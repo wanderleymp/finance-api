@@ -6,7 +6,7 @@ const app = express();
 const PORT = process.env.PORT || 3000;
 
 app.get("/", (req, res) => {
-  res.send("Agile Backend - Deploy Test!");
+  res.send("Agile Backend API- Deploy Test!");
 });
 
 app.listen(PORT, () => {
