@@ -9,13 +9,11 @@ services:
     restart: always
     env_file:
       - .env
-    depends_on:
-      - postgres
     ports:
       - "3000:3000"
     networks:
-      - app-network
+      - agile_network
 
 networks:
-  agile-network:
+  agile_network:
     external: true
