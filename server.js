@@ -8,11 +8,11 @@ const PORT = process.env.PORT || 3000;
 
 // Configuração do banco de dados PostgreSQL
 const pool = new Pool({
-  user: 'user_agile', // Substitua pelo seu usuário do PostgreSQL
-  host: 'localhost',   // Ou o IP do seu servidor PostgreSQL
-  database: 'agile_db', // Substitua pelo nome do seu banco de dados
-  password: 'darct99KhVLJXvnbE9eX', // Substitua pela sua senha do PostgreSQL
-  port: 5432,           // Porta padrão do PostgreSQL
+  user: 'agile_user', // Nome do usuário correto
+  host: '157.90.31.218', // IP do servidor PostgreSQL
+  database: 'agile_db', // Nome do banco de dados
+  password: 'darct99KhVLJXvnbE9eX', // Senha correta
+  port: 5432, // Porta do PostgreSQL
 });
 
 // Middleware para tratamento de JSON
@@ -68,5 +68,5 @@ app.post('/dados', async (req, res) => {
 // Iniciando o servidor
 app.listen(PORT, () => {
   console.log(`Servidor rodando na porta ${PORT}`);
-  console.log(`Acesse http://localhost:${PORT} ou http://seu-ip-externo:${PORT}`);
+  console.log(`Acesse http://localhost:${PORT} ou http://157.90.31.218:${PORT}`);
 });
