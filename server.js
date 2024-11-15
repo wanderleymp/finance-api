@@ -9,7 +9,7 @@ const PORT = process.env.PORT || 3000;
 // Configuração do banco de dados PostgreSQL
 const pool = new Pool({
   user: 'user_agile', // Substitua pelo seu usuário do PostgreSQL
-  host: 'localhost',   // Ou o IP do seu servidor PostgreSQL
+  host: '157.90.31.218',   // Ou o IP do seu servidor PostgreSQL
   database: 'agile_db', // Substitua pelo nome do seu banco de dados
   password: 'darct99KhVLJXvnbE9eX', // Substitua pela sua senha do PostgreSQL
   port: 5432,           // Porta padrão do PostgreSQL
