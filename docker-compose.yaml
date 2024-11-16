@@ -19,6 +19,8 @@ services:
       - "traefik.http.services.agile-backend.loadbalancer.server.port=3000"
       - "traefik.http.routers.agile-backend.entrypoints=websecure"
       - "traefik.http.routers.agile-backend.tls.certresolver=letsencryptresolver"
+      - traefik.http.services.agile-backend.loadbalancer.passHostHeader=true
+      - traefik.http.routers.agile-backend.service=agile-backend
 networks:
   backendNet:
     external: true
