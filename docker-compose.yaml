@@ -12,8 +12,14 @@ services:
     ports:
       - "3000:3000"
     networks:
-      - agile_network
+      - agileNet
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.agile-backend.rule=Host(`api.agilefinance.com.br`) || Host(`api.agilefinance.com.br`)"
+      - "traefik.http.services.agile-backend.loadbalancer.server.port=3000"
+      - "traefik.http.routers.agile-backend.entrypoints=websecure"
+      - "traefik.http.routers.agile-backend.tls.certresolver=letsencryptresolver"
 
 networks:
-  agile_network:
+  agileNet:
     external: true
