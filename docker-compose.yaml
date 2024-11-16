@@ -1,4 +1,4 @@
-version: '3.8'
+
 
 services:
   api:
@@ -12,7 +12,7 @@ services:
     ports:
       - "3000:3000"
     networks:
-      - agileNet
+      - AgileNet
     labels:
       - "traefik.enable=true"
       - "traefik.http.routers.agile-backend.rule=Host(`api.agilefinance.com.br`) || Host(`api.agilefinance.com.br`)"
@@ -21,5 +21,5 @@ services:
       - "traefik.http.routers.agile-backend.tls.certresolver=letsencryptresolver"
 
 networks:
-  agileNet:
+  AgileNet:
     external: true
