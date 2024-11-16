@@ -41,7 +41,7 @@ app.get('/test-db', async (req, res) => {
 app.get('/dados', async (req, res) => {
   try {
     console.log('Rota /dados foi acessada');
-    const result = await pool.query('SELECT * FROM public.teste'); // Substitua "sua_tabela" pelo nome da sua tabela
+    const result = await pool.query('SELECT * FROM public.persons'); // Substitua "sua_tabela" pelo nome da sua tabela
     res.status(200).json(result.rows);
   } catch (error) {
     console.error('Erro ao buscar dados:', error);
