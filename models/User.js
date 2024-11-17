@@ -120,6 +120,22 @@ class User {
   static async validatePassword(user, password) {
     return bcrypt.compare(password, user.password);
   }
+
+  static async getUserDetails(userId) {
+    const query = `
+      SELECT *
+      FROM vw_user_details
+      WHERE user_id = $1
+    `;
+
+    try {
+      const result = await db.query(query, [userId]);
+      return result.rows[0];
+    } catch (err) {
+      console.error('Erro ao obter detalhes do usuário:', err);
+      throw err;
+    }
+  }
 }
 
 module.exports = User;

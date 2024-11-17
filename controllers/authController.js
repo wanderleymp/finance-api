@@ -24,7 +24,11 @@ const login = async (req, res) => {
 
     console.log('Senha válida. Gerando token JWT...');
     const token = jwt.sign({ userId: user.user_id }, process.env.JWT_SECRET, { expiresIn: '1h' });
-    res.json({ token });
+
+    // Obter detalhes do usuário para enviar junto com o token
+    const userDetails = await User.getUserDetails(user.user_id);
+
+    res.json({ token, userDetails });
     console.log('Login bem-sucedido para o usuário:', identifier);
   } catch (err) {
     console.error('Erro interno durante o login:', err);
@@ -32,6 +36,20 @@ const login = async (req, res) => {
   }
 };
 
+// Obter detalhes do usuário logado
+const getUserDetails = async (req, res) => {
+  try {
+    console.log('Buscando detalhes do usuário:', req.user.userId);
+    const userDetails = await User.getUserDetails(req.user.userId);
+    if (!userDetails) {
+      return res.status(404).json({ message: 'User not found.' });
+    }
+    res.json(userDetails);
+  } catch (err) {
+    console.error('Erro ao obter detalhes do usuário:', err);
+    res.status(500).send('Internal Server Error');
+  }
+};
 // Lógica de Criação de Novo Usuário
 /// Registro de Novo Usuário
 const userNew = async (req, res) => {
@@ -87,5 +105,6 @@ const updatePassword = async (req, res) => {
 module.exports = {
   login,
   userNew,
+  getUserDetails,
   updatePassword,
 };
