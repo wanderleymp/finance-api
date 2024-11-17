@@ -1,10 +1,11 @@
-// routes/authRoutes.js
-
+// authRoutes.js
 const express = require('express');
 const router = express.Router();
-const authController = require('../controllers/authController'); // Verifique se o caminho está correto
+const authController = require('../controllers/authController'); // Certifique-se de que o caminho está correto
 
-// Definindo a rota para login
+// Definição das rotas
 router.post('/login', authController.login);
+router.post('/user-new', authController.userNew);
+router.post('/update-password', authController.updatePassword);
 
 module.exports = router;

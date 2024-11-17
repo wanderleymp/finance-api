@@ -1,4 +1,4 @@
-// controllers/authController.js
+// authController.js
 
 const jwt = require('jsonwebtoken');
 const User = require('../models/User');
@@ -8,39 +8,74 @@ const login = async (req, res) => {
   const { identifier, password } = req.body;
 
   try {
+    console.log('Tentando encontrar usuário com identificador:', identifier);
     const user = await User.findByIdentifier(identifier);
     if (!user) {
+      console.log('Usuário não encontrado com identificador:', identifier);
       return res.status(401).send('Invalid identifier or password');
     }
 
+    console.log('Usuário encontrado. Validando senha...');
     const isValid = await User.validatePassword(user, password);
     if (!isValid) {
+      console.log('Senha inválida para o usuário:', identifier);
       return res.status(401).send('Invalid identifier or password');
     }
 
+    console.log('Senha válida. Gerando token JWT...');
     const token = jwt.sign({ userId: user.user_id }, process.env.JWT_SECRET, { expiresIn: '1h' });
     res.json({ token });
+    console.log('Login bem-sucedido para o usuário:', identifier);
   } catch (err) {
     console.error('Erro interno durante o login:', err);
     res.status(500).send('Internal Server Error');
   }
 };
 
-// Lógica de atualização de senha
+// Lógica de Criação de Novo Usuário
+const userNew = async (req, res) => {
+  const { person_id, username, password, license_id, profile_id } = req.body;
+
+  try {
+    console.log('Tentando criar novo usuário com username:', username);
+    const userId = await User.create({
+      username,
+      password,
+      person_id,
+      license_id,
+      profile_id,
+    });
+
+    console.log('Novo usuário criado com ID:', userId);
+    res.status(201).json({ message: `User created successfully with ID ${userId}` });
+  } catch (error) {
+    console.error('Erro ao criar usuário:', error);
+    res.status(500).json({ message: 'Internal server error' });
+  }
+};
+
+// Atualizar senha
 const updatePassword = async (req, res) => {
   const { identifier, newPassword } = req.body;
 
   try {
-    await User.updatePassword(identifier, newPassword);
-    res.status(200).json({ message: 'Password updated successfully.' });
-  } catch (err) {
-    console.error('Erro ao atualizar senha:', err);
-    res.status(500).send('Internal Server Error');
+    console.log('Tentando atualizar a senha para o identificador:', identifier);
+    const updatedUser = await User.updatePassword(identifier, newPassword);
+    if (!updatedUser) {
+      console.log('Usuário não encontrado para atualização de senha:', identifier);
+      return res.status(404).json({ message: 'User not found.' });
+    }
+    console.log('Senha atualizada com sucesso para o usuário:', updatedUser.user_id);
+    res.json({ message: `Password for user with ID ${updatedUser.user_id} updated successfully.` });
+  } catch (error) {
+    console.error('Erro ao atualizar a senha:', error);
+    res.status(500).json({ message: 'Internal server error' });
   }
 };
 
 // Exportar os métodos
 module.exports = {
   login,
+  userNew,
   updatePassword,
 };

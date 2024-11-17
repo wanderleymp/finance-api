@@ -4,7 +4,6 @@ const db = require('../config/database');
 const bcrypt = require('bcrypt');
 
 class User {
-  // Localizar usuário por identificador (email, CPF, telefone, etc.)
   static async findByIdentifier(identifier) {
     const query = `
       SELECT ua.*
@@ -19,6 +18,7 @@ class User {
     `;
 
     try {
+      console.log('Iniciando a busca pelo identificador:', identifier);
       const result = await db.query(query, [identifier]);
       return result.rows[0];
     } catch (err) {
@@ -27,7 +27,6 @@ class User {
     }
   }
 
-  // Criar novo usuário
   static async create({ username, password, personData, contacts, licenseId, profileId }) {
     const hashedPassword = await bcrypt.hash(password, 10);
     const client = await db.connect();
@@ -88,16 +87,6 @@ class User {
         }
       }
 
-      // Etapa 4: Relacionar a licença ao usuário
-      if (licenseId) {
-        const licenseQuery = `
-          INSERT INTO user_license (user_id, license_id)
-          VALUES ($1, $2)
-          ON CONFLICT DO NOTHING
-        `;
-        await client.query(licenseQuery, [userId, licenseId]);
-      }
-
       await client.query('COMMIT');
       return userId;
     } catch (err) {
@@ -109,42 +98,40 @@ class User {
     }
   }
 
-  // Validar senha
-  static async validatePassword(user, password) {
+  static async updatePassword(identifier, newPassword) {
+    const hashedPassword = await bcrypt.hash(newPassword, 10);
+    const client = await db.connect();
+
     try {
-      return await bcrypt.compare(password, user.password);
+      console.log('Iniciando atualização de senha para identificador:', identifier);
+      const query = `
+        UPDATE user_accounts
+        SET password = $1
+        WHERE user_id IN (
+          SELECT ua.user_id
+          FROM user_accounts ua
+          JOIN persons p ON ua.person_id = p.person_id
+          LEFT JOIN person_contacts pc ON p.person_id = pc.person_id
+          LEFT JOIN contacts c ON pc.contact_id = c.contact_id
+          LEFT JOIN person_documents pd ON p.person_id = pd.person_id
+          WHERE UPPER(c.contact_value) = UPPER($2)
+             OR UPPER(pd.document_value) = UPPER($2)
+        )
+        RETURNING user_id, username
+      `;
+
+      const result = await client.query(query, [hashedPassword, identifier]);
+      return result.rows[0];
     } catch (err) {
-      console.error('Erro ao validar senha:', err);
+      console.error('Erro ao atualizar a senha:', err);
       throw err;
+    } finally {
+      client.release();
     }
   }
 
-  // Atualizar a senha do usuário
-  static async updatePassword(identifier, newPassword) {
-    const hashedPassword = await bcrypt.hash(newPassword, 10);
-    const query = `
-      UPDATE user_accounts
-      SET password = $1
-      WHERE user_id = (
-        SELECT ua.user_id
-        FROM user_accounts ua
-        JOIN persons p ON ua.person_id = p.person_id
-        LEFT JOIN person_contacts pc ON p.person_id = pc.person_id
-        LEFT JOIN contacts c ON pc.contact_id = c.contact_id
-        LEFT JOIN person_documents pd ON p.person_id = pd.person_id
-        WHERE UPPER(c.contact_value) = UPPER($2)
-           OR UPPER(pd.document_value) = UPPER($2)
-        LIMIT 1
-      )
-    `;
-
-    try {
-      await db.query(query, [hashedPassword, identifier]);
-      return true;
-    } catch (err) {
-      console.error('Erro ao atualizar senha:', err);
-      throw err;
-    }
+  static async validatePassword(user, password) {
+    return bcrypt.compare(password, user.password);
   }
 }
 
