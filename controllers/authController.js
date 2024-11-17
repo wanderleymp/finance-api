@@ -33,26 +33,26 @@ const login = async (req, res) => {
 };
 
 // Lógica de Criação de Novo Usuário
+/// Registro de Novo Usuário
 const userNew = async (req, res) => {
-  const { person_id, username, password, license_id, profile_id } = req.body;
+  const { username, password, personId, profileId, licenseId } = req.body;
+
+  if (!username || !password || !personId || !profileId || !licenseId) {
+    return res.status(400).json({ message: 'All fields (username, password, personId, profileId, licenseId) are required.' });
+  }
 
   try {
     console.log('Tentando criar novo usuário com username:', username);
-    const userId = await User.create({
-      username,
-      password,
-      person_id,
-      license_id,
-      profile_id,
-    });
+    console.log('Iniciando criação de usuário no banco de dados...');
+    const userId = await User.create({ username, password, personId, profileId, licenseId });
 
-    console.log('Novo usuário criado com ID:', userId);
     res.status(201).json({ message: `User created successfully with ID ${userId}` });
   } catch (error) {
     console.error('Erro ao criar usuário:', error);
-    res.status(500).json({ message: 'Internal server error' });
+    res.status(500).json({ message: `Internal server error: ${error.message}` });
   }
 };
+
 
 // Atualizar senha
 const updatePassword = async (req, res) => {

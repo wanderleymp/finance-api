@@ -32,74 +32,44 @@ class User {
     }
   }
 
-  static async create({ username, password, personData, contacts, licenseId, profileId }) {
+  static async create({ username, password, personId, profileId, licenseId }) {
     const hashedPassword = await bcrypt.hash(password, 10);
-    const client = await db.connect();
 
     try {
-      await client.query('BEGIN');
+      console.log('Iniciando a criação do usuário no banco de dados...');
 
-      // Etapa 1: Inserir ou verificar a pessoa
-      const personQuery = `
-        INSERT INTO persons (full_name, birth_date)
-        VALUES ($1, $2)
-        ON CONFLICT (full_name) DO NOTHING
-        RETURNING person_id
-      `;
-      const personResult = await client.query(personQuery, [personData.fullName, personData.birthDate]);
-      let personId = personResult.rows[0]?.person_id;
+      // Iniciar a transação
+      await db.query('BEGIN');
 
-      if (!personId) {
-        const existingPersonQuery = `
-          SELECT person_id FROM person_documents
-          WHERE UPPER(document_value) = UPPER($1) AND document_type = 'cpf'
-        `;
-        const existingPersonResult = await client.query(existingPersonQuery, [personData.cpf]);
-        personId = existingPersonResult.rows[0]?.person_id;
-      }
-
-      if (!personId) {
-        throw new Error('Não foi possível criar ou localizar a pessoa.');
-      }
-
-      // Etapa 2: Inserir o usuário
+      // Inserir o novo usuário na tabela user_accounts
       const userQuery = `
         INSERT INTO user_accounts (username, password, person_id, profile_id)
         VALUES ($1, $2, $3, $4)
         RETURNING user_id
       `;
-      const userResult = await client.query(userQuery, [username, hashedPassword, personId, profileId]);
+      const userResult = await db.query(userQuery, [username, hashedPassword, personId, profileId]);
       const userId = userResult.rows[0].user_id;
 
-      // Etapa 3: Relacionar contatos
-      for (const contact of contacts) {
-        const contactQuery = `
-          INSERT INTO contacts (contact_type, contact_value, is_active)
-          VALUES ($1, $2, TRUE)
-          ON CONFLICT (contact_value, contact_type) DO NOTHING
-          RETURNING contact_id
-        `;
-        const contactResult = await client.query(contactQuery, [contact.type, contact.value]);
-        const contactId = contactResult.rows[0]?.contact_id;
+      console.log(`Usuário criado com sucesso! ID do usuário: ${userId}`);
 
-        if (contactId) {
-          const personContactQuery = `
-            INSERT INTO person_contacts (person_id, contact_id)
-            VALUES ($1, $2)
-            ON CONFLICT DO NOTHING
-          `;
-          await client.query(personContactQuery, [personId, contactId]);
-        }
-      }
+      // Inserir o relacionamento na tabela user_license
+      const licenseQuery = `
+        INSERT INTO user_license (user_id, license_id)
+        VALUES ($1, $2)
+      `;
+      await db.query(licenseQuery, [userId, licenseId]);
 
-      await client.query('COMMIT');
+      console.log(`Licença relacionada ao usuário: ${userId}`);
+
+      // Finalizar a transação
+      await db.query('COMMIT');
+
       return userId;
     } catch (err) {
-      await client.query('ROLLBACK');
+      // Se ocorrer um erro, desfazer a transação
+      await db.query('ROLLBACK');
       console.error('Erro ao criar usuário:', err);
       throw err;
-    } finally {
-      client.release();
     }
   }
 
