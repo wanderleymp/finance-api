@@ -60,18 +60,28 @@ const updatePassword = async (req, res) => {
 
   try {
     console.log('Tentando atualizar a senha para o identificador:', identifier);
+    
+    // Verificar se os campos necessários foram fornecidos
+    if (!identifier || !newPassword) {
+      console.log('Erro: Falta de dados obrigatórios para atualizar a senha.');
+      return res.status(400).json({ message: 'Identifier and new password are required.' });
+    }
+
+    // Chamar a função para atualizar a senha
     const updatedUser = await User.updatePassword(identifier, newPassword);
     if (!updatedUser) {
       console.log('Usuário não encontrado para atualização de senha:', identifier);
-      return res.status(404).json({ message: 'User not found.' });
+      return res.status(404).json({ message: 'Usuário não encontrado para atualização de senha.' });
     }
-    console.log('Senha atualizada com sucesso para o usuário:', updatedUser.user_id);
-    res.json({ message: `Password for user with ID ${updatedUser.user_id} updated successfully.` });
+
+    console.log(`Senha atualizada com sucesso para o usuário. ID: ${updatedUser.user_id}, Username: ${updatedUser.username}`);
+    res.json({ message: `Senha atualizada com sucesso para o usuário. ID ${updatedUser.user_id}, User name: ${updatedUser.username}` });
   } catch (error) {
     console.error('Erro ao atualizar a senha:', error);
     res.status(500).json({ message: 'Internal server error' });
   }
 };
+
 
 // Exportar os métodos
 module.exports = {

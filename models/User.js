@@ -18,8 +18,13 @@ class User {
     `;
 
     try {
-      console.log('Iniciando a busca pelo identificador:', identifier);
-      const result = await db.query(query, [identifier]);
+      console.log(`Iniciando a busca pelo identificador: ${identifier}`);
+      const result = await db.query(query, [identifier.trim()]);
+      if (result.rows.length > 0) {
+        console.log(`Usuário encontrado com identificador: ${identifier}`);
+      } else {
+        console.log(`Nenhum usuário encontrado com identificador: ${identifier}`);
+      }
       return result.rows[0];
     } catch (err) {
       console.error('Erro ao buscar por identificador:', err);
@@ -99,36 +104,48 @@ class User {
   }
 
   static async updatePassword(identifier, newPassword) {
-    const hashedPassword = await bcrypt.hash(newPassword, 10);
-    const client = await db.connect();
-
     try {
-      console.log('Iniciando atualização de senha para identificador:', identifier);
-      const query = `
+      console.log(`Iniciando atualização de senha para identificador: ${identifier}`);
+
+      // Buscar o usuário pelo identificador
+      const user = await User.findByIdentifier(identifier);
+
+      if (!user) {
+        console.log(`Usuário não encontrado para atualização de senha: ${identifier}`);
+        return null;
+      }
+
+      console.log(`Usuário encontrado. ID do usuário: ${user.user_id}, Username: ${user.username}`);
+
+      // Hash da nova senha
+      const hashedPassword = await bcrypt.hash(newPassword, 10);
+      console.log(`Senha criptografada com sucesso.`);
+
+      // Query para atualizar a senha
+      const updatePasswordQuery = `
         UPDATE user_accounts
         SET password = $1
-        WHERE user_id IN (
-          SELECT ua.user_id
-          FROM user_accounts ua
-          JOIN persons p ON ua.person_id = p.person_id
-          LEFT JOIN person_contacts pc ON p.person_id = pc.person_id
-          LEFT JOIN contacts c ON pc.contact_id = c.contact_id
-          LEFT JOIN person_documents pd ON p.person_id = pd.person_id
-          WHERE UPPER(c.contact_value) = UPPER($2)
-             OR UPPER(pd.document_value) = UPPER($2)
-        )
+        WHERE user_id = $2
         RETURNING user_id, username
       `;
 
-      const result = await client.query(query, [hashedPassword, identifier]);
-      return result.rows[0];
+      const updateResult = await db.query(updatePasswordQuery, [hashedPassword, user.user_id]);
+
+      if (updateResult.rows.length === 0) {
+        console.log(`Erro ao atualizar a senha para o usuário com ID: ${user.user_id}`);
+        return null;
+      }
+
+      const updatedUser = updateResult.rows[0];
+      console.log(`Senha atualizada com sucesso para o usuário. ID: ${updatedUser.user_id}, Username: ${updatedUser.username}`);
+      return updatedUser;
+
     } catch (err) {
       console.error('Erro ao atualizar a senha:', err);
       throw err;
-    } finally {
-      client.release();
     }
   }
+
 
   static async validatePassword(user, password) {
     return bcrypt.compare(password, user.password);
