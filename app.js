@@ -1,9 +1,11 @@
 // app.js
+
 const express = require('express');
 const app = express();
-const authRoutes = require('./routes/authRoutes');
+const authRoutes = require('./routes/authRoutes'); // <--- Adicione esta linha
+const personRoutes = require('./routes/personRoutes');
 
-app.use(express.json()); // Para lidar com JSON no corpo das requisições
+app.use(express.json());
 
 // Rota de health check
 app.get('/health', (req, res) => {
@@ -12,6 +14,9 @@ app.get('/health', (req, res) => {
 
 // Definir a rota de autenticação
 app.use('/auth', authRoutes);
+
+// Definir a rota para Person
+app.use('/person', personRoutes);
 
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => {
