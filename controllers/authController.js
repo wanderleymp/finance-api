@@ -100,6 +100,25 @@ const updatePassword = async (req, res) => {
   }
 };
 
+// Função para obter todos os usuários que compartilham licenças com o usuário logado
+const getUsers = async (req, res) => {
+  const userId = req.user.userId;
+  console.log('Tentando listar todos os usuários para o usuário logado com ID:', userId);
+
+  try {
+    const users = await User.findUsersWithSharedLicenses(userId);
+    
+    if (users.error) {
+      return res.status(403).json({ message: users.error });
+    }
+
+    res.json(users);
+  } catch (error) {
+    console.error('Erro ao listar usuários:', error);
+    res.status(500).json({ message: 'Erro ao listar usuários.' });
+  }
+};
+
 
 // Exportar os métodos
 module.exports = {
@@ -107,4 +126,5 @@ module.exports = {
   userNew,
   getUserDetails,
   updatePassword,
+  getUsers,
 };

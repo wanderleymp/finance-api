@@ -121,6 +121,30 @@ class User {
     return bcrypt.compare(password, user.password);
   }
 
+  static async findUsersWithSharedLicenses(userId) {
+    const query = `
+      SELECT DISTINCT ua.*
+      FROM user_accounts ua
+      JOIN user_license ul1 ON ua.user_id = ul1.user_id
+      WHERE ul1.license_id IN (
+          SELECT ul2.license_id
+          FROM user_license ul2
+          WHERE ul2.user_id = $1
+      )
+      AND ua.user_id <> $1
+    `;
+
+    try {
+      console.log('Iniciando a busca de usuários que compartilham licenças com o usuário:', userId);
+      const result = await db.query(query, [userId]);
+      console.log(`Usuários encontrados: ${result.rows.length}`);
+      return result.rows;
+    } catch (err) {
+      console.error('Erro ao buscar usuários com licenças compartilhadas:', err);
+      throw err;
+    }
+  }
+  
   static async getUserDetails(userId) {
     const query = `
       SELECT *
