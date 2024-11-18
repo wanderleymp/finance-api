@@ -123,15 +123,19 @@ class User {
 
   static async findUsersWithSharedLicenses(userId) {
     const query = `
-      SELECT DISTINCT ua.*
+      SELECT 
+          ua.*,
+          (SELECT row_to_json(p.*)::text
+            FROM vw_persons_complete p
+            WHERE p.person_id = ua.person_id) AS persons
       FROM user_accounts ua
       JOIN user_license ul1 ON ua.user_id = ul1.user_id
       WHERE ul1.license_id IN (
           SELECT ul2.license_id
           FROM user_license ul2
           WHERE ul2.user_id = $1
-      )
-      AND ua.user_id <> $1
+      );
+
     `;
 
     try {
