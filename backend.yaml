@@ -6,10 +6,8 @@ services:
     restart: always
     environment:
       NODE_ENV: production
-      DB_HOST: postgres
-      DB_USER: usuario
-      DB_PASS: senha
-      DB_NAME: appdb
+      DATABASE_CONNECTION_URI: postgresql://postgres:ffcaa89a3e19bd98e911475c7974309b@10.1.0.2:5432/AgileDB?connection_limit=20
+
     networks:
       - AgileNet
     deploy:
