@@ -18,16 +18,18 @@ services:
     ports:
       - "3000:3000"
     networks:
-      - backendNet
+      - AgileNet
     labels:
-      - "traefik.enable=true"
-      - "traefik.http.routers.agile-backend.rule=Host(`api.agilefinance.com.br`)
-      - "traefik.http.services.agile-backend.loadbalancer.server.port=3000"
-      - "traefik.http.routers.agile-backend.entrypoints=websecure"
-      - traefik.http.services.agile-backend.loadbalancer.passHostHeader=true
-      - traefik.http.routers.agile-backend.service=agile-backend
-      - "traefik.http.routers.agile-backend.tls.certresolver=letsencryptresolver"
-     
+        - "traefik.enable=true"
+        - "traefik.http.routers.portainer.rule=Host(`api.agilefinance.com.br`)" ## Dominio da aplicação
+        - "traefik.http.services.portainer.loadbalancer.server.port=3000"
+        - "traefik.http.routers.portainer.tls.certresolver=letsencryptresolver"
+        - "traefik.http.routers.portainer.service=backend"
+        - "traefik.docker.network=AgileNet" ## Nome da rede interna
+        - "traefik.http.routers.portainer.entrypoints=websecure"
+        - "traefik.http.routers.portainer.priority=1"     
 networks:
-  AgileNet:
+  AgileNet: ## Nome da rede interna
     external: true
+    attachable: true
+    name: AgileNet ## Nome da rede interna
