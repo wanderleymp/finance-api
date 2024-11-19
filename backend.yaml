@@ -1,0 +1,26 @@
+version: '3.8'
+
+services:
+  backend:
+    image: wanderleymp/backend:latest
+    restart: always
+    environment:
+      NODE_ENV: production
+      DB_HOST: postgres
+      DB_USER: usuario
+      DB_PASS: senha
+      DB_NAME: appdb
+    networks:
+      - AgileNet
+    deploy:
+      labels:
+        - "traefik.enable=true"
+        - "traefik.http.routers.backend.rule=Host(`api.agilefinance.com.br`)"
+        - "traefik.http.services.backend.loadbalancer.server.port=3000"
+        - "traefik.http.routers.backend.tls.certresolver=letsencryptresolver"
+        - "traefik.docker.network=AgileNet"
+        - "traefik.http.routers.backend.entrypoints=websecure"
+
+networks:
+  AgileNet:
+    external: true
