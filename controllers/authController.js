@@ -4,33 +4,39 @@ const jwt = require('jsonwebtoken');
 const User = require('../models/User');
 
 
+// Lógica de Login
 const login = async (req, res) => {
   const { identifier, password } = req.body;
 
   try {
     console.log('[LOGIN] Tentando encontrar usuário com identificador:', identifier);
-    const user = await User.findByIdentifier(identifier);
 
+    const user = await User.findByIdentifier(identifier);
     if (!user) {
-      console.log('[LOGIN] Usuário não encontrado.');
+      console.log('[LOGIN] Usuário não encontrado:', identifier);
       return res.status(401).json({ message: 'Invalid identifier or password' });
     }
 
     console.log('[LOGIN] Usuário encontrado. Validando senha...');
     const isValid = await User.validatePassword(user, password);
-   
-
-
     if (!isValid) {
-      console.log('[LOGIN] Senha inválida.');
+      console.log('[LOGIN] Senha inválida para o usuário:', identifier);
       return res.status(401).json({ message: 'Invalid identifier or password' });
     }
 
     console.log('[LOGIN] Senha válida. Gerando token JWT...');
     const token = jwt.sign({ userId: user.user_id }, process.env.JWT_SECRET, { expiresIn: '1h' });
 
-    console.log('[LOGIN] Token gerado com sucesso:', token);
-    res.json({ token });
+    console.log('[LOGIN] Obtendo detalhes do usuário...');
+    const userDetails = await User.getUserDetails(user.user_id);
+
+    if (!userDetails) {
+      console.log('[LOGIN] Não foi possível obter os detalhes do usuário.');
+      return res.status(500).json({ message: 'Unable to fetch user details' });
+    }
+
+    console.log('[LOGIN] Login bem-sucedido. Enviando resposta...');
+    res.json({ token, userDetails });
   } catch (err) {
     console.error('[LOGIN] Erro interno durante o login:', err);
     res.status(500).json({ message: 'Internal Server Error' });
