@@ -1,4 +1,6 @@
 const Person = require('../models/Person');
+const CNPJService = require('../services/cnpjService');
+
 
 // Método para obter as pessoas vinculadas ao usuário logado
 const getPersons = async (req, res) => {
@@ -21,25 +23,28 @@ const getPersons = async (req, res) => {
   }
 };
 
-// Método para consultar informações de um CNPJ
 const getCNPJ = async (req, res) => {
-  const userId = req.user.userId; // Obtém o ID do usuário logado
   const { cnpj } = req.params;
 
   try {
-    console.log(`Usuário ${userId} requisitou consulta para CNPJ: ${cnpj}`);
-    const dadosCNPJ = await Person.consultarCNPJ(cnpj);
+    console.log(`[CNPJController] Recebida requisição para consultar CNPJ: ${cnpj}`);
 
-    if (!dadosCNPJ) {
-      console.log('Nenhuma informação encontrada para o CNPJ.');
-      return res.status(404).json({ message: 'Nenhuma informação encontrada para o CNPJ.' });
+    // Validar o formato do CNPJ
+    const cleanedCNPJ = cnpj.replace(/\D/g, '');
+    if (cleanedCNPJ.length !== 14) {
+      console.log('[CNPJController] CNPJ inválido:', cnpj);
+      return res.status(400).json({ message: 'CNPJ inválido.' });
     }
 
-    console.log('Informações do CNPJ encontradas:', dadosCNPJ);
-    res.status(200).json(dadosCNPJ);
+    // Consultar a API
+    const cnpjData = await CNPJService.fetchCNPJData(cleanedCNPJ);
+    console.log('[CNPJController] Dados do CNPJ obtidos:', cnpjData);
+
+    // Retornar os dados
+    res.json(cnpjData);
   } catch (err) {
-    console.error('Erro ao consultar CNPJ:', err.message);
-    res.status(500).json({ message: 'Erro interno no servidor.' });
+    console.error('[CNPJController] Erro ao consultar CNPJ:', err.message);
+    res.status(500).json({ message: 'Erro ao consultar CNPJ.' });
   }
 };
 
