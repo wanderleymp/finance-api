@@ -1,33 +1,32 @@
-const axios = require('axios');
+const axios = require('axios'); // Biblioteca para realizar requisições HTTP
 
-const fetchCnpjData = async (cnpj) => {
-  try {
-    const url = `${process.env.CNPJ_API_URL}${cnpj}`;
-    console.log(`Consultando CNPJ: ${url}`);
+/**
+ * Valida se o CNPJ está no formato correto.
+ * @param {string} cnpj - O CNPJ a ser validado.
+ * @returns {boolean} - Retorna true se o CNPJ for válido.
+ */
+function validarCNPJ(cnpj) {
+    return /^\d{14}$/.test(cnpj);
+}
 
-    const response = await axios.get(url);
-
-    if (response.status === 200) {
-      const data = response.data;
-      return {
-        cnpj: data.cnpj,
-        business_name: data.nome,
-        trade_name: data.fantasia,
-        registration_status: data.situacao,
-        address: `${data.logradouro}, ${data.numero} - ${data.bairro}, ${data.municipio} - ${data.uf}, ${data.cep}`,
-        phone: data.telefone,
-        email: data.email,
-      };
-    } else {
-      console.error(`Erro na API ReceitaWS: ${response.statusText}`);
-      return null;
+/**
+ * Consulta informações de um CNPJ em uma API externa.
+ * @param {string} cnpj - O CNPJ a ser consultado.
+ * @returns {Promise<Object>} - Dados da empresa.
+ */
+async function consultarCNPJ(cnpj) {
+    if (!validarCNPJ(cnpj)) {
+        throw new Error('CNPJ inválido. O formato esperado é 14 dígitos.');
     }
-  } catch (err) {
-    console.error('Erro ao consultar CNPJ:', err.message);
-    return null;
-  }
-};
 
-module.exports = {
-  fetchCnpjData,
-};
+    const url = `https://receitaws.com.br/v1/cnpj/${cnpj}`;
+    const response = await axios.get(url, {
+        headers: {
+            'Accept': 'application/json',
+        },
+    });
+
+    return response.data;
+}
+
+module.exports = { consultarCNPJ };

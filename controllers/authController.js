@@ -3,38 +3,40 @@
 const jwt = require('jsonwebtoken');
 const User = require('../models/User');
 
-// Lógica de Login
+
 const login = async (req, res) => {
   const { identifier, password } = req.body;
 
   try {
-    console.log('Tentando encontrar usuário com identificador:', identifier);
+    console.log('[LOGIN] Tentando encontrar usuário com identificador:', identifier);
     const user = await User.findByIdentifier(identifier);
+
     if (!user) {
-      console.log('Usuário não encontrado com identificador:', identifier);
-      return res.status(401).send('Invalid identifier or password');
+      console.log('[LOGIN] Usuário não encontrado.');
+      return res.status(401).json({ message: 'Invalid identifier or password' });
     }
 
-    console.log('Usuário encontrado. Validando senha...');
+    console.log('[LOGIN] Usuário encontrado. Validando senha...');
     const isValid = await User.validatePassword(user, password);
+   
+
+
     if (!isValid) {
-      console.log('Senha inválida para o usuário:', identifier);
-      return res.status(401).send('Invalid identifier or password');
+      console.log('[LOGIN] Senha inválida.');
+      return res.status(401).json({ message: 'Invalid identifier or password' });
     }
 
-    console.log('Senha válida. Gerando token JWT...');
+    console.log('[LOGIN] Senha válida. Gerando token JWT...');
     const token = jwt.sign({ userId: user.user_id }, process.env.JWT_SECRET, { expiresIn: '1h' });
 
-    // Obter detalhes do usuário para enviar junto com o token
-    const userDetails = await User.getUserDetails(user.user_id);
-
-    res.json({ token, userDetails });
-    console.log('Login bem-sucedido para o usuário:', identifier);
+    console.log('[LOGIN] Token gerado com sucesso:', token);
+    res.json({ token });
   } catch (err) {
-    console.error('Erro interno durante o login:', err);
-    res.status(500).send('Internal Server Error');
+    console.error('[LOGIN] Erro interno durante o login:', err);
+    res.status(500).json({ message: 'Internal Server Error' });
   }
 };
+
 
 // Obter detalhes do usuário logado
 const getUserDetails = async (req, res) => {

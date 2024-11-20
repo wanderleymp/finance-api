@@ -1,7 +1,7 @@
-// models/User.js
-
 const db = require('../config/database');
-const bcrypt = require('bcrypt');
+// const bcrypt = require('bcrypt');
+const argon2 = require('argon2');
+
 
 class User {
   static async findByIdentifier(identifier) {
@@ -18,137 +18,36 @@ class User {
     `;
 
     try {
-      console.log(`Iniciando a busca pelo identificador: ${identifier}`);
+      console.log(`[User] Iniciando a busca pelo identificador: ${identifier}`);
       const result = await db.query(query, [identifier.trim()]);
       if (result.rows.length > 0) {
-        console.log(`Usuário encontrado com identificador: ${identifier}`);
+        console.log(`[User] Usuário encontrado com identificador: ${identifier}`);
       } else {
-        console.log(`Nenhum usuário encontrado com identificador: ${identifier}`);
+        console.log(`[User] Nenhum usuário encontrado com identificador: ${identifier}`);
       }
       return result.rows[0];
     } catch (err) {
-      console.error('Erro ao buscar por identificador:', err);
+      console.error('[User] Erro ao buscar por identificador:', err);
       throw err;
     }
   }
-
-  static async create({ username, password, personId, profileId, licenseId }) {
-    const hashedPassword = await bcrypt.hash(password, 10);
-
-    try {
-      console.log('Iniciando a criação do usuário no banco de dados...');
-
-      // Iniciar a transação
-      await db.query('BEGIN');
-
-      // Inserir o novo usuário na tabela user_accounts
-      const userQuery = `
-        INSERT INTO user_accounts (username, password, person_id, profile_id)
-        VALUES ($1, $2, $3, $4)
-        RETURNING user_id
-      `;
-      const userResult = await db.query(userQuery, [username, hashedPassword, personId, profileId]);
-      const userId = userResult.rows[0].user_id;
-
-      console.log(`Usuário criado com sucesso! ID do usuário: ${userId}`);
-
-      // Inserir o relacionamento na tabela user_license
-      const licenseQuery = `
-        INSERT INTO user_license (user_id, license_id)
-        VALUES ($1, $2)
-      `;
-      await db.query(licenseQuery, [userId, licenseId]);
-
-      console.log(`Licença relacionada ao usuário: ${userId}`);
-
-      // Finalizar a transação
-      await db.query('COMMIT');
-
-      return userId;
-    } catch (err) {
-      // Se ocorrer um erro, desfazer a transação
-      await db.query('ROLLBACK');
-      console.error('Erro ao criar usuário:', err);
-      throw err;
-    }
-  }
-
-  static async updatePassword(identifier, newPassword) {
-    try {
-      console.log(`Iniciando atualização de senha para identificador: ${identifier}`);
-
-      // Buscar o usuário pelo identificador
-      const user = await User.findByIdentifier(identifier);
-
-      if (!user) {
-        console.log(`Usuário não encontrado para atualização de senha: ${identifier}`);
-        return null;
-      }
-
-      console.log(`Usuário encontrado. ID do usuário: ${user.user_id}, Username: ${user.username}`);
-
-      // Hash da nova senha
-      const hashedPassword = await bcrypt.hash(newPassword, 10);
-      console.log(`Senha criptografada com sucesso.`);
-
-      // Query para atualizar a senha
-      const updatePasswordQuery = `
-        UPDATE user_accounts
-        SET password = $1
-        WHERE user_id = $2
-        RETURNING user_id, username
-      `;
-
-      const updateResult = await db.query(updatePasswordQuery, [hashedPassword, user.user_id]);
-
-      if (updateResult.rows.length === 0) {
-        console.log(`Erro ao atualizar a senha para o usuário com ID: ${user.user_id}`);
-        return null;
-      }
-
-      const updatedUser = updateResult.rows[0];
-      console.log(`Senha atualizada com sucesso para o usuário. ID: ${updatedUser.user_id}, Username: ${updatedUser.username}`);
-      return updatedUser;
-
-    } catch (err) {
-      console.error('Erro ao atualizar a senha:', err);
-      throw err;
-    }
-  }
-
 
   static async validatePassword(user, password) {
-    return bcrypt.compare(password, user.password);
-  }
-
-  static async findUsersWithSharedLicenses(userId) {
-    const query = `
-      SELECT 
-          ua.*,
-          (SELECT row_to_json(p.*)::text
-            FROM vw_persons_complete p
-            WHERE p.person_id = ua.person_id) AS persons
-      FROM user_accounts ua
-      JOIN user_license ul1 ON ua.user_id = ul1.user_id
-      WHERE ul1.license_id IN (
-          SELECT ul2.license_id
-          FROM user_license ul2
-          WHERE ul2.user_id = $1
-      );
-
-    `;
-
     try {
-      console.log('Iniciando a busca de usuários que compartilham licenças com o usuário:', userId);
-      const result = await db.query(query, [userId]);
-      console.log(`Usuários encontrados: ${result.rows.length}`);
-      return result.rows;
-    } catch (err) {
-      console.error('Erro ao buscar usuários com licenças compartilhadas:', err);
-      throw err;
+      console.log(`[User] Hash armazenado no banco: ${user.password}`);
+      console.log(`[User] Senha fornecida: ${password}`);
+      
+      console.log(`[User] Iniciando comparação de senha...`);
+      const isValid = await argon2.verify(user.password, password);
+      
+      console.log(`[User] Resultado da validação de senha: ${isValid}`);
+      return isValid;
+    } catch (error) {
+      console.error('[User] Erro ao validar senha:', error);
+      throw new Error('Erro ao validar senha');
     }
   }
-  
+
   static async getUserDetails(userId) {
     const query = `
       SELECT *
@@ -157,13 +56,57 @@ class User {
     `;
 
     try {
+      console.log(`[User] Buscando detalhes do usuário com ID: ${userId}`);
       const result = await db.query(query, [userId]);
+      console.log(`[User] Detalhes do usuário obtidos: ${JSON.stringify(result.rows[0])}`);
       return result.rows[0];
     } catch (err) {
-      console.error('Erro ao obter detalhes do usuário:', err);
+      console.error('[User] Erro ao obter detalhes do usuário:', err.message);
       throw err;
     }
   }
+
+static async updatePassword(identifier, newPassword) {
+  try {
+    console.log(`[User] Iniciando atualização de senha para identificador: ${identifier}`);
+
+    // Busca o usuário pelo identificador
+    const user = await User.findByIdentifier(identifier);
+    if (!user) {
+      console.log(`[User] Usuário não encontrado para atualização de senha: ${identifier}`);
+      return null;
+    }
+
+    console.log(`[User] Usuário encontrado. ID: ${user.user_id}. Gerando novo hash para a senha...`);
+
+    // Gera o hash da nova senha
+    const hashedPassword = await argon2.hash(newPassword);
+    console.log('[User] Hash gerado com sucesso.');
+
+    // Atualiza a senha no banco de dados
+    const query = `
+      UPDATE user_accounts
+      SET password = $1
+      WHERE user_id = $2
+      RETURNING user_id, username
+    `;
+    const result = await db.query(query, [hashedPassword, user.user_id]);
+
+    if (result.rows.length === 0) {
+      console.log(`[User] Falha ao atualizar a senha para o usuário ID: ${user.user_id}`);
+      return null;
+    }
+
+    const updatedUser = result.rows[0];
+    console.log(`[User] Senha atualizada com sucesso. ID: ${updatedUser.user_id}, Username: ${updatedUser.username}`);
+
+    return updatedUser;
+  } catch (error) {
+    console.error('[User] Erro ao atualizar senha:', error);
+    throw new Error('Erro ao atualizar senha');
+  }
+}
+
 }
 
 module.exports = User;

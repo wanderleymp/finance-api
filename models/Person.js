@@ -1,8 +1,12 @@
-// models/Person.js
-
 const db = require('../config/database');
+const axios = require('axios');
 
 class Person {
+  /**
+   * Obtém as pessoas vinculadas ao usuário logado.
+   * @param {number} userId - ID do usuário.
+   * @returns {Promise<Array>} - Lista de pessoas vinculadas.
+   */
   static async getPersonsByUserId(userId) {
     const query = `
       WITH user_licenses AS (
@@ -50,6 +54,15 @@ class Person {
       throw err;
     }
   }
+
+    static async consultarCNPJ(cnpj) {
+      console.log(`Recebida chamada ao método consultarCNPJ com CNPJ: ${cnpj}`);
+      return { message: 'endpoint ok' };
+    }
+ 
+  
+
+  
 }
 
 module.exports = Person;
