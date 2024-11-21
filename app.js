@@ -3,6 +3,26 @@ const app = express();
 const addressRoutes = require('./routes/addressRoutes');
 const authRoutes = require('./routes/authRoutes');
 const personRoutes = require('./routes/personRoutes');
+const cors = require('cors');
+
+app.use(cors({
+  origin: 'https://zp1v56uxy8rdx5ypatb0ockcb9tr6a-oci3--5173--d3acb9e1.local-credentialless.webcontainer-api.io',
+  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
+  allowedHeaders: ['Content-Type', 'Authorization'],
+}));
+
+// Configurar tratamento explícito para requisições OPTIONS
+app.options('*', (req, res) => {
+  res.setHeader('Access-Control-Allow-Origin', 'https://zp1v56uxy8rdx5ypatb0ockcb9tr6a-oci3--5173--d3acb9e1.local-credentialless.webcontainer-api.io');
+  res.setHeader('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
+  res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization');
+  res.status(204).end();
+});
+
+app.use((req, res, next) => {
+  console.log(`[Request] ${req.method} ${req.path}`);
+  next();
+});
 
 if (!process.env.JWT_SECRET) {
   console.error('Erro: JWT_SECRET não está configurado.');
@@ -28,6 +48,9 @@ app.get('/end', (req, res) => {
 app.use('/addresses', addressRoutes);
 app.use('/auth', authRoutes);
 app.use('/person', personRoutes);
+
+
+
 
 // Log para confirmar que o servidor está rodando
 const PORT = process.env.PORT || 3000;

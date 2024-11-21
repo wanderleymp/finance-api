@@ -18,6 +18,10 @@ services:
         - "traefik.http.routers.backend.tls.certresolver=letsencryptresolver"
         - "traefik.docker.network=AgileNet"
         - "traefik.http.routers.backend.entrypoints=websecure"
+        - "traefik.http.middlewares.corsMiddleware.headers.accessControlAllowOriginList=https://zp1v56uxy8rdx5ypatb0ockcb9tr6a-oci3--5173--d3acb9e1.local-credentialless.webcontainer-api.io"
+        - "traefik.http.middlewares.corsMiddleware.headers.accessControlAllowMethods=GET,POST,PUT,DELETE,OPTIONS"
+        - "traefik.http.middlewares.corsMiddleware.headers.accessControlAllowHeaders=Content-Type,Authorization"
+        - "traefik.http.routers.backend.middlewares=corsMiddleware"
 
 networks:
   AgileNet:

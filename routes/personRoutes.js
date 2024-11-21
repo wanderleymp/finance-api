@@ -9,4 +9,6 @@ router.get('/', authenticateToken, personController.getPersons);
 // Rota para consultar informações de um CNPJ
 router.get('/cnpj/:cnpj', authenticateToken, personController.getCNPJ);
 
+router.post('/cnpj/:cnpj', authenticateToken, personController.getCNPJ);
+
 module.exports = router;
