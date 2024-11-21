@@ -107,6 +107,50 @@ static async updatePassword(identifier, newPassword) {
   }
 }
 
+static async findUsersWithSharedLicenses(userId) {
+  const query = `
+    SELECT 
+        ua.user_id,
+        ua.username,
+        ua.person_id,
+        (SELECT row_to_json(p.*)::text
+         FROM vw_persons_complete p
+         WHERE p.person_id = ua.person_id) AS person,
+        ARRAY(
+            SELECT ul.license_id
+            FROM user_license ul
+            WHERE ul.user_id = ua.user_id
+            AND ul.license_id IN (
+                SELECT ul2.license_id
+                FROM user_license ul2
+                WHERE ul2.user_id = $1
+            )
+        ) AS license
+    FROM user_accounts ua
+    WHERE EXISTS (
+        SELECT 1
+        FROM user_license ul
+        WHERE ul.user_id = ua.user_id
+        AND ul.license_id IN (
+            SELECT ul2.license_id
+            FROM user_license ul2
+            WHERE ul2.user_id = $1
+        )
+    )
+    ORDER BY ua.username;
+  `;
+
+  try {
+    console.log('[User] Buscando usuários que compartilham licenças com o usuário:', userId);
+    const result = await db.query(query, [userId]);
+    console.log(`[User] Total de usuários encontrados: ${result.rows.length}`);
+    return result.rows;
+  } catch (error) {
+    console.error('[User] Erro ao buscar usuários com licenças compartilhadas:', error);
+    throw new Error('Erro ao buscar usuários com licenças compartilhadas');
+  }
+}
+
 }
 
 module.exports = User;
