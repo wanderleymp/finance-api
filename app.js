@@ -2,6 +2,8 @@ const express = require('express');
 const app = express();
 const addressRoutes = require('./routes/addressRoutes');
 const authRoutes = require('./routes/authRoutes');
+const movementRoutes = require('./routes/movementRoutes');
+
 const personRoutes = require('./routes/personRoutes');
 const cors = require('cors');
 
@@ -47,6 +49,8 @@ app.get('/end', (req, res) => {
 // Rotas principais
 app.use('/addresses', addressRoutes);
 app.use('/auth', authRoutes);
+app.use('/movements', movementRoutes);
+
 app.use('/person', personRoutes);
 
 
