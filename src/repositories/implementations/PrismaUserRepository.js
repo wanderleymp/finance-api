@@ -146,6 +146,124 @@ class PrismaUserRepository extends IUserRepository {
       throw error;
     }
   }
+
+  async findByUsername(username) {
+    const startTime = Date.now();
+    try {
+      logger.info('Iniciando busca de usuário por username', {
+        operation: 'findByUsername',
+        data: { username }
+      });
+
+      const user = await this.prisma.user_accounts.findFirst({
+        where: { username }
+      });
+
+      const duration = Date.now() - startTime;
+      logger.info('Busca de usuário por username concluída', {
+        operation: 'findByUsername',
+        duration,
+        data: { username, found: !!user }
+      });
+
+      return user;
+    } catch (error) {
+      const duration = Date.now() - startTime;
+      logger.error('Erro ao buscar usuário por username', {
+        operation: 'findByUsername',
+        duration,
+        error: error.message,
+        data: { username }
+      });
+      throw error;
+    }
+  }
+
+  async findByIdentifier(identifier) {
+    try {
+        console.log('=== BUSCA DE USUÁRIO ===');
+        console.log('Buscando por:', identifier);
+
+        // Busca por username ou qualquer valor de contato
+        const user = await this.prisma.user_accounts.findFirst({
+            where: {
+                OR: [
+                    { username: identifier },
+                    {
+                        persons: {
+                            person_contacts: {
+                                some: {
+                                    contacts: {
+                                        is: {
+                                            contact_value: {
+                                                equals: identifier,
+                                                mode: 'insensitive'
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                ]
+            },
+            include: {
+                persons: {
+                    include: {
+                        person_contacts: {
+                            include: {
+                                contacts: {
+                                    include: {
+                                        contact_types: true
+                                    }
+                                }
+                            }
+                        },
+                        person_documents: {
+                            include: {
+                                document_types: true
+                            }
+                        },
+                        addresses: true,
+                        person_tax_regimes: true,
+                        person_types: true,
+                        person_license: {
+                            include: {
+                                licenses: true
+                            }
+                        }
+                    }
+                },
+                profiles: true
+            }
+        });
+
+        if (user) {
+            console.log('Usuário encontrado:', {
+                id: user.user_id,
+                username: user.username,
+                temSenha: !!user.password,
+                contatos: user.persons?.person_contacts?.map(pc => ({
+                    tipo: pc.contacts?.contact_types?.type_name,
+                    tipo_id: pc.contacts?.contact_type_id,
+                    valor: pc.contacts?.contact_value,
+                    nome: pc.contacts?.contact_name
+                }))
+            });
+        } else {
+            console.log('Nenhum usuário encontrado');
+        }
+
+        return user;
+    } catch (error) {
+        console.error('Erro na busca:', {
+            mensagem: error.message,
+            tipo: error.name,
+            stack: error.stack?.split('\n')
+        });
+        throw error;
+    }
+  }
 }
 
 module.exports = PrismaUserRepository;

@@ -20,17 +20,17 @@ class LogsController {
                     }
                 })
                 .slice(-lines);
-
+            
             res.json({
                 type: logType,
                 lines: logLines.length,
                 logs: logLines
             });
         } catch (error) {
-            res.status(500).json({
-                error: 'Erro ao ler os logs',
-                details: error.message,
-                availableTypes: ['combined', 'error']
+            console.error('Erro ao ler logs:', error);
+            res.status(500).json({ 
+                error: 'Erro ao ler logs',
+                details: error.message 
             });
         }
     }
