@@ -1,0 +1,24 @@
+version: '3.8'
+
+services:
+  backend:
+    image: wanderleymp/backend:latest
+    restart: always
+    environment:
+      NODE_ENV: production
+      DATABASE_CONNECTION_URI: postgresql://postgres:ffcaa89a3e19bd98e911475c7974309b@10.1.0.2:5432/AgileDB?connection_limit=20
+
+    networks:
+      - AgileNet
+    deploy:
+      labels:
+        - "traefik.enable=true"
+        - "traefik.http.routers.backend.rule=Host(`api.agilefinance.com.br`)"
+        - "traefik.http.services.backend.loadbalancer.server.port=3000"
+        - "traefik.http.routers.backend.tls.certresolver=letsencryptresolver"
+        - "traefik.docker.network=AgileNet"
+        - "traefik.http.routers.backend.entrypoints=websecure"
+
+networks:
+  AgileNet:
+    external: true
