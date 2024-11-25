@@ -1,15 +1,16 @@
-const pool = require('../../config/db');
 const logger = require('../../config/logger');
+const PrismaUserRepository = require('../repositories/implementations/PrismaUserRepository');
+
+const userRepository = new PrismaUserRepository();
 
 const getAllUsers = async (req, res) => {
   try {
-    logger.info('Buscando todos os usuários');
-    const result = await pool.query('SELECT * FROM user_accounts');
-    logger.info(`${result.rows.length} usuários encontrados`);
-    res.status(200).json(result.rows);
+    logger.info('Iniciando busca de todos os usuários');
+    const users = await userRepository.getAllUsers();
+    res.status(200).json(users);
   } catch (error) {
     logger.error(`Erro ao buscar usuários: ${error.message}`);
-    res.status(500).json({ error: error.message });
+    res.status(500).json({ error: 'Erro interno ao buscar usuários' });
   }
 };
 
