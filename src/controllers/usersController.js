@@ -1,19 +1,45 @@
 const argon2 = require('argon2');
 const logger = require('../../config/logger');
 const PrismaUserRepository = require('../repositories/implementations/PrismaUserRepository');
+const { getPaginationParams, getPaginationMetadata } = require('../utils/pagination');
 
 const userRepository = new PrismaUserRepository();
 
 // GET /users
 async function getAllUsers(req, res) {
     try {
-        const users = await userRepository.getAllUsers();
+        // Processa parâmetros de paginação
+        const { page, limit, offset } = getPaginationParams(req.query);
+        const search = req.query.search?.trim();
+
+        // Construir where clause baseado nos parâmetros de busca
+        const where = {};
+        if (search) {
+            where.OR = [
+                { username: { contains: search, mode: 'insensitive' } }
+            ];
+        }
+
+        // Buscar usuários com paginação
+        const [users, total] = await Promise.all([
+            userRepository.getAllUsers(where, offset, limit),
+            userRepository.countUsers(where)
+        ]);
+
         // Remove sensitive data
         const sanitizedUsers = users.map(user => {
             const { password, ...userWithoutPassword } = user;
             return userWithoutPassword;
         });
-        res.json(sanitizedUsers);
+
+        // Gera metadados da paginação
+        const meta = getPaginationMetadata(total, limit, page);
+
+        // Retorna resposta formatada
+        res.json({
+            data: sanitizedUsers,
+            meta
+        });
     } catch (error) {
         logger.error('Erro ao buscar usuários:', error);
         res.status(500).json({ error: 'Erro ao buscar usuários' });
@@ -29,7 +55,10 @@ async function getUserById(req, res) {
         }
         // Remove sensitive data
         const { password, ...userWithoutPassword } = user;
-        res.json(userWithoutPassword);
+        res.json({
+            data: userWithoutPassword,
+            meta: {}
+        });
     } catch (error) {
         logger.error('Erro ao buscar usuário:', error);
         res.status(500).json({ error: 'Erro ao buscar usuário' });
@@ -68,7 +97,10 @@ async function createUser(req, res) {
 
         // Remove sensitive data
         const { password: _, ...userWithoutPassword } = user;
-        res.status(201).json(userWithoutPassword);
+        res.status(201).json({
+            data: userWithoutPassword,
+            meta: {}
+        });
     } catch (error) {
         logger.error('Erro ao criar usuário:', error);
         res.status(500).json({ error: 'Erro ao criar usuário' });
@@ -107,7 +139,10 @@ async function updateUser(req, res) {
 
         // Remove sensitive data
         const { password: _, ...userWithoutPassword } = updatedUser;
-        res.json(userWithoutPassword);
+        res.json({
+            data: userWithoutPassword,
+            meta: {}
+        });
     } catch (error) {
         logger.error('Erro ao atualizar usuário:', error);
         res.status(500).json({ error: 'Erro ao atualizar usuário' });
@@ -131,7 +166,10 @@ async function deleteUser(req, res) {
         }
 
         await userRepository.deleteUser(id);
-        res.status(204).send();
+        res.status(204).json({
+            data: null,
+            meta: {}
+        });
     } catch (error) {
         logger.error('Erro ao deletar usuário:', error);
         res.status(500).json({ error: 'Erro ao deletar usuário' });
@@ -167,7 +205,10 @@ async function updatePassword(req, res) {
         const hashedPassword = await argon2.hash(newPassword);
         await userRepository.updateUser(id, { password: hashedPassword });
 
-        res.json({ message: 'Senha atualizada com sucesso' });
+        res.json({
+            data: { message: 'Senha atualizada com sucesso' },
+            meta: {}
+        });
     } catch (error) {
         logger.error('Erro ao atualizar senha:', error);
         res.status(500).json({ error: 'Erro ao atualizar senha' });

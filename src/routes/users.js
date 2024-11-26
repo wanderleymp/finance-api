@@ -80,6 +80,97 @@ router.get('/', authenticateToken, getAllUsers);
 
 /**
  * @swagger
+ * /users:
+ *   get:
+ *     tags:
+ *       - Users
+ *     summary: Lista usuários com paginação e filtros
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: query
+ *         name: page
+ *         schema:
+ *           type: integer
+ *           minimum: 1
+ *           default: 1
+ *         description: Número da página
+ *       - in: query
+ *         name: limit
+ *         schema:
+ *           type: integer
+ *           minimum: 1
+ *           maximum: 100
+ *           default: 10
+ *         description: Número de registros por página
+ *       - in: query
+ *         name: search
+ *         schema:
+ *           type: string
+ *         description: Filtrar por nome ou email
+ *     responses:
+ *       200:
+ *         description: Lista de usuários
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 data:
+ *                   type: array
+ *                   items:
+ *                     type: object
+ *                     properties:
+ *                       id:
+ *                         type: integer
+ *                       username:
+ *                         type: string
+ *                       profile:
+ *                         type: object
+ *                       person:
+ *                         type: object
+ *                         properties:
+ *                           id:
+ *                             type: integer
+ *                           full_name:
+ *                             type: string
+ *                           contacts:
+ *                             type: array
+ *                             items:
+ *                               type: object
+ *                               properties:
+ *                                 id:
+ *                                   type: integer
+ *                                 type:
+ *                                   type: string
+ *                                 value:
+ *                                   type: string
+ *                                 name:
+ *                                   type: string
+ *                 meta:
+ *                   type: object
+ *                   properties:
+ *                     total:
+ *                       type: integer
+ *                     pages:
+ *                       type: integer
+ *                     current_page:
+ *                       type: integer
+ *                     per_page:
+ *                       type: integer
+ *       401:
+ *         description: Não autorizado
+ *       500:
+ *         description: Erro interno do servidor
+ */
+router.get('/list', authenticateToken, (req, res) => {
+  const { page, limit, search } = req.query;
+  // Implementação da lógica de listagem com paginação e filtros
+  // ...
+});
+
+/**
+ * @swagger
  * /users/{id}:
  *   get:
  *     summary: Obtém um usuário pelo ID

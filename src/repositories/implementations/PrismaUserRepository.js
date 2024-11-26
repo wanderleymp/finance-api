@@ -8,22 +8,26 @@ class PrismaUserRepository extends IUserRepository {
     this.prisma = new PrismaClient();
   }
 
-  async getAllUsers() {
+  async getAllUsers(where = {}, skip = 0, take = 10) {
     const startTime = Date.now();
     try {
-      logger.info('Iniciando busca de todos os usuários', {
+      logger.info('Iniciando busca de usuários com paginação', {
         operation: 'getAllUsers',
-        timestamp: new Date().toISOString()
+        data: { where, skip, take }
       });
 
-      const users = await this.prisma.user_accounts.findMany();
-      const duration = Date.now() - startTime;
+      const users = await this.prisma.user_accounts.findMany({
+        where,
+        skip,
+        take,
+        orderBy: { username: 'asc' }
+      });
 
+      const duration = Date.now() - startTime;
       logger.info('Busca de usuários concluída com sucesso', {
         operation: 'getAllUsers',
         duration,
-        count: users.length,
-        data: { userCount: users.length }
+        count: users.length
       });
 
       return users;
@@ -32,6 +36,19 @@ class PrismaUserRepository extends IUserRepository {
       logger.error('Erro ao buscar usuários', {
         operation: 'getAllUsers',
         duration,
+        error: error.message,
+        stack: error.stack
+      });
+      throw error;
+    }
+  }
+
+  async countUsers(where = {}) {
+    try {
+      return await this.prisma.user_accounts.count({ where });
+    } catch (error) {
+      logger.error('Erro ao contar usuários', {
+        operation: 'countUsers',
         error: error.message,
         stack: error.stack
       });
@@ -262,6 +279,53 @@ class PrismaUserRepository extends IUserRepository {
             stack: error.stack?.split('\n')
         });
         throw error;
+    }
+  }
+
+  async findAll({ page, limit, offset, search }) {
+    const startTime = Date.now();
+    try {
+      logger.info('Iniciando busca paginada de usuários', {
+        operation: 'findAll',
+        data: { page, limit, offset, search }
+      });
+
+      // Construir where clause baseado nos parâmetros de busca
+      const where = {};
+      if (search) {
+        where.OR = [
+          { username: { contains: search, mode: 'insensitive' } }
+        ];
+      }
+
+      // Buscar usuários com paginação
+      const [users, total] = await Promise.all([
+        this.prisma.user_accounts.findMany({
+          where,
+          skip: offset,
+          take: limit,
+          orderBy: { username: 'asc' }
+        }),
+        this.prisma.user_accounts.count({ where })
+      ]);
+
+      const duration = Date.now() - startTime;
+      logger.info('Busca paginada de usuários concluída', {
+        operation: 'findAll',
+        duration,
+        data: { total, pageSize: users.length }
+      });
+
+      return { users, total };
+    } catch (error) {
+      const duration = Date.now() - startTime;
+      logger.error('Erro ao buscar usuários com paginação', {
+        operation: 'findAll',
+        duration,
+        error: error.message,
+        stack: error.stack
+      });
+      throw error;
     }
   }
 }
