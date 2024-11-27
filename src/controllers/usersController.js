@@ -67,10 +67,7 @@ async function getUserById(req, res) {
             licenses: userWithoutPassword.licenses || []
         };
 
-        res.json({
-            data: formattedUser,
-            meta: {}
-        });
+        res.json(formattedUser);
     } catch (error) {
         logger.error('Erro ao buscar usuário:', error);
         res.status(500).json({ error: 'Erro ao buscar usuário' });
