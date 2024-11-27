@@ -337,6 +337,38 @@ router.get('/:id/contacts', authenticateToken, (req, res) => personController.li
 
 /**
  * @swagger
+ * /persons/{personId}/contacts/{contactId}:
+ *   delete:
+ *     tags:
+ *       - Pessoas
+ *     summary: Remove um contato de uma pessoa
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: personId
+ *         required: true
+ *         schema:
+ *           type: integer
+ *         description: ID da pessoa
+ *       - in: path
+ *         name: contactId
+ *         required: true
+ *         schema:
+ *           type: integer
+ *         description: ID do contato
+ *     responses:
+ *       204:
+ *         description: Contato removido com sucesso
+ *       404:
+ *         description: Contato não encontrado ou sem permissão
+ *       500:
+ *         description: Erro ao remover contato
+ */
+router.delete('/:personId/contacts/:contactId', authenticateToken, (req, res) => personController.removeContact(req, res));
+
+/**
+ * @swagger
  * /persons:
  *   post:
  *     tags:

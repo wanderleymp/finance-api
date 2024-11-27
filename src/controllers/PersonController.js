@@ -241,6 +241,32 @@ class PersonController {
     }
   }
 
+  async removeContact(req, res) {
+    try {
+      const { personId, contactId } = req.params;
+      const userId = req.user.id;
+
+      logger.info('=== REMOVENDO CONTATO DA PESSOA ===', {
+        personId,
+        contactId,
+        userId
+      });
+
+      const success = await this.personRepository.removeContact(personId, contactId, userId);
+      
+      if (!success) {
+        logger.info('Contato não encontrado ou sem permissão', { personId, contactId });
+        return res.status(404).json({ error: 'Contato não encontrado ou sem permissão' });
+      }
+
+      logger.info('Contato removido com sucesso', { personId, contactId });
+      return res.status(204).send();
+    } catch (error) {
+      logger.error('Erro ao remover contato da pessoa:', error);
+      return res.status(500).json({ error: 'Erro ao remover contato da pessoa' });
+    }
+  }
+
   async testCNPJAPI(req, res) {
     try {
       const { cnpj } = req.query;

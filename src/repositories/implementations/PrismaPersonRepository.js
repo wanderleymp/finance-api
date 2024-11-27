@@ -1749,6 +1749,93 @@ class PrismaPersonRepository {
   }
 
   /**
+   * Remove um contato de uma pessoa
+   * @param {number} personId - ID da pessoa
+   * @param {number} personContactId - ID do relacionamento pessoa-contato
+   * @param {number} userId - ID do usuário requisitante
+   * @returns {Promise<boolean>} - true se removido com sucesso
+   */
+  async removeContact(personId, personContactId, userId) {
+    const requestId = Math.random().toString(36).substring(7);
+    try {
+      this.logger.info('=== REMOVENDO CONTATO DA PESSOA ===', {
+        requestId,
+        personId,
+        personContactId,
+        userId
+      });
+
+      // Verifica se o usuário tem acesso à pessoa
+      const userLicenses = await this.getLicenseIdsByUserId(userId);
+      
+      const person = await this.prisma.persons.findFirst({
+        where: {
+          person_id: parseInt(personId),
+          person_license: {
+            some: {
+              license_id: {
+                in: userLicenses
+              }
+            }
+          }
+        }
+      });
+
+      if (!person) {
+        this.logger.warn('Pessoa não encontrada ou sem permissão', { 
+          requestId,
+          personId, 
+          userId,
+          userLicenses 
+        });
+        return false;
+      }
+
+      // Verifica se o contato pertence à pessoa
+      const personContact = await this.prisma.person_contacts.findFirst({
+        where: {
+          person_contact_id: parseInt(personContactId),
+          person_id: parseInt(personId)
+        }
+      });
+
+      if (!personContact) {
+        this.logger.warn('Contato não encontrado ou não pertence à pessoa', {
+          requestId,
+          personId,
+          personContactId
+        });
+        return false;
+      }
+
+      // Remove apenas o relacionamento
+      await this.prisma.person_contacts.delete({
+        where: {
+          person_contact_id: parseInt(personContactId)
+        }
+      });
+
+      this.logger.info('Contato removido com sucesso', {
+        requestId,
+        personId,
+        personContactId
+      });
+
+      return true;
+    } catch (error) {
+      this.logger.error('Erro ao remover contato da pessoa:', {
+        requestId,
+        personId,
+        personContactId,
+        userId,
+        error: error.message,
+        stack: error.stack
+      });
+      throw error;
+    }
+  }
+
+  /**
    * Método auxiliar para obter os IDs das licenças do usuário
    * @param {number} userId - ID do usuário
    * @returns {Promise<number[]>} - Array com os IDs das licenças
