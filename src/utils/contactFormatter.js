@@ -1,4 +1,34 @@
 /**
+ * Formata um número de WhatsApp para um formato padronizado
+ * @param {string} whatsapp - O número do WhatsApp para formatar
+ * @returns {string} - O número formatado
+ */
+function formatWhatsApp(whatsapp) {
+    // Remove todos os caracteres não numéricos e espaços
+    let numbers = whatsapp.replace(/[\s\W_]+/g, '');
+    
+    // Se tiver o formato internacional do WhatsApp (@s.whatsapp.net), remove
+    numbers = numbers.replace(/@s\.whatsapp\.net/i, '');
+    
+    // Se começar com + ou 0, remove
+    if (numbers.startsWith('0')) {
+        numbers = numbers.substring(1);
+    }
+    
+    // Se não tiver código do país, assume Brasil (+55)
+    if (numbers.length <= 11) {
+        numbers = '55' + numbers;
+    }
+    
+    // Garante que tenha o 9 para celulares no Brasil
+    if (numbers.startsWith('55') && numbers.length === 12 && !numbers.substring(2).startsWith('9')) {
+        numbers = numbers.substring(0, 2) + '9' + numbers.substring(2);
+    }
+
+    return numbers;
+}
+
+/**
  * Formats a phone number to a standardized format
  * @param {string} phoneNumber - The phone number to format
  * @returns {string} - The formatted phone number
@@ -46,6 +76,7 @@ function formatContactValue(value, type) {
         case 'E-Mail':
             return value.toLowerCase().trim();
         case 'Whatsapp':
+            return formatWhatsApp(value);
         case 'Telefone':
             return formatPhoneNumber(value);
         default:
@@ -65,16 +96,15 @@ function detectContactType(value) {
 
     // Verifica se é email
     if (cleanValue.includes('@') && cleanValue.includes('.')) {
+        // Se for formato do WhatsApp internacional
+        if (cleanValue.includes('@s.whatsapp.net')) {
+            return { type: 'Whatsapp', confidence: 1 };
+        }
         return { type: 'E-Mail', confidence: 0.9 };
     }
 
     // Verifica se é um número de telefone/whatsapp
     if (numericValue.length >= 8) {
-        // Se tiver o formato internacional do WhatsApp (@s.whatsapp.net)
-        if (cleanValue.includes('@s.whatsapp.net')) {
-            return { type: 'Whatsapp', confidence: 1 };
-        }
-
         // Se for um número BR com 11 dígitos (com 9)
         if (numericValue.length === 11 && numericValue.startsWith('9', 2)) {
             return { type: 'Whatsapp', confidence: 0.7 };
@@ -95,6 +125,7 @@ function detectContactType(value) {
 
 module.exports = {
     formatPhoneNumber,
+    formatWhatsApp,
     formatContactValue,
     detectContactType
 };

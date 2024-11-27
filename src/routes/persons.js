@@ -97,6 +97,32 @@ router.get('/:id', authenticateToken, (req, res) => personController.getById(req
 
 /**
  * @swagger
+ * /persons/{id}:
+ *   delete:
+ *     tags:
+ *       - Pessoas
+ *     summary: Remove uma pessoa
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: integer
+ *         description: ID da pessoa
+ *     responses:
+ *       204:
+ *         description: Pessoa removida com sucesso
+ *       404:
+ *         description: Pessoa não encontrada ou sem permissão
+ *       500:
+ *         description: Erro ao remover pessoa
+ */
+router.delete('/:id', authenticateToken, (req, res) => personController.delete(req, res));
+
+/**
+ * @swagger
  * /persons/cnpj:
  *   post:
  *     tags:
@@ -262,6 +288,52 @@ router.get('/consulta/cnpj/:cnpj', authenticateToken, (req, res) => personContro
  *         description: Erro ao consultar API
  */
 router.get('/consulta/cep/:cep', authenticateToken, (req, res) => personController.consultaCEP(req, res));
+
+/**
+ * @swagger
+ * /persons/{id}/contacts:
+ *   get:
+ *     tags:
+ *       - Pessoas
+ *     summary: Lista os contatos de uma pessoa
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: integer
+ *         description: ID da pessoa
+ *     responses:
+ *       200:
+ *         description: Lista de contatos
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 data:
+ *                   type: array
+ *                   items:
+ *                     type: object
+ *                     properties:
+ *                       id:
+ *                         type: integer
+ *                       type:
+ *                         type: string
+ *                       value:
+ *                         type: string
+ *                       name:
+ *                         type: string
+ *                 meta:
+ *                   type: object
+ *       404:
+ *         description: Pessoa não encontrada ou sem permissão
+ *       500:
+ *         description: Erro ao listar contatos
+ */
+router.get('/:id/contacts', authenticateToken, (req, res) => personController.listContacts(req, res));
 
 /**
  * @swagger

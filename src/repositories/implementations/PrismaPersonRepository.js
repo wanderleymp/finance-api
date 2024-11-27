@@ -3,9 +3,10 @@ const logger = require('../../../config/logger');
 const CepService = require('../../services/CepService');
 
 class PrismaPersonRepository {
-  constructor(prisma, logger) {
-    this.prisma = prisma;
+  constructor() {
+    this.prisma = new PrismaClient();
     this.logger = logger;
+    this.cepService = new CepService();
   }
 
   async findAll({ page, limit, offset, search, userId }) {
@@ -1318,7 +1319,7 @@ class PrismaPersonRepository {
       });
 
       if (Array.isArray(qsaData) && qsaData.length > 0) {
-        const qsaRecords = await Promise.all(qsaData.map(member =>
+        const qsaRecords = await Promise.all(qsaData.map(member => 
           this.prisma.person_qsa.create({
             data: {
               juridical_person_id: parseInt(person_id),
@@ -1356,7 +1357,7 @@ class PrismaPersonRepository {
       });
 
       if (Array.isArray(cnaesData) && cnaesData.length > 0) {
-        const cnaeRecords = await Promise.all(cnaesData.map(cnae =>
+        const cnaeRecords = await Promise.all(cnaesData.map(cnae => 
           this.prisma.person_cnae.create({
             data: {
               person_id: parseInt(person_id),
@@ -1537,13 +1538,246 @@ class PrismaPersonRepository {
     }
   }
 
-  // Método auxiliar para obter os IDs das licenças do usuário
+  /**
+   * Deleta uma pessoa e todos os seus relacionamentos
+   * @param {number} personId - ID da pessoa
+   * @param {number} userId - ID do usuário
+   * @returns {Promise<boolean>}
+   */
+  async delete(personId, userId) {
+    const requestId = Math.random().toString(36).substring(7);
+    try {
+      logger.info('=== DELETANDO PESSOA ===', {
+        requestId,
+        personId,
+        userId
+      });
+
+      // Verifica se o usuário tem acesso à pessoa
+      const userLicenses = await this.getLicenseIdsByUserId(userId);
+      const person = await this.prisma.persons.findFirst({
+        where: {
+          person_id: personId,
+          person_license: {
+            some: {
+              license_id: {
+                in: userLicenses
+              }
+            }
+          }
+        }
+      });
+
+      if (!person) {
+        logger.info('Pessoa não encontrada ou sem permissão', {
+          requestId,
+          personId,
+          userLicenses
+        });
+        return false;
+      }
+
+      // Deleta em transação para garantir consistência
+      await this.prisma.$transaction(async (prisma) => {
+        // Remove associações
+        await prisma.person_contacts.deleteMany({
+          where: { person_id: personId }
+        });
+
+        await prisma.person_documents.deleteMany({
+          where: { person_id: personId }
+        });
+
+        await prisma.person_cnae.deleteMany({
+          where: { person_id: personId }
+        });
+
+        await prisma.person_tax_regimes.deleteMany({
+          where: { person_id: personId }
+        });
+
+        await prisma.person_license.deleteMany({
+          where: { person_id: personId }
+        });
+
+        await prisma.addresses.deleteMany({
+          where: { person_id: personId }
+        });
+
+        // Por fim, remove a pessoa
+        await prisma.persons.delete({
+          where: { person_id: personId }
+        });
+      });
+
+      logger.info('Pessoa deletada com sucesso', {
+        requestId,
+        personId
+      });
+
+      return true;
+    } catch (error) {
+      logger.error('Erro ao deletar pessoa:', {
+        requestId,
+        personId,
+        error: error.message,
+        stack: error.stack
+      });
+      throw error;
+    }
+  }
+
+  /**
+   * Lista os contatos de uma pessoa
+   * @param {number} personId - ID da pessoa
+   * @param {number} userId - ID do usuário requisitante
+   * @param {Object} options - Opções de paginação
+   * @param {number} [options.page] - Número da página
+   * @param {number} [options.limit] - Limite de registros por página
+   * @returns {Promise<Object>} - Lista de contatos com metadados
+   */
+  async findContactsByPersonId(personId, userId, options = {}) {
+    const requestId = Math.random().toString(36).substring(7);
+    try {
+      this.logger.info('=== LISTANDO CONTATOS DA PESSOA ===', {
+        requestId,
+        personId,
+        userId,
+        options
+      });
+
+      // Verifica se o usuário tem acesso à pessoa
+      const userLicenses = await this.getLicenseIdsByUserId(userId);
+      
+      const person = await this.prisma.persons.findFirst({
+        where: {
+          person_id: parseInt(personId),
+          person_license: {
+            some: {
+              license_id: {
+                in: userLicenses
+              }
+            }
+          }
+        }
+      });
+
+      if (!person) {
+        this.logger.warn('Pessoa não encontrada ou sem permissão', { 
+          requestId,
+          personId, 
+          userId,
+          userLicenses 
+        });
+        return {
+          data: [],
+          meta: {
+            total: 0,
+            page: options.page || 1,
+            limit: options.limit || 0,
+            pages: 0
+          }
+        };
+      }
+
+      // Configurar paginação
+      const { page = 1, limit } = options;
+      const skip = limit ? (page - 1) * limit : undefined;
+      const take = limit || undefined;
+
+      // Buscar total de registros
+      const [total, contacts] = await Promise.all([
+        this.prisma.person_contacts.count({
+          where: {
+            person_id: parseInt(personId)
+          }
+        }),
+        this.prisma.person_contacts.findMany({
+          where: {
+            person_id: parseInt(personId)
+          },
+          include: {
+            contacts: {
+              include: {
+                contact_types: true
+              }
+            }
+          },
+          skip,
+          take,
+          orderBy: {
+            person_contact_id: 'asc'
+          }
+        })
+      ]);
+
+      this.logger.info('Contatos encontrados', {
+        requestId,
+        personId,
+        total,
+        returned: contacts.length,
+        page,
+        limit
+      });
+
+      const data = contacts.map(pc => ({
+        id: pc.person_contact_id,
+        type: pc.contacts.contact_types?.description || null,
+        value: pc.contacts.contact_value || '',
+        name: pc.contacts.contact_name || null
+      }));
+
+      return {
+        data,
+        meta: {
+          total,
+          page: page || 1,
+          limit: limit || total,
+          pages: limit ? Math.ceil(total / limit) : 1
+        }
+      };
+    } catch (error) {
+      this.logger.error('Erro ao buscar contatos da pessoa:', {
+        requestId,
+        personId,
+        userId,
+        error: error.message,
+        stack: error.stack
+      });
+      throw error;
+    }
+  }
+
+  /**
+   * Método auxiliar para obter os IDs das licenças do usuário
+   * @param {number} userId - ID do usuário
+   * @returns {Promise<number[]>} - Array com os IDs das licenças
+   */
   async getLicenseIdsByUserId(userId) {
-    const userLicenses = await this.prisma.user_license.findMany({
-      where: { user_id: userId },
-      select: { license_id: true }
-    });
-    return userLicenses.map(ul => ul.license_id);
+    try {
+      const userLicenses = await this.prisma.user_license.findMany({
+        where: { 
+          user_id: parseInt(userId)
+        },
+        select: { 
+          license_id: true 
+        }
+      });
+
+      if (!userLicenses || userLicenses.length === 0) {
+        this.logger.warn('Nenhuma licença encontrada para o usuário', { userId });
+        return [];
+      }
+
+      return userLicenses.map(ul => ul.license_id);
+    } catch (error) {
+      this.logger.error('Erro ao buscar licenças do usuário:', {
+        userId,
+        error: error.message,
+        stack: error.stack
+      });
+      throw error;
+    }
   }
 }
 

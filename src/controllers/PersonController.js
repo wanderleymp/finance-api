@@ -180,6 +180,67 @@ class PersonController {
     }
   }
 
+  async delete(req, res) {
+    try {
+      const { id } = req.params;
+      const userId = req.user.id;
+
+      logger.info('=== DELETANDO PESSOA ===', {
+        id,
+        userId
+      });
+
+      const success = await this.personRepository.delete(id, userId);
+      
+      if (!success) {
+        logger.info('Pessoa não encontrada ou sem permissão', { id });
+        return res.status(404).json({ error: 'Pessoa não encontrada ou sem permissão' });
+      }
+
+      logger.info('Pessoa deletada com sucesso', { id });
+      return res.status(204).send();
+    } catch (error) {
+      logger.error('Erro ao deletar pessoa:', error);
+      return res.status(500).json({ error: 'Erro ao deletar pessoa' });
+    }
+  }
+
+  async listContacts(req, res) {
+    try {
+      const { id } = req.params;
+      const userId = req.user.id;
+      const { page, limit } = req.query;
+
+      logger.info('=== LISTANDO CONTATOS DA PESSOA ===', {
+        id,
+        userId,
+        page,
+        limit
+      });
+
+      const result = await this.personRepository.findContactsByPersonId(
+        id, 
+        userId,
+        {
+          page: page ? parseInt(page) : undefined,
+          limit: limit ? parseInt(limit) : undefined
+        }
+      );
+      
+      logger.info('Contatos encontrados', {
+        id,
+        total: result.meta.total,
+        page: result.meta.page,
+        limit: result.meta.limit
+      });
+
+      return res.json(result);
+    } catch (error) {
+      logger.error('Erro ao listar contatos da pessoa:', error);
+      return res.status(500).json({ error: 'Erro ao listar contatos da pessoa' });
+    }
+  }
+
   async testCNPJAPI(req, res) {
     try {
       const { cnpj } = req.query;
