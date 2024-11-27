@@ -1866,6 +1866,121 @@ class PrismaPersonRepository {
       throw error;
     }
   }
+
+  async listDocuments(personId, page = 1, limit = 10) {
+    const skip = (page - 1) * limit;
+
+    const [total, documents] = await Promise.all([
+      this.prisma.person_documents.count({
+        where: { person_id: personId }
+      }),
+      this.prisma.person_documents.findMany({
+        where: { person_id: personId },
+        include: {
+          document_type: true
+        },
+        skip,
+        take: limit,
+        orderBy: { created_at: 'desc' }
+      })
+    ]);
+
+    const pages = Math.ceil(total / limit);
+
+    return {
+      data: documents,
+      meta: {
+        total,
+        page,
+        limit,
+        pages
+      }
+    };
+  }
+
+  async addDocument(personId, data) {
+    // Verifica se o tipo de documento existe
+    const documentType = await this.prisma.document_types.findUnique({
+      where: { id: data.type_id }
+    });
+
+    if (!documentType) {
+      throw new Error('Tipo de documento não encontrado');
+    }
+
+    // Verifica se já existe documento do mesmo tipo
+    const existingDocument = await this.prisma.person_documents.findFirst({
+      where: {
+        person_id: personId,
+        document_type_id: data.type_id
+      }
+    });
+
+    if (existingDocument) {
+      throw new Error('Pessoa já possui documento deste tipo');
+    }
+
+    // Valida o documento se houver regex
+    if (documentType.validation_regex) {
+      const regex = new RegExp(documentType.validation_regex);
+      if (!regex.test(data.value)) {
+        throw new Error('Documento inválido para o tipo selecionado');
+      }
+    }
+
+    return this.prisma.person_documents.create({
+      data: {
+        person_id: personId,
+        document_type_id: data.type_id,
+        value: data.value
+      },
+      include: {
+        document_type: true
+      }
+    });
+  }
+
+  async removeDocument(personId, documentId) {
+    const document = await this.prisma.person_documents.findFirst({
+      where: {
+        id: documentId,
+        person_id: personId
+      }
+    });
+
+    if (!document) {
+      throw new Error('Documento não encontrado');
+    }
+
+    return this.prisma.person_documents.delete({
+      where: { id: documentId }
+    });
+  }
+
+  async validateDocument(typeId, value) {
+    // Busca o tipo de documento
+    const documentType = await this.prisma.document_types.findUnique({
+      where: { id: typeId }
+    });
+
+    if (!documentType) {
+      throw new Error('Tipo de documento não encontrado');
+    }
+
+    // Se não tem regex, considera válido
+    if (!documentType.validation_regex) {
+      return { valid: true };
+    }
+
+    // Valida com regex
+    const regex = new RegExp(documentType.validation_regex);
+    const valid = regex.test(value);
+
+    return {
+      valid,
+      message: valid ? 'Documento válido' : 'Documento inválido para o tipo selecionado'
+    };
+  }
 }
 
 module.exports = PrismaPersonRepository;

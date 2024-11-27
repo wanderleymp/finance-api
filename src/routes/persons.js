@@ -9,6 +9,221 @@ const personController = new PersonController(personRepository);
 
 /**
  * @swagger
+ * components:
+ *   schemas:
+ *     Person:
+ *       type: object
+ *       properties:
+ *         id:
+ *           type: integer
+ *           description: ID da pessoa
+ *         full_name:
+ *           type: string
+ *           description: Nome completo/Razão social
+ *         fantasy_name:
+ *           type: string
+ *           description: Nome fantasia
+ *         person_type:
+ *           type: object
+ *           properties:
+ *             id:
+ *               type: integer
+ *             name:
+ *               type: string
+ *         documents:
+ *           type: array
+ *           items:
+ *             type: object
+ *             properties:
+ *               type:
+ *                 type: string
+ *               value:
+ *                 type: string
+ *         address:
+ *           type: object
+ *           properties:
+ *             postal_code:
+ *               type: string
+ *             street:
+ *               type: string
+ *             number:
+ *               type: string
+ *             complement:
+ *               type: string
+ *             neighborhood:
+ *               type: string
+ *             city:
+ *               type: string
+ *             state:
+ *               type: string
+ *         contacts:
+ *           type: array
+ *           items:
+ *             type: object
+ *             properties:
+ *               id:
+ *                 type: integer
+ *               type:
+ *                 type: string
+ *               value:
+ *                 type: string
+ *               name:
+ *                 type: string
+ *         qsa:
+ *           type: array
+ *           items:
+ *             type: object
+ *             properties:
+ *               name:
+ *                 type: string
+ *               role:
+ *                 type: string
+ *               document:
+ *                 type: string
+ *         cnaes:
+ *           type: array
+ *           items:
+ *             type: object
+ *             properties:
+ *               code:
+ *                 type: string
+ *               description:
+ *                 type: string
+ *               primary:
+ *                 type: boolean
+ *         tax_regime:
+ *           type: object
+ *           properties:
+ *             type:
+ *               type: string
+ *             description:
+ *               type: string
+ *     
+ *     PersonInput:
+ *       type: object
+ *       required:
+ *         - full_name
+ *         - person_type_id
+ *         - documents
+ *       properties:
+ *         full_name:
+ *           type: string
+ *           description: Nome completo/Razão social
+ *         fantasy_name:
+ *           type: string
+ *           description: Nome fantasia
+ *         person_type_id:
+ *           type: integer
+ *           description: ID do tipo de pessoa (1=PF, 2=PJ)
+ *         documents:
+ *           type: array
+ *           items:
+ *             type: object
+ *             required:
+ *               - type_id
+ *               - value
+ *             properties:
+ *               type_id:
+ *                 type: integer
+ *               value:
+ *                 type: string
+ *         address:
+ *           type: object
+ *           properties:
+ *             postal_code:
+ *               type: string
+ *             street:
+ *               type: string
+ *             number:
+ *               type: string
+ *             complement:
+ *               type: string
+ *             neighborhood:
+ *               type: string
+ *             city:
+ *               type: string
+ *             state:
+ *               type: string
+ *         contacts:
+ *           type: array
+ *           items:
+ *             type: object
+ *             required:
+ *               - type_id
+ *               - value
+ *             properties:
+ *               type_id:
+ *                 type: integer
+ *               value:
+ *                 type: string
+ *               name:
+ *                 type: string
+ *     
+ *     ContactInput:
+ *       type: object
+ *       required:
+ *         - type_id
+ *         - value
+ *       properties:
+ *         type_id:
+ *           type: integer
+ *           description: ID do tipo de contato
+ *         value:
+ *           type: string
+ *           description: Valor do contato
+ *         name:
+ *           type: string
+ *           description: Nome/descrição do contato
+ *     
+ *     PaginationMeta:
+ *       type: object
+ *       properties:
+ *         total:
+ *           type: integer
+ *           description: Total de registros
+ *         page:
+ *           type: integer
+ *           description: Página atual
+ *         limit:
+ *           type: integer
+ *           description: Registros por página
+ *         pages:
+ *           type: integer
+ *           description: Total de páginas
+ *     
+ *     Document:
+ *       type: object
+ *       properties:
+ *         id:
+ *           type: integer
+ *           description: ID do documento
+ *         person_id:
+ *           type: integer
+ *           description: ID da pessoa
+ *         document_type:
+ *           type: object
+ *           properties:
+ *             id:
+ *               type: integer
+ *             name:
+ *               type: string
+ *             mask:
+ *               type: string
+ *             validation_regex:
+ *               type: string
+ *         value:
+ *           type: string
+ *           description: Valor do documento
+ *         created_at:
+ *           type: string
+ *           format: date-time
+ *         updated_at:
+ *           type: string
+ *           format: date-time
+ */
+
+/**
+ * @swagger
  * /persons:
  *   get:
  *     tags:
@@ -305,6 +520,21 @@ router.get('/consulta/cep/:cep', authenticateToken, (req, res) => personControll
  *         schema:
  *           type: integer
  *         description: ID da pessoa
+ *       - in: query
+ *         name: page
+ *         schema:
+ *           type: integer
+ *           minimum: 1
+ *           default: 1
+ *         description: Número da página
+ *       - in: query
+ *         name: limit
+ *         schema:
+ *           type: integer
+ *           minimum: 1
+ *           maximum: 100
+ *           default: 10
+ *         description: Quantidade de registros por página
  *     responses:
  *       200:
  *         description: Lista de contatos
@@ -327,13 +557,63 @@ router.get('/consulta/cep/:cep', authenticateToken, (req, res) => personControll
  *                       name:
  *                         type: string
  *                 meta:
- *                   type: object
+ *                   $ref: '#/components/schemas/PaginationMeta'
  *       404:
- *         description: Pessoa não encontrada ou sem permissão
+ *         description: Pessoa não encontrada
+ *       401:
+ *         description: Não autorizado
  *       500:
- *         description: Erro ao listar contatos
+ *         description: Erro interno do servidor
  */
 router.get('/:id/contacts', authenticateToken, (req, res) => personController.listContacts(req, res));
+
+/**
+ * @swagger
+ * /persons/{id}/contacts:
+ *   post:
+ *     tags:
+ *       - Pessoas
+ *     summary: Adiciona um contato à pessoa
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: integer
+ *         description: ID da pessoa
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             $ref: '#/components/schemas/ContactInput'
+ *     responses:
+ *       201:
+ *         description: Contato adicionado
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 message:
+ *                   type: string
+ *                 data:
+ *                   type: object
+ *                   properties:
+ *                     id:
+ *                       type: integer
+ *       400:
+ *         description: Dados inválidos
+ *       404:
+ *         description: Pessoa não encontrada
+ *       401:
+ *         description: Não autorizado
+ *       500:
+ *         description: Erro interno do servidor
+ */
+router.post('/:id/contacts', authenticateToken, (req, res) => personController.addContact(req, res));
 
 /**
  * @swagger
@@ -369,6 +649,143 @@ router.delete('/:personId/contacts/:contactId', authenticateToken, (req, res) =>
 
 /**
  * @swagger
+ * /persons/{id}/documents:
+ *   get:
+ *     tags:
+ *       - Pessoas
+ *     summary: Lista documentos de uma pessoa
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: integer
+ *         description: ID da pessoa
+ *       - in: query
+ *         name: page
+ *         schema:
+ *           type: integer
+ *           minimum: 1
+ *           default: 1
+ *       - in: query
+ *         name: limit
+ *         schema:
+ *           type: integer
+ *           minimum: 1
+ *           maximum: 100
+ *           default: 10
+ *     responses:
+ *       200:
+ *         description: Lista de documentos
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 data:
+ *                   type: array
+ *                   items:
+ *                     $ref: '#/components/schemas/Document'
+ *                 meta:
+ *                   $ref: '#/components/schemas/PaginationMeta'
+ *       404:
+ *         description: Pessoa não encontrada
+ *       500:
+ *         description: Erro interno do servidor
+ */
+router.get('/:id/documents', authenticateToken, (req, res) => personController.listDocuments(req, res));
+
+/**
+ * @swagger
+ * /persons/{id}/documents:
+ *   post:
+ *     tags:
+ *       - Pessoas
+ *     summary: Adiciona um documento à pessoa
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: integer
+ *         description: ID da pessoa
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required:
+ *               - type_id
+ *               - value
+ *             properties:
+ *               type_id:
+ *                 type: integer
+ *                 description: ID do tipo de documento
+ *               value:
+ *                 type: string
+ *                 description: Valor do documento
+ *     responses:
+ *       201:
+ *         description: Documento adicionado
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 message:
+ *                   type: string
+ *                 data:
+ *                   $ref: '#/components/schemas/Document'
+ *       400:
+ *         description: Dados inválidos
+ *       404:
+ *         description: Pessoa ou tipo de documento não encontrado
+ *       409:
+ *         description: Pessoa já possui documento deste tipo
+ *       500:
+ *         description: Erro interno do servidor
+ */
+router.post('/:id/documents', authenticateToken, (req, res) => personController.addDocument(req, res));
+
+/**
+ * @swagger
+ * /persons/{personId}/documents/{documentId}:
+ *   delete:
+ *     tags:
+ *       - Pessoas
+ *     summary: Remove um documento de uma pessoa
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: personId
+ *         required: true
+ *         schema:
+ *           type: integer
+ *         description: ID da pessoa
+ *       - in: path
+ *         name: documentId
+ *         required: true
+ *         schema:
+ *           type: integer
+ *         description: ID do documento
+ *     responses:
+ *       204:
+ *         description: Documento removido
+ *       404:
+ *         description: Pessoa ou documento não encontrado
+ *       500:
+ *         description: Erro interno do servidor
+ */
+router.delete('/:personId/documents/:documentId', authenticateToken, (req, res) => personController.removeDocument(req, res));
+
+/**
+ * @swagger
  * /persons:
  *   post:
  *     tags:
@@ -381,48 +798,7 @@ router.delete('/:personId/contacts/:contactId', authenticateToken, (req, res) =>
  *       content:
  *         application/json:
  *           schema:
- *             type: object
- *             required:
- *               - type
- *               - full_name
- *             properties:
- *               type:
- *                 type: string
- *                 enum: [PHYSICAL, LEGAL]
- *                 description: Tipo de pessoa (física ou jurídica)
- *               full_name:
- *                 type: string
- *                 description: Nome completo ou razão social
- *               fantasy_name:
- *                 type: string
- *                 description: Nome fantasia (apenas para pessoa jurídica)
- *               birth_date:
- *                 type: string
- *                 format: date
- *                 description: Data de nascimento ou fundação
- *               documents:
- *                 type: array
- *                 items:
- *                   type: object
- *                   required:
- *                     - type
- *                     - value
- *                   properties:
- *                     type:
- *                       type: string
- *                       enum: [CPF, CNPJ, RG]
- *                     value:
- *                       type: string
- *               addresses:
- *                 type: array
- *                 items:
- *                   $ref: '#/components/schemas/Address'
- *               cnaes:
- *                 type: array
- *                 items:
- *                   $ref: '#/components/schemas/CNAE'
- *               tax_regime:
- *                 $ref: '#/components/schemas/TaxRegime'
+ *             $ref: '#/components/schemas/PersonInput'
  *     responses:
  *       201:
  *         description: Pessoa criada

@@ -340,6 +340,126 @@ class PersonController {
       });
     }
   }
+
+  async listDocuments(req, res) {
+    try {
+      const { id } = req.params;
+      const { page = 1, limit = 10 } = req.query;
+
+      // Verifica se a pessoa existe
+      const person = await this.personRepository.getById(parseInt(id));
+      if (!person) {
+        return res.status(404).json({ error: 'Pessoa não encontrada' });
+      }
+
+      const result = await this.personRepository.listDocuments(
+        parseInt(id),
+        parseInt(page),
+        parseInt(limit)
+      );
+
+      return res.json(result);
+    } catch (error) {
+      console.error('Error listing person documents:', error);
+      return res.status(500).json({ error: 'Erro ao listar documentos da pessoa' });
+    }
+  }
+
+  async addDocument(req, res) {
+    try {
+      const { id } = req.params;
+      const { type_id, value } = req.body;
+
+      if (!type_id || !value) {
+        return res.status(400).json({ error: 'Tipo e valor do documento são obrigatórios' });
+      }
+
+      // Verifica se a pessoa existe
+      const person = await this.personRepository.getById(parseInt(id));
+      if (!person) {
+        return res.status(404).json({ error: 'Pessoa não encontrada' });
+      }
+
+      const document = await this.personRepository.addDocument(parseInt(id), {
+        type_id: parseInt(type_id),
+        value
+      });
+
+      return res.status(201).json({
+        message: 'Documento adicionado com sucesso',
+        data: document
+      });
+    } catch (error) {
+      console.error('Error adding person document:', error);
+      
+      if (error.message === 'Tipo de documento não encontrado') {
+        return res.status(404).json({ error: error.message });
+      }
+      
+      if (error.message === 'Pessoa já possui documento deste tipo') {
+        return res.status(409).json({ error: error.message });
+      }
+      
+      if (error.message === 'Documento inválido para o tipo selecionado') {
+        return res.status(400).json({ error: error.message });
+      }
+
+      return res.status(500).json({ error: 'Erro ao adicionar documento' });
+    }
+  }
+
+  async removeDocument(req, res) {
+    try {
+      const { personId, documentId } = req.params;
+
+      // Verifica se a pessoa existe
+      const person = await this.personRepository.getById(parseInt(personId));
+      if (!person) {
+        return res.status(404).json({ error: 'Pessoa não encontrada' });
+      }
+
+      await this.personRepository.removeDocument(
+        parseInt(personId),
+        parseInt(documentId)
+      );
+
+      return res.status(204).send();
+    } catch (error) {
+      console.error('Error removing person document:', error);
+
+      if (error.message === 'Documento não encontrado') {
+        return res.status(404).json({ error: error.message });
+      }
+
+      return res.status(500).json({ error: 'Erro ao remover documento' });
+    }
+  }
+
+  async validateDocument(req, res) {
+    try {
+      const { typeId } = req.params;
+      const { value } = req.body;
+
+      if (!value) {
+        return res.status(400).json({ error: 'Valor do documento é obrigatório' });
+      }
+
+      const result = await this.personRepository.validateDocument(
+        parseInt(typeId),
+        value
+      );
+
+      return res.json(result);
+    } catch (error) {
+      console.error('Error validating document:', error);
+
+      if (error.message === 'Tipo de documento não encontrado') {
+        return res.status(404).json({ error: error.message });
+      }
+
+      return res.status(500).json({ error: 'Erro ao validar documento' });
+    }
+  }
 }
 
 module.exports = PersonController;
