@@ -4,6 +4,8 @@ const jwt = require('jsonwebtoken');
 const argon2 = require('argon2');
 const logger = require('../../config/logger');
 const PrismaUserRepository = require('../repositories/implementations/PrismaUserRepository');
+const { getUserById } = require('../controllers/usersController');
+const authenticateToken = require('../middlewares/authMiddleware');
 
 const userRepository = new PrismaUserRepository();
 
@@ -136,47 +138,6 @@ router.post('/login', async (req, res) => {
             return res.status(401).json({ error: 'Credenciais inválidas' });
         }
 
-        // Formata os contatos do usuário
-        const contacts = {};
-        const contactsList = [];
-        if (user.persons?.person_contacts) {
-            console.log('Processando contatos:', user.persons.person_contacts);
-            user.persons.person_contacts.forEach(pc => {
-                if (pc.contacts) {
-                    const contact = {
-                        id: pc.contacts.contact_id,
-                        type: pc.contacts.contact_types?.type_name,
-                        type_id: pc.contacts.contact_type_id,
-                        value: pc.contacts.contact_value,
-                        name: pc.contacts.contact_name
-                    };
-                    contactsList.push(contact);
-                    
-                    // Agrupa por tipo também
-                    if (contact.type) {
-                        const type = contact.type.toLowerCase();
-                        if (!contacts[type]) contacts[type] = [];
-                        contacts[type].push(contact);
-                    }
-                }
-            });
-        }
-
-        // Formata as licenças do usuário
-        const licenses = user.persons?.person_license?.map(pl => ({
-            id: pl.licenses.license_id,
-            name: pl.licenses.name,
-            status: pl.licenses.status,
-            expiration_date: pl.licenses.expiration_date
-        })) || [];
-
-        // Formata os documentos do usuário
-        const documents = user.persons?.person_documents?.map(pd => ({
-            id: pd.document_id,
-            type: pd.document_types.type_name,
-            value: pd.document_value
-        })) || [];
-
         // Gera o token JWT
         const token = jwt.sign(
             { 
@@ -188,35 +149,23 @@ router.post('/login', async (req, res) => {
             process.env.JWT_SECRET, 
             { expiresIn: '1h' }
         );
-        
-        console.log('Login bem-sucedido:', { 
-            userId: user.user_id, 
-            username: user.username,
-            contatos: contacts
+
+        // Busca dados completos do usuário usando getUserById
+        req.params.id = user.user_id;
+        const userResponse = await new Promise((resolve) => {
+            getUserById({ params: { id: user.user_id } }, {
+                json: (data) => resolve(data),
+                status: () => ({ json: () => resolve(null) })
+            });
         });
+
+        if (!userResponse) {
+            return res.status(500).json({ error: 'Erro ao buscar dados do usuário' });
+        }
 
         res.json({ 
             token,
-            user: {
-                id: user.user_id,
-                username: user.username,
-                profile: user.profiles,
-                person: {
-                    id: user.persons?.person_id,
-                    full_name: user.persons?.full_name,
-                    fantasy_name: user.persons?.fantasy_name,
-                    birth_date: user.persons?.birth_date,
-                    contacts: {
-                        byType: contacts,
-                        list: contactsList
-                    },
-                    documents,
-                    licenses,
-                    address: user.persons?.addresses,
-                    tax_regime: user.persons?.person_tax_regimes?.[0],
-                    type: user.persons?.person_types?.description
-                }
-            }
+            user: userResponse
         });
     } catch (error) {
         console.error('Erro durante autenticação:', {
@@ -231,6 +180,93 @@ router.post('/login', async (req, res) => {
             }
         });
         res.status(500).json({ error: 'Erro interno do servidor' });
+    }
+});
+
+/**
+ * @swagger
+ * /auth/me:
+ *   get:
+ *     summary: Retorna os dados do usuário autenticado
+ *     description: Retorna os dados completos do usuário autenticado usando o token JWT
+ *     tags: [Auth]
+ *     security:
+ *       - bearerAuth: []
+ *     responses:
+ *       200:
+ *         description: Dados do usuário
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/User'
+ *       401:
+ *         description: Não autorizado
+ */
+router.get('/me', authenticateToken, async (req, res) => {
+    try {
+        // Usa a mesma função do getUserById
+        req.params.id = req.user.id;
+        return getUserById(req, res);
+    } catch (error) {
+        logger.error('Erro ao buscar dados do usuário:', error);
+        return res.status(500).json({ error: 'Erro interno do servidor' });
+    }
+});
+
+/**
+ * @swagger
+ * /auth/refresh:
+ *   post:
+ *     summary: Renovar token JWT
+ *     description: Renova o token JWT atual por um novo token
+ *     tags: [Auth]
+ *     security:
+ *       - bearerAuth: []
+ *     responses:
+ *       200:
+ *         description: Token renovado com sucesso
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 token:
+ *                   type: string
+ *                   description: Novo token JWT
+ *       401:
+ *         description: Token não fornecido
+ *       403:
+ *         description: Token inválido ou expirado
+ */
+router.post('/refresh', async (req, res) => {
+    const authHeader = req.headers['authorization'];
+    const token = authHeader && authHeader.split(' ')[1];
+
+    if (!token) {
+        logger.warn('Tentativa de renovação de token sem token de autenticação');
+        return res.status(401).json({ error: 'Token de autenticação não fornecido' });
+    }
+
+    try {
+        // Verifica se o token atual é válido
+        const decoded = jwt.verify(token, process.env.JWT_SECRET);
+        
+        // Gera um novo token com os mesmos dados
+        const newToken = jwt.sign(
+            {
+                user_id: decoded.user_id,
+                username: decoded.username,
+                profile_id: decoded.profile_id
+            },
+            process.env.JWT_SECRET,
+            { expiresIn: '8h' }
+        );
+
+        logger.info(`Token renovado com sucesso para o usuário ${decoded.username}`);
+        res.json({ token: newToken });
+    } catch (error) {
+        logger.error(`Erro ao renovar token: ${error.message}`);
+        return res.status(403).json({ error: 'Token inválido ou expirado' });
     }
 });
 

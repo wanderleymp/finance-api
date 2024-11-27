@@ -53,10 +53,22 @@ async function getUserById(req, res) {
         if (!user) {
             return res.status(404).json({ error: 'Usuário não encontrado' });
         }
-        // Remove sensitive data
+
+        // Remove dados sensíveis
         const { password, ...userWithoutPassword } = user;
+
+        // Formata o usuário no mesmo padrão do getAllUsers
+        const formattedUser = {
+            user_id: userWithoutPassword.user_id,
+            username: userWithoutPassword.username,
+            person_id: userWithoutPassword.person_id,
+            profile_id: userWithoutPassword.profile_id,
+            full_name: userWithoutPassword.persons?.full_name,
+            licenses: userWithoutPassword.licenses || []
+        };
+
         res.json({
-            data: userWithoutPassword,
+            data: formattedUser,
             meta: {}
         });
     } catch (error) {
