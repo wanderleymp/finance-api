@@ -155,7 +155,7 @@ class PrismaPersonRepository {
           : [],
         contacts: Array.isArray(person.person_contacts)
           ? person.person_contacts.map(contact => ({
-              type: contact.contacts?.contact_types?.type || null,
+              type: contact.contacts?.contact_types?.description || null,
               value: contact.contacts?.contact_value || '',
               name: contact.contacts?.contact_name || ''
             }))
@@ -377,7 +377,7 @@ class PrismaPersonRepository {
         // Processar contatos
         if (Array.isArray(person.person_contacts)) {
           formatted.contacts = person.person_contacts.map(contact => ({
-            type: contact.contacts?.contact_types?.type || null,
+            type: contact.contacts?.contact_types?.description || null,
             value: contact.contacts?.contact_value || '',
             name: contact.contacts?.contact_name || ''
           }));
@@ -558,7 +558,7 @@ class PrismaPersonRepository {
       // Processar contatos
       if (Array.isArray(person.person_contacts)) {
         formattedPerson.contacts = person.person_contacts.map(contact => ({
-          type: contact.contacts?.contact_types?.type || null,
+          type: contact.contacts?.contact_types?.description || null,
           value: contact.contacts?.contact_value || '',
           name: contact.contacts?.contact_name || ''
         }));
@@ -1117,6 +1117,13 @@ class PrismaPersonRepository {
             person_documents: {
               some: {
                 document_value: member.document_value
+              }
+            },
+            person_license: {
+              some: {
+                license_id: {
+                  in: userLicenses
+                }
               }
             }
           }
@@ -1838,27 +1845,49 @@ class PrismaPersonRepository {
   /**
    * Método auxiliar para obter os IDs das licenças do usuário
    * @param {number} userId - ID do usuário
-   * @returns {Promise<number[]>} - Array com os IDs das licenças
+   * @returns {Promise<number[]>} Array com os IDs das licenças
    */
   async getLicenseIdsByUserId(userId) {
+    const requestId = Math.random().toString(36).substring(7);
     try {
+      this.logger.info('Buscando licenças do usuário', {
+        requestId,
+        userId
+      });
+
+      // Garantir que userId é um número
+      const parsedUserId = parseInt(userId);
+      if (isNaN(parsedUserId)) {
+        this.logger.error('ID do usuário inválido', {
+          requestId,
+          userId,
+          parsedUserId
+        });
+        throw new Error('ID do usuário inválido');
+      }
+
       const userLicenses = await this.prisma.user_license.findMany({
-        where: { 
-          user_id: parseInt(userId)
+        where: {
+          user_id: parsedUserId
         },
-        select: { 
-          license_id: true 
+        select: {
+          license_id: true
         }
       });
 
-      if (!userLicenses || userLicenses.length === 0) {
-        this.logger.warn('Nenhuma licença encontrada para o usuário', { userId });
-        return [];
-      }
+      const licenseIds = userLicenses.map(ul => ul.license_id);
 
-      return userLicenses.map(ul => ul.license_id);
+      this.logger.info('Licenças encontradas', {
+        requestId,
+        userId: parsedUserId,
+        count: licenseIds.length,
+        licenseIds
+      });
+
+      return licenseIds;
     } catch (error) {
       this.logger.error('Erro ao buscar licenças do usuário:', {
+        requestId,
         userId,
         error: error.message,
         stack: error.stack
@@ -1980,6 +2009,149 @@ class PrismaPersonRepository {
       valid,
       message: valid ? 'Documento válido' : 'Documento inválido para o tipo selecionado'
     };
+  }
+
+  /**
+   * Add a contact to a person
+   * @param {Object} data - Contact data
+   * @param {string} data.contactValue - Contact value (phone, email, etc)
+   * @param {number} data.personId - Person ID
+   * @param {number} [data.contactTypeId] - Contact type ID (optional)
+   * @param {string} [data.contactName] - Contact name (optional)
+   * @param {number} data.userId - User ID
+   * @returns {Promise<Object>} Created contact
+   */
+  async addContact(data) {
+    const requestId = Math.random().toString(36).substring(7);
+    try {
+      this.logger.info('=== INICIANDO ADIÇÃO DE CONTATO ===', {
+        requestId,
+        data: JSON.stringify(data)
+      });
+
+      // Parse do contactTypeId para número
+      const contactTypeId = data.contactTypeId ? parseInt(data.contactTypeId) : null;
+
+      // 1. Buscar contato existente
+      let contact = await this.prisma.contacts.findFirst({
+        where: {
+          contact_value: data.contactValue,
+          contact_type_id: contactTypeId
+        },
+        include: {
+          contact_types: true
+        }
+      });
+
+      // 2. Se não existir, criar novo contato
+      if (!contact) {
+        contact = await this.prisma.contacts.create({
+          data: {
+            contact_value: data.contactValue,
+            contact_name: data.contactName || null,
+            contact_type_id: contactTypeId
+          },
+          include: {
+            contact_types: true
+          }
+        });
+      }
+
+      // 3. Verificar se já existe relação pessoa-contato
+      const existingPersonContact = await this.prisma.person_contacts.findFirst({
+        where: {
+          person_id: data.personId,
+          contact_id: contact.contact_id
+        }
+      });
+
+      if (existingPersonContact) {
+        return {
+          id: existingPersonContact.person_contact_id,
+          type: contact.contact_types?.description || null,
+          value: contact.contact_value,
+          name: contact.contact_name
+        };
+      }
+
+      // 4. Criar nova relação pessoa-contato
+      const personContact = await this.prisma.person_contacts.create({
+        data: {
+          person_id: data.personId,
+          contact_id: contact.contact_id
+        }
+      });
+
+      return {
+        id: personContact.person_contact_id,
+        type: contact.contact_types?.description || null,
+        value: contact.contact_value,
+        name: contact.contact_name
+      };
+
+    } catch (error) {
+      this.logger.error('Erro ao adicionar contato:', {
+        requestId,
+        error: error.message,
+        stack: error.stack,
+        details: error.code || error.meta
+      });
+      throw error;
+    }
+  }
+
+  /**
+   * Get license IDs for a user
+   * @param {number} userId - User ID
+   * @returns {Promise<number[]>} Array of license IDs
+   */
+  async getLicenseIdsByUserId(userId) {
+    const requestId = Math.random().toString(36).substring(7);
+    try {
+      this.logger.info('Buscando licenças do usuário', {
+        requestId,
+        userId
+      });
+
+      // Garantir que userId é um número
+      const parsedUserId = parseInt(userId);
+      if (isNaN(parsedUserId)) {
+        this.logger.error('ID do usuário inválido', {
+          requestId,
+          userId,
+          parsedUserId
+        });
+        throw new Error('ID do usuário inválido');
+      }
+
+      const userLicenses = await this.prisma.user_license.findMany({
+        where: {
+          user_id: parsedUserId
+        },
+        select: {
+          license_id: true
+        }
+      });
+
+      const licenseIds = userLicenses.map(ul => ul.license_id);
+
+      this.logger.info('Licenças encontradas', {
+        requestId,
+        userId: parsedUserId,
+        count: licenseIds.length,
+        licenseIds
+      });
+
+      return licenseIds;
+    } catch (error) {
+      this.logger.error('Erro ao buscar licenças do usuário:', {
+        requestId,
+        userId,
+        error: error.message,
+        stack: error.stack
+      });
+      throw error;
+    }
   }
 }
 

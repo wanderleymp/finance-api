@@ -7,6 +7,7 @@ const uuid = require('uuid');
 class PersonController {
   constructor(personRepository) {
     this.personRepository = personRepository;
+    this.logger = logger;
   }
 
   async list(req, res) {
@@ -458,6 +459,93 @@ class PersonController {
       }
 
       return res.status(500).json({ error: 'Erro ao validar documento' });
+    }
+  }
+
+  /**
+   * Add a contact to a person
+   * @param {Object} req - Express request object
+   * @param {Object} res - Express response object
+   */
+  async addContact(req, res) {
+    const requestId = Math.random().toString(36).substring(7);
+    try {
+      const personId = parseInt(req.params.id);
+      const { contactValue, contactTypeId, contactName } = req.body;
+      const userId = req.user.id;
+
+      this.logger.info('=== ADICIONANDO CONTATO ===', {
+        requestId,
+        personId,
+        userId,
+        contactValue,
+        contactTypeId,
+        contactName
+      });
+
+      // Validar dados obrigatórios
+      if (!personId || !contactValue) {
+        this.logger.warn('Dados obrigatórios ausentes', {
+          requestId,
+          personId,
+          contactValue
+        });
+        return res.status(400).json({
+          error: 'Dados obrigatórios ausentes',
+          requiredParams: ['personId', 'contactValue'],
+          optionalParams: ['contactTypeId', 'contactName']
+        });
+      }
+
+      // Se contactTypeId for uma string vazia, converte para null
+      const finalContactTypeId = contactTypeId === "" ? null : parseInt(contactTypeId);
+
+      // Verifica se a pessoa existe e se o usuário tem acesso
+      const person = await this.personRepository.findById(personId, userId);
+      if (!person) {
+        this.logger.warn('Pessoa não encontrada ou sem acesso', {
+          requestId,
+          personId,
+          userId
+        });
+        return res.status(404).json({ error: 'Pessoa não encontrada' });
+      }
+
+      // Adiciona o contato
+      const result = await this.personRepository.addContact({
+        contactValue,
+        personId,
+        contactTypeId: finalContactTypeId,
+        contactName,
+        userId
+      });
+
+      this.logger.info('Contato adicionado com sucesso', {
+        requestId,
+        personId,
+        contactId: result.contact_id
+      });
+
+      return res.status(201).json({
+        message: 'Contato adicionado com sucesso',
+        data: result
+      });
+
+    } catch (error) {
+      this.logger.error('Erro ao adicionar contato:', {
+        requestId,
+        error: error.message,
+        stack: error.stack
+      });
+
+      if (error.message.includes('Pessoa não encontrada')) {
+        return res.status(404).json({ error: 'Pessoa não encontrada' });
+      }
+
+      return res.status(500).json({ 
+        error: 'Erro ao adicionar contato',
+        details: error.message
+      });
     }
   }
 }
