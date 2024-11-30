@@ -5,6 +5,7 @@ const logsRoutes = require('./logs');
 const authRoutes = require('./auth');
 const personsRoutes = require('./persons');
 const contactRoutes = require('./contact');
+const licenseRoutes = require('./licenseRoutes');
 
 // Rota de teste para verificar se a API está funcionando
 router.get('/', (req, res) => {
@@ -25,6 +26,9 @@ router.use('/persons', personsRoutes);
 
 // Rotas de contatos
 router.use('/contacts', contactRoutes);
+
+// Rotas de licenças
+router.use('/licenses', licenseRoutes);
 
 // Rota de fallback para debug
 router.use('*', (req, res) => {

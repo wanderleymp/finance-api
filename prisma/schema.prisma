@@ -533,6 +533,7 @@ model licenses {
   end_date                     DateTime?                      @db.Date
   status                       String                         @default("Ativa") @db.VarChar(20)
   timezone                     String?                        @db.VarChar(50)
+  active                       Boolean                        @default(true)
   account_movements            account_movements[]
   accounts                     accounts[]
   bank_accounts                bank_accounts[]
@@ -540,7 +541,7 @@ model licenses {
   integration_credentials      integration_credentials[]
   license_account_plans        license_account_plans[]
   license_api_chat             license_api_chat[]
-  persons                      persons                        @relation(fields: [person_id], references: [person_id], onDelete: Cascade, onUpdate: NoAction, map: "fk_person")
+  persons                      persons                        @relation(fields: [person_id], references: [person_id], onDelete: Cascade, onUpdate: NoAction)
   movement_templates           movement_templates[]
   movements                    movements[]
   payment_license_relationship payment_license_relationship[]
