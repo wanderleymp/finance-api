@@ -213,6 +213,43 @@ class PrismaLicenseRepository extends ILicenseRepository {
             throw error;
         }
     }
+
+    async getLicenseUsers(licenseId) {
+        try {
+            const license = await this.prisma.licenses.findUnique({
+                where: { license_id: parseInt(licenseId) },
+                include: {
+                    user_license: {
+                        include: {
+                            user_accounts: {
+                                include: {
+                                    persons: {
+                                        select: {
+                                            person_id: true,
+                                            full_name: true
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            });
+
+            if (!license) {
+                return null;
+            }
+
+            return license.user_license.map(ul => ({
+                user_id: ul.user_accounts.user_id,
+                name: ul.user_accounts.persons.full_name,
+                email: ul.user_accounts.username
+            }));
+        } catch (error) {
+            logger.error('Error in getLicenseUsers:', error);
+            throw error;
+        }
+    }
 }
 
 module.exports = PrismaLicenseRepository;

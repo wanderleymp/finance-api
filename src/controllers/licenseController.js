@@ -58,6 +58,23 @@ exports.getLicenseById = async (req, res) => {
     }
 };
 
+// Get users from a license
+exports.getLicenseUsers = async (req, res) => {
+    try {
+        const { id } = req.params;
+        const users = await licenseRepository.getLicenseUsers(id);
+        
+        if (!users) {
+            return res.status(404).json({ error: 'License not found' });
+        }
+
+        return res.status(200).json(users);
+    } catch (error) {
+        logger.error('Error in getLicenseUsers controller:', error);
+        return res.status(500).json({ error: 'Internal server error' });
+    }
+};
+
 // Update license
 exports.updateLicense = async (req, res) => {
     try {

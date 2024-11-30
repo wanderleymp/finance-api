@@ -200,4 +200,45 @@ router.put('/:id', authenticateToken, licenseController.updateLicense);
  */
 router.delete('/:id', authenticateToken, licenseController.deleteLicense);
 
+/**
+ * @swagger
+ * /api/licenses/{id}/users:
+ *   get:
+ *     summary: Listar usuários de uma licença
+ *     security:
+ *       - bearerAuth: []
+ *     tags: [Licenses]
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: integer
+ *         description: ID da licença
+ *     responses:
+ *       200:
+ *         description: Lista de usuários da licença
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 data:
+ *                   type: array
+ *                   items:
+ *                     type: object
+ *                     properties:
+ *                       user_id:
+ *                         type: integer
+ *                       name:
+ *                         type: string
+ *                       email:
+ *                         type: string
+ *       404:
+ *         description: Licença não encontrada
+ *       401:
+ *         description: Não autorizado
+ */
+router.get('/:id/users', authenticateToken, licenseController.getLicenseUsers);
+
 module.exports = router;
