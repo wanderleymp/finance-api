@@ -3,8 +3,6 @@ const cors = require('cors');
 const swaggerUi = require('swagger-ui-express');
 const swaggerJsdoc = require('swagger-jsdoc');
 
-const personRoutes = require('./routes/persons');
-
 const app = express();
 
 // Configuração do Swagger
@@ -35,9 +33,8 @@ const swaggerSpec = swaggerJsdoc(swaggerOptions);
 app.use(cors());
 app.use(express.json());
 
-// Rotas
+// Swagger
 app.use('/api-docs', swaggerUi.serve, swaggerUi.setup(swaggerSpec));
-app.use('/persons', personRoutes);
 
 // Tratamento de erros
 app.use((err, req, res, next) => {

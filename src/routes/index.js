@@ -6,37 +6,41 @@ const authRoutes = require('./auth');
 const personsRoutes = require('./persons');
 const contactRoutes = require('./contact');
 const licenseRoutes = require('./licenseRoutes');
+const paymentMethodRoutes = require('./paymentMethodRoutes');
 
-// Rota de teste para verificar se a API está funcionando
+// Test route to check if API is working
 router.get('/', (req, res) => {
-  res.json({ message: 'API funcionando!' });
+  res.json({ message: 'API is working!' });
 });
 
-// Rotas de autenticação
+// Auth routes
 router.use('/auth', authRoutes);
 
-// Rotas de usuários
+// Users routes
 router.use('/users', usersRoutes);
 
-// Rotas de logs
+// Logs routes
 router.use('/logs', logsRoutes);
 
-// Rotas de pessoas
+// Persons routes
 router.use('/persons', personsRoutes);
 
-// Rotas de contatos
+// Contact routes
 router.use('/contacts', contactRoutes);
 
-// Rotas de licenças
+// License routes
 router.use('/licenses', licenseRoutes);
+
+// Payment methods routes
+router.use('/payment-methods', paymentMethodRoutes);
 
 // Rota de fallback para debug
 router.use('*', (req, res) => {
   res.status(404).json({
-    error: 'Rota não encontrada',
-    method: req.method,
+    erro: 'Rota não encontrada',
+    metodo: req.method,
     url: req.url,
-    path: req.path,
+    caminho: req.path,
     baseUrl: req.baseUrl,
     originalUrl: req.originalUrl
   });
