@@ -117,6 +117,26 @@ class PrismaPaymentMethodRepository extends IPaymentMethodRepository {
 
     async updatePaymentMethod(id, data) {
         try {
+            // Validar ID
+            if (!id || id <= 0) {
+                logger.warn(`[Repository] Invalid payment method ID: ${id}`);
+                throw new Error('Invalid payment method ID');
+            }
+
+            logger.info(`[Repository] Checking if payment method ${id} exists`);
+            
+            // Verificar se o método de pagamento existe
+            const existingPaymentMethod = await this.prisma.payment_methods.findUnique({
+                where: { payment_method_id: id }
+            });
+
+            if (!existingPaymentMethod) {
+                logger.warn(`[Repository] Payment method ${id} not found`);
+                throw new Error('Payment method not found');
+            }
+
+            logger.info(`[Repository] Payment method ${id} found, checking account entry if provided`);
+
             // Verificar se a conta contábil existe se fornecida
             if (data.account_entry_id) {
                 const accountEntry = await this.prisma.account_entries.findUnique({
@@ -124,16 +144,18 @@ class PrismaPaymentMethodRepository extends IPaymentMethodRepository {
                 });
 
                 if (!accountEntry) {
+                    logger.warn(`[Repository] Account entry ${data.account_entry_id} not found`);
                     throw new Error('Account entry not found');
                 }
             }
 
+            logger.info(`[Repository] Updating payment method ${id}`);
+
             const paymentMethod = await this.prisma.payment_methods.update({
-                where: { payment_method_id: parseInt(id) },
+                where: { payment_method_id: id },
                 data: {
                     ...data,
-                    account_entry_id: data.account_entry_id ? parseInt(data.account_entry_id) : undefined,
-                    active: data.active === true || data.active === 'true'
+                    account_entry_id: data.account_entry_id ? parseInt(data.account_entry_id) : undefined
                 },
                 include: {
                     account_entries: {
@@ -145,9 +167,11 @@ class PrismaPaymentMethodRepository extends IPaymentMethodRepository {
                 }
             });
 
+            logger.info(`[Repository] Payment method ${id} updated successfully`);
             return paymentMethod;
         } catch (error) {
-            logger.error(`Error updating payment method ${id}:`, error);
+            logger.error(`[Repository] Error updating payment method ${id}. Error:`, error);
+            logger.error(`[Repository] Update data:`, data);
             throw error;
         }
     }

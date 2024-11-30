@@ -7,6 +7,8 @@ const personsRoutes = require('./persons');
 const contactRoutes = require('./contact');
 const licenseRoutes = require('./licenseRoutes');
 const paymentMethodRoutes = require('./paymentMethodRoutes');
+const movementTypeRoutes = require('./movementTypeRoutes');
+const movementStatusRoutes = require('./movementStatusRoutes');
 
 // Test route to check if API is working
 router.get('/', (req, res) => {
@@ -33,6 +35,12 @@ router.use('/licenses', licenseRoutes);
 
 // Payment methods routes
 router.use('/payment-methods', paymentMethodRoutes);
+
+// Movement types routes
+router.use('/movement-types', movementTypeRoutes);
+
+// Movement statuses routes
+router.use('/movement-statuses', movementStatusRoutes);
 
 // Rota de fallback para debug
 router.use('*', (req, res) => {

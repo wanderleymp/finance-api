@@ -541,7 +541,7 @@ model licenses {
   integration_credentials      integration_credentials[]
   license_account_plans        license_account_plans[]
   license_api_chat             license_api_chat[]
-  persons                      persons                        @relation(fields: [person_id], references: [person_id], onDelete: Cascade, onUpdate: NoAction)
+  persons                      persons                        @relation(fields: [person_id], references: [person_id], onDelete: Cascade, onUpdate: NoAction, map: "fk_person")
   movement_templates           movement_templates[]
   movements                    movements[]
   payment_license_relationship payment_license_relationship[]
@@ -806,8 +806,9 @@ model nfe {
   access_key     String?   @db.VarChar(44)
 }
 
+/// The underlying table does not contain a valid unique identifier and can therefore currently not be handled by Prisma Client.
 model nfse {
-  invoice_id          Int       @id(map: "nfse_invoice_pkey")
+  invoice_id          Int       @default(autoincrement())
   reference_id        String    @default(dbgenerated("10")) @db.VarChar(100)
   number              String?   @db.VarChar(50)
   series              String?   @db.VarChar(20)
@@ -820,6 +821,8 @@ model nfse {
   movement_id         Int       @default(10)
   integration_id      Int?      @default(10)
   integration_nfse_id String?   @db.VarChar(100)
+
+  @@ignore
 }
 
 model nota_fiscal_eventos {
@@ -1022,6 +1025,7 @@ model persons {
   created_at                                         DateTime?             @default(now()) @db.Timestamp(6)
   fantasy_name                                       String?               @db.VarChar(255)
   social_capital                                     Decimal?              @db.Decimal(15, 2)
+  updated_at                                         DateTime?             @default(now()) @db.Timestamp(6)
   addresses                                          addresses?
   contracts_recurring                                contracts_recurring[]
   licenses                                           licenses?
@@ -1050,100 +1054,17 @@ model pix_key_types {
 }
 
 model product_groups {
-  product_group_id Int        @id @default(autoincrement())
-  name             String     @db.VarChar(255)
-  description      String?
-  ncm              String?    @db.VarChar(10)
-  created_at       DateTime?  @default(now()) @db.Timestamp(6)
-  updated_at       DateTime?  @default(now()) @db.Timestamp(6)
-  products         products[] @ignore
-}
-
-/// The underlying table does not contain a valid unique identifier and can therefore currently not be handled by Prisma Client.
-model products {
-  item_id          Int             @default(autoincrement())
-  code             String          @db.VarChar(50)
-  name             String          @db.VarChar(255)
-  description      String?
-  status           String?         @default("active") @db.VarChar(20)
-  price            Decimal         @db.Decimal(10, 2)
-  created_at       DateTime?       @default(now()) @db.Timestamp(6)
-  updated_at       DateTime?       @default(now()) @db.Timestamp(6)
-  weight           Decimal?        @db.Decimal(10, 2)
-  dimensions       String?         @db.VarChar(50)
-  manufacturer     String?         @db.VarChar(255)
-  product_group_id Int?
-  active           Boolean         @default(true)
-  deleted_at       DateTime?       @db.Timestamp(6)
-  product_groups   product_groups? @relation(fields: [product_group_id], references: [product_group_id], onUpdate: NoAction)
-
-  @@ignore
-}
-
-model profile_permissions {
-  permission_id   Int             @id @default(autoincrement())
-  profile_id      Int
-  feature_id      Int
-  can_access      Boolean?        @default(true)
-  created_at      DateTime?       @default(now()) @db.Timestamp(6)
-  updated_at      DateTime?       @default(now()) @db.Timestamp(6)
-  system_features system_features @relation(fields: [feature_id], references: [feature_id], onDelete: Cascade, onUpdate: NoAction, map: "fk_feature")
-  profiles        profiles        @relation(fields: [profile_id], references: [profile_id], onDelete: Cascade, onUpdate: NoAction, map: "fk_profile")
-}
-
-model profiles {
-  profile_id          Int                   @id @default(autoincrement())
-  description         String                @db.VarChar(50)
-  profile_name        String                @unique(map: "profiles_profile_name_unique") @db.VarChar(255)
-  profile_permissions profile_permissions[]
-  user_accounts       user_accounts[]
-}
-
-model receipts {
-  receipt_id     Int          @id @default(autoincrement())
-  installment_id Int
-  received_at    DateTime?    @default(now()) @db.Timestamp(6)
-  amount         Decimal      @db.Decimal(10, 2)
-  installments   installments @relation(fields: [installment_id], references: [installment_id], onDelete: Cascade, onUpdate: NoAction, map: "fk_installment")
-}
-
-model role_permissions {
-  role_id          Int
-  permission_id    Int
-  created_at       DateTime?        @default(now()) @db.Timestamp(6)
-  user_permissions user_permissions @relation(fields: [permission_id], references: [permission_id], onDelete: NoAction, onUpdate: NoAction)
-  roles            roles            @relation(fields: [role_id], references: [role_id], onDelete: NoAction, onUpdate: NoAction)
-
-  @@id([role_id, permission_id])
-}
-
-model roles {
-  role_id          Int                @id @default(autoincrement())
-  role_name        String             @unique @db.VarChar(50)
-  description      String?
-  created_at       DateTime?          @default(now()) @db.Timestamp(6)
-  updated_at       DateTime?          @default(now()) @db.Timestamp(6)
-  status           String?            @default("active") @db.VarChar(20)
-  role_permissions role_permissions[]
-  user_roles       user_roles[]
-}
-
-model service_group_relationship {
-  service_group_relationship_id Int       @id @default(autoincrement())
-  service_group_id              Int
-  created_at                    DateTime? @default(now()) @db.Timestamp(6)
-  updated_at                    DateTime? @default(now()) @db.Timestamp(6)
+  product_group_id Int         @id @default(autoincrement())
+  description      String      @db.VarChar(100)
+  created_at       DateTime?   @default(now()) @db.Timestamp(6)
+  updated_at       DateTime?   @default(now()) @db.Timestamp(6)
+  products         products[]  @ignore
 }
 
 model service_groups {
-  service_group_id        Int                   @id @default(autoincrement())
-  group_name              String                @db.VarChar(255)
-  group_description       String?
-  account_entry_id        Int?
-  created_at              DateTime?             @default(now()) @db.Timestamp(6)
-  updated_at              DateTime?             @default(now()) @db.Timestamp(6)
-  service_municipality_id Int?
-  account_entries         account_entries?      @relation(fields: [account_entry_id], references: [account_entry_id], onUpdate: NoAction, map: "fk_account_plan")
+  service_group_id         Int                   @id @default(autoincrement())
+  description             String                 @db.VarChar(100)
+  service_municipality_id  Int?
   service_municipality    service_municipality? @relation(fields: [service_municipality_id], references: [service_municipality_id], onUpdate: NoAction, map: "fk_service_municipality")
   services                services[]            @ignore
 }
@@ -1291,4 +1212,15 @@ model v_model_movement_id {
   model_movement_id Int?
 
   @@ignore
+}
+
+model nfe_sampa {
+  nfe_sampa_id Int      @id @default(autoincrement())
+  chave_origem String?
+  json_data    Json
+  emissao      DateTime @default(now()) @db.Timestamp(6)
+  json_retorno Json?
+  url_xml      String?
+  url_pdf      String?
+  status       String?
 }

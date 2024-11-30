@@ -56,14 +56,27 @@ class PaymentMethodController {
     async updatePaymentMethod(req, res) {
         try {
             const { id } = req.params;
-            const paymentMethod = await this.repository.updatePaymentMethod(id, req.body);
+            const numericId = parseInt(id);
+            
+            // Validar ID
+            if (isNaN(numericId) || numericId <= 0) {
+                logger.warn(`Invalid payment method ID received: ${id}`);
+                return res.status(400).json({ error: 'Invalid payment method ID' });
+            }
+
+            logger.info(`Attempting to update payment method. ID received: ${id}, Body:`, req.body);
+            
+            const paymentMethod = await this.repository.updatePaymentMethod(numericId, req.body);
+            logger.info(`Payment method ${id} updated successfully`);
             res.json(paymentMethod);
         } catch (error) {
-            logger.error('Error in updatePaymentMethod:', error);
+            logger.error(`Error in updatePaymentMethod. ID: ${req.params.id}, Body:`, req.body);
+            logger.error('Full error:', error);
+            
             if (error.message === 'Account entry not found') {
                 return res.status(400).json({ error: error.message });
             }
-            if (error.code === 'P2025') {
+            if (error.message === 'Payment method not found' || error.code === 'P2025') {
                 return res.status(404).json({ error: 'Payment method not found' });
             }
             res.status(500).json({ error: 'Internal server error' });
