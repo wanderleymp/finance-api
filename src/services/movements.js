@@ -7,8 +7,13 @@ class MovementService {
             startDate,
             endDate,
             person_id,
+            search,
             license_id,
             status_id,
+            minAmount,
+            maxAmount,
+            sortBy = 'movement_date',
+            sortOrder = 'desc',
             page = 1,
             limit = 10
         } = filters;
@@ -25,10 +30,41 @@ class MovementService {
             if (endDate) where.movement_date.lte = new Date(endDate);
         }
 
+        // Filtro por valor
+        if (minAmount !== undefined || maxAmount !== undefined) {
+            where.total_amount = {};
+            if (minAmount !== undefined) where.total_amount.gte = parseFloat(minAmount);
+            if (maxAmount !== undefined) where.total_amount.lte = parseFloat(maxAmount);
+        }
+
+        // Busca por pessoa (nome ou ID)
+        if (search || person_id) {
+            where.persons = {};
+            
+            if (search) {
+                where.persons.full_name = {
+                    contains: search,
+                    mode: 'insensitive'
+                };
+            }
+            
+            if (person_id) {
+                where.persons.id = parseInt(person_id);
+            }
+        }
+
         // Outros filtros
-        if (person_id) where.person_id = parseInt(person_id);
         if (license_id) where.license_id = parseInt(license_id);
         if (status_id) where.movement_status_id = parseInt(status_id);
+
+        // Validando campo de ordenação
+        const validSortFields = ['movement_date', 'total_amount', 'created_at', 'updated_at'];
+        const orderBy = {};
+        if (validSortFields.includes(sortBy)) {
+            orderBy[sortBy] = sortOrder.toLowerCase();
+        } else {
+            orderBy.movement_date = 'desc';
+        }
 
         // Calculando paginação
         const pageInt = parseInt(page);
@@ -53,9 +89,7 @@ class MovementService {
                     }
                 }
             },
-            orderBy: {
-                movement_date: 'desc'
-            },
+            orderBy,
             skip,
             take: limitInt
         });
@@ -97,8 +131,25 @@ class MovementService {
             license_id,
             movement_type_id,
             description,
-            items
+            items,
+            payment_method_id,
+            movement_status_id = 1 // Status padrão para novo movimento
         } = data;
+
+        // Converter e validar os itens
+        const processedItems = items.map(item => {
+            const quantity = parseFloat(item.quantity);
+            const unitPrice = parseFloat(item.unit_price);
+            
+            return {
+                item_id: parseInt(item.item_id),
+                quantity: quantity,
+                unit_price: unitPrice,
+                total_price: quantity * unitPrice, // Agora usando total_price ao invés de total_value
+                salesperson_id: item.salesperson_id ? parseInt(item.salesperson_id) : null,
+                technician_id: item.technician_id ? parseInt(item.technician_id) : null
+            };
+        });
 
         return await prisma.movements.create({
             data: {
@@ -107,18 +158,24 @@ class MovementService {
                 total_amount: parseFloat(total_amount),
                 license_id: parseInt(license_id),
                 movement_type_id: parseInt(movement_type_id),
+                payment_method_id: payment_method_id ? parseInt(payment_method_id) : null,
+                movement_status_id: parseInt(movement_status_id),
                 description,
                 movement_items: {
-                    create: items.map(item => ({
-                        service_id: parseInt(item.service_id),
-                        quantity: parseFloat(item.quantity),
-                        unit_value: parseFloat(item.unit_value),
-                        total_value: parseFloat(item.quantity) * parseFloat(item.unit_value)
-                    }))
+                    create: processedItems
                 }
             },
             include: {
-                movement_items: true
+                persons: true,
+                licenses: true,
+                movement_statuses: true,
+                movement_items: {
+                    include: {
+                        movements: true,
+                        user_accounts_movement_items_salesperson_idTouser_accounts: true,
+                        user_accounts_movement_items_technician_idTouser_accounts: true
+                    }
+                }
             }
         });
     }
@@ -149,10 +206,12 @@ class MovementService {
                 description,
                 movement_items: {
                     create: items.map(item => ({
-                        service_id: parseInt(item.service_id),
+                        item_id: parseInt(item.item_id),
                         quantity: parseFloat(item.quantity),
-                        unit_value: parseFloat(item.unit_value),
-                        total_value: parseFloat(item.quantity) * parseFloat(item.unit_value)
+                        unit_price: parseFloat(item.unit_price),
+                        total_price: parseFloat(item.quantity) * parseFloat(item.unit_price), // Agora usando total_price ao invés de total_value
+                        salesperson_id: item.salesperson_id ? parseInt(item.salesperson_id) : null,
+                        technician_id: item.technician_id ? parseInt(item.technician_id) : null
                     }))
                 }
             },

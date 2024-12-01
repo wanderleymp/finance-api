@@ -12,6 +12,16 @@ const MOVEMENT_TYPE_SALES = 1;
  *     tags: [Sales]
  *     parameters:
  *       - in: query
+ *         name: search
+ *         schema:
+ *           type: string
+ *         description: Busca por nome da pessoa
+ *       - in: query
+ *         name: person_id
+ *         schema:
+ *           type: integer
+ *         description: ID da pessoa
+ *       - in: query
  *         name: startDate
  *         schema:
  *           type: string
@@ -24,11 +34,6 @@ const MOVEMENT_TYPE_SALES = 1;
  *           format: date
  *         description: Data final (YYYY-MM-DD)
  *       - in: query
- *         name: person_id
- *         schema:
- *           type: integer
- *         description: ID da pessoa
- *       - in: query
  *         name: license_id
  *         schema:
  *           type: integer
@@ -38,6 +43,30 @@ const MOVEMENT_TYPE_SALES = 1;
  *         schema:
  *           type: integer
  *         description: ID do status
+ *       - in: query
+ *         name: minAmount
+ *         schema:
+ *           type: number
+ *         description: Valor mínimo
+ *       - in: query
+ *         name: maxAmount
+ *         schema:
+ *           type: number
+ *         description: Valor máximo
+ *       - in: query
+ *         name: sortBy
+ *         schema:
+ *           type: string
+ *           enum: [movement_date, total_amount, created_at, updated_at]
+ *           default: movement_date
+ *         description: Campo para ordenação
+ *       - in: query
+ *         name: sortOrder
+ *         schema:
+ *           type: string
+ *           enum: [asc, desc]
+ *           default: desc
+ *         description: Ordem da ordenação
  *       - in: query
  *         name: page
  *         schema:
@@ -57,11 +86,16 @@ const MOVEMENT_TYPE_SALES = 1;
 router.get('/', async (req, res) => {
     try {
         const filters = {
+            search: req.query.search,
             startDate: req.query.startDate,
             endDate: req.query.endDate,
             person_id: req.query.person_id,
             license_id: req.query.license_id,
             status_id: req.query.status_id,
+            minAmount: req.query.minAmount,
+            maxAmount: req.query.maxAmount,
+            sortBy: req.query.sortBy,
+            sortOrder: req.query.sortOrder,
             page: req.query.page,
             limit: req.query.limit
         };
