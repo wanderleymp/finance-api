@@ -1089,9 +1089,8 @@ model service_municipality {
   service_lc116           service_lc116?   @relation(fields: [service_lc116_id], references: [service_lc116_id], onUpdate: NoAction, map: "fk_service_lc116")
 }
 
-/// The underlying table does not contain a valid unique identifier and can therefore currently not be handled by Prisma Client.
 model services {
-  item_id          Int             @default(autoincrement())
+  item_id          Int             @id @default(autoincrement())
   code             String          @db.VarChar(50)
   name             String          @db.VarChar(255)
   description      String?
@@ -1103,8 +1102,6 @@ model services {
   active           Boolean         @default(true)
   deleted_at       DateTime?       @db.Timestamp(6)
   service_groups   service_groups? @relation(fields: [service_group_id], references: [service_group_id], onDelete: NoAction, onUpdate: NoAction)
-
-  @@ignore
 }
 
 model system_default_accounts {

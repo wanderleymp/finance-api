@@ -12,6 +12,7 @@ const movementStatusRoutes = require('./movementStatusRoutes');
 const movementsRoutes = require('./movements');
 const salesRoutes = require('./sales');
 const purchasesRoutes = require('./purchases');
+const servicesRoutes = require('./services'); // Nova importação
 
 // Test route to check if API is working
 router.get('/', (req, res) => {
@@ -53,6 +54,9 @@ router.use('/sales', salesRoutes);
 
 // Purchases routes
 router.use('/purchases', purchasesRoutes);
+
+// Services routes
+router.use('/services', servicesRoutes); // Nova rota
 
 // Rota de fallback para debug
 router.use('*', (req, res) => {
