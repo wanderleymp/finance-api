@@ -7,6 +7,95 @@ datasource db {
   url      = env("DATABASE_CONNECTION_URI")
 }
 
+model profiles {
+  profile_id          Int                   @id @default(autoincrement())
+  description         String                @db.VarChar(50)
+  profile_name        String                @unique(map: "profiles_profile_name_unique") @db.VarChar(255)
+  profile_permissions profile_permissions[]
+  user_accounts       user_accounts[]
+}
+
+model user_accounts {
+  user_id                                                     Int              @id @default(autoincrement())
+  username                                                    String           @db.VarChar(50)
+  password                                                    String           @db.VarChar(255)
+  person_id                                                   Int              @unique(map: "unique_person_user")
+  profile_id                                                  Int
+  movement_items_movement_items_salesperson_idTouser_accounts movement_items[] @relation("movement_items_salesperson_idTouser_accounts")
+  movement_items_movement_items_technician_idTouser_accounts  movement_items[] @relation("movement_items_technician_idTouser_accounts")
+  persons                                                     persons          @relation(fields: [person_id], references: [person_id], onDelete: Cascade, onUpdate: NoAction)
+  profiles                                                    profiles         @relation(fields: [profile_id], references: [profile_id], onDelete: Cascade, onUpdate: NoAction)
+  user_license                                                user_license[]
+  user_roles                                                  user_roles[]
+}
+
+/// This model contains an expression index which requires additional setup for migrations. Visit https://pris.ly/d/expression-indexes for more info.
+model persons {
+  person_id                                          Int                   @id @default(autoincrement())
+  full_name                                          String                @db.VarChar(255)
+  birth_date                                         DateTime?             @db.Date
+  person_type_id                                     Int?
+  created_at                                         DateTime?             @default(now()) @db.Timestamp(6)
+  fantasy_name                                       String?               @db.VarChar(255)
+  social_capital                                     Decimal?              @db.Decimal(15, 2)
+  updated_at                                         DateTime?             @default(now()) @db.Timestamp(6)
+  addresses                                          addresses?
+  contracts_recurring                                contracts_recurring[]
+  licenses                                           licenses?
+  movement_templates                                 movement_templates[]
+  movements                                          movements[]
+  person_cnae                                        person_cnae[]
+  person_contacts                                    person_contacts[]
+  person_documents                                   person_documents[]
+  person_license                                     person_license[]
+  person_pix_keys                                    person_pix_keys[]
+  person_qsa_person_qsa_juridical_person_idTopersons person_qsa[]          @relation("person_qsa_juridical_person_idTopersons")
+  person_qsa_person_qsa_physical_person_idTopersons  person_qsa[]          @relation("person_qsa_physical_person_idTopersons")
+  person_tax_regimes                                 person_tax_regimes[]
+  person_wyse                                        person_wyse[]
+  person_types                                       person_types?         @relation(fields: [person_type_id], references: [person_type_id], onUpdate: NoAction)
+  user_accounts                                      user_accounts?
+
+  @@index([fantasy_name], map: "idx_persons_fantasy_name")
+  @@index([full_name], map: "idx_persons_full_name")
+}
+
+model licenses {
+  license_id                   Int                            @id @unique(map: "licenses_license_id_unique") @default(autoincrement())
+  person_id                    Int                            @unique(map: "idx_license_person")
+  license_name                 String                         @db.VarChar(100)
+  start_date                   DateTime                       @db.Date
+  end_date                     DateTime?                      @db.Date
+  status                       String                         @default("Ativa") @db.VarChar(20)
+  timezone                     String?                        @db.VarChar(50)
+  active                       Boolean                        @default(true)
+  account_movements            account_movements[]
+  accounts                     accounts[]
+  bank_accounts                bank_accounts[]
+  contract_group_licenses      contract_group_licenses[]
+  integration_credentials      integration_credentials[]
+  license_account_plans        license_account_plans[]
+  license_api_chat             license_api_chat[]
+  persons                      persons                        @relation(fields: [person_id], references: [person_id], onDelete: Cascade, onUpdate: NoAction, map: "fk_person")
+  movement_templates           movement_templates[]
+  movements                    movements[]
+  payment_license_relationship payment_license_relationship[]
+  person_license               person_license[]
+  user_license                 user_license[]
+  user_roles                   user_roles[]
+}
+
+model user_license {
+  user_license_id Int           @id @default(autoincrement())
+  user_id         Int
+  license_id      Int
+  licenses        licenses      @relation(fields: [license_id], references: [license_id], onDelete: Cascade, onUpdate: NoAction)
+  users           user_accounts @relation(fields: [user_id], references: [user_id], onDelete: Cascade, onUpdate: NoAction)
+
+  @@index([license_id], map: "idx_user_license_license_id")
+  @@index([user_id], map: "idx_user_license_user_id")
+}
+
 model account_entries {
   account_entry_id        Int                       @id @default(autoincrement())
   account_plan_id         Int?
@@ -525,31 +614,6 @@ model license_api_chat {
   licenses            licenses  @relation(fields: [license_id], references: [license_id], onDelete: Cascade, onUpdate: NoAction, map: "fk_license")
 }
 
-model licenses {
-  license_id                   Int                            @id @unique(map: "licenses_license_id_unique") @default(autoincrement())
-  person_id                    Int                            @unique(map: "idx_license_person")
-  license_name                 String                         @db.VarChar(100)
-  start_date                   DateTime                       @db.Date
-  end_date                     DateTime?                      @db.Date
-  status                       String                         @default("Ativa") @db.VarChar(20)
-  timezone                     String?                        @db.VarChar(50)
-  active                       Boolean                        @default(true)
-  account_movements            account_movements[]
-  accounts                     accounts[]
-  bank_accounts                bank_accounts[]
-  contract_group_licenses      contract_group_licenses[]
-  integration_credentials      integration_credentials[]
-  license_account_plans        license_account_plans[]
-  license_api_chat             license_api_chat[]
-  persons                      persons                        @relation(fields: [person_id], references: [person_id], onDelete: Cascade, onUpdate: NoAction, map: "fk_person")
-  movement_templates           movement_templates[]
-  movements                    movements[]
-  payment_license_relationship payment_license_relationship[]
-  person_license               person_license[]
-  user_license                 user_license[]
-  user_roles                   user_roles[]
-}
-
 model message_attachments {
   attachment_id Int      @id @default(autoincrement())
   message_id    Int
@@ -806,6 +870,17 @@ model nfe {
   access_key     String?   @db.VarChar(44)
 }
 
+model nfe_sampa {
+  nfe_sampa_id Int      @id @default(autoincrement())
+  chave_origem String?
+  json_data    Json
+  emissao      DateTime @default(now()) @db.Timestamp(6)
+  json_retorno Json?
+  url_xml      String?
+  url_pdf      String?
+  status       String?
+}
+
 /// The underlying table does not contain a valid unique identifier and can therefore currently not be handled by Prisma Client.
 model nfse {
   invoice_id          Int       @default(autoincrement())
@@ -1016,37 +1091,6 @@ model person_wyse {
   persons   persons? @relation(fields: [person_id], references: [person_id], onDelete: NoAction, onUpdate: NoAction)
 }
 
-/// This model contains an expression index which requires additional setup for migrations. Visit https://pris.ly/d/expression-indexes for more info.
-model persons {
-  person_id                                          Int                   @id @default(autoincrement())
-  full_name                                          String                @db.VarChar(255)
-  birth_date                                         DateTime?             @db.Date
-  person_type_id                                     Int?
-  created_at                                         DateTime?             @default(now()) @db.Timestamp(6)
-  fantasy_name                                       String?               @db.VarChar(255)
-  social_capital                                     Decimal?              @db.Decimal(15, 2)
-  updated_at                                         DateTime?             @default(now()) @db.Timestamp(6)
-  addresses                                          addresses?
-  contracts_recurring                                contracts_recurring[]
-  licenses                                           licenses?
-  movement_templates                                 movement_templates[]
-  movements                                          movements[]
-  person_cnae                                        person_cnae[]
-  person_contacts                                    person_contacts[]
-  person_documents                                   person_documents[]
-  person_license                                     person_license[]
-  person_pix_keys                                    person_pix_keys[]
-  person_qsa_person_qsa_juridical_person_idTopersons person_qsa[]          @relation("person_qsa_juridical_person_idTopersons")
-  person_qsa_person_qsa_physical_person_idTopersons  person_qsa[]          @relation("person_qsa_physical_person_idTopersons")
-  person_tax_regimes                                 person_tax_regimes[]
-  person_wyse                                        person_wyse[]
-  person_types                                       person_types?         @relation(fields: [person_type_id], references: [person_type_id], onUpdate: NoAction)
-  user_accounts                                      user_accounts?
-
-  @@index([fantasy_name], map: "idx_persons_fantasy_name")
-  @@index([full_name], map: "idx_persons_full_name")
-}
-
 model pix_key_types {
   pix_key_type_id Int               @id @default(autoincrement())
   description     String            @unique @db.VarChar(50)
@@ -1054,17 +1098,92 @@ model pix_key_types {
 }
 
 model product_groups {
-  product_group_id Int         @id @default(autoincrement())
-  description      String      @db.VarChar(100)
-  created_at       DateTime?   @default(now()) @db.Timestamp(6)
-  updated_at       DateTime?   @default(now()) @db.Timestamp(6)
-  products         products[]  @ignore
+  product_group_id Int        @id @default(autoincrement())
+  name             String     @db.VarChar(255)
+  description      String?
+  ncm              String?    @db.VarChar(10)
+  created_at       DateTime?  @default(now()) @db.Timestamp(6)
+  updated_at       DateTime?  @default(now()) @db.Timestamp(6)
+  products         products[] @ignore
+}
+
+/// The underlying table does not contain a valid unique identifier and can therefore currently not be handled by Prisma Client.
+model products {
+  item_id          Int             @default(autoincrement())
+  code             String          @db.VarChar(50)
+  name             String          @db.VarChar(255)
+  description      String?
+  status           String?         @default("active") @db.VarChar(20)
+  price            Decimal         @db.Decimal(10, 2)
+  created_at       DateTime?       @default(now()) @db.Timestamp(6)
+  updated_at       DateTime?       @default(now()) @db.Timestamp(6)
+  weight           Decimal?        @db.Decimal(10, 2)
+  dimensions       String?         @db.VarChar(50)
+  manufacturer     String?         @db.VarChar(255)
+  product_group_id Int?
+  active           Boolean         @default(true)
+  deleted_at       DateTime?       @db.Timestamp(6)
+  product_groups   product_groups? @relation(fields: [product_group_id], references: [product_group_id], onUpdate: NoAction)
+
+  @@ignore
+}
+
+model profile_permissions {
+  permission_id   Int             @id @default(autoincrement())
+  profile_id      Int
+  feature_id      Int
+  can_access      Boolean?        @default(true)
+  created_at      DateTime?       @default(now()) @db.Timestamp(6)
+  updated_at      DateTime?       @default(now()) @db.Timestamp(6)
+  system_features system_features @relation(fields: [feature_id], references: [feature_id], onDelete: Cascade, onUpdate: NoAction, map: "fk_feature")
+  profiles        profiles        @relation(fields: [profile_id], references: [profile_id], onDelete: Cascade, onUpdate: NoAction, map: "fk_profile")
+}
+
+model receipts {
+  receipt_id     Int          @id @default(autoincrement())
+  installment_id Int
+  received_at    DateTime?    @default(now()) @db.Timestamp(6)
+  amount         Decimal      @db.Decimal(10, 2)
+  installments   installments @relation(fields: [installment_id], references: [installment_id], onDelete: Cascade, onUpdate: NoAction, map: "fk_installment")
+}
+
+model role_permissions {
+  role_id          Int
+  permission_id    Int
+  created_at       DateTime?        @default(now()) @db.Timestamp(6)
+  user_permissions user_permissions @relation(fields: [permission_id], references: [permission_id], onDelete: NoAction, onUpdate: NoAction)
+  roles            roles            @relation(fields: [role_id], references: [role_id], onDelete: NoAction, onUpdate: NoAction)
+
+  @@id([role_id, permission_id])
+}
+
+model roles {
+  role_id          Int                @id @default(autoincrement())
+  role_name        String             @unique @db.VarChar(50)
+  description      String?
+  created_at       DateTime?          @default(now()) @db.Timestamp(6)
+  updated_at       DateTime?          @default(now()) @db.Timestamp(6)
+  status           String?            @default("active") @db.VarChar(20)
+  role_permissions role_permissions[]
+  user_roles       user_roles[]
+}
+
+model service_group_relationship {
+  service_group_relationship_id Int       @id @default(autoincrement())
+  service_group_id              Int
+  created_at                    DateTime? @default(now()) @db.Timestamp(6)
+  updated_at                    DateTime? @default(now()) @db.Timestamp(6)
 }
 
 model service_groups {
-  service_group_id         Int                   @id @default(autoincrement())
-  description             String                 @db.VarChar(100)
-  service_municipality_id  Int?
+  service_group_id        Int                   @id @default(autoincrement())
+  group_name              String                @db.VarChar(255)
+  group_description       String?
+  account_entry_id        Int?
+  created_at              DateTime?             @default(now()) @db.Timestamp(6)
+  updated_at              DateTime?             @default(now()) @db.Timestamp(6)
+  service_municipality_id Int?
+  account_entries         account_entries?      @relation(fields: [account_entry_id], references: [account_entry_id], onUpdate: NoAction, map: "fk_account_plan")
   service_municipality    service_municipality? @relation(fields: [service_municipality_id], references: [service_municipality_id], onUpdate: NoAction, map: "fk_service_municipality")
   services                services[]            @ignore
 }
@@ -1089,8 +1208,9 @@ model service_municipality {
   service_lc116           service_lc116?   @relation(fields: [service_lc116_id], references: [service_lc116_id], onUpdate: NoAction, map: "fk_service_lc116")
 }
 
+/// The underlying table does not contain a valid unique identifier and can therefore currently not be handled by Prisma Client.
 model services {
-  item_id          Int             @id @default(autoincrement())
+  item_id          Int             @default(autoincrement())
   code             String          @db.VarChar(50)
   name             String          @db.VarChar(255)
   description      String?
@@ -1102,6 +1222,8 @@ model services {
   active           Boolean         @default(true)
   deleted_at       DateTime?       @db.Timestamp(6)
   service_groups   service_groups? @relation(fields: [service_group_id], references: [service_group_id], onDelete: NoAction, onUpdate: NoAction)
+
+  @@ignore
 }
 
 model system_default_accounts {
@@ -1148,31 +1270,6 @@ model temporary_tokens {
   integration_credentials integration_credentials @relation(fields: [credential_id], references: [credential_id], onDelete: Cascade, onUpdate: NoAction, map: "fk_credential")
 }
 
-model user_accounts {
-  user_id                                                     Int              @id @default(autoincrement())
-  username                                                    String           @db.VarChar(50)
-  password                                                    String           @db.VarChar(255)
-  person_id                                                   Int              @unique(map: "unique_person_user")
-  profile_id                                                  Int
-  movement_items_movement_items_salesperson_idTouser_accounts movement_items[] @relation("movement_items_salesperson_idTouser_accounts")
-  movement_items_movement_items_technician_idTouser_accounts  movement_items[] @relation("movement_items_technician_idTouser_accounts")
-  persons                                                     persons          @relation(fields: [person_id], references: [person_id], onDelete: Cascade, onUpdate: NoAction)
-  profiles                                                    profiles         @relation(fields: [profile_id], references: [profile_id], onDelete: Cascade, onUpdate: NoAction)
-  user_license                                                user_license[]
-  user_roles                                                  user_roles[]
-}
-
-model user_license {
-  user_license_id Int           @id @default(autoincrement())
-  user_id         Int
-  license_id      Int
-  licenses        licenses      @relation(fields: [license_id], references: [license_id], onDelete: Cascade, onUpdate: NoAction)
-  user_accounts   user_accounts @relation(fields: [user_id], references: [user_id], onDelete: Cascade, onUpdate: NoAction)
-
-  @@index([license_id], map: "idx_user_license_license_id")
-  @@index([user_id], map: "idx_user_license_user_id")
-}
-
 model user_permissions {
   permission_id    Int                @id(map: "permissions_pkey") @default(autoincrement())
   permission_name  String             @unique(map: "permissions_permission_name_key") @db.VarChar(100)
@@ -1209,15 +1306,4 @@ model v_model_movement_id {
   model_movement_id Int?
 
   @@ignore
-}
-
-model nfe_sampa {
-  nfe_sampa_id Int      @id @default(autoincrement())
-  chave_origem String?
-  json_data    Json
-  emissao      DateTime @default(now()) @db.Timestamp(6)
-  json_retorno Json?
-  url_xml      String?
-  url_pdf      String?
-  status       String?
 }

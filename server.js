@@ -6,7 +6,26 @@ const routes = require('./src/routes');
 const logger = require('./config/logger');
 const dotenv = require('dotenv');
 
+// Carrega variáveis de ambiente
 dotenv.config();
+
+// Manipuladores de erro não tratado
+process.on('uncaughtException', (error) => {
+    console.error('=== ERRO NÃO TRATADO ===');
+    console.error('Erro:', error);
+    console.error('Stack:', error.stack);
+});
+
+process.on('unhandledRejection', (error) => {
+    console.error('=== PROMISE REJEITADA NÃO TRATADA ===');
+    console.error('Erro:', error);
+    console.error('Stack:', error.stack);
+});
+
+// Debug: Verifica variáveis de ambiente críticas
+console.log('=== VERIFICAÇÃO DE AMBIENTE ===');
+console.log('JWT_SECRET definido:', !!process.env.JWT_SECRET);
+console.log('DATABASE_CONNECTION_URI definido:', !!process.env.DATABASE_CONNECTION_URI);
 
 const app = express();
 

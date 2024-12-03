@@ -212,28 +212,21 @@ class PrismaUserRepository extends IUserRepository {
       });
 
       if (user) {
-        // Formata o usuário antes de retornar
-        const formattedUser = {
-          user_id: user.user_id,
+        console.log('Resultado da busca:', { 
+          encontrado: true,
+          id: user.user_id,
           username: user.username,
-          password: user.password,
-          person_id: user.person_id,
-          profile_id: user.profile_id,
-          full_name: user.persons?.full_name,
-          profile: user.profiles ? {
-            id: user.profiles.profile_id,
-            name: user.profiles.profile_name,
-            description: user.profiles.description
-          } : null
-        };
-
-        return formattedUser;
+          temSenha: !!user.password,
+          hashDaSenha: user.password?.substring(0, 10) + '...'
+        });
+        return user;
       }
 
+      console.log('Usuário não encontrado');
       return null;
     } catch (error) {
       console.log('Erro na busca:', error);
-      throw new Error(error.message);
+      throw error;
     }
   }
 

@@ -120,13 +120,13 @@ router.post('/login', async (req, res) => {
             hashDaSenha: user.password?.substring(0, 10) + '...'
         });
 
+        console.log('Verificando senha com Argon2...');
+        
         // Verifica se tem senha
         if (!user.password) {
             console.log('Usuário não tem senha definida');
             return res.status(401).json({ error: 'Credenciais inválidas' });
         }
-
-        console.log('Verificando senha com Argon2...');
         
         // Verifica a senha usando Argon2
         const validPassword = await argon2.verify(user.password, password);
@@ -138,17 +138,30 @@ router.post('/login', async (req, res) => {
             return res.status(401).json({ error: 'Credenciais inválidas' });
         }
 
-        // Gera o token JWT
-        const token = jwt.sign(
-            { 
-                id: user.user_id, 
-                username: user.username,
-                role: user.role,
-                profile_id: user.profile_id
-            }, 
-            process.env.JWT_SECRET, 
-            { expiresIn: '1h' }
-        );
+        // Debug: Verificar JWT
+        console.log('=== DEBUG JWT ===');
+        console.log('JWT_SECRET definido:', !!process.env.JWT_SECRET);
+        console.log('JWT_SECRET length:', process.env.JWT_SECRET ? process.env.JWT_SECRET.length : 0);
+        console.log('Tentando gerar token...');
+
+        let token;
+        try {
+            // Gera o token JWT
+            token = jwt.sign(
+                { 
+                    id: user.user_id, 
+                    username: user.username,
+                    role: user.role,
+                    profile_id: user.profile_id
+                }, 
+                process.env.JWT_SECRET, 
+                { expiresIn: '1h' }
+            );
+            console.log('Token gerado com sucesso!');
+        } catch (error) {
+            console.error('Erro ao gerar token:', error);
+            return res.status(500).json({ error: 'Erro interno do servidor' });
+        }
 
         // Busca dados completos do usuário usando getUserById
         req.params.id = user.user_id;
