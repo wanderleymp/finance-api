@@ -7,9 +7,6 @@ class IUserRepository {
     throw new Error('Method not implemented');
   }
 
-  async getUserById(id) {
-    throw new Error('Method not implemented');
-  }
 
   async createUser(userData) {
     throw new Error('Method not implemented');
@@ -20,6 +17,10 @@ class IUserRepository {
   }
 
   async deleteUser(id) {
+    throw new Error('Method not implemented');
+  }
+
+  async findUserAccountById(id) {
     throw new Error('Method not implemented');
   }
 }

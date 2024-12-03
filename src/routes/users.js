@@ -3,12 +3,12 @@ const router = express.Router();
 const logger = require('../../config/logger');
 const { 
     getAllUsers, 
-    getUserById, 
     createUser, 
     updateUser, 
     deleteUser,
     updatePassword,
-    getUserLicenses 
+    getUserLicenses,
+    getUserAccount
 } = require('../controllers/usersController');
 const authenticateToken = require('../middlewares/authMiddleware');
 
@@ -247,39 +247,6 @@ router.post('/', createUser);
 /**
  * @swagger
  * /users/{id}:
- *   get:
- *     summary: Obtém um usuário pelo ID
- *     security:
- *       - bearerAuth: []
- *     tags: [Users]
- *     servers:
- *       - url: https://api.agilefinance.com.br
- *         description: Servidor de produção
- *     parameters:
- *       - in: path
- *         name: id
- *         required: true
- *         schema:
- *           type: integer
- *         description: ID do usuário
- *     responses:
- *       200:
- *         description: Usuário encontrado
- *         content:
- *           application/json:
- *             schema:
- *               $ref: '#/components/schemas/User'
- *       404:
- *         description: Usuário não encontrado
- */
-router.route('/:id')
-  .get(getUserById)
-  .put(updateUser)
-  .delete(deleteUser);
-
-/**
- * @swagger
- * /users/{id}:
  *   put:
  *     summary: Atualiza um usuário
  *     security:
@@ -349,6 +316,40 @@ router.route('/:id')
  *       404:
  *         description: Usuário não encontrado
  */
+
+/**
+ * @swagger
+ * /users/{id}:
+ *   get:
+ *     tags:
+ *       - Users
+ *     summary: Obtém um usuário pelo ID
+ *     security:
+ *       - bearerAuth: []
+ *     servers:
+ *       - url: https://api.agilefinance.com.br
+ *         description: Servidor de produção
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: integer
+ *         description: ID do usuário
+ *     responses:
+ *       200:
+ *         description: Usuário encontrado
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/User'
+ *       404:
+ *         description: Usuário não encontrado
+ */
+router.route('/:id')
+  .get(getUserAccount)
+  .put(updateUser)
+  .delete(deleteUser);
 
 /**
  * @swagger
@@ -461,5 +462,52 @@ router.get('/:id/licenses', (req, res) => {
  */
 router.route('/:id/password')
   .patch(updatePassword);
+
+/**
+ * @swagger
+ * /users/{id}/account:
+ *   get:
+ *     summary: Obtém os dados da conta de um usuário
+ *     security:
+ *       - bearerAuth: []
+ *     tags: [Users]
+ *     servers:
+ *       - url: https://api.agilefinance.com.br
+ *         description: Servidor de produção
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: integer
+ *         description: ID do usuário
+ *     responses:
+ *       200:
+ *         description: Dados da conta de usuário encontrados
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 user_id:
+ *                   type: integer
+ *                 username:
+ *                   type: string
+ *                 email:
+ *                   type: string
+ *                 active:
+ *                   type: boolean
+ *                 created_at:
+ *                   type: string
+ *                   format: date-time
+ *                 updated_at:
+ *                   type: string
+ *                   format: date-time
+ *                 profile_id:
+ *                   type: integer
+ *       404:
+ *         description: Conta de usuário não encontrada
+ */
+router.get('/:id/account', getUserAccount);
 
 module.exports = router;

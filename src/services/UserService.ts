@@ -5,16 +5,16 @@ class UserService {
     this.userRepository = userRepository;
   }
 
-  async findUserById(id: number): Promise<User | null> {
-    return this.userRepository.findById(id);
-  }
-
   async createUser(data: CreateUserDTO): Promise<User> {
     const existingUser = await this.userRepository.findByEmail(data.email);
     if (existingUser) {
       throw new Error('User already exists');
     }
     return this.userRepository.create(data);
+  }
+
+  async findUserAccountById(id: number): Promise<UserAccount | null> {
+    return this.userRepository.findUserAccountById(id);
   }
 
   // outros métodos do serviço...

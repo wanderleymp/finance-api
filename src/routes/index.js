@@ -31,11 +31,13 @@ router.use((req, res, next) => {
   console.log('Request Query:', req.query);
   console.log('Request Body:', req.body);
   console.log('Base URL:', req.baseUrl);
-  console.log('Route Stack:', router.stack.map(layer => ({
-    regexp: layer.regexp.toString(),
-    path: layer.route?.path,
-    methods: layer.route?.methods
-  })));
+  console.log('Router Stack:', router.stack.map(layer => {
+    return {
+      path: layer.route?.path,
+      methods: layer.route?.methods,
+      regexp: layer.regexp.toString()
+    };
+  }));
   console.log('=== END MAIN ROUTER DEBUG ===\n');
 
   logger.info('Rota sendo processada:', {
@@ -55,7 +57,7 @@ router.use((req, res, next) => {
 // Auth routes
 router.use('/auth', authRoutes);
 
-// Users routes
+// Rotas de usuários
 router.use('/users', usersRoutes);
 
 // Logs routes

@@ -77,6 +77,14 @@ app.use((req, res, next) => {
 // Rotas
 app.use('/', routes);
 
+// Debug de rotas
+console.log('=== ROTAS REGISTRADAS ===');
+routes.stack.forEach((r) => {
+  if (r.route && r.route.path) {
+    console.log(`Rota: ${r.route.path}, Métodos: ${Object.keys(r.route.methods)}`);
+  }
+});
+
 // Middleware de erro
 app.use((err, req, res, next) => {
     logger.error('Erro não tratado:', {

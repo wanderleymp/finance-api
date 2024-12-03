@@ -72,43 +72,6 @@ class PrismaUserRepository extends IUserRepository {
     }
   }
 
-  async getUserById(id) {
-    try {
-      console.log('Buscando usuário por ID:', id);
-      
-      const user = await this.prisma.user_accounts.findUnique({
-        where: { user_id: parseInt(id) },
-        include: {
-          persons: {
-            select: {
-              full_name: true,
-              person_id: true
-            }
-          },
-          profiles: {
-            select: {
-              profile_id: true,
-              profile_name: true
-            }
-          }
-        }
-      });
-
-      console.log('Usuário encontrado:', JSON.stringify(user, null, 2));
-
-      if (!user) {
-        console.log('Usuário não encontrado');
-        return null;
-      }
-
-      return this.formatUser(user);
-    } catch (error) {
-      console.error('Erro detalhado na busca de usuário:', error);
-      console.error('Detalhes completos do erro:', JSON.stringify(error, null, 2));
-      throw error;
-    }
-  }
-
   async findByIdentifier(identifier) {
     try {
       console.log('=== BUSCA DE USUÁRIO ===');
@@ -185,6 +148,41 @@ class PrismaUserRepository extends IUserRepository {
       return null;
     } catch (error) {
       console.log('Erro na busca:', error);
+      throw error;
+    }
+  }
+
+  async findUserAccountById(userId) {
+    try {
+      console.log('=== DEBUG findUserAccountById ===');
+      console.log('Received User ID:', userId);
+      console.log('User ID Type:', typeof userId);
+      
+      const parsedUserId = parseInt(userId, 10);
+      console.log('Parsed User ID:', parsedUserId);
+      console.log('Parsed ID Type:', typeof parsedUserId);
+      
+      const userAccount = await this.prisma.user_accounts.findUnique({
+        where: { user_id: parsedUserId },
+        select: {
+          user_id: true,
+          username: true,
+          active: true,
+          created_at: true,
+          updated_at: true,
+          profile_id: true
+        }
+      });
+
+      console.log('User Account Query Result:', userAccount);
+      
+      return userAccount;
+    } catch (error) {
+      console.error('=== FULL ERROR IN findUserAccountById ===');
+      console.error('Error Name:', error.name);
+      console.error('Error Message:', error.message);
+      console.error('Error Stack:', error.stack);
+      
       throw error;
     }
   }

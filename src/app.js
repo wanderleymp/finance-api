@@ -36,6 +36,9 @@ app.use(express.json());
 // Swagger
 app.use('/api-docs', swaggerUi.serve, swaggerUi.setup(swaggerSpec));
 
+const routes = require('./routes');
+app.use('/', routes);
+
 // Tratamento de erros
 app.use((err, req, res, next) => {
   console.error(err.stack);

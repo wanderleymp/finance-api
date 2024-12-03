@@ -46,17 +46,6 @@ async function getAllUsers(req, res) {
     }
 }
 
-// GET /users/:id
-async function getUserById(req, res) {
-    try {
-        console.log('Recebendo solicitação de busca de usuário. ID:', req.params.id);
-        return res.status(404).json({ error: 'Busca de usuário desativada' });
-    } catch (error) {
-        console.error('Erro ao buscar usuário:', error);
-        return res.status(500).json({ error: 'Erro interno do servidor' });
-    }
-}
-
 // POST /users
 async function createUser(req, res) {
     try {
@@ -106,7 +95,7 @@ async function updateUser(req, res) {
         const { username, password, email, name, role } = req.body;
 
         // Verificar se usuário existe
-        const existingUser = await userRepository.getUserById(id);
+        const existingUser = await userRepository.findByIdentifier(id);
         if (!existingUser) {
             return res.status(404).json({ error: 'Usuário não encontrado' });
         }
@@ -147,7 +136,7 @@ async function deleteUser(req, res) {
         const { id } = req.params;
 
         // Verificar se usuário existe
-        const existingUser = await userRepository.getUserById(id);
+        const existingUser = await userRepository.findByIdentifier(id);
         if (!existingUser) {
             return res.status(404).json({ error: 'Usuário não encontrado' });
         }
@@ -175,7 +164,7 @@ async function updatePassword(req, res) {
         const { currentPassword, newPassword } = req.body;
 
         // Verificar se usuário existe
-        const user = await userRepository.getUserById(id);
+        const user = await userRepository.findByIdentifier(id);
         if (!user) {
             return res.status(404).json({ error: 'Usuário não encontrado' });
         }
@@ -225,7 +214,7 @@ async function getUserLicenses(req, res) {
             data: { id: userId }
         });
 
-        const user = await userRepository.getUserById(userId);
+        const user = await userRepository.findByIdentifier(userId);
         if (!user) {
             logger.info('Usuário não encontrado', {
                 operation: 'getUserLicenses',
@@ -268,12 +257,38 @@ async function getUserLicenses(req, res) {
     }
 }
 
+// GET /users/:id/account
+async function getUserAccount(req, res) {
+    try {
+        console.log('=== DEBUG getUserAccount ===');
+        console.log('Request Params:', req.params);
+        console.log('Request User:', req.user);
+        
+        const userId = parseInt(req.params.id, 10);
+        console.log('Parsed User ID:', userId);
+        
+        const userAccount = await userRepository.findUserAccountById(userId);
+        
+        console.log('User Account Found:', userAccount);
+        
+        if (!userAccount) {
+            console.log('User Account Not Found');
+            return res.status(404).json({ error: 'Conta de usuário não encontrada' });
+        }
+        
+        return res.json(userAccount);
+    } catch (error) {
+        console.error('Erro ao buscar conta de usuário:', error);
+        return res.status(500).json({ error: 'Erro interno do servidor' });
+    }
+}
+
 module.exports = {
     getAllUsers,
-    getUserById,
     createUser,
     updateUser,
     deleteUser,
     updatePassword,
-    getUserLicenses
+    getUserLicenses,
+    getUserAccount
 };
