@@ -4,7 +4,6 @@ const jwt = require('jsonwebtoken');
 const argon2 = require('argon2');
 const logger = require('../../config/logger');
 const PrismaUserRepository = require('../repositories/implementations/PrismaUserRepository');
-const { getUserById } = require('../controllers/usersController');
 const authenticateToken = require('../middlewares/authMiddleware');
 
 const userRepository = new PrismaUserRepository();
@@ -49,43 +48,6 @@ const userRepository = new PrismaUserRepository();
  *                 token:
  *                   type: string
  *                   description: Token JWT para autenticação
- *                 user:
- *                   type: object
- *                   properties:
- *                     id:
- *                       type: integer
- *                     username:
- *                       type: string
- *                     profile:
- *                       type: object
- *                     person:
- *                       type: object
- *                       properties:
- *                         id:
- *                           type: integer
- *                         full_name:
- *                           type: string
- *                         fantasy_name:
- *                           type: string
- *                         birth_date:
- *                           type: string
- *                         contacts:
- *                           type: object
- *                           properties:
- *                             byType:
- *                               type: object
- *                             list:
- *                               type: array
- *                         documents:
- *                           type: array
- *                         licenses:
- *                           type: array
- *                         address:
- *                           type: object
- *                         tax_regime:
- *                           type: object
- *                         type:
- *                           type: string
  *       401:
  *         description: Credenciais inválidas
  *         content:
@@ -104,6 +66,11 @@ router.post('/login', async (req, res) => {
         console.log('=== INÍCIO DO LOGIN ===');
         console.log('Dados recebidos:', { identifier, temSenha: !!password });
         
+        // Adicionar logs de debug
+        console.log('=== DEBUG LOGIN ===');
+        console.log('Dados recebidos:', req.body);
+        console.log('Tentativa de login para:', req.body.identifier);
+
         // Busca o usuário por username ou qualquer valor de contato
         const user = await userRepository.findByIdentifier(identifier);
         
@@ -158,27 +125,22 @@ router.post('/login', async (req, res) => {
                 { expiresIn: '1h' }
             );
             console.log('Token gerado com sucesso!');
+            
+            // Adicionar log após a geração do token
+            console.log('Token gerado:', token);
+            console.log('Dados do usuário no token:', { 
+                id: user.user_id, 
+                username: user.username,
+                role: user.role,
+                profile_id: user.profile_id
+            });
         } catch (error) {
             console.error('Erro ao gerar token:', error);
             return res.status(500).json({ error: 'Erro interno do servidor' });
         }
-
-        // Busca dados completos do usuário usando getUserById
-        req.params.id = user.user_id;
-        const userResponse = await new Promise((resolve) => {
-            getUserById({ params: { id: user.user_id } }, {
-                json: (data) => resolve(data),
-                status: () => ({ json: () => resolve(null) })
-            });
-        });
-
-        if (!userResponse) {
-            return res.status(500).json({ error: 'Erro ao buscar dados do usuário' });
-        }
-
-        res.json({ 
-            token,
-            user: userResponse
+        console.log('Token:', token);
+        return res.status(200).json({
+            token
         });
     } catch (error) {
         console.error('Erro durante autenticação:', {
@@ -217,9 +179,7 @@ router.post('/login', async (req, res) => {
  */
 router.get('/me', authenticateToken, async (req, res) => {
     try {
-        // Usa a mesma função do getUserById
-        req.params.id = req.user.id;
-        return getUserById(req, res);
+        return res.status(200).json(req.user);
     } catch (error) {
         logger.error('Erro ao buscar dados do usuário:', error);
         return res.status(500).json({ error: 'Erro interno do servidor' });

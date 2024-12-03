@@ -50,8 +50,7 @@ class PrismaUserRepository extends IUserRepository {
         } : null,
         licenses: user.user_license.map(ul => ({
           id: ul.licenses.license_id,
-          name: ul.licenses.license_name,
-          description: ul.licenses.description
+          name: ul.licenses.license_name
         }))
       }));
     } catch (error) {
@@ -74,13 +73,9 @@ class PrismaUserRepository extends IUserRepository {
   }
 
   async getUserById(id) {
-    const startTime = Date.now();
     try {
-      logger.info('Iniciando busca de usuário por ID', {
-        operation: 'getUserById',
-        data: { id }
-      });
-
+      console.log('Buscando usuário por ID:', id);
+      
       const user = await this.prisma.user_accounts.findUnique({
         where: { user_id: parseInt(id) },
         include: {
@@ -93,52 +88,23 @@ class PrismaUserRepository extends IUserRepository {
           profiles: {
             select: {
               profile_id: true,
-              profile_name: true,
-              description: true
-            }
-          },
-          user_license: {
-            include: {
-              licenses: {
-                select: {
-                  license_id: true,
-                  license_name: true,
-                  description: true
-                }
-              }
+              profile_name: true
             }
           }
         }
       });
 
+      console.log('Usuário encontrado:', JSON.stringify(user, null, 2));
+
       if (!user) {
-        logger.info('Usuário não encontrado', {
-          operation: 'getUserById',
-          data: { id }
-        });
+        console.log('Usuário não encontrado');
         return null;
       }
 
-      const duration = Date.now() - startTime;
-      logger.info('Usuário encontrado', {
-        operation: 'getUserById',
-        duration,
-        data: {
-          id,
-          hasLicenses: user.user_license?.length > 0
-        }
-      });
-
-      return user;
+      return this.formatUser(user);
     } catch (error) {
-      const duration = Date.now() - startTime;
-      logger.error('Erro ao buscar usuário por ID', {
-        operation: 'getUserById',
-        duration,
-        error: error.message,
-        stack: error.stack,
-        data: { id }
-      });
+      console.error('Erro detalhado na busca de usuário:', error);
+      console.error('Detalhes completos do erro:', JSON.stringify(error, null, 2));
       throw error;
     }
   }
@@ -224,28 +190,19 @@ class PrismaUserRepository extends IUserRepository {
   }
 
   formatUser(user) {
-    return {
+    console.log('DEBUG formatUser - User Object:', JSON.stringify(user, null, 2));
+    
+    const formattedUser = {
       user_id: user.user_id,
       username: user.username,
       person_id: user.persons?.person_id,
-      profile_id: user.profiles?.profile_id,
-      email: user.email,
-      role: user.role,
-      created_at: user.created_at,
-      licenses: user.user_licenses?.map(ul => ({
-        id: ul.licenses.license_id,
-        name: ul.licenses.license_name,
-        description: ul.licenses.description
-      })) || [],
-      person: user.persons ? {
-        full_name: user.persons.full_name
-      } : null,
-      profile: user.profiles ? {
-        id: user.profiles.profile_id,
-        name: user.profiles.profile_name,
-        description: user.profiles.description
-      } : null
+      full_name: user.persons?.full_name,
+      profile_name: user.profiles?.profile_name
     };
+
+    console.log('DEBUG formatUser - Formatted User:', JSON.stringify(formattedUser, null, 2));
+    
+    return formattedUser;
   }
 }
 

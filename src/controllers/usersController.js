@@ -49,28 +49,11 @@ async function getAllUsers(req, res) {
 // GET /users/:id
 async function getUserById(req, res) {
     try {
-        const user = await userRepository.getUserById(req.params.id);
-        if (!user) {
-            return res.status(404).json({ error: 'Usuário não encontrado' });
-        }
-
-        // Remove dados sensíveis
-        const { password, ...userWithoutPassword } = user;
-
-        // Formata o usuário no mesmo padrão do getAllUsers
-        const formattedUser = {
-            user_id: userWithoutPassword.user_id,
-            username: userWithoutPassword.username,
-            person_id: userWithoutPassword.person_id,
-            profile_id: userWithoutPassword.profile_id,
-            full_name: userWithoutPassword.persons?.full_name,
-            licenses: userWithoutPassword.licenses || []
-        };
-
-        res.json(formattedUser);
+        console.log('Recebendo solicitação de busca de usuário. ID:', req.params.id);
+        return res.status(404).json({ error: 'Busca de usuário desativada' });
     } catch (error) {
-        logger.error('Erro ao buscar usuário:', error);
-        res.status(500).json({ error: 'Erro ao buscar usuário' });
+        console.error('Erro ao buscar usuário:', error);
+        return res.status(500).json({ error: 'Erro interno do servidor' });
     }
 }
 
@@ -255,7 +238,10 @@ async function getUserLicenses(req, res) {
         const licenses = user.user_license?.map(ul => ({
             id: ul.licenses.license_id,
             name: ul.licenses.license_name,
-            description: ul.licenses.description
+            status: ul.licenses.status,
+            start_date: ul.licenses.start_date,
+            end_date: ul.licenses.end_date,
+            active: ul.licenses.active
         })) || [];
 
         const duration = Date.now() - startTime;
