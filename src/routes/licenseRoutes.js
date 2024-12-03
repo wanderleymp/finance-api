@@ -3,6 +3,16 @@ const router = express.Router();
 const licenseController = require('../controllers/licenseController');
 const authenticateToken = require('../middlewares/authMiddleware');
 
+// Middleware para logging
+router.use((req, res, next) => {
+    console.log('=== ROTA LICENSES ===');
+    console.log('Método:', req.method);
+    console.log('URL:', req.url);
+    console.log('Query:', req.query);
+    console.log('User:', req.user);
+    next();
+});
+
 /**
  * @swagger
  * components:

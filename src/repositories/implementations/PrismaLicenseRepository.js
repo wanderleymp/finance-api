@@ -2,28 +2,66 @@ const { PrismaClient } = require('@prisma/client');
 const ILicenseRepository = require('../interfaces/ILicenseRepository');
 const logger = require('../../../config/logger');
 
+console.log('=== ARQUIVO PRISMA LICENSE REPOSITORY CARREGADO ===');
+
 class PrismaLicenseRepository extends ILicenseRepository {
     constructor() {
         super();
         this.prisma = new PrismaClient();
     }
 
-    async getAllLicenses(filters = {}, skip = 0, take = 10) {
+    async getAllLicenses(userId, filters = {}, skip = 0, take = 10) {
         try {
+            console.log('=== REPOSITORY GET ALL LICENSES ===');
+            console.log('1. UserId recebido:', userId);
+            console.log('2. Filters recebidos:', filters);
+            console.log('3. Skip:', skip);
+            console.log('4. Take:', take);
+            
             const where = { ...filters };
+            console.log('5. Where inicial:', where);
+            
             if (where.active === 'all') {
                 delete where.active;
+            } else if (where.active === 'true') {
+                where.active = true;
+            } else if (where.active === 'false') {
+                where.active = false;
             }
+            console.log('6. Where após processamento active:', where);
 
             // Buscar o total de registros
-            const total = await this.prisma.licenses.count({ where });
+            const total = await this.prisma.licenses.count({
+                where: {
+                    AND: [
+                        where,
+                        {
+                            user_license: {
+                                some: {
+                                    user_id: parseInt(userId)
+                                }
+                            }
+                        }
+                    ]
+                }
+            });
+            console.log('7. Total encontrado:', total);
 
             // Buscar os registros da página atual
+            console.log('8. Iniciando busca de licenses');
             const licenses = await this.prisma.licenses.findMany({
-                where,
-                skip,
-                take,
-                orderBy: { license_name: 'asc' },
+                where: {
+                    AND: [
+                        where,
+                        {
+                            user_license: {
+                                some: {
+                                    user_id: parseInt(userId)
+                                }
+                            }
+                        }
+                    ]
+                },
                 include: {
                     persons: {
                         select: {
@@ -41,8 +79,12 @@ class PrismaLicenseRepository extends ILicenseRepository {
                             }
                         }
                     }
-                }
+                },
+                skip,
+                take,
+                orderBy: { license_name: 'asc' }
             });
+            console.log('9. Licenses encontradas:', licenses);
 
             // Calcular metadados da paginação
             const totalPages = Math.ceil(total / take);
@@ -50,7 +92,7 @@ class PrismaLicenseRepository extends ILicenseRepository {
             const hasNext = currentPage < totalPages;
             const hasPrevious = currentPage > 1;
 
-            return {
+            const result = {
                 data: licenses,
                 pagination: {
                     total,
@@ -61,7 +103,11 @@ class PrismaLicenseRepository extends ILicenseRepository {
                     hasPrevious
                 }
             };
+            console.log('10. Resultado final:', result);
+            
+            return result;
         } catch (error) {
+            console.error('11. ERRO no repository:', error);
             logger.error('Error fetching licenses:', error);
             throw error;
         }

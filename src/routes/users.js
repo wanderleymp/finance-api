@@ -1,14 +1,42 @@
 const express = require('express');
 const router = express.Router();
+const logger = require('../../config/logger');
 const { 
     getAllUsers, 
     getUserById, 
     createUser, 
     updateUser, 
     deleteUser,
-    updatePassword 
+    updatePassword,
+    getUserLicenses 
 } = require('../controllers/usersController');
 const authenticateToken = require('../middlewares/authMiddleware');
+
+// Middleware de logging para debug
+router.use((req, res, next) => {
+  console.log('=== DEBUG USERS ROUTER ===');
+  console.log('Request URL:', req.originalUrl);
+  console.log('Request Method:', req.method);
+  console.log('Request Path:', req.path);
+  console.log('Request Params:', req.params);
+  console.log('Base URL:', req.baseUrl);
+  console.log('Route:', req.route);
+  console.log('=== END DEBUG ===');
+
+  logger.info('Rota de usuário sendo processada:', {
+    originalUrl: req.originalUrl,
+    method: req.method,
+    path: req.path,
+    params: req.params,
+    baseUrl: req.baseUrl,
+    route: req.route,
+    stack: new Error().stack
+  });
+  next();
+});
+
+// Aplicar middleware de autenticação em todas as rotas
+router.use(authenticateToken);
 
 /**
  * @swagger
@@ -76,7 +104,7 @@ const authenticateToken = require('../middlewares/authMiddleware');
  *               items:
  *                 $ref: '#/components/schemas/User'
  */
-router.get('/', authenticateToken, getAllUsers);
+router.get('/', getAllUsers);
 
 /**
  * @swagger
@@ -163,41 +191,11 @@ router.get('/', authenticateToken, getAllUsers);
  *       500:
  *         description: Erro interno do servidor
  */
-router.get('/list', authenticateToken, (req, res) => {
+router.get('/list', (req, res) => {
   const { page, limit, search } = req.query;
   // Implementação da lógica de listagem com paginação e filtros
   // ...
 });
-
-/**
- * @swagger
- * /users/{id}:
- *   get:
- *     summary: Obtém um usuário pelo ID
- *     security:
- *       - bearerAuth: []
- *     tags: [Users]
- *     servers:
- *       - url: https://api.agilefinance.com.br
- *         description: Servidor de produção
- *     parameters:
- *       - in: path
- *         name: id
- *         required: true
- *         schema:
- *           type: integer
- *         description: ID do usuário
- *     responses:
- *       200:
- *         description: Usuário encontrado
- *         content:
- *           application/json:
- *             schema:
- *               $ref: '#/components/schemas/User'
- *       404:
- *         description: Usuário não encontrado
- */
-router.get('/:id', authenticateToken, getUserById);
 
 /**
  * @swagger
@@ -244,7 +242,40 @@ router.get('/:id', authenticateToken, getUserById);
  *       409:
  *         description: Username já existe
  */
-router.post('/', authenticateToken, createUser);
+router.post('/', createUser);
+
+/**
+ * @swagger
+ * /users/{id}:
+ *   get:
+ *     summary: Obtém um usuário pelo ID
+ *     security:
+ *       - bearerAuth: []
+ *     tags: [Users]
+ *     servers:
+ *       - url: https://api.agilefinance.com.br
+ *         description: Servidor de produção
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: integer
+ *         description: ID do usuário
+ *     responses:
+ *       200:
+ *         description: Usuário encontrado
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/User'
+ *       404:
+ *         description: Usuário não encontrado
+ */
+router.route('/:id')
+  .get(getUserById)
+  .put(updateUser)
+  .delete(deleteUser);
 
 /**
  * @swagger
@@ -291,7 +322,6 @@ router.post('/', authenticateToken, createUser);
  *       404:
  *         description: Usuário não encontrado
  */
-router.put('/:id', authenticateToken, updateUser);
 
 /**
  * @swagger
@@ -319,7 +349,71 @@ router.put('/:id', authenticateToken, updateUser);
  *       404:
  *         description: Usuário não encontrado
  */
-router.delete('/:id', authenticateToken, deleteUser);
+
+/**
+ * @swagger
+ * /users/{id}/licenses:
+ *   get:
+ *     summary: Obtém as licenças de um usuário
+ *     description: Retorna todas as licenças associadas a um usuário específico
+ *     tags: [Users]
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: integer
+ *         description: ID do usuário
+ *     security:
+ *       - bearerAuth: []
+ *     responses:
+ *       200:
+ *         description: Lista de licenças do usuário
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: array
+ *               items:
+ *                 type: object
+ *                 properties:
+ *                   id:
+ *                     type: integer
+ *                   name:
+ *                     type: string
+ *                   description:
+ *                     type: string
+ *       404:
+ *         description: Usuário não encontrado
+ *       500:
+ *         description: Erro interno do servidor
+ */
+router.get('/:id/licenses', (req, res) => {
+    console.log('=== DEBUG: Rota /users/:id/licenses ===');
+    console.log('ID:', req.params.id);
+    console.log('URL:', req.originalUrl);
+    console.log('Method:', req.method);
+    console.log('Headers:', req.headers);
+    console.log('Params:', req.params);
+    console.log('Query:', req.query);
+    console.log('Body:', req.body);
+    console.log('=== END DEBUG ===');
+
+    logger.info('Debug rota licenses', {
+        id: req.params.id,
+        url: req.originalUrl,
+        method: req.method,
+        headers: req.headers,
+        params: req.params,
+        query: req.query,
+        body: req.body
+    });
+
+    const licenses = getUserLicenses(req.params.id);
+    console.log('Licenças:', licenses);
+    logger.info('Licenças do usuário', { id: req.params.id, licenses });
+
+    res.json({ message: 'Debug route /users/:id/licenses', id: req.params.id, licenses });
+});
 
 /**
  * @swagger
@@ -365,6 +459,7 @@ router.delete('/:id', authenticateToken, deleteUser);
  *       404:
  *         description: Usuário não encontrado
  */
-router.patch('/:id/password', authenticateToken, updatePassword);
+router.route('/:id/password')
+  .patch(updatePassword);
 
 module.exports = router;

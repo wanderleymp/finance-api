@@ -1104,7 +1104,7 @@ model product_groups {
   ncm              String?    @db.VarChar(10)
   created_at       DateTime?  @default(now()) @db.Timestamp(6)
   updated_at       DateTime?  @default(now()) @db.Timestamp(6)
-  products         products[] @ignore
+  products         products[]
 }
 
 /// The underlying table does not contain a valid unique identifier and can therefore currently not be handled by Prisma Client.
@@ -1185,7 +1185,7 @@ model service_groups {
   service_municipality_id Int?
   account_entries         account_entries?      @relation(fields: [account_entry_id], references: [account_entry_id], onUpdate: NoAction, map: "fk_account_plan")
   service_municipality    service_municipality? @relation(fields: [service_municipality_id], references: [service_municipality_id], onUpdate: NoAction, map: "fk_service_municipality")
-  services                services[]            @ignore
+  services                services[]
 }
 
 model service_lc116 {

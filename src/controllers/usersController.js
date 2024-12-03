@@ -224,11 +224,70 @@ async function updatePassword(req, res) {
     }
 }
 
+// GET /users/:id/licenses
+async function getUserLicenses(req, res) {
+    const startTime = Date.now();
+    try {
+        const userId = parseInt(req.params.id);
+        if (isNaN(userId)) {
+            logger.warn('ID de usuário inválido', {
+                operation: 'getUserLicenses',
+                data: { id: req.params.id }
+            });
+            return res.status(400).json({ error: 'ID de usuário inválido' });
+        }
+
+        logger.info('Iniciando busca de licenças do usuário', {
+            operation: 'getUserLicenses',
+            data: { id: userId }
+        });
+
+        const user = await userRepository.getUserById(userId);
+        if (!user) {
+            logger.info('Usuário não encontrado', {
+                operation: 'getUserLicenses',
+                data: { id: userId }
+            });
+            return res.status(404).json({ error: 'Usuário não encontrado' });
+        }
+
+        // Garantir que user.licenses existe
+        const licenses = user.user_license?.map(ul => ({
+            id: ul.licenses.license_id,
+            name: ul.licenses.license_name,
+            description: ul.licenses.description
+        })) || [];
+
+        const duration = Date.now() - startTime;
+        logger.info('Busca de licenças concluída', {
+            operation: 'getUserLicenses',
+            duration,
+            data: { 
+                id: userId,
+                licenseCount: licenses.length
+            }
+        });
+
+        res.json(licenses);
+    } catch (error) {
+        const duration = Date.now() - startTime;
+        logger.error('Erro ao buscar licenças do usuário', {
+            operation: 'getUserLicenses',
+            duration,
+            error: error.message,
+            stack: error.stack,
+            data: { id: req.params.id }
+        });
+        res.status(500).json({ error: 'Erro ao buscar licenças do usuário' });
+    }
+}
+
 module.exports = {
     getAllUsers,
     getUserById,
     createUser,
     updateUser,
     deleteUser,
-    updatePassword
+    updatePassword,
+    getUserLicenses
 };

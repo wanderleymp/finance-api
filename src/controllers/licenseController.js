@@ -1,6 +1,8 @@
 const logger = require('../../config/logger');
 const PrismaLicenseRepository = require('../repositories/implementations/PrismaLicenseRepository');
 
+console.log('=== ARQUIVO LICENSE CONTROLLER CARREGADO ===');
+
 const licenseRepository = new PrismaLicenseRepository();
 
 // Create a new license
@@ -23,19 +25,30 @@ exports.createLicense = async (req, res) => {
 // Get all licenses with pagination
 exports.getLicenses = async (req, res) => {
     try {
+        console.log('=== CONTROLLER GET LICENSES ===');
+        console.log('1. User:', req.user);
+        console.log('2. Query params:', req.query);
+
         const { page = 1, limit = 10, ...filters } = req.query;
         const skip = (parseInt(page) - 1) * parseInt(limit);
 
+        console.log('3. Filtros antes:', filters);
         // Remover campos vazios dos filtros
         Object.keys(filters).forEach(key => {
             if (filters[key] === '' || filters[key] === undefined) {
                 delete filters[key];
             }
         });
+        console.log('4. Filtros depois:', filters);
+        console.log('5. Skip:', skip);
+        console.log('6. Limit:', limit);
 
-        const result = await licenseRepository.getAllLicenses(filters, skip, parseInt(limit));
+        const result = await licenseRepository.getAllLicenses(req.user.id, filters, skip, parseInt(limit));
+        console.log('7. Resultado:', result);
+
         res.json(result);
     } catch (error) {
+        console.error('8. ERRO no controller:', error);
         logger.error('Error fetching licenses:', error);
         res.status(500).json({ error: 'Internal server error' });
     }

@@ -99,51 +99,44 @@ class PrismaUserRepository extends IUserRepository {
           },
           user_license: {
             include: {
-              licenses: true
+              licenses: {
+                select: {
+                  license_id: true,
+                  license_name: true,
+                  description: true
+                }
+              }
             }
           }
         }
       });
 
-      if (user) {
-        // Formata o usuário no mesmo padrão do getAllUsers
-        const formattedUser = {
-          user_id: user.user_id,
-          username: user.username,
-          person_id: user.person_id,
-          profile_id: user.profile_id,
-          full_name: user.persons?.full_name,
-          licenses: user.user_license?.map(ul => ({
-            id: ul.licenses.license_id,
-            name: ul.licenses.license_name,
-            description: ul.licenses.description
-          })) || []
-        };
-
-        const duration = Date.now() - startTime;
-        logger.info('Busca de usuário por ID concluída', {
+      if (!user) {
+        logger.info('Usuário não encontrado', {
           operation: 'getUserById',
-          duration,
-          data: { id, found: true }
+          data: { id }
         });
-
-        return formattedUser;
+        return null;
       }
 
       const duration = Date.now() - startTime;
-      logger.info('Busca de usuário por ID concluída', {
+      logger.info('Usuário encontrado', {
         operation: 'getUserById',
         duration,
-        data: { id, found: false }
+        data: {
+          id,
+          hasLicenses: user.user_license?.length > 0
+        }
       });
 
-      return null;
+      return user;
     } catch (error) {
       const duration = Date.now() - startTime;
       logger.error('Erro ao buscar usuário por ID', {
         operation: 'getUserById',
         duration,
         error: error.message,
+        stack: error.stack,
         data: { id }
       });
       throw error;
