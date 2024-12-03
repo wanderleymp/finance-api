@@ -86,6 +86,12 @@ router.use('/movements', movementsRoutes);
 
 // Sales routes
 router.use('/sales', salesRoutes);
+console.log('DEBUG: Rotas de vendas registradas', 
+    salesRoutes.stack.map(r => ({
+        path: r.route?.path,
+        method: r.route?.methods
+    }))
+);
 
 // Purchases routes
 router.use('/purchases', purchasesRoutes);

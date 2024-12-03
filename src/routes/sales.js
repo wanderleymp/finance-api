@@ -251,4 +251,40 @@ router.delete('/:id', async (req, res) => {
     }
 });
 
+/**
+ * @swagger
+ * /sales/{id}/cancel:
+ *   post:
+ *     summary: Cancela um movimento de venda
+ *     tags: [Sales]
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: integer
+ *     responses:
+ *       200:
+ *         description: Movimento cancelado com sucesso
+ *       404:
+ *         description: Movimento não encontrado
+ */
+router.post('/:id/cancel', async (req, res) => {
+    try {
+        const { id } = req.params;
+        
+        console.log('DEBUG: Rota de cancelamento chamada', { 
+            id, 
+            method: req.method, 
+            originalUrl: req.originalUrl 
+        });
+
+        // Por enquanto, apenas retorna a mensagem
+        res.json({ message: 'movimento cancelado' });
+    } catch (error) {
+        console.error(error);
+        res.status(500).json({ error: 'Erro ao cancelar movimento' });
+    }
+});
+
 module.exports = router;
