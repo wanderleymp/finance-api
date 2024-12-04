@@ -56,17 +56,6 @@ exports.getAccountsReceivable = async (filters, options) => {
 
         debugLog(`Received Parameters: ${JSON.stringify({ filters, options })}`);
 
-        logger.info('Accounts Receivable Query Params FULL DEBUG', { 
-            filters, 
-            options,
-            allFiltersKeys: Object.keys(filters),
-            searchValue: filters.search,
-            searchType: typeof filters.search,
-            statusValue: filters.status,
-            statusType: typeof filters.status,
-            fullFiltersObject: JSON.stringify(filters, null, 2)
-        });
-
         const skip = (page - 1) * limit;
 
         const whereConditions = [];
@@ -141,10 +130,6 @@ exports.getAccountsReceivable = async (filters, options) => {
             ? 'WHERE ' + whereConditions.join(' AND ') 
             : '';
 
-        debugLog('DEBUG - Where Clause: ' + whereClause);
-        debugLog('DEBUG - Where Conditions: ' + JSON.stringify(whereConditions));
-        debugLog('DEBUG - Where Params: ' + JSON.stringify(whereParams));
-
         const countQuery = `
             SELECT COUNT(*) as total
             FROM installments i
@@ -171,12 +156,8 @@ exports.getAccountsReceivable = async (filters, options) => {
             ${whereClause}
         `;
 
-        debugLog('DEBUG - Full Count Query: ' + countQuery);
-
         const total = await prismaClient.$queryRawUnsafe(countQuery, ...whereParams);
         const totalCount = Number(total[0]?.total) || 0;
-
-        debugLog('DEBUG - Total Count: ' + totalCount);
 
         const selectQuery = `
             SELECT 
@@ -223,13 +204,7 @@ exports.getAccountsReceivable = async (filters, options) => {
             OFFSET ${skip}
         `;
 
-        console.log('DEBUG - Full Query:', selectQuery);
-        console.log('DEBUG - Query Params:', whereParams);
-        console.log('DEBUG - Where Clause:', whereClause);
-
         const accountsReceivable = await prismaClient.$queryRawUnsafe(selectQuery, ...whereParams);
-
-        debugLog('DEBUG - Accounts Receivable Count: ' + accountsReceivable.length);
 
         const totalPages = Math.ceil(totalCount / limit);
         const currentPage = page;

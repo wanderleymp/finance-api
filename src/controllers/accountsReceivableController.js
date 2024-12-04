@@ -42,9 +42,6 @@ exports.getAccountsReceivable = async (req, res) => {
             limit: parseInt(limit)
         };
 
-        logger.info('Accounts Receivable Filters', { filters });
-        logger.info('Accounts Receivable Options', { options });
-
         const result = await accountsReceivableRepository.getAccountsReceivable(filters, options);
         res.json(result);
     } catch (error) {
