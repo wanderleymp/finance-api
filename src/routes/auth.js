@@ -63,53 +63,24 @@ router.post('/login', async (req, res) => {
     const { identifier, password } = req.body;
 
     try {
-        console.log('=== INÍCIO DO LOGIN ===');
-        console.log('Dados recebidos:', { identifier, temSenha: !!password });
-        
-        // Adicionar logs de debug
-        console.log('=== DEBUG LOGIN ===');
-        console.log('Dados recebidos:', req.body);
-        console.log('Tentativa de login para:', req.body.identifier);
-
         // Busca o usuário por username ou qualquer valor de contato
         const user = await userRepository.findByIdentifier(identifier);
         
         if (!user) {
-            console.log('Usuário não encontrado');
             return res.status(401).json({ error: 'Credenciais inválidas' });
         }
 
-        console.log('Resultado da busca:', { 
-            encontrado: true,
-            id: user.user_id,
-            username: user.username,
-            temSenha: !!user.password,
-            hashDaSenha: user.password?.substring(0, 10) + '...'
-        });
-
-        console.log('Verificando senha com Argon2...');
-        
         // Verifica se tem senha
         if (!user.password) {
-            console.log('Usuário não tem senha definida');
             return res.status(401).json({ error: 'Credenciais inválidas' });
         }
         
-        // Verifica a senha usando Argon2
+        // Verifica a senha
         const validPassword = await argon2.verify(user.password, password);
         
-        console.log('Resultado da verificação:', { senhaCorreta: validPassword });
-        
         if (!validPassword) {
-            console.log('Senha incorreta');
             return res.status(401).json({ error: 'Credenciais inválidas' });
         }
-
-        // Debug: Verificar JWT
-        console.log('=== DEBUG JWT ===');
-        console.log('JWT_SECRET definido:', !!process.env.JWT_SECRET);
-        console.log('JWT_SECRET length:', process.env.JWT_SECRET ? process.env.JWT_SECRET.length : 0);
-        console.log('Tentando gerar token...');
 
         let token;
         try {
@@ -124,35 +95,19 @@ router.post('/login', async (req, res) => {
                 process.env.JWT_SECRET, 
                 { expiresIn: '1h' }
             );
-            console.log('Token gerado com sucesso!');
-            
-            // Adicionar log após a geração do token
-            console.log('Token gerado:', token);
-            console.log('Dados do usuário no token:', { 
-                id: user.user_id, 
-                username: user.username,
-                role: user.role,
-                profile_id: user.profile_id
-            });
         } catch (error) {
-            console.error('Erro ao gerar token:', error);
+            logger.error('Erro ao gerar token:', error);
             return res.status(500).json({ error: 'Erro interno do servidor' });
         }
-        console.log('Token:', token);
+        
         return res.status(200).json({
             token
         });
     } catch (error) {
-        console.error('Erro durante autenticação:', {
+        logger.error('Erro durante autenticação:', {
             mensagem: error.message,
             tipo: error.name,
-            stack: error.stack?.split('\n'),
-            dados: {
-                id: user?.user_id,
-                username: user?.username,
-                temContatos: !!user?.persons?.person_contacts,
-                numContatos: user?.persons?.person_contacts?.length
-            }
+            stack: error.stack?.split('\n')
         });
         res.status(500).json({ error: 'Erro interno do servidor' });
     }

@@ -8,7 +8,7 @@ function getPrismaClient() {
     if (!prisma) {
         try {
             prisma = new PrismaClient({
-                log: ['query', 'info', 'warn', 'error']
+                log: [] // Remove todos os logs
             });
         } catch (error) {
             logger.error('Erro ao inicializar Prisma Client', { error: error.message });
@@ -62,22 +62,22 @@ exports.getAccountsReceivable = async (filters, options) => {
         }
 
         if (due_date_start) {
-            where.push('i.due_date >= $' + (params.length + 1));
+            where.push('i.due_date >= $' + (params.length + 1)+'::date');
             params.push(due_date_start);
         }
 
         if (due_date_end) {
-            where.push('i.due_date <= $' + (params.length + 1));
+            where.push('i.due_date <= $' + (params.length + 1)+'::date');
             params.push(due_date_end);
         }
 
         if (expected_date_start) {
-            where.push('i.expected_date >= $' + (params.length + 1));
+            where.push('i.expected_date >= $' + (params.length + 1)+'::date');
             params.push(expected_date_start);
         }
 
         if (expected_date_end) {
-            where.push('i.expected_date <= $' + (params.length + 1));
+            where.push('i.expected_date <= $' + (params.length + 1)+'::date');
             params.push(expected_date_end);
         }
 

@@ -3,15 +3,15 @@ const logger = require('../../config/logger');
 
 exports.getAccountsReceivable = async (req, res) => {
     try {
-        logger.info('Accounts Receivable Request Query', { query: req.query });
-
         const {
             movement_status_id = 23,
             person_id = null,
-            due_date_start = null,
-            due_date_end = null,
-            expected_date_start = null,
-            expected_date_end = null,
+            startDate = null,
+            endDate = null,
+            dueStartDate = null,
+            dueEndDate = null,
+            expectedStartDate = null,
+            expectedEndDate = null,
             days_overdue = null,
             movement_type_id = null,
             order_by = 'due_date',
@@ -23,10 +23,10 @@ exports.getAccountsReceivable = async (req, res) => {
         const filters = {
             movement_status_id: movement_status_id ? parseInt(movement_status_id) : 23,
             person_id: person_id ? parseInt(person_id) : null,
-            due_date_start,
-            due_date_end,
-            expected_date_start,
-            expected_date_end,
+            due_date_start: dueStartDate || startDate,
+            due_date_end: dueEndDate || endDate,
+            expected_date_start: expectedStartDate || startDate,
+            expected_date_end: expectedEndDate || endDate,
             days_overdue: days_overdue ? parseInt(days_overdue) : null,
             movement_type_id: movement_type_id ? parseInt(movement_type_id) : null
         };

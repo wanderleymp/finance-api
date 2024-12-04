@@ -22,35 +22,27 @@ router.get('/', (req, res) => {
   res.json({ message: 'API is working!' });
 });
 
+// Middleware de logging global no topo
+router.use((req, res, next) => {
+  console.log('\n=== NOVA REQUISIÇÃO ===');
+  console.log(`${req.method} ${req.originalUrl}`);
+  next();
+});
+
 // Middleware de logging para debug
 router.use((req, res, next) => {
-  console.log('\n=== MAIN ROUTER DEBUG ===');
-  console.log('Request URL:', req.originalUrl);
-  console.log('Request Method:', req.method);
-  console.log('Request Headers:', req.headers);
-  console.log('Request Params:', req.params);
-  console.log('Request Query:', req.query);
-  console.log('Request Body:', req.body);
-  console.log('Base URL:', req.baseUrl);
-  console.log('Router Stack:', router.stack.map(layer => {
-    return {
-      path: layer.route?.path,
-      methods: layer.route?.methods,
-      regexp: layer.regexp.toString()
-    };
-  }));
-  console.log('=== END MAIN ROUTER DEBUG ===\n');
-
-  logger.info('Rota sendo processada:', {
-    originalUrl: req.originalUrl,
+  logger.info('Requisição Recebida', {
+    url: req.originalUrl,
     method: req.method,
-    headers: req.headers,
     path: req.path,
-    params: req.params,
     query: req.query,
+    params: req.params,
     body: req.body,
-    baseUrl: req.baseUrl,
-    stack: new Error().stack
+    headers: {
+      contentType: req.headers['content-type'],
+      userAgent: req.headers['user-agent']
+    },
+    timestamp: new Date().toISOString()
   });
   next();
 });
