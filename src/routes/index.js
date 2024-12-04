@@ -15,6 +15,7 @@ const salesRoutes = require('./sales');
 const purchasesRoutes = require('./purchases');
 const servicesRoutes = require('./services'); // Nova importação
 const accountsReceivableRoutes = require('./accountsReceivableRoutes');
+const messagingRoutes = require('./messagingRoutes');
 
 // Test route to check if API is working
 router.get('/', (req, res) => {
@@ -98,6 +99,9 @@ router.use('/purchases', purchasesRoutes);
 
 // Services routes
 router.use('/services', servicesRoutes); // Nova rota
+
+// Messaging routes
+router.use('/messaging', messagingRoutes);
 
 // Accounts Receivable routes
 router.use('/accounts-receivable', accountsReceivableRoutes);
