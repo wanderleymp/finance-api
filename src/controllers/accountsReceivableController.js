@@ -17,7 +17,9 @@ exports.getAccountsReceivable = async (req, res) => {
             order_by = 'due_date',
             order = 'desc',
             page = 1,
-            limit = 10
+            limit = 10,
+            search = null,
+            status = null
         } = req.query;
 
         const filters = {
@@ -25,10 +27,12 @@ exports.getAccountsReceivable = async (req, res) => {
             person_id: person_id ? parseInt(person_id) : null,
             due_date_start: dueStartDate || startDate,
             due_date_end: dueEndDate || endDate,
-            expected_date_start: expectedStartDate || startDate,
-            expected_date_end: expectedEndDate || endDate,
+            expectedDateStart: expectedStartDate,
+            expectedDateEnd: expectedEndDate,
             days_overdue: days_overdue ? parseInt(days_overdue) : null,
-            movement_type_id: movement_type_id ? parseInt(movement_type_id) : null
+            movement_type_id: movement_type_id ? parseInt(movement_type_id) : null,
+            search,
+            status
         };
 
         const options = {

@@ -1,5 +1,17 @@
 const { PrismaClient, Prisma } = require('@prisma/client');
 const logger = require('../../config/logger');
+const fs = require('fs');
+const path = require('path');
+
+// Função de log para salvar em arquivo
+function debugLog(message) {
+    try {
+        const logPath = path.join(__dirname, '..', '..', 'debug_accounts_receivable.log');
+        fs.appendFileSync(logPath, `${new Date().toISOString()} - ${message}\n`);
+    } catch (error) {
+        // Silently fail if unable to log
+    }
+}
 
 // Singleton para garantir uma única instância do Prisma
 let prisma;
@@ -26,12 +38,13 @@ exports.getAccountsReceivable = async (filters, options) => {
             movement_status_id, 
             person_id, 
             due_date_start, 
-            due_date_end, 
-            expected_date_start, 
-            expected_date_end, 
+            due_date_end,
+            expectedDateStart,  
+            expectedDateEnd,    
             days_overdue, 
             movement_type_id,
-            search // Novo parâmetro de busca
+            search,
+            status
         } = filters;
 
         const {
@@ -41,65 +54,96 @@ exports.getAccountsReceivable = async (filters, options) => {
             limit = 10
         } = options;
 
-        logger.info('Accounts Receivable Query Params', { 
+        debugLog(`Received Parameters: ${JSON.stringify({ filters, options })}`);
+
+        logger.info('Accounts Receivable Query Params FULL DEBUG', { 
             filters, 
-            options 
+            options,
+            allFiltersKeys: Object.keys(filters),
+            searchValue: filters.search,
+            searchType: typeof filters.search,
+            statusValue: filters.status,
+            statusType: typeof filters.status,
+            fullFiltersObject: JSON.stringify(filters, null, 2)
         });
 
         const skip = (page - 1) * limit;
 
-        const where = [];
-        const params = [];
+        const whereConditions = [];
+        const whereParams = [];
 
         if (movement_status_id) {
-            where.push('m.movement_status_id = $' + (params.length + 1));
-            params.push(movement_status_id);
+            whereConditions.push('m.movement_status_id = $' + (whereParams.length + 1));
+            whereParams.push(movement_status_id);
         }
 
         if (person_id) {
-            where.push('m.person_id = $' + (params.length + 1));
-            params.push(person_id);
+            whereConditions.push('m.person_id = $' + (whereParams.length + 1));
+            whereParams.push(person_id);
         }
 
         if (due_date_start) {
-            where.push('i.due_date >= $' + (params.length + 1)+'::date');
-            params.push(due_date_start);
+            whereConditions.push('i.due_date >= $' + (whereParams.length + 1)+'::date');
+            whereParams.push(due_date_start);
         }
 
         if (due_date_end) {
-            where.push('i.due_date <= $' + (params.length + 1)+'::date');
-            params.push(due_date_end);
+            whereConditions.push('i.due_date <= $' + (whereParams.length + 1)+'::date');
+            whereParams.push(due_date_end);
         }
 
-        if (expected_date_start) {
-            where.push('i.expected_date >= $' + (params.length + 1)+'::date');
-            params.push(expected_date_start);
+        if (expectedDateStart) {  
+            const formattedStartDate = new Date(expectedDateStart).toISOString().split('T')[0];
+            whereConditions.push('i.expected_date >= $' + (whereParams.length + 1)+'::date');
+            whereParams.push(formattedStartDate);
         }
 
-        if (expected_date_end) {
-            where.push('i.expected_date <= $' + (params.length + 1)+'::date');
-            params.push(expected_date_end);
+        if (expectedDateEnd) {  
+            const formattedEndDate = new Date(expectedDateEnd).toISOString().split('T')[0];
+            whereConditions.push('i.expected_date <= $' + (whereParams.length + 1)+'::date');
+            whereParams.push(formattedEndDate);
         }
 
         if (days_overdue !== null && days_overdue !== undefined) {
-            where.push('EXTRACT(DAY FROM NOW() - i.due_date)::integer = $' + (params.length + 1));
-            params.push(days_overdue);
+            whereConditions.push('EXTRACT(DAY FROM NOW() - i.due_date)::integer = $' + (whereParams.length + 1));
+            whereParams.push(days_overdue);
         }
 
         if (movement_type_id) {
-            where.push('m.movement_type_id = $' + (params.length + 1));
-            params.push(movement_type_id);
+            whereConditions.push('m.movement_type_id = $' + (whereParams.length + 1));
+            whereParams.push(movement_type_id);
         }
 
         if (search) {
-            where.push('(p.full_name ILIKE $' + (params.length + 1) + ' OR mt.type_name ILIKE $' + (params.length + 2) + ' OR ms.status_name ILIKE $' + (params.length + 3) + ')');
-            params.push('%' + search + '%');
-            params.push('%' + search + '%');
-            params.push('%' + search + '%');
+            logger.debug('DEBUG: Search parameter received', { 
+                search, 
+                fullNameSearch: '%' + search + '%'
+            });
+            whereConditions.push('LOWER(p.full_name) ILIKE $' + (whereParams.length + 1));
+            whereParams.push('%' + search.toLowerCase() + '%');
         }
 
-        const whereClause = where.length > 0 ? 'WHERE ' + where.join(' AND ') : '';
-        logger.info('Accounts Receivable Where Clause', { whereClause });
+        if (status) {
+            logger.debug('DEBUG: Status parameter received', { 
+                status, 
+                statusType: typeof status,
+                statusRawValue: status,
+                statusTrimmed: status.trim(),
+                statusLength: status.length
+            });
+            
+            // Adiciona condição de status com cast explícito e comparação case-sensitive
+            whereConditions.push('i.status = $' + (whereParams.length + 1) + '::text');
+            whereParams.push(status.trim());
+        }
+
+        const whereClause = whereConditions.length > 0 
+            ? 'WHERE ' + whereConditions.join(' AND ') 
+            : '';
+
+        debugLog('DEBUG - Where Clause: ' + whereClause);
+        debugLog('DEBUG - Where Conditions: ' + JSON.stringify(whereConditions));
+        debugLog('DEBUG - Where Params: ' + JSON.stringify(whereParams));
 
         const countQuery = `
             SELECT COUNT(*) as total
@@ -127,9 +171,12 @@ exports.getAccountsReceivable = async (filters, options) => {
             ${whereClause}
         `;
 
-        const total = await prismaClient.$queryRawUnsafe(countQuery, ...params);
+        debugLog('DEBUG - Full Count Query: ' + countQuery);
+
+        const total = await prismaClient.$queryRawUnsafe(countQuery, ...whereParams);
         const totalCount = Number(total[0]?.total) || 0;
-        logger.info('Accounts Receivable Total Count', { total: totalCount });
+
+        debugLog('DEBUG - Total Count: ' + totalCount);
 
         const selectQuery = `
             SELECT 
@@ -171,11 +218,18 @@ exports.getAccountsReceivable = async (filters, options) => {
                     AND b.generated_at = latest_boleto.max_generated_at
             ) b ON b.installment_id = i.installment_id
             ${whereClause}
-            ORDER BY i.${order_by} ${order}
-            LIMIT ${limit} OFFSET ${skip}
+            ORDER BY ${order_by} ${order}
+            LIMIT ${limit}
+            OFFSET ${skip}
         `;
 
-        const accountsReceivable = await prismaClient.$queryRawUnsafe(selectQuery, ...params);
+        console.log('DEBUG - Full Query:', selectQuery);
+        console.log('DEBUG - Query Params:', whereParams);
+        console.log('DEBUG - Where Clause:', whereClause);
+
+        const accountsReceivable = await prismaClient.$queryRawUnsafe(selectQuery, ...whereParams);
+
+        debugLog('DEBUG - Accounts Receivable Count: ' + accountsReceivable.length);
 
         const totalPages = Math.ceil(totalCount / limit);
         const currentPage = page;
