@@ -55,7 +55,7 @@ class MovementService {
 
         // Outros filtros
         if (license_id) where.license_id = parseInt(license_id);
-        if (status_id) where.movement_status_id = parseInt(status_id);
+        if (status_id) where.status_id = parseInt(status_id);
 
         // Validando campo de ordenação
         const validSortFields = ['movement_date', 'total_amount', 'created_at', 'updated_at'];
@@ -133,7 +133,7 @@ class MovementService {
             description,
             items,
             payment_method_id,
-            movement_status_id = 1 // Status padrão para novo movimento
+            status_id = 1 // Status padrão para novo movimento
         } = data;
 
         // Converter e validar os itens
@@ -159,7 +159,7 @@ class MovementService {
                 license_id: parseInt(license_id),
                 movement_type_id: parseInt(movement_type_id),
                 payment_method_id: payment_method_id ? parseInt(payment_method_id) : null,
-                movement_status_id: parseInt(movement_status_id),
+                status_id: parseInt(status_id),
                 description,
                 movement_items: {
                     create: processedItems
@@ -231,6 +231,54 @@ class MovementService {
         return await prisma.movements.delete({
             where: { movement_id: parseInt(id) }
         });
+    }
+
+    async cancelMovement(id) {
+        // Converter id para inteiro
+        const movementId = parseInt(id);
+
+        // Verificar se o movimento existe
+        const movement = await prisma.movements.findUnique({
+            where: { movement_id: movementId },
+            include: {
+                movement_statuses: true
+            }
+        });
+
+        // Verificar se o movimento não existe
+        if (!movement) {
+            throw new Error('Movimento não encontrado');
+        }
+
+        // Verificar se o status é diferente de 19 (cancelado)
+        if (movement.movement_statuses?.movement_status_id === 19) {
+            throw new Error('Movimento já está cancelado');
+        }
+
+        // Atualizar o status para cancelado (19)
+        const updatedMovement = await prisma.movements.update({
+            where: { movement_id: movementId },
+            data: { 
+                movement_statuses: {
+                    connect: { movement_status_id: 19 }
+                }
+            },
+            include: {
+                movement_statuses: true
+            }
+        });
+
+        // Log do cancelamento
+        console.log('Movimento cancelado:', {
+            movementId: updatedMovement.movement_id,
+            previousStatus: movement.movement_statuses?.movement_status_id,
+            newStatus: 19
+        });
+
+        return { 
+            message: 'Cancelamento de movimento realizado com sucesso',
+            movementId: updatedMovement.movement_id
+        };
     }
 }
 

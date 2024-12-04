@@ -279,8 +279,8 @@ router.post('/:id/cancel', async (req, res) => {
             originalUrl: req.originalUrl 
         });
 
-        // Por enquanto, apenas retorna a mensagem
-        res.json({ message: 'movimento cancelado' });
+        const result = await movementService.cancelMovement(id);
+        res.json(result);
     } catch (error) {
         console.error(error);
         res.status(500).json({ error: 'Erro ao cancelar movimento' });
