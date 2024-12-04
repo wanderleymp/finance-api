@@ -22,15 +22,16 @@ exports.getAccountsReceivable = async (filters, options) => {
     try {
         const prismaClient = getPrismaClient();
 
-        const {
-            movement_status_id,
-            person_id,
-            due_date_start,
-            due_date_end,
-            expected_date_start,
-            expected_date_end,
-            days_overdue,
-            movement_type_id
+        const { 
+            movement_status_id, 
+            person_id, 
+            due_date_start, 
+            due_date_end, 
+            expected_date_start, 
+            expected_date_end, 
+            days_overdue, 
+            movement_type_id,
+            search // Novo parâmetro de busca
         } = filters;
 
         const {
@@ -50,45 +51,51 @@ exports.getAccountsReceivable = async (filters, options) => {
         const where = [];
         const params = [];
 
-        // Adicionar filtros apenas se não forem nulos
-        if (movement_status_id !== null) {
+        if (movement_status_id) {
             where.push('m.movement_status_id = $' + (params.length + 1));
             params.push(movement_status_id);
         }
 
-        if (person_id !== null) {
-            where.push('p.person_id = $' + (params.length + 1));
+        if (person_id) {
+            where.push('m.person_id = $' + (params.length + 1));
             params.push(person_id);
         }
 
         if (due_date_start) {
             where.push('i.due_date >= $' + (params.length + 1));
-            params.push(new Date(due_date_start));
+            params.push(due_date_start);
         }
 
         if (due_date_end) {
             where.push('i.due_date <= $' + (params.length + 1));
-            params.push(new Date(due_date_end));
+            params.push(due_date_end);
         }
 
         if (expected_date_start) {
             where.push('i.expected_date >= $' + (params.length + 1));
-            params.push(new Date(expected_date_start));
+            params.push(expected_date_start);
         }
 
         if (expected_date_end) {
             where.push('i.expected_date <= $' + (params.length + 1));
-            params.push(new Date(expected_date_end));
+            params.push(expected_date_end);
         }
 
-        if (days_overdue !== null) {
-            where.push('EXTRACT(DAY FROM NOW() - i.due_date) >= $' + (params.length + 1));
+        if (days_overdue !== null && days_overdue !== undefined) {
+            where.push('EXTRACT(DAY FROM NOW() - i.due_date)::integer = $' + (params.length + 1));
             params.push(days_overdue);
         }
 
-        if (movement_type_id !== null) {
+        if (movement_type_id) {
             where.push('m.movement_type_id = $' + (params.length + 1));
             params.push(movement_type_id);
+        }
+
+        if (search) {
+            where.push('(p.full_name ILIKE $' + (params.length + 1) + ' OR mt.type_name ILIKE $' + (params.length + 2) + ' OR ms.status_name ILIKE $' + (params.length + 3) + ')');
+            params.push('%' + search + '%');
+            params.push('%' + search + '%');
+            params.push('%' + search + '%');
         }
 
         const whereClause = where.length > 0 ? 'WHERE ' + where.join(' AND ') : '';
@@ -102,6 +109,21 @@ exports.getAccountsReceivable = async (filters, options) => {
             LEFT JOIN persons p ON p.person_id = m.person_id
             LEFT JOIN movement_statuses ms ON ms.movement_status_id = m.movement_status_id
             INNER JOIN movement_types mt ON mt.movement_type_id = m.movement_type_id
+            LEFT JOIN (
+                SELECT 
+                    b.installment_id, 
+                    b.boleto_url, 
+                    b.status AS boleto_status
+                FROM (
+                    SELECT 
+                        installment_id, 
+                        MAX(generated_at) AS max_generated_at
+                    FROM boletos
+                    GROUP BY installment_id
+                ) latest_boleto
+                JOIN boletos b ON b.installment_id = latest_boleto.installment_id 
+                    AND b.generated_at = latest_boleto.max_generated_at
+            ) b ON b.installment_id = i.installment_id
             ${whereClause}
         `;
 
@@ -124,13 +146,30 @@ exports.getAccountsReceivable = async (filters, options) => {
                 p.full_name,
                 m.movement_type_id,
                 mt.type_name,
-                ms.status_name as movement_status
+                ms.status_name as movement_status,
+                b.boleto_url,
+                b.boleto_status
             FROM installments i
             JOIN movement_payments mp ON mp.payment_id = i.payment_id
             JOIN movements m ON m.movement_id = mp.movement_id
             LEFT JOIN persons p ON p.person_id = m.person_id
             LEFT JOIN movement_statuses ms ON ms.movement_status_id = m.movement_status_id
             INNER JOIN movement_types mt ON mt.movement_type_id = m.movement_type_id
+            LEFT JOIN (
+                SELECT 
+                    b.installment_id, 
+                    b.boleto_url, 
+                    b.status AS boleto_status
+                FROM (
+                    SELECT 
+                        installment_id, 
+                        MAX(generated_at) AS max_generated_at
+                    FROM boletos
+                    GROUP BY installment_id
+                ) latest_boleto
+                JOIN boletos b ON b.installment_id = latest_boleto.installment_id 
+                    AND b.generated_at = latest_boleto.max_generated_at
+            ) b ON b.installment_id = i.installment_id
             ${whereClause}
             ORDER BY i.${order_by} ${order}
             LIMIT ${limit} OFFSET ${skip}
