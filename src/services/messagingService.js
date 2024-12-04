@@ -12,8 +12,7 @@ class MessagingService {
             
             return {
                 success: true,
-                message: 'Invoice message sent successfully',
-                data: result
+                message: 'Message sent successfully'
             };
         } catch (error) {
             logger.error('Error in sendInvoiceMessage', { 
@@ -24,12 +23,7 @@ class MessagingService {
                 error_stack: error.stack
             });
 
-            return {
-                success: false,
-                message: 'Failed to send invoice message',
-                error: error.message,
-                details: error.response?.data
-            };
+            throw new Error('Unable to send message');
         }
     }
 
@@ -50,8 +44,7 @@ class MessagingService {
 
             return {
                 success: true,
-                message: 'Installment message sent successfully',
-                data: result
+                message: 'Message sent successfully'
             };
         } catch (error) {
             console.error('DEBUG - Error in sendInstallmentMessage service', { 
@@ -67,12 +60,7 @@ class MessagingService {
                 error_status: error.response?.status
             });
 
-            return {
-                success: false,
-                message: 'Failed to send installment message',
-                error: error.message,
-                details: error.response?.data
-            };
+            throw new Error('Unable to send message');
         }
     }
 }
