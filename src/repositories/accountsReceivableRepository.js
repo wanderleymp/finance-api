@@ -101,6 +101,7 @@ exports.getAccountsReceivable = async (filters, options) => {
             JOIN movements m ON m.movement_id = mp.movement_id
             LEFT JOIN persons p ON p.person_id = m.person_id
             LEFT JOIN movement_statuses ms ON ms.movement_status_id = m.movement_status_id
+            INNER JOIN movement_types mt ON mt.movement_type_id = m.movement_type_id
             ${whereClause}
         `;
 
@@ -122,12 +123,14 @@ exports.getAccountsReceivable = async (filters, options) => {
                 p.person_id,
                 p.full_name,
                 m.movement_type_id,
+                mt.type_name,
                 ms.status_name as movement_status
             FROM installments i
             JOIN movement_payments mp ON mp.payment_id = i.payment_id
             JOIN movements m ON m.movement_id = mp.movement_id
             LEFT JOIN persons p ON p.person_id = m.person_id
             LEFT JOIN movement_statuses ms ON ms.movement_status_id = m.movement_status_id
+            INNER JOIN movement_types mt ON mt.movement_type_id = m.movement_type_id
             ${whereClause}
             ORDER BY i.${order_by} ${order}
             LIMIT ${limit} OFFSET ${skip}
