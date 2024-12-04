@@ -7,7 +7,7 @@ class IBoletoRepository {
         throw new Error('Method not implemented');
     }
 
-    async findAll(filters, skip, take) {
+    async findAll(filters = {}, skip = 0, take = 10) {
         throw new Error('Method not implemented');
     }
 
@@ -16,6 +16,10 @@ class IBoletoRepository {
     }
 
     async delete(id) {
+        throw new Error('Method not implemented');
+    }
+
+    async generateBoletoWebhook(params) {
         throw new Error('Method not implemented');
     }
 }

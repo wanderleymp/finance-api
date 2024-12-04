@@ -7,7 +7,7 @@ const authenticateToken = require('../middlewares/authMiddleware');
  * @swagger
  * /boletos:
  *   post:
- *     summary: Criar um novo boleto
+ *     summary: Gerar boleto via webhook
  *     tags: [Boletos]
  *     security:
  *       - bearerAuth: []
@@ -17,13 +17,22 @@ const authenticateToken = require('../middlewares/authMiddleware');
  *         application/json:
  *           schema:
  *             type: object
+ *             properties:
+ *               movement_id:
+ *                 type: integer
+ *                 description: ID do movimento
+ *               installment_id:
+ *                 type: integer
+ *                 description: ID da parcela
  *     responses:
- *       201:
- *         description: Boleto criado com sucesso
+ *       200:
+ *         description: Solicitação de geração de boleto enviada com sucesso
+ *       400:
+ *         description: Boleto já existe ou parâmetros inválidos
  *       500:
  *         description: Erro interno do servidor
  */
-router.post('/', authenticateToken, boletoController.createBoleto);
+router.post('/', authenticateToken, boletoController.generateBoletoWebhook);
 
 /**
  * @swagger
@@ -123,5 +132,35 @@ router.put('/:id', authenticateToken, boletoController.updateBoleto);
  *         description: Erro interno do servidor
  */
 router.delete('/:id', authenticateToken, boletoController.deleteBoleto);
+
+/**
+ * @swagger
+ * /boletos/cancel:
+ *   post:
+ *     summary: Cancelar boleto
+ *     tags: [Boletos]
+ *     security:
+ *       - bearerAuth: []
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             properties:
+ *               installment_id:
+ *                 type: integer
+ *                 description: ID da parcela
+ *     responses:
+ *       200:
+ *         description: Boleto cancelado com sucesso
+ *       400:
+ *         description: installment_id é obrigatório
+ *       404:
+ *         description: Boleto não encontrado ou já cancelado
+ *       500:
+ *         description: Erro interno do servidor
+ */
+router.post('/cancel', authenticateToken, boletoController.cancelBoleto);
 
 module.exports = router;

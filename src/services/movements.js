@@ -1,7 +1,13 @@
 const { PrismaClient } = require('@prisma/client');
 const prisma = new PrismaClient();
+const axios = require('axios');
+const PrismaMovementRepository = require('../repositories/implementations/PrismaMovementRepository');
 
 class MovementService {
+    constructor() {
+        this.repository = new PrismaMovementRepository();
+    }
+
     async list(movement_type_id, filters = {}) {
         const {
             startDate,
@@ -252,26 +258,22 @@ class MovementService {
 
         // Verificar se o status é diferente de 19 (cancelado)
         if (movement.movement_statuses?.movement_status_id === 19) {
-            throw new Error('Movimento já está cancelado');
+            return { 
+                message: 'Movimento já está cancelado',
+                movementId: movementId,
+                alreadyCancelled: true
+            };
         }
 
-        // Atualizar o status para cancelado (19)
-        const updatedMovement = await prisma.movements.update({
-            where: { movement_id: movementId },
-            data: { 
-                movement_statuses: {
-                    connect: { movement_status_id: 19 }
-                }
-            },
-            include: {
-                movement_statuses: true
-            }
-        });
+        const previousStatusId = movement.movement_statuses?.movement_status_id;
+
+        // Atualizar o status para cancelado (19) usando o repository
+        const updatedMovement = await this.repository.updateMovementStatus(movementId, 19);
 
         // Log do cancelamento
         console.log('Movimento cancelado:', {
             movementId: updatedMovement.movement_id,
-            previousStatus: movement.movement_statuses?.movement_status_id,
+            previousStatus: previousStatusId,
             newStatus: 19
         });
 

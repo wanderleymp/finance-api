@@ -1,7 +1,34 @@
 const PrismaBoletoRepository = require('../repositories/implementations/PrismaBoletoRepository');
 const logger = require('../../config/logger');
+const axios = require('axios');
 
 const boletoRepository = new PrismaBoletoRepository();
+
+// Função para buscar o movement_id de uma installment
+async function getMovementIdFromInstallment(installmentId) {
+    try {
+        const installment = await boletoRepository.prisma.installments.findUnique({
+            where: { installment_id: installmentId },
+            include: { 
+                movement_payment: { 
+                    select: { movement_id: true } 
+                } 
+            }
+        });
+
+        if (!installment || !installment.movement_payment) {
+            throw new Error('Installment or movement not found');
+        }
+
+        return installment.movement_payment.movement_id;
+    } catch (error) {
+        logger.error('Error getting movement ID from installment', { 
+            installmentId, 
+            error: error.message 
+        });
+        throw error;
+    }
+}
 
 exports.createBoleto = async (req, res) => {
     try {
@@ -85,6 +112,73 @@ exports.deleteBoleto = async (req, res) => {
         res.status(204).send();
     } catch (error) {
         logger.error('Error deleting boleto', { error: error.message });
+        res.status(500).json({ 
+            error: 'Internal server error', 
+            details: error.message 
+        });
+    }
+};
+
+exports.generateBoletoWebhook = async (req, res) => {
+    try {
+        const { movement_id, installment_id } = req.body;
+
+        const result = await boletoRepository.generateBoletoWebhook({ 
+            movement_id, 
+            installment_id 
+        });
+
+        res.json(result);
+    } catch (error) {
+        logger.error('Error in generateBoletoWebhook controller', { 
+            error: error.message, 
+            stack: error.stack 
+        });
+
+        if (error.message.includes('already exists')) {
+            return res.status(400).json({ 
+                error: error.message 
+            });
+        }
+
+        if (error.message.includes('must be provided')) {
+            return res.status(400).json({ 
+                error: error.message 
+            });
+        }
+
+        res.status(500).json({ 
+            error: 'Internal server error', 
+            details: error.message 
+        });
+    }
+};
+
+exports.cancelBoleto = async (req, res) => {
+    try {
+        const { installment_id } = req.body;
+        
+        if (!installment_id) {
+            return res.status(400).json({ 
+                error: 'installment_id is required' 
+            });
+        }
+
+        const result = await boletoRepository.cancelBoleto(parseInt(installment_id));
+        
+        res.json(result);
+    } catch (error) {
+        logger.error('Error in cancelBoleto controller', { 
+            error: error.message, 
+            stack: error.stack 
+        });
+
+        if (error.message.includes('not found')) {
+            return res.status(404).json({ 
+                error: error.message 
+            });
+        }
+
         res.status(500).json({ 
             error: 'Internal server error', 
             details: error.message 

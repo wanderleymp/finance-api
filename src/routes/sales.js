@@ -280,6 +280,12 @@ router.post('/:id/cancel', async (req, res) => {
         });
 
         const result = await movementService.cancelMovement(id);
+        
+        // Se já estiver cancelado, retornar 200 com a mensagem
+        if (result.alreadyCancelled) {
+            return res.status(200).json(result);
+        }
+
         res.json(result);
     } catch (error) {
         console.error(error);

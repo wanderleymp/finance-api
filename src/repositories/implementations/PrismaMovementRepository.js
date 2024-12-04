@@ -1,9 +1,13 @@
 const { PrismaClient } = require('@prisma/client');
+const IMovementRepository = require('../interfaces/IMovementRepository');
 const logger = require('../../../config/logger');
+const PrismaBoletoRepository = require('./PrismaBoletoRepository');
 
-class PrismaMovementRepository {
+class PrismaMovementRepository extends IMovementRepository {
     constructor() {
-        this.prisma = new PrismaClient();
+        super();
+        this.prisma = new PrismaClient({ log: [] });
+        this.boletoRepository = new PrismaBoletoRepository();
     }
 
     async createMovement(data) {
@@ -238,6 +242,63 @@ class PrismaMovementRepository {
             return movement;
         } catch (error) {
             logger.error('Error updating movement:', error);
+            throw error;
+        }
+    }
+
+    async updateMovementStatus(id, status_id) {
+        try {
+            // Atualizar status do movimento
+            const updatedMovement = await this.prisma.movements.update({
+                where: { movement_id: parseInt(id) },
+                data: { movement_status_id: parseInt(status_id) }
+            });
+
+            // Buscar boletos A_RECEBER relacionados ao movimento
+            const boletosToCancel = await this.prisma.$queryRaw`
+                select b.external_boleto_id
+                from movements m
+                join movement_payments mp on m.movement_id = mp.movement_id
+                join installments i on mp.payment_id = i.payment_id
+                left join boletos b on i.installment_id = b.installment_id
+                where 
+                m.movement_id = ${parseInt(id)}
+                and b.status = 'A_RECEBER'
+            `;
+
+            // Se encontrou boletos, cancelar cada um
+            if (boletosToCancel && boletosToCancel.length > 0) {
+                logger.info('Found boletos to cancel', { 
+                    movement_id: id, 
+                    boletos: boletosToCancel 
+                });
+
+                for (const boleto of boletosToCancel) {
+                    try {
+                        await this.boletoRepository.cancelBoleto(boleto.external_boleto_id);
+                        logger.info('Boleto cancelled successfully', { 
+                            movement_id: id, 
+                            external_boleto_id: boleto.external_boleto_id 
+                        });
+                    } catch (error) {
+                        logger.error('Error cancelling boleto', { 
+                            movement_id: id, 
+                            external_boleto_id: boleto.external_boleto_id,
+                            error: error.message 
+                        });
+                        // Não interrompe o processo se falhar o cancelamento de um boleto
+                    }
+                }
+            }
+
+            return updatedMovement;
+        } catch (error) {
+            logger.error('Error updating movement status', { 
+                error: error.message, 
+                stack: error.stack,
+                movement_id: id,
+                status_id 
+            });
             throw error;
         }
     }
