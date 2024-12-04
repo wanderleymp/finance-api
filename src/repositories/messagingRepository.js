@@ -4,21 +4,23 @@ const logger = require('../../config/logger');
 class MessagingRepository {
     async sendInvoiceMessage(movement_id) {
         try {
+            const headers = {
+                'Content-Type': 'application/json',
+                'Authorization': 'Bearer ffcaa89a3e19bd98e911475c7974309b',
+                'apikey': 'ffcaa89a3e19bd98e911475c7974309b'
+            };
+
             const response = await axios.post(
                 'https://n8n.webhook.agilefinance.com.br/webhook/mensagem/faturamento', 
                 { movement_id },
-                {
-                    headers: {
-                        'Content-Type': 'application/json',
-                        'apikey': 'ffcaa89a3e19bd98e911475c7974309b'
-                    }
-                }
+                { headers }
             );
             
             logger.info('Invoice message sent successfully', { 
                 movement_id, 
                 response_status: response.status,
-                response_data: response.data
+                response_data: response.data,
+                response_headers: response.headers
             });
 
             return response.data;
@@ -27,7 +29,8 @@ class MessagingRepository {
                 movement_id, 
                 error_message: error.message,
                 error_response: error.response?.data,
-                error_status: error.response?.status
+                error_status: error.response?.status,
+                error_config: error.config
             });
             throw error;
         }

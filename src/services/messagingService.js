@@ -20,7 +20,8 @@ class MessagingService {
                 movement_id, 
                 error_message: error.message,
                 error_response: error.response?.data,
-                error_status: error.response?.status
+                error_status: error.response?.status,
+                error_stack: error.stack
             });
 
             return {
