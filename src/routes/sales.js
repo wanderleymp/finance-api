@@ -317,8 +317,19 @@ router.post('/:id/cancel', async (req, res) => {
  *         description: Erro interno do servidor
  */
 router.post('/:id/boleto', (req, res) => {
-    req.body.movement_id = parseInt(req.params.id);
-    return boletoController.generateBoletoWebhook(req, res);
+    const movement_id = parseInt(req.params.id);
+    const installment_id = req.body.installment_id;
+
+    console.log('DEBUG: Gerando boleto para venda', { 
+        movement_id, 
+        installment_id, 
+        body: req.body 
+    });
+
+    return boletoController.generateBoletoWebhook(req, res, { 
+        movement_id, 
+        installment_id 
+    });
 });
 
 module.exports = router;

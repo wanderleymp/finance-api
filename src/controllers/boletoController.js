@@ -1,6 +1,7 @@
 const PrismaBoletoRepository = require('../repositories/implementations/PrismaBoletoRepository');
 const logger = require('../../config/logger');
 const axios = require('axios');
+const db = require('../../config/db'); // assuming db is defined in this file
 
 const boletoRepository = new PrismaBoletoRepository();
 
@@ -119,78 +120,57 @@ exports.deleteBoleto = async (req, res) => {
     }
 };
 
-exports.generateBoletoWebhook = async (req, res) => {
+exports.generateBoletoWebhook = async (req, res, params = {}) => {
     try {
-        const { movement_id, installment_id } = req.body;
+        const movement_id = params.movement_id || req.body.movement_id;
+        
+        // Validar se existe parcela para este movimento
+        const { rows } = await db.query(
+            `SELECT i.installment_id 
+             FROM installments i
+             INNER JOIN movement_payments mp ON mp.payment_id = i.payment_id
+             WHERE mp.movement_id = $1`,
+            [movement_id]
+        );
 
-        logger.info('Recebendo solicitação de geração de boleto', {
-            movement_id, 
-            installment_id,
-            user_id: req.user?.id,
-            user_name: req.user?.username
+        if (!rows || rows.length === 0) {
+            return res.status(400).json({ 
+                error: 'Validação falhou',
+                details: 'Não foi encontrada nenhuma parcela para esta venda. É necessário ter parcelas cadastradas para gerar o boleto.'
+            });
+        }
+        
+        const webhookBaseUrl = process.env.N8N_URL;
+        const apiKey = process.env.N8N_API_SECRET;
+        const webhookUrl = `${webhookBaseUrl}/vendas/boleto`;
+
+        console.log('DEBUG: Enviando requisição para webhook:', {
+            url: webhookUrl,
+            movement_id,
+            headers: { 'apikey': apiKey }
         });
 
-        const result = await boletoRepository.generateBoletoWebhook({ 
-            movement_id, 
-            installment_id 
-        });
+        await axios.post(webhookUrl, 
+            { movement_id },
+            { headers: { 'apikey': apiKey } }
+        );
 
-        logger.info('Boleto gerado com sucesso', {
-            movement_id, 
-            installment_id,
-            result_id: result?.boleto_id
-        });
-
-        res.json(result);
+        console.log('DEBUG: Requisição enviada com sucesso');
+        res.json({ message: 'Solicitação de geração de boleto enviada com sucesso' });
     } catch (error) {
-        logger.error('Erro na geração de boleto', { 
-            movement_id, 
-            installment_id,
-            error: error.message, 
-            stack: error.stack,
-            user_id: req.user?.id,
-            user_name: req.user?.username
+        console.error('Erro ao enviar para webhook:', error);
+        console.error('Detalhes do erro:', {
+            message: error.message,
+            response: error.response?.data,
+            config: {
+                url: error.config?.url,
+                headers: error.config?.headers,
+                data: error.config?.data
+            }
         });
-
-        // Erros de validação específicos
-        if (error.message.includes('already exists')) {
-            return res.status(400).json({ 
-                error: 'Boleto já existe',
-                details: 'Um boleto com status A_RECEBER já foi gerado para esta parcela.'
-            });
-        }
-
-        if (error.message.includes('must be provided')) {
-            return res.status(400).json({ 
-                error: 'Parâmetros inválidos',
-                details: 'É necessário fornecer movement_id ou installment_id para gerar o boleto.'
-            });
-        }
-
-        if (error.message.includes('Movement has no installments')) {
-            return res.status(400).json({ 
-                error: 'Movimento sem parcelas',
-                details: 'Não é possível gerar boleto para um movimento que não possui parcelas. Verifique se o movimento foi processado corretamente.'
-            });
-        }
-
-        if (error.message.includes('Movement not found')) {
-            return res.status(404).json({ 
-                error: 'Movimento não encontrado',
-                details: 'O movimento especificado não existe no sistema.'
-            });
-        }
-
-        if (error.message.includes('Installment not found')) {
-            return res.status(404).json({ 
-                error: 'Parcela não encontrada',
-                details: 'A parcela especificada não existe no sistema.'
-            });
-        }
-
         res.status(500).json({ 
-            error: 'Erro interno do servidor', 
-            details: 'Ocorreu um erro inesperado ao tentar gerar o boleto. Por favor, tente novamente.'
+            error: 'Erro interno do servidor',
+            details: 'Ocorreu um erro ao tentar gerar o boleto. Por favor, tente novamente.'
         });
     }
 };

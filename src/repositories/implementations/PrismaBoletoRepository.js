@@ -203,82 +203,83 @@ class PrismaBoletoRepository extends IBoletoRepository {
                     }
                 });
 
+                console.log('DEBUG: Verificando parcela', {
+                    installment_id,
+                    installment_exists: !!installment,
+                    movement_payment_exists: !!installment?.movement_payment,
+                    movement_exists: !!installment?.movement_payment?.movement
+                });
+
                 if (!installment) {
-                    logger.error('Parcela não encontrada', { 
+                    console.error('ERRO: Parcela não encontrada', { 
                         installment_id,
                         context: 'Tentativa de geração de boleto' 
                     });
                     throw new Error('Installment not found');
                 }
 
-                logger.info('Parcela encontrada', {
-                    installment_id,
+                // Log detalhado da parcela
+                console.log('DEBUG: Detalhes da parcela', {
+                    installment_id: installment.installment_id,
+                    status: installment.status,
+                    amount: installment.amount,
                     movement_id: installment.movement_payment?.movement_id,
-                    person: installment.movement_payment?.movement?.person?.name,
+                    person_name: installment.movement_payment?.movement?.person?.name,
                     total_amount: installment.movement_payment?.movement?.total_amount
                 });
 
-                finalInstallmentId = installment_id;
-            } else if (movement_id) {
-                // Buscar a parcela do movimento
-                const movement = await this.prisma.movements.findUnique({
-                    where: { movement_id },
-                    include: {
-                        movement_payment: {
-                            include: {
-                                installments: true,
-                                movement: {
-                                    select: {
-                                        total_amount: true,
-                                        movement_date: true,
-                                        person: {
-                                            select: {
-                                                name: true
-                                            }
-                                        }
-                                    }
-                                }
-                            }
-                        },
-                        person: true
-                    }
-                });
-
-                if (!movement) {
-                    logger.error('Movimento não encontrado', { 
-                        movement_id,
-                        context: 'Tentativa de geração de boleto' 
+                if (!installment.movement_payment) {
+                    console.error('ERRO: Parcela sem pagamento associado', { 
+                        installment_id,
+                        context: 'Verificação de movimento de pagamento' 
                     });
-                    throw new Error('Movement not found');
+                    throw new Error('Installment has no associated movement payment');
                 }
 
-                logger.info('Movimento encontrado', {
-                    movement_id,
-                    person_name: movement.person?.name,
-                    total_amount: movement.total_amount
+                finalInstallmentId = installment_id;
+            } else if (movement_id) {
+                // Buscar o pagamento do movimento
+                const movementPayment = await this.getMovementPayment(movement_id);
+
+                if (!movementPayment) {
+                    console.error('ERRO: Movimento sem pagamento', { 
+                        movement_id,
+                        context: 'Verificação de pagamento do movimento' 
+                    });
+                    throw new Error('Movement has no associated payment');
+                }
+
+                // Buscar parcelas do pagamento
+                const installments = await this.prisma.installments.findMany({
+                    where: { payment_id: movementPayment.payment_id },
+                    orderBy: { due_date: 'asc' }
                 });
 
-                if (!movement.movement_payment || !movement.movement_payment.installments || movement.movement_payment.installments.length === 0) {
-                    logger.error('Nenhuma parcela encontrada para o movimento', { 
+                console.log('DEBUG: Parcelas do movimento', {
+                    movement_id,
+                    payment_id: movementPayment.payment_id,
+                    installments_count: installments.length,
+                    installment_ids: installments.map(i => i.installment_id),
+                    first_installment_status: installments[0]?.status
+                });
+
+                if (installments.length === 0) {
+                    console.error('ERRO: Movimento sem parcelas', { 
                         movement_id,
                         movement_details: {
-                            total_amount: movement.total_amount,
-                            person_name: movement.person?.name
+                            total_amount: movementPayment.total_amount,
+                            person_name: movementPayment.movement?.person?.name
                         }
                     });
                     throw new Error('Movement has no installments. Cannot generate boleto without installments.');
                 }
 
-                logger.info('Parcelas do movimento', {
-                    installments_count: movement.movement_payment.installments.length,
-                    installment_ids: movement.movement_payment.installments.map(i => i.installment_id)
-                });
-
-                finalInstallmentId = movement.movement_payment.installments[0].installment_id;
+                finalInstallmentId = installments[0].installment_id;
             } else {
-                logger.error('Parâmetros inválidos para geração de boleto', { 
+                console.error('ERRO: Parâmetros inválidos', { 
                     movement_id, 
-                    installment_id 
+                    installment_id,
+                    context: 'Geração de boleto' 
                 });
                 throw new Error('Either movement_id or installment_id must be provided');
             }
@@ -291,48 +292,125 @@ class PrismaBoletoRepository extends IBoletoRepository {
                 }
             });
 
+            console.log('DEBUG: Verificando boleto existente', {
+                installment_id: finalInstallmentId,
+                existing_boleto: !!existingBoleto
+            });
+
             if (existingBoleto) {
-                logger.warn('Boleto já existe com status A_RECEBER', { 
+                console.warn('AVISO: Boleto já existe com status A_RECEBER', { 
                     installment_id: finalInstallmentId, 
                     boleto_id: existingBoleto.boleto_id 
                 });
-                throw new Error('Boleto already exists with status A_RECEBER');
+                throw new Error('Boleto already exists');
             }
 
             // Determinar o movement_id
-            let finalMovementId;
-            if (movement_id) {
-                finalMovementId = movement_id;
-            } else if (installment_id) {
-                finalMovementId = await this.getMovementIdFromInstallment(installment_id);
-            } else {
-                throw new Error('Either movement_id or installment_id must be provided');
-            }
+            const finalMovementId = movement_id || 
+                (await this.prisma.installments.findUnique({
+                    where: { installment_id: finalInstallmentId },
+                    select: { 
+                        movement_payment: { 
+                            select: { movement_id: true } 
+                        } 
+                    }
+                }))?.movement_payment?.movement_id;
 
-            logger.info('Preparando geração de boleto', {
+            console.log('DEBUG: Movimento final para geração de boleto', {
+                movement_id: finalMovementId,
                 installment_id: finalInstallmentId
             });
 
-            // Fazer requisição para o webhook
+            // Chamar webhook para geração de boleto
             const webhookResponse = await axios.post(
-                'https://n8n.webhook.agilefinance.com.br/webhook/vendas/boleto', 
-                { movement_id: finalMovementId }
+                process.env.N8N_BOLETO_WEBHOOK_URL, 
+                { 
+                    movement_id: finalMovementId, 
+                    installment_id: finalInstallmentId 
+                },
+                {
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'apikey': process.env.N8N_WEBHOOK_API_KEY
+                    }
+                }
             );
 
-            logger.info('Webhook request successful', { 
-                movement_id: finalMovementId, 
-                response: webhookResponse.data 
+            console.log('DEBUG: Resposta do webhook de boleto', {
+                status: webhookResponse.status,
+                data: webhookResponse.data
             });
 
             return {
-                message: 'Boleto generation request sent successfully',
-                movement_id: finalMovementId,
+                message: 'Boleto gerado com sucesso',
+                boleto_id: webhookResponse.data.boleto_id,
                 webhook_response: webhookResponse.data
             };
         } catch (error) {
-            logger.error('Error in generateBoletoWebhook', { 
-                error: error.message, 
-                stack: error.stack 
+            console.error('ERRO na geração de boleto:', {
+                error_message: error.message,
+                error_stack: error.stack,
+                movement_id: params.movement_id,
+                installment_id: params.installment_id
+            });
+            throw error;
+        }
+    }
+
+    async getMovementPayment(movement_id) {
+        try {
+            console.log('DEBUG: Buscando payment para movimento', { movement_id });
+
+            const movementPayment = await this.prisma.movement_payments.findFirst({
+                where: { movement_id: parseInt(movement_id) },
+                include: {
+                    payment_methods: {
+                        select: {
+                            name: true
+                        }
+                    },
+                    movement: {
+                        select: {
+                            total_amount: true,
+                            movement_date: true,
+                            person: {
+                                select: {
+                                    name: true
+                                }
+                            }
+                        }
+                    }
+                }
+            });
+
+            console.log('DEBUG: Resultado da busca de payment', {
+                movement_id,
+                payment_exists: !!movementPayment,
+                payment_details: movementPayment ? {
+                    payment_id: movementPayment.payment_id,
+                    status: movementPayment.status,
+                    total_amount: movementPayment.total_amount,
+                    payment_method: movementPayment.payment_methods?.name,
+                    movement_total: movementPayment.movement?.total_amount,
+                    movement_date: movementPayment.movement?.movement_date,
+                    person_name: movementPayment.movement?.person?.name
+                } : null
+            });
+
+            if (!movementPayment) {
+                console.warn('AVISO: Nenhum pagamento encontrado para o movimento', { 
+                    movement_id,
+                    details: 'Não foi possível encontrar um pagamento associado a este movimento' 
+                });
+                return null;
+            }
+
+            return movementPayment;
+        } catch (error) {
+            console.error('ERRO ao buscar payment do movimento', {
+                movement_id,
+                error_message: error.message,
+                error_stack: error.stack
             });
             throw error;
         }
