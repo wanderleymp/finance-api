@@ -20,12 +20,6 @@ class PrismaServiceRepository extends IServiceRepository {
                 paramCount++;
             }
 
-            if (filters.status) {
-                whereConditions.push(`i.status = $${paramCount}`);
-                queryParams.push(filters.status);
-                paramCount++;
-            }
-
             if (filters.service_group_id) {
                 whereConditions.push(`s.service_group_id = $${paramCount}`);
                 queryParams.push(parseInt(filters.service_group_id));
@@ -48,7 +42,6 @@ class PrismaServiceRepository extends IServiceRepository {
                     i.code,
                     i.name,
                     i.description,
-                    i.status,
                     i.price,
                     i.created_at,
                     i.updated_at,
@@ -99,7 +92,6 @@ class PrismaServiceRepository extends IServiceRepository {
                     i.code,
                     i.name,
                     i.description,
-                    i.status,
                     i.price,
                     i.created_at,
                     i.updated_at,
@@ -142,13 +134,12 @@ class PrismaServiceRepository extends IServiceRepository {
                     code,
                     name,
                     description,
-                    status,
                     price,
                     active,
                     created_at,
                     updated_at
                 ) VALUES (
-                    $1, $2, $3, $4, $5, $6, NOW(), NOW()
+                    $1, $2, $3, $4, $5, NOW(), NOW()
                 )
                 RETURNING item_id
             `;
@@ -157,7 +148,6 @@ class PrismaServiceRepository extends IServiceRepository {
                 data.code,
                 data.name,
                 data.description,
-                data.status || 'active',
                 parseFloat(data.price),
                 true
             ];
@@ -232,11 +222,6 @@ class PrismaServiceRepository extends IServiceRepository {
             if (data.description !== undefined) {
                 updateFields.push(`description = $${paramCount++}`);
                 params.push(data.description);
-            }
-
-            if (data.status !== undefined) {
-                updateFields.push(`status = $${paramCount++}`);
-                params.push(data.status);
             }
 
             if (data.price !== undefined) {
