@@ -20,7 +20,7 @@
   },
   "homepage": "https://github.com/wanderleymp/finance-api#readme",
   "dependencies": {
-    "@prisma/client": "^5.22.0",
+    "@prisma/client": "^6.0.1",
     "argon2": "^0.41.1",
     "axios": "^1.7.8",
     "cors": "^2.8.5",
@@ -35,6 +35,6 @@
   },
   "devDependencies": {
     "nodemon": "^3.1.7",
-    "prisma": "^5.22.0"
+    "prisma": "^6.0.1"
   }
 }

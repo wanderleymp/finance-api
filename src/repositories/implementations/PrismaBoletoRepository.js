@@ -172,17 +172,128 @@ class PrismaBoletoRepository extends IBoletoRepository {
         try {
             const { movement_id, installment_id } = params;
 
+            logger.info('Iniciando geração de boleto', { 
+                movement_id, 
+                installment_id 
+            });
+
+            let finalInstallmentId;
+            
+            if (installment_id) {
+                // Validar se a parcela existe
+                const installment = await this.prisma.installments.findUnique({
+                    where: { installment_id },
+                    include: {
+                        movement_payment: {
+                            select: { 
+                                movement_id: true,
+                                movement: {
+                                    select: {
+                                        total_amount: true,
+                                        movement_date: true,
+                                        person: {
+                                            select: {
+                                                name: true
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                });
+
+                if (!installment) {
+                    logger.error('Parcela não encontrada', { 
+                        installment_id,
+                        context: 'Tentativa de geração de boleto' 
+                    });
+                    throw new Error('Installment not found');
+                }
+
+                logger.info('Parcela encontrada', {
+                    installment_id,
+                    movement_id: installment.movement_payment?.movement_id,
+                    person: installment.movement_payment?.movement?.person?.name,
+                    total_amount: installment.movement_payment?.movement?.total_amount
+                });
+
+                finalInstallmentId = installment_id;
+            } else if (movement_id) {
+                // Buscar a parcela do movimento
+                const movement = await this.prisma.movements.findUnique({
+                    where: { movement_id },
+                    include: {
+                        movement_payment: {
+                            include: {
+                                installments: true,
+                                movement: {
+                                    select: {
+                                        total_amount: true,
+                                        movement_date: true,
+                                        person: {
+                                            select: {
+                                                name: true
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                        },
+                        person: true
+                    }
+                });
+
+                if (!movement) {
+                    logger.error('Movimento não encontrado', { 
+                        movement_id,
+                        context: 'Tentativa de geração de boleto' 
+                    });
+                    throw new Error('Movement not found');
+                }
+
+                logger.info('Movimento encontrado', {
+                    movement_id,
+                    person_name: movement.person?.name,
+                    total_amount: movement.total_amount
+                });
+
+                if (!movement.movement_payment || !movement.movement_payment.installments || movement.movement_payment.installments.length === 0) {
+                    logger.error('Nenhuma parcela encontrada para o movimento', { 
+                        movement_id,
+                        movement_details: {
+                            total_amount: movement.total_amount,
+                            person_name: movement.person?.name
+                        }
+                    });
+                    throw new Error('Movement has no installments. Cannot generate boleto without installments.');
+                }
+
+                logger.info('Parcelas do movimento', {
+                    installments_count: movement.movement_payment.installments.length,
+                    installment_ids: movement.movement_payment.installments.map(i => i.installment_id)
+                });
+
+                finalInstallmentId = movement.movement_payment.installments[0].installment_id;
+            } else {
+                logger.error('Parâmetros inválidos para geração de boleto', { 
+                    movement_id, 
+                    installment_id 
+                });
+                throw new Error('Either movement_id or installment_id must be provided');
+            }
+
             // Validar se já existe boleto com status A_RECEBER
             const existingBoleto = await this.prisma.boletos.findFirst({
                 where: { 
-                    installment_id: installment_id,
+                    installment_id: finalInstallmentId,
                     status: 'A_RECEBER' 
                 }
             });
 
             if (existingBoleto) {
-                logger.warn('Boleto already exists with status A_RECEBER', { 
-                    installment_id, 
+                logger.warn('Boleto já existe com status A_RECEBER', { 
+                    installment_id: finalInstallmentId, 
                     boleto_id: existingBoleto.boleto_id 
                 });
                 throw new Error('Boleto already exists with status A_RECEBER');
@@ -197,6 +308,10 @@ class PrismaBoletoRepository extends IBoletoRepository {
             } else {
                 throw new Error('Either movement_id or installment_id must be provided');
             }
+
+            logger.info('Preparando geração de boleto', {
+                installment_id: finalInstallmentId
+            });
 
             // Fazer requisição para o webhook
             const webhookResponse = await axios.post(

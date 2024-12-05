@@ -139,7 +139,7 @@ class MovementService {
             description,
             items,
             payment_method_id,
-            status_id = 1 // Status padrão para novo movimento
+            movement_status_id = 23 // Alterado para movement_status_id padrão 23
         } = data;
 
         // Converter e validar os itens
@@ -165,7 +165,7 @@ class MovementService {
                 license_id: parseInt(license_id),
                 movement_type_id: parseInt(movement_type_id),
                 payment_method_id: payment_method_id ? parseInt(payment_method_id) : null,
-                status_id: parseInt(status_id),
+                movement_status_id: parseInt(movement_status_id), // Atualizado para movement_status_id
                 description,
                 movement_items: {
                     create: processedItems

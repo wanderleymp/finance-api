@@ -1,6 +1,7 @@
 const express = require('express');
 const router = express.Router();
 const movementService = require('../services/movements');
+const boletoController = require('../controllers/boletoController');
 
 const MOVEMENT_TYPE_SALES = 1;
 
@@ -291,6 +292,33 @@ router.post('/:id/cancel', async (req, res) => {
         console.error(error);
         res.status(500).json({ error: 'Erro ao cancelar movimento' });
     }
+});
+
+/**
+ * @swagger
+ * /sales/{id}/boleto:
+ *   post:
+ *     summary: Gerar boleto para uma venda específica
+ *     tags: [Sales]
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: integer
+ *     responses:
+ *       200:
+ *         description: Solicitação de geração de boleto enviada com sucesso
+ *       400:
+ *         description: Boleto já existe ou parâmetros inválidos
+ *       404:
+ *         description: Venda não encontrada
+ *       500:
+ *         description: Erro interno do servidor
+ */
+router.post('/:id/boleto', (req, res) => {
+    req.body.movement_id = parseInt(req.params.id);
+    return boletoController.generateBoletoWebhook(req, res);
 });
 
 module.exports = router;
