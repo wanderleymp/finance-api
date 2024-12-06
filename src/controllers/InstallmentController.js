@@ -7,25 +7,52 @@ class InstallmentController {
 
     async getAllInstallments(req, res) {
         try {
-            const { skip = 0, take = 10, status, payment_id, due_date_start, due_date_end, search } = req.query;
+            console.log('Raw Query Parameters:', JSON.stringify(req.query, null, 2));
+            
+            const { skip = 0, take = 10, status, search, expected_start_date, expected_end_date, due_date_start, due_date_end } = req.query;
+
+            console.log('Extracted Query Parameters:', JSON.stringify({
+                skip, 
+                take, 
+                status, 
+                search, 
+                expected_start_date, 
+                expected_end_date, 
+                due_date_start, 
+                due_date_end
+            }, null, 2));
 
             const filters = {
                 status,
-                payment_id: payment_id ? parseInt(payment_id) : undefined,
-                due_date_start,
-                due_date_end,
-                search
+                due_start_date: due_date_start,
+                due_end_date: due_date_end,
+                search,
+                expected_start_date,
+                expected_end_date
             };
 
-            logger.info('Getting all installments', { filters, skip, take });
+            console.log('Filters Debugging:', JSON.stringify({
+                rawQuery: req.query,
+                filters,
+                expectedStartDateType: typeof filters.expected_start_date,
+                expectedStartDateValue: filters.expected_start_date,
+                expectedEndDateType: typeof filters.expected_end_date,
+                expectedEndDateValue: filters.expected_end_date,
+                dueStartDateType: typeof filters.due_start_date,
+                dueStartDateValue: filters.due_start_date,
+                dueEndDateType: typeof filters.due_end_date,
+                dueEndDateValue: filters.due_end_date
+            }, null, 2));
+
+            console.log('Getting all installments:', JSON.stringify({ filters, skip, take }, null, 2));
 
             const result = await this.installmentRepository.findAll(filters, parseInt(skip), parseInt(take));
             return res.json(result);
         } catch (error) {
-            logger.error('Error getting all installments', { 
+            console.log('Error getting all installments:', JSON.stringify({ 
                 error: error.message,
                 stack: error.stack
-            });
+            }, null, 2));
             return res.status(500).json({ error: 'Internal server error' });
         }
     }
@@ -34,22 +61,22 @@ class InstallmentController {
         try {
             const { id } = req.params;
             
-            logger.info('Getting installment by id', { id });
+            console.log('Getting installment by id:', JSON.stringify({ id }, null, 2));
 
             const installment = await this.installmentRepository.findById(parseInt(id));
             
             if (!installment) {
-                logger.warn('Installment not found', { id });
+                console.log('Installment not found:', JSON.stringify({ id }, null, 2));
                 return res.status(404).json({ error: 'Installment not found' });
             }
 
             return res.json(installment);
         } catch (error) {
-            logger.error('Error getting installment by id', { 
+            console.log('Error getting installment by id:', JSON.stringify({ 
                 id: req.params.id,
                 error: error.message,
                 stack: error.stack
-            });
+            }, null, 2));
             return res.status(500).json({ error: 'Internal server error' });
         }
     }
@@ -66,7 +93,7 @@ class InstallmentController {
                 account_entry_id
             } = req.body;
 
-            logger.info('Creating installment', { 
+            console.log('Creating installment:', JSON.stringify({ 
                 payment_id, 
                 amount, 
                 due_date, 
@@ -74,19 +101,19 @@ class InstallmentController {
                 installment_number,
                 movement_id,
                 account_entry_id
-            });
+            }, null, 2));
 
             // Validate required fields
             if (!payment_id || !amount || !due_date || !status || !installment_number || !account_entry_id) {
                 const error = 'Missing required fields';
-                logger.warn('Validation error creating installment', { 
+                console.log('Validation error creating installment:', JSON.stringify({ 
                     payment_id, 
                     amount, 
                     due_date, 
                     status, 
                     installment_number,
                     account_entry_id
-                });
+                }, null, 2));
                 return res.status(400).json({ error });
             }
 
@@ -100,17 +127,17 @@ class InstallmentController {
                 movement_id: movement_id ? parseInt(movement_id) : null
             });
 
-            logger.info('Installment created successfully', { 
+            console.log('Installment created successfully:', JSON.stringify({ 
                 installment_id: installment.installment_id
-            });
+            }, null, 2));
 
             return res.status(201).json(installment);
         } catch (error) {
-            logger.error('Error creating installment', { 
+            console.log('Error creating installment:', JSON.stringify({ 
                 body: req.body,
                 error: error.message,
                 stack: error.stack
-            });
+            }, null, 2));
             return res.status(500).json({ error: 'Internal server error' });
         }
     }
@@ -129,7 +156,7 @@ class InstallmentController {
                 balance
             } = req.body;
 
-            logger.info('Updating installment', { 
+            console.log('Updating installment:', JSON.stringify({ 
                 id,
                 payment_id, 
                 amount, 
@@ -139,11 +166,11 @@ class InstallmentController {
                 movement_id,
                 account_entry_id,
                 balance
-            });
+            }, null, 2));
 
             const existingInstallment = await this.installmentRepository.findById(parseInt(id));
             if (!existingInstallment) {
-                logger.warn('Installment not found for update', { id });
+                console.log('Installment not found for update:', JSON.stringify({ id }, null, 2));
                 return res.status(404).json({ error: 'Installment not found' });
             }
 
@@ -158,16 +185,16 @@ class InstallmentController {
                 balance: balance ? parseFloat(balance) : undefined
             });
 
-            logger.info('Installment updated successfully', { id });
+            console.log('Installment updated successfully:', JSON.stringify({ id }, null, 2));
 
             return res.json(updatedInstallment);
         } catch (error) {
-            logger.error('Error updating installment', { 
+            console.log('Error updating installment:', JSON.stringify({ 
                 id: req.params.id,
                 body: req.body,
                 error: error.message,
                 stack: error.stack
-            });
+            }, null, 2));
             return res.status(500).json({ error: 'Internal server error' });
         }
     }
@@ -176,25 +203,25 @@ class InstallmentController {
         try {
             const { id } = req.params;
             
-            logger.info('Deleting installment', { id });
+            console.log('Deleting installment:', JSON.stringify({ id }, null, 2));
 
             const existingInstallment = await this.installmentRepository.findById(parseInt(id));
             if (!existingInstallment) {
-                logger.warn('Installment not found for deletion', { id });
+                console.log('Installment not found for deletion:', JSON.stringify({ id }, null, 2));
                 return res.status(404).json({ error: 'Installment not found' });
             }
 
             await this.installmentRepository.delete(parseInt(id));
 
-            logger.info('Installment deleted successfully', { id });
+            console.log('Installment deleted successfully:', JSON.stringify({ id }, null, 2));
 
             return res.status(204).send();
         } catch (error) {
-            logger.error('Error deleting installment', { 
+            console.log('Error deleting installment:', JSON.stringify({ 
                 id: req.params.id,
                 error: error.message,
                 stack: error.stack
-            });
+            }, null, 2));
             return res.status(500).json({ error: 'Internal server error' });
         }
     }
@@ -203,17 +230,17 @@ class InstallmentController {
         try {
             const { paymentId } = req.params;
 
-            logger.info('Getting installments by payment id', { paymentId });
+            console.log('Getting installments by payment id:', JSON.stringify({ paymentId }, null, 2));
 
             const installments = await this.installmentRepository.findByPaymentId(parseInt(paymentId));
 
             return res.json(installments);
         } catch (error) {
-            logger.error('Error getting installments by payment id', { 
+            console.log('Error getting installments by payment id:', JSON.stringify({ 
                 payment_id: req.params.paymentId,
                 error: error.message,
                 stack: error.stack
-            });
+            }, null, 2));
             return res.status(500).json({ error: 'Internal server error' });
         }
     }
@@ -222,17 +249,17 @@ class InstallmentController {
         try {
             const { movementId } = req.params;
 
-            logger.info('Getting installments by movement id', { movementId });
+            console.log('Getting installments by movement id:', JSON.stringify({ movementId }, null, 2));
 
             const installments = await this.installmentRepository.findByMovementId(parseInt(movementId));
 
             return res.json(installments);
         } catch (error) {
-            logger.error('Error getting installments by movement id', { 
+            console.log('Error getting installments by movement id:', JSON.stringify({ 
                 movement_id: req.params.movementId,
                 error: error.message,
                 stack: error.stack
-            });
+            }, null, 2));
             return res.status(500).json({ error: 'Internal server error' });
         }
     }

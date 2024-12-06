@@ -19,9 +19,26 @@ class PrismaInstallmentRepository extends IInstallmentRepository {
                 take 
             });
 
+            const statusCondition = filters.status ? 
+                Prisma.sql`AND i.status = '${Prisma.raw(filters.status)}'` : 
+                Prisma.sql``;
+
             const searchCondition = filters.search ? 
                 Prisma.sql`AND (LOWER(p.full_name) LIKE LOWER('%${Prisma.raw(filters.search)}%') OR LOWER(p.fantasy_name) LIKE LOWER('%${Prisma.raw(filters.search)}%'))` : 
                 Prisma.sql``;
+
+            const movementDateCondition = filters.movement_start_date && filters.movement_end_date ? 
+                Prisma.sql`AND m.movement_date BETWEEN '${Prisma.raw(filters.movement_start_date)}' AND '${Prisma.raw(filters.movement_end_date)}'` : 
+                Prisma.sql``;
+
+            const dueDateCondition = filters.due_start_date && filters.due_end_date ? 
+                Prisma.sql`AND i.due_date BETWEEN '${Prisma.raw(filters.due_start_date)}' AND '${Prisma.raw(filters.due_end_date)}'` : 
+                Prisma.sql``;
+
+            // Condição de data esperada
+            const expectedDateCondition = filters.expected_start_date && filters.expected_end_date 
+                ? Prisma.sql`AND i.expected_date >= '${Prisma.raw(filters.expected_start_date)}' AND i.expected_date <= '${Prisma.raw(filters.expected_end_date)}'` 
+                : Prisma.sql``;
 
             logger.info('Search Debugging', { 
                 requestId,
@@ -29,6 +46,30 @@ class PrismaInstallmentRepository extends IInstallmentRepository {
                 searchConditionRaw: searchCondition.sql,
                 searchConditionType: typeof searchCondition,
                 searchConditionValues: searchCondition.values
+            });
+
+            logger.info('Status Debugging', { 
+                requestId,
+                status: filters.status,
+                statusConditionRaw: statusCondition.sql,
+                statusConditionType: typeof statusCondition,
+                statusConditionValues: statusCondition.values
+            });
+
+            logger.info('Date Debugging', { 
+                requestId,
+                movementDateCondition: movementDateCondition.sql,
+                dueDateCondition: dueDateCondition.sql,
+                expectedDateCondition: expectedDateCondition.sql,
+                expectedStartDate: filters.expected_start_date,
+                expectedEndDate: filters.expected_end_date,
+                expectedDateConditionType: typeof expectedDateCondition,
+                expectedDateConditionIsEmpty: expectedDateCondition.sql === '',
+                filtersType: typeof filters,
+                filtersExpectedStartDateType: typeof filters.expected_start_date,
+                rawExpectedDateCondition: expectedDateCondition.toString(),
+                expectedStartDateValue: filters.expected_start_date,
+                expectedEndDateValue: filters.expected_end_date
             });
 
             // Log the exact query for debugging
@@ -40,6 +81,10 @@ class PrismaInstallmentRepository extends IInstallmentRepository {
                 JOIN persons p ON m.person_id = p.person_id
                 WHERE m.movement_status_id = 23
                 ${searchCondition.sql}
+                ${statusCondition.sql}
+                ${movementDateCondition.sql}
+                ${dueDateCondition.sql}
+                ${expectedDateCondition.sql}
             `;
             logger.info('Total Query String', { requestId, totalQueryString });
             logger.info('Query String', { requestId, searchCondition: searchCondition.sql });
@@ -54,6 +99,10 @@ class PrismaInstallmentRepository extends IInstallmentRepository {
                 JOIN persons p ON m.person_id = p.person_id
                 WHERE m.movement_status_id = 23
                 ${searchCondition}
+                ${statusCondition}
+                ${movementDateCondition}
+                ${dueDateCondition}
+                ${expectedDateCondition}
             `;
             const total = parseInt(totalQuery[0].total);
 
@@ -98,6 +147,7 @@ class PrismaInstallmentRepository extends IInstallmentRepository {
                     i.installment_number,
                     i.amount,
                     i.status,
+                    i.expected_date,
                     COALESCE(ua.boleto_url, u.boleto_url) AS boleto_url,
                     pdj.documents AS person_documents
                 FROM installments i
@@ -109,6 +159,10 @@ class PrismaInstallmentRepository extends IInstallmentRepository {
                 LEFT JOIN person_documents_json pdj ON p.person_id = pdj.person_id
                 WHERE m.movement_status_id = 23
                 ${searchCondition.sql}
+                ${statusCondition.sql}
+                ${movementDateCondition.sql}
+                ${dueDateCondition.sql}
+                ${expectedDateCondition.sql}
                 ORDER BY i.due_date DESC
                 LIMIT ${take} OFFSET ${skip}
             `;
@@ -153,6 +207,7 @@ class PrismaInstallmentRepository extends IInstallmentRepository {
                     i.installment_number,
                     i.amount,
                     i.status,
+                    i.expected_date,
                     COALESCE(ua.boleto_url, u.boleto_url) AS boleto_url,
                     pdj.documents AS person_documents
                 FROM installments i
@@ -164,6 +219,10 @@ class PrismaInstallmentRepository extends IInstallmentRepository {
                 LEFT JOIN person_documents_json pdj ON p.person_id = pdj.person_id
                 WHERE m.movement_status_id = 23
                 ${searchCondition}
+                ${statusCondition}
+                ${movementDateCondition}
+                ${dueDateCondition}
+                ${expectedDateCondition}
                 ORDER BY i.due_date DESC
                 LIMIT ${take} OFFSET ${skip}
             `;
