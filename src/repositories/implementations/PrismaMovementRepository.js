@@ -86,57 +86,48 @@ class PrismaMovementRepository extends IMovementRepository {
 
     async getAllMovements(filters = {}, skip = 0, take = 10, sort = { field: 'movement_date', order: 'desc' }) {
         try {
+            logger.info('Getting all movements with filters:', { filters, skip, take, sort });
+            
             const where = {};
-
-            if (filters.movement_date) {
-                where.movement_date = {
-                    gte: new Date(filters.movement_date.gte),
-                    lte: new Date(filters.movement_date.lte)
-                };
-            }
-
-            if (filters.total_amount) {
-                where.total_amount = {
-                    gte: parseFloat(filters.total_amount.gte),
-                    lte: parseFloat(filters.total_amount.lte)
-                };
-            }
-
-            if (filters.person_id) {
-                where.person_id = parseInt(filters.person_id);
-            }
-
-            if (filters.license_id) {
-                where.license_id = parseInt(filters.license_id);
+            
+            if (filters.movement_date_gte || filters.movement_date_lte) {
+                where.movement_date = {};
+                if (filters.movement_date_gte) {
+                    where.movement_date.gte = new Date(filters.movement_date_gte);
+                }
+                if (filters.movement_date_lte) {
+                    where.movement_date.lte = new Date(filters.movement_date_lte);
+                }
             }
 
             if (filters.movement_type_id) {
-                where.movement_type_id = parseInt(filters.movement_type_id);
+                where.movement_type_id = filters.movement_type_id;
             }
 
             if (filters.movement_status_id) {
-                where.movement_status_id = parseInt(filters.movement_status_id);
+                where.movement_status_id = filters.movement_status_id;
             }
 
             if (filters.search) {
                 where.OR = [
-                    { description: { contains: filters.search, mode: 'insensitive' } },
-                    { persons: { full_name: { contains: filters.search, mode: 'insensitive' } } },
-                    { persons: { fantasy_name: { contains: filters.search, mode: 'insensitive' } } },
-                    { persons: { 
-                        person_documents: {
-                            some: {
-                                document_value: { contains: filters.search, mode: 'insensitive' }
-                            }
+                    {
+                        persons: {
+                            OR: [
+                                { full_name: { contains: filters.search, mode: 'insensitive' } },
+                                { fantasy_name: { contains: filters.search, mode: 'insensitive' } }
+                            ]
                         }
-                    }}
+                    },
+                    { description: { contains: filters.search, mode: 'insensitive' } }
                 ];
             }
 
-            const [movements, total] = await Promise.all([
-                this.prisma.movements.findMany({
+            logger.debug('Constructed where clause:', { where });
+
+            const movements = await this.prisma.$transaction(async (prisma) => {
+                const result = await prisma.movements.findMany({
                     where,
-                    skip,
+                    skip: Math.max(0, skip),
                     take,
                     orderBy: { [sort.field]: sort.order },
                     select: {
@@ -175,84 +166,140 @@ class PrismaMovementRepository extends IMovementRepository {
                                 status_name: true,
                                 description: true
                             }
+                        },
+                        movement_payments: {
+                            select: {
+                                payment_id: true,
+                                total_amount: true,
+                                status: true,
+                                payment_methods: {
+                                    select: {
+                                        payment_method_id: true,
+                                        method_name: true,
+                                        description: true,
+                                        installment_count: true,
+                                        days_between_installments: true,
+                                        first_due_date_days: true
+                                    }
+                                },
+                                installments: {
+                                    select: {
+                                        installment_id: true,
+                                        due_date: true,
+                                        balance: true,
+                                        status: true
+                                    }
+                                }
+                            }
                         }
                     }
-                }),
-                this.prisma.movements.count({ where })
-            ]);
+                });
 
-            return {
-                data: movements,
-                pagination: {
-                    total,
-                    totalPages: Math.ceil(total / take),
-                    currentPage: Math.floor(skip / take) + 1,
-                    perPage: take,
-                    hasNext: skip + take < total,
-                    hasPrevious: skip > 0
-                }
-            };
+                logger.info('Successfully retrieved movements', { count: result.length });
+                return result;
+            });
+
+            return movements;
         } catch (error) {
-            logger.error('Error fetching movements:', { error: error.message, stack: error.stack });
+            logger.error('Error getting all movements:', { 
+                error: error.message, 
+                stack: error.stack,
+                filters,
+                skip,
+                take,
+                sort
+            });
             throw error;
         }
     }
 
     async getMovementById(id) {
         try {
-            const movement = await this.prisma.movements.findFirst({
-                where: { 
-                    movement_id: parseInt(id)
-                },
-                select: {
-                    movement_id: true,
-                    movement_date: true,
-                    total_amount: true,
-                    description: true,
-                    movement_type_id: true,
-                    movement_status_id: true,
-                    persons: {
-                        select: {
-                            person_id: true,
-                            full_name: true,
-                            fantasy_name: true,
-                            person_documents: {
-                                select: {
-                                    document_value: true,
-                                    document_types: {
-                                        select: {
-                                            description: true
+            logger.info('Getting movement by id:', { id });
+
+            const movement = await this.prisma.$transaction(async (prisma) => {
+                const result = await prisma.movements.findUnique({
+                    where: { movement_id: parseInt(id) },
+                    select: {
+                        movement_id: true,
+                        movement_date: true,
+                        total_amount: true,
+                        description: true,
+                        movement_type_id: true,
+                        movement_status_id: true,
+                        persons: {
+                            select: {
+                                person_id: true,
+                                full_name: true,
+                                fantasy_name: true,
+                                person_documents: {
+                                    select: {
+                                        document_value: true,
+                                        document_types: {
+                                            select: {
+                                                description: true
+                                            }
                                         }
                                     }
                                 }
                             }
-                        }
-                    },
-                    movement_types: {
-                        select: {
-                            movement_type_id: true,
-                            type_name: true
-                        }
-                    },
-                    movement_statuses: {
-                        select: {
-                            movement_status_id: true,
-                            status_name: true,
-                            description: true
+                        },
+                        movement_types: {
+                            select: {
+                                movement_type_id: true,
+                                type_name: true
+                            }
+                        },
+                        movement_statuses: {
+                            select: {
+                                movement_status_id: true,
+                                status_name: true,
+                                description: true
+                            }
+                        },
+                        movement_payments: {
+                            select: {
+                                payment_id: true,
+                                total_amount: true,
+                                status: true,
+                                payment_methods: {
+                                    select: {
+                                        payment_method_id: true,
+                                        method_name: true,
+                                        description: true,
+                                        installment_count: true,
+                                        days_between_installments: true,
+                                        first_due_date_days: true
+                                    }
+                                },
+                                installments: {
+                                    select: {
+                                        installment_id: true,
+                                        due_date: true,
+                                        balance: true,
+                                        status: true
+                                    }
+                                }
+                            }
                         }
                     }
-                }
-            });
+                });
 
-            if (!movement) {
-                throw new MovementNotFoundError(id);
-            }
+                if (!result) {
+                    logger.warn('Movement not found:', { id });
+                    throw new MovementNotFoundError(`Movement with id ${id} not found`);
+                }
+
+                logger.info('Successfully retrieved movement:', { id });
+                return result;
+            });
 
             return movement;
         } catch (error) {
-            logger.error('Error fetching movement:', { 
+            logger.error('Error getting movement by id:', { 
                 error: error.message, 
-                movement_id: id 
+                stack: error.stack,
+                id 
             });
             throw error;
         }
