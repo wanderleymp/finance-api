@@ -1,4 +1,4 @@
-const { PrismaClient } = require('@prisma/client');
+const { PrismaClient, Prisma } = require('@prisma/client');
 const { v4: uuidv4 } = require('uuid');
 const IInstallmentRepository = require('../IInstallmentRepository');
 const logger = require('../../../config/logger');
@@ -31,7 +31,7 @@ class PrismaInstallmentRepository extends IInstallmentRepository {
                 JOIN movements m ON mp.movement_id = m.movement_id
                 JOIN persons p ON m.person_id = p.person_id
                 WHERE m.movement_status_id = 23
-                ${this.prisma.Prisma.raw(searchCondition)}
+                ${Prisma.sql([searchCondition])}
             `;
             const total = parseInt(totalQuery[0].total);
 
@@ -86,7 +86,7 @@ class PrismaInstallmentRepository extends IInstallmentRepository {
                 LEFT JOIN boleto_a_receber ua ON i.installment_id = ua.installment_id
                 LEFT JOIN person_documents_json pdj ON p.person_id = pdj.person_id
                 WHERE m.movement_status_id = 23
-                ${this.prisma.Prisma.raw(searchCondition)}
+                ${Prisma.sql([searchCondition])}
                 ORDER BY i.due_date DESC
                 LIMIT ${take} OFFSET ${skip}
             `;
