@@ -7,11 +7,11 @@ const customFormat = format.combine(
   format.json(),
   format.printf(({ timestamp, level, message, metadata, stack }) => {
     let log = `${timestamp} [${level.toUpperCase()}]: ${message}`;
-    if (metadata.duration) {
-      log += ` (Duration: ${metadata.duration}ms)`;
+    if (metadata) {
+      log += `\nMetadata: ${JSON.stringify(metadata, null, 2)}`;
     }
-    if (metadata.data) {
-      log += `\nData: ${JSON.stringify(metadata.data, null, 2)}`;
+    if (metadata && metadata.duration) {
+      log += ` (Duration: ${metadata.duration}ms)`;
     }
     if (stack) {
       log += `\nStack: ${stack}`;

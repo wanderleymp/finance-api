@@ -7,13 +7,14 @@ class InstallmentController {
 
     async getAllInstallments(req, res) {
         try {
-            const { skip = 0, take = 10, status, payment_id, due_date_start, due_date_end } = req.query;
+            const { skip = 0, take = 10, status, payment_id, due_date_start, due_date_end, search } = req.query;
 
             const filters = {
                 status,
                 payment_id: payment_id ? parseInt(payment_id) : undefined,
                 due_date_start,
-                due_date_end
+                due_date_end,
+                search
             };
 
             logger.info('Getting all installments', { filters, skip, take });
