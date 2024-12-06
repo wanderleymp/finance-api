@@ -1,7 +1,55 @@
 const express = require('express');
 const router = express.Router();
-const { PrismaClient } = require('@prisma/client');
-const prisma = new PrismaClient();
+const MovementController = require('../controllers/MovementController');
+const PrismaMovementRepository = require('../repositories/implementations/PrismaMovementRepository');
+const validateMovement = require('../middlewares/validateMovement');
+const authenticateToken = require('../middlewares/authMiddleware');
+
+const movementRepository = new PrismaMovementRepository();
+const movementController = new MovementController(movementRepository);
+
+/**
+ * @swagger
+ * components:
+ *   schemas:
+ *     Movement:
+ *       type: object
+ *       required:
+ *         - movement_date
+ *         - person_id
+ *         - total_amount
+ *         - items
+ *       properties:
+ *         movement_date:
+ *           type: string
+ *           format: date-time
+ *           description: Data do movimento
+ *         person_id:
+ *           type: integer
+ *           description: ID da pessoa relacionada
+ *         total_amount:
+ *           type: number
+ *           format: float
+ *           description: Valor total do movimento
+ *         description:
+ *           type: string
+ *           description: Descrição do movimento
+ *         items:
+ *           type: array
+ *           items:
+ *             type: object
+ *             required:
+ *               - product_id
+ *               - quantity
+ *               - unit_value
+ *             properties:
+ *               product_id:
+ *                 type: integer
+ *               quantity:
+ *                 type: number
+ *               unit_value:
+ *                 type: number
+ */
 
 /**
  * @swagger
@@ -9,41 +57,64 @@ const prisma = new PrismaClient();
  *   get:
  *     summary: Lista todos os movimentos
  *     tags: [Movements]
+ *     security:
+ *       - bearerAuth: []
  *     parameters:
  *       - in: query
- *         name: movement_type_id
+ *         name: page
  *         schema:
  *           type: integer
- *         description: ID do tipo de movimento (1 para vendas, 2 para compras)
+ *         description: Número da página
+ *       - in: query
+ *         name: limit
+ *         schema:
+ *           type: integer
+ *         description: Itens por página
+ *       - in: query
+ *         name: sort_field
+ *         schema:
+ *           type: string
+ *         description: Campo para ordenação
+ *       - in: query
+ *         name: sort_order
+ *         schema:
+ *           type: string
+ *           enum: [asc, desc]
+ *         description: Ordem da ordenação
+ *       - in: query
+ *         name: search
+ *         schema:
+ *           type: string
+ *         description: Termo de busca
  *     responses:
  *       200:
- *         description: Lista de movimentos
+ *         description: Lista de movimentos paginada
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 data:
+ *                   type: array
+ *                   items:
+ *                     $ref: '#/components/schemas/Movement'
+ *                 pagination:
+ *                   type: object
+ *                   properties:
+ *                     total:
+ *                       type: integer
+ *                     totalPages:
+ *                       type: integer
+ *                     currentPage:
+ *                       type: integer
+ *                     perPage:
+ *                       type: integer
+ *                     hasNext:
+ *                       type: boolean
+ *                     hasPrevious:
+ *                       type: boolean
  */
-router.get('/', async (req, res) => {
-    try {
-        const { movement_type_id } = req.query;
-        const movements = await prisma.movements.findMany({
-            where: {
-                movement_type_id: movement_type_id ? parseInt(movement_type_id) : undefined,
-                is_template: false
-            },
-            include: {
-                persons: true,
-                licenses: true,
-                movement_statuses: true,
-                movement_items: {
-                    include: {
-                        services: true
-                    }
-                }
-            }
-        });
-        res.json(movements);
-    } catch (error) {
-        console.error(error);
-        res.status(500).json({ error: 'Erro ao buscar movimentos' });
-    }
-});
+router.get('/', authenticateToken, (req, res) => movementController.getAllMovements(req, res));
 
 /**
  * @swagger
@@ -51,6 +122,8 @@ router.get('/', async (req, res) => {
  *   get:
  *     summary: Busca um movimento pelo ID
  *     tags: [Movements]
+ *     security:
+ *       - bearerAuth: []
  *     parameters:
  *       - in: path
  *         name: id
@@ -60,36 +133,34 @@ router.get('/', async (req, res) => {
  *     responses:
  *       200:
  *         description: Movimento encontrado
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/Movement'
  *       404:
  *         description: Movimento não encontrado
  */
-router.get('/:id', async (req, res) => {
-    try {
-        const { id } = req.params;
-        const movement = await prisma.movements.findUnique({
-            where: { movement_id: parseInt(id) },
-            include: {
-                persons: true,
-                licenses: true,
-                movement_statuses: true,
-                movement_items: {
-                    include: {
-                        services: true
-                    }
-                }
-            }
-        });
+router.get('/:id', authenticateToken, (req, res) => movementController.getMovementById(req, res));
 
-        if (!movement) {
-            return res.status(404).json({ error: 'Movimento não encontrado' });
-        }
-
-        res.json(movement);
-    } catch (error) {
-        console.error(error);
-        res.status(500).json({ error: 'Erro ao buscar movimento' });
-    }
-});
+/**
+ * @swagger
+ * /api/movements/{id}/history:
+ *   get:
+ *     summary: Busca o histórico de um movimento
+ *     tags: [Movements]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: integer
+ *     responses:
+ *       200:
+ *         description: Histórico do movimento
+ */
+router.get('/:id/history', authenticateToken, (req, res) => movementController.getMovementHistory(req, res));
 
 /**
  * @swagger
@@ -97,63 +168,23 @@ router.get('/:id', async (req, res) => {
  *   post:
  *     summary: Cria um novo movimento
  *     tags: [Movements]
+ *     security:
+ *       - bearerAuth: []
  *     requestBody:
  *       required: true
  *       content:
  *         application/json:
  *           schema:
- *             type: object
- *             required:
- *               - movement_date
- *               - person_id
- *               - total_amount
- *               - license_id
- *               - movement_type_id
- *               - items
+ *             $ref: '#/components/schemas/Movement'
  *     responses:
  *       201:
  *         description: Movimento criado com sucesso
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/Movement'
  */
-router.post('/', async (req, res) => {
-    try {
-        const {
-            movement_date,
-            person_id,
-            total_amount,
-            license_id,
-            movement_type_id,
-            description,
-            items
-        } = req.body;
-
-        const movement = await prisma.movements.create({
-            data: {
-                movement_date: new Date(movement_date),
-                person_id: parseInt(person_id),
-                total_amount: parseFloat(total_amount),
-                license_id: parseInt(license_id),
-                movement_type_id: parseInt(movement_type_id),
-                description,
-                movement_items: {
-                    create: items.map(item => ({
-                        service_id: parseInt(item.service_id),
-                        quantity: parseFloat(item.quantity),
-                        unit_value: parseFloat(item.unit_value),
-                        total_value: parseFloat(item.quantity) * parseFloat(item.unit_value)
-                    }))
-                }
-            },
-            include: {
-                movement_items: true
-            }
-        });
-
-        res.status(201).json(movement);
-    } catch (error) {
-        console.error(error);
-        res.status(500).json({ error: 'Erro ao criar movimento' });
-    }
-});
+router.post('/', [authenticateToken, validateMovement], (req, res) => movementController.createMovement(req, res));
 
 /**
  * @swagger
@@ -161,71 +192,40 @@ router.post('/', async (req, res) => {
  *   put:
  *     summary: Atualiza um movimento
  *     tags: [Movements]
+ *     security:
+ *       - bearerAuth: []
  *     parameters:
  *       - in: path
  *         name: id
  *         required: true
  *         schema:
  *           type: integer
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             $ref: '#/components/schemas/Movement'
  *     responses:
  *       200:
  *         description: Movimento atualizado com sucesso
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/Movement'
  *       404:
  *         description: Movimento não encontrado
  */
-router.put('/:id', async (req, res) => {
-    try {
-        const { id } = req.params;
-        const {
-            movement_date,
-            person_id,
-            total_amount,
-            license_id,
-            description,
-            items
-        } = req.body;
-
-        // Primeiro, excluir os itens existentes
-        await prisma.movement_items.deleteMany({
-            where: { movement_id: parseInt(id) }
-        });
-
-        // Atualizar o movimento e criar novos itens
-        const movement = await prisma.movements.update({
-            where: { movement_id: parseInt(id) },
-            data: {
-                movement_date: new Date(movement_date),
-                person_id: parseInt(person_id),
-                total_amount: parseFloat(total_amount),
-                license_id: parseInt(license_id),
-                description,
-                movement_items: {
-                    create: items.map(item => ({
-                        service_id: parseInt(item.service_id),
-                        quantity: parseFloat(item.quantity),
-                        unit_value: parseFloat(item.unit_value),
-                        total_value: parseFloat(item.quantity) * parseFloat(item.unit_value)
-                    }))
-                }
-            },
-            include: {
-                movement_items: true
-            }
-        });
-
-        res.json(movement);
-    } catch (error) {
-        console.error(error);
-        res.status(500).json({ error: 'Erro ao atualizar movimento' });
-    }
-});
+router.put('/:id', [authenticateToken, validateMovement], (req, res) => movementController.updateMovement(req, res));
 
 /**
  * @swagger
  * /api/movements/{id}:
  *   delete:
- *     summary: Remove um movimento
+ *     summary: Remove um movimento (soft delete)
  *     tags: [Movements]
+ *     security:
+ *       - bearerAuth: []
  *     parameters:
  *       - in: path
  *         name: id
@@ -233,30 +233,11 @@ router.put('/:id', async (req, res) => {
  *         schema:
  *           type: integer
  *     responses:
- *       200:
+ *       204:
  *         description: Movimento removido com sucesso
  *       404:
  *         description: Movimento não encontrado
  */
-router.delete('/:id', async (req, res) => {
-    try {
-        const { id } = req.params;
-
-        // Primeiro, excluir os itens do movimento
-        await prisma.movement_items.deleteMany({
-            where: { movement_id: parseInt(id) }
-        });
-
-        // Depois, excluir o movimento
-        await prisma.movements.delete({
-            where: { movement_id: parseInt(id) }
-        });
-
-        res.json({ message: 'Movimento removido com sucesso' });
-    } catch (error) {
-        console.error(error);
-        res.status(500).json({ error: 'Erro ao remover movimento' });
-    }
-});
+router.delete('/:id', authenticateToken, (req, res) => movementController.deleteMovement(req, res));
 
 module.exports = router;

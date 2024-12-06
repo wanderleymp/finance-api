@@ -1,197 +1,259 @@
 const { PrismaClient } = require('@prisma/client');
 const IMovementRepository = require('../interfaces/IMovementRepository');
 const logger = require('../../../config/logger');
-const PrismaBoletoRepository = require('./PrismaBoletoRepository');
+const { MovementError, MovementNotFoundError } = require('../../utils/errors/MovementError');
 
 class PrismaMovementRepository extends IMovementRepository {
     constructor() {
         super();
-        this.prisma = new PrismaClient({ log: [] });
-        this.boletoRepository = new PrismaBoletoRepository();
+        this.prisma = new PrismaClient({
+            log: ['error', 'warn'],
+            errorFormat: 'minimal'
+        });
     }
 
     async createMovement(data) {
         try {
             const movement = await this.prisma.movements.create({
                 data: {
-                    ...data,
-                    movement_type_id: parseInt(data.movement_type_id)
+                    movement_date: new Date(data.movement_date),
+                    person_id: parseInt(data.person_id),
+                    total_amount: parseFloat(data.total_amount),
+                    description: data.description,
+                    license_id: parseInt(data.license_id),
+                    total_items: parseFloat(data.total_amount), 
+                    movement_items: {
+                        create: data.items.map(item => ({
+                            item_id: parseInt(item.product_id),
+                            quantity: parseFloat(item.quantity),
+                            unit_price: parseFloat(item.unit_value),
+                            total_price: parseFloat(item.quantity) * parseFloat(item.unit_value)
+                        }))
+                    }
                 },
-                include: {
+                select: {
+                    movement_id: true,
+                    movement_date: true,
+                    total_amount: true,
+                    description: true,
+                    movement_type_id: true,
+                    movement_status_id: true,
                     persons: {
                         select: {
                             person_id: true,
-                            name: true,
-                            document: true,
-                            email: true
-                        }
-                    },
-                    movement_items: {
-                        include: {
-                            products: {
+                            full_name: true,
+                            fantasy_name: true,
+                            person_documents: {
                                 select: {
-                                    product_id: true,
-                                    name: true,
-                                    code: true
+                                    document_value: true,
+                                    document_types: {
+                                        select: {
+                                            description: true
+                                        }
+                                    }
                                 }
                             }
                         }
                     },
-                    movement_payments: {
-                        include: {
-                            payment_methods: {
-                                select: {
-                                    payment_method_id: true,
-                                    name: true
-                                }
-                            }
-                        }
-                    },
-                    movement_types: true
-                }
-            });
-
-            return movement;
-        } catch (error) {
-            logger.error('Error creating movement:', error);
-            throw error;
-        }
-    }
-
-    async getMovementById(id) {
-        try {
-            const movement = await this.prisma.movements.findUnique({
-                where: { movement_id: parseInt(id) },
-                include: {
-                    persons: {
+                    movement_types: {
                         select: {
-                            person_id: true,
-                            name: true,
-                            document: true,
-                            email: true
+                            movement_type_id: true,
+                            type_name: true
                         }
                     },
-                    movement_items: {
-                        include: {
-                            products: {
-                                select: {
-                                    product_id: true,
-                                    name: true,
-                                    code: true
-                                }
-                            }
+                    movement_statuses: {
+                        select: {
+                            movement_status_id: true,
+                            status_name: true,
+                            description: true
                         }
-                    },
-                    movement_payments: {
-                        include: {
-                            payment_methods: {
-                                select: {
-                                    payment_method_id: true,
-                                    name: true
-                                }
-                            }
-                        }
-                    },
-                    movement_types: true
+                    }
                 }
             });
 
+            logger.info('Movement created successfully', { movement_id: movement.movement_id });
             return movement;
         } catch (error) {
-            logger.error('Error fetching movement:', error);
+            logger.error('Error creating movement:', { error: error.message, stack: error.stack });
+            if (error.code === 'P2002') {
+                throw new MovementError('Unique constraint violation', 400);
+            } else if (error.code === 'P2003') {
+                throw new MovementError('Foreign key constraint violation', 400);
+            }
             throw error;
         }
     }
 
     async getAllMovements(filters = {}, skip = 0, take = 10, sort = { field: 'movement_date', order: 'desc' }) {
         try {
-            // Construir a cláusula where baseada nos filtros
-            const where = {
-                ...filters
-            };
+            const where = {};
 
-            // Tratar filtros especiais
-            if (where.movement_date) {
+            if (filters.movement_date) {
                 where.movement_date = {
-                    gte: where.movement_date.gte,
-                    lte: where.movement_date.lte
+                    gte: new Date(filters.movement_date.gte),
+                    lte: new Date(filters.movement_date.lte)
                 };
             }
 
-            if (where.total_amount) {
+            if (filters.total_amount) {
                 where.total_amount = {
-                    gte: where.total_amount.gte,
-                    lte: where.total_amount.lte
+                    gte: parseFloat(filters.total_amount.gte),
+                    lte: parseFloat(filters.total_amount.lte)
                 };
             }
 
-            // Construir ordenação
-            const orderBy = {
-                [sort.field]: sort.order
-            };
+            if (filters.person_id) {
+                where.person_id = parseInt(filters.person_id);
+            }
 
-            // Buscar o total de registros
-            const total = await this.prisma.movements.count({ where });
+            if (filters.license_id) {
+                where.license_id = parseInt(filters.license_id);
+            }
 
-            // Buscar os registros da página atual
-            const movements = await this.prisma.movements.findMany({
-                where,
-                skip,
-                take,
-                orderBy,
-                include: {
-                    persons: {
-                        select: {
-                            person_id: true,
-                            name: true,
-                            document: true,
-                            email: true
-                        }
-                    },
-                    movement_items: {
-                        include: {
-                            products: {
-                                select: {
-                                    product_id: true,
-                                    name: true,
-                                    code: true
-                                }
+            if (filters.movement_type_id) {
+                where.movement_type_id = parseInt(filters.movement_type_id);
+            }
+
+            if (filters.movement_status_id) {
+                where.movement_status_id = parseInt(filters.movement_status_id);
+            }
+
+            if (filters.search) {
+                where.OR = [
+                    { description: { contains: filters.search, mode: 'insensitive' } },
+                    { persons: { full_name: { contains: filters.search, mode: 'insensitive' } } },
+                    { persons: { fantasy_name: { contains: filters.search, mode: 'insensitive' } } },
+                    { persons: { 
+                        person_documents: {
+                            some: {
+                                document_value: { contains: filters.search, mode: 'insensitive' }
                             }
                         }
-                    },
-                    movement_payments: {
-                        include: {
-                            payment_methods: {
-                                select: {
-                                    payment_method_id: true,
-                                    name: true
+                    }}
+                ];
+            }
+
+            const [movements, total] = await Promise.all([
+                this.prisma.movements.findMany({
+                    where,
+                    skip,
+                    take,
+                    orderBy: { [sort.field]: sort.order },
+                    select: {
+                        movement_id: true,
+                        movement_date: true,
+                        total_amount: true,
+                        description: true,
+                        movement_type_id: true,
+                        movement_status_id: true,
+                        persons: {
+                            select: {
+                                person_id: true,
+                                full_name: true,
+                                fantasy_name: true,
+                                person_documents: {
+                                    select: {
+                                        document_value: true,
+                                        document_types: {
+                                            select: {
+                                                description: true
+                                            }
+                                        }
+                                    }
                                 }
                             }
+                        },
+                        movement_types: {
+                            select: {
+                                movement_type_id: true,
+                                type_name: true
+                            }
+                        },
+                        movement_statuses: {
+                            select: {
+                                movement_status_id: true,
+                                status_name: true,
+                                description: true
+                            }
                         }
-                    },
-                    movement_types: true
-                }
-            });
-
-            // Calcular metadados da paginação
-            const totalPages = Math.ceil(total / take);
-            const currentPage = Math.floor(skip / take) + 1;
-            const hasNext = currentPage < totalPages;
-            const hasPrevious = currentPage > 1;
+                    }
+                }),
+                this.prisma.movements.count({ where })
+            ]);
 
             return {
                 data: movements,
                 pagination: {
                     total,
-                    totalPages,
-                    currentPage,
+                    totalPages: Math.ceil(total / take),
+                    currentPage: Math.floor(skip / take) + 1,
                     perPage: take,
-                    hasNext,
-                    hasPrevious
+                    hasNext: skip + take < total,
+                    hasPrevious: skip > 0
                 }
             };
         } catch (error) {
-            logger.error('Error fetching movements:', error);
+            logger.error('Error fetching movements:', { error: error.message, stack: error.stack });
+            throw error;
+        }
+    }
+
+    async getMovementById(id) {
+        try {
+            const movement = await this.prisma.movements.findFirst({
+                where: { 
+                    movement_id: parseInt(id)
+                },
+                select: {
+                    movement_id: true,
+                    movement_date: true,
+                    total_amount: true,
+                    description: true,
+                    movement_type_id: true,
+                    movement_status_id: true,
+                    persons: {
+                        select: {
+                            person_id: true,
+                            full_name: true,
+                            fantasy_name: true,
+                            person_documents: {
+                                select: {
+                                    document_value: true,
+                                    document_types: {
+                                        select: {
+                                            description: true
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    },
+                    movement_types: {
+                        select: {
+                            movement_type_id: true,
+                            type_name: true
+                        }
+                    },
+                    movement_statuses: {
+                        select: {
+                            movement_status_id: true,
+                            status_name: true,
+                            description: true
+                        }
+                    }
+                }
+            });
+
+            if (!movement) {
+                throw new MovementNotFoundError(id);
+            }
+
+            return movement;
+        } catch (error) {
+            logger.error('Error fetching movement:', { 
+                error: error.message, 
+                movement_id: id 
+            });
             throw error;
         }
     }
@@ -199,106 +261,62 @@ class PrismaMovementRepository extends IMovementRepository {
     async updateMovement(id, data) {
         try {
             const updateData = {
-                ...data
+                ...(data.movement_date && { movement_date: new Date(data.movement_date) }),
+                ...(data.person_id && { person_id: parseInt(data.person_id) }),
+                ...(data.total_amount && { total_amount: parseFloat(data.total_amount) }),
+                ...(data.description && { description: data.description }),
+                ...(data.license_id && { license_id: parseInt(data.license_id) })
             };
 
             const movement = await this.prisma.movements.update({
                 where: { movement_id: parseInt(id) },
                 data: updateData,
-                include: {
+                select: {
+                    movement_id: true,
+                    movement_date: true,
+                    total_amount: true,
+                    description: true,
+                    movement_type_id: true,
+                    movement_status_id: true,
                     persons: {
                         select: {
                             person_id: true,
-                            name: true,
-                            document: true,
-                            email: true
-                        }
-                    },
-                    movement_items: {
-                        include: {
-                            products: {
+                            full_name: true,
+                            fantasy_name: true,
+                            person_documents: {
                                 select: {
-                                    product_id: true,
-                                    name: true,
-                                    code: true
+                                    document_value: true,
+                                    document_types: {
+                                        select: {
+                                            description: true
+                                        }
+                                    }
                                 }
                             }
                         }
                     },
-                    movement_payments: {
-                        include: {
-                            payment_methods: {
-                                select: {
-                                    payment_method_id: true,
-                                    name: true
-                                }
-                            }
+                    movement_types: {
+                        select: {
+                            movement_type_id: true,
+                            type_name: true
                         }
                     },
-                    movement_types: true
+                    movement_statuses: {
+                        select: {
+                            movement_status_id: true,
+                            status_name: true,
+                            description: true
+                        }
+                    }
                 }
             });
 
             return movement;
         } catch (error) {
-            logger.error('Error updating movement:', error);
-            throw error;
-        }
-    }
-
-    async updateMovementStatus(id, status_id) {
-        try {
-            // Atualizar status do movimento
-            const updatedMovement = await this.prisma.movements.update({
-                where: { movement_id: parseInt(id) },
-                data: { movement_status_id: parseInt(status_id) }
-            });
-
-            // Buscar boletos A_RECEBER relacionados ao movimento
-            const boletosToCancel = await this.prisma.$queryRaw`
-                select b.external_boleto_id
-                from movements m
-                join movement_payments mp on m.movement_id = mp.movement_id
-                join installments i on mp.payment_id = i.payment_id
-                left join boletos b on i.installment_id = b.installment_id
-                where 
-                m.movement_id = ${parseInt(id)}
-                and b.status = 'A_RECEBER'
-            `;
-
-            // Se encontrou boletos, cancelar cada um
-            if (boletosToCancel && boletosToCancel.length > 0) {
-                logger.info('Found boletos to cancel', { 
-                    movement_id: id, 
-                    boletos: boletosToCancel 
-                });
-
-                for (const boleto of boletosToCancel) {
-                    try {
-                        await this.boletoRepository.cancelBoleto(boleto.external_boleto_id);
-                        logger.info('Boleto cancelled successfully', { 
-                            movement_id: id, 
-                            external_boleto_id: boleto.external_boleto_id 
-                        });
-                    } catch (error) {
-                        logger.error('Error cancelling boleto', { 
-                            movement_id: id, 
-                            external_boleto_id: boleto.external_boleto_id,
-                            error: error.message 
-                        });
-                        // Não interrompe o processo se falhar o cancelamento de um boleto
-                    }
-                }
+            logger.error('Error updating movement:', { error: error.message, movement_id: id });
+            if (error.code === 'P2025') {
+                throw new MovementNotFoundError(id);
             }
-
-            return updatedMovement;
-        } catch (error) {
-            logger.error('Error updating movement status', { 
-                error: error.message, 
-                stack: error.stack,
-                movement_id: id,
-                status_id 
-            });
             throw error;
         }
     }
@@ -308,10 +326,28 @@ class PrismaMovementRepository extends IMovementRepository {
             await this.prisma.movements.delete({
                 where: { movement_id: parseInt(id) }
             });
-
-            return true;
         } catch (error) {
-            logger.error('Error deleting movement:', error);
+            logger.error('Error deleting movement:', { error: error.message, movement_id: id });
+            if (error.code === 'P2025') {
+                throw new MovementNotFoundError(id);
+            }
+            throw error;
+        }
+    }
+
+    async getMovementHistory(id) {
+        try {
+            const history = await this.prisma.movement_status_history.findMany({
+                where: { movement_id: parseInt(id) },
+                orderBy: { changed_at: 'desc' },
+                include: {
+                    movement_statuses: true
+                }
+            });
+
+            return history;
+        } catch (error) {
+            logger.error('Error fetching movement history:', { error: error.message, movement_id: id });
             throw error;
         }
     }

@@ -157,7 +157,6 @@ model chat_channels {
   channel_name String    @unique @db.VarChar(50)
   created_at   DateTime? @default(now()) @db.Timestamp(6)
   updated_at   DateTime? @default(now()) @db.Timestamp(6)
-  chats        chats[]
 
   @@index([channel_name], map: "idx_chat_channels_channel_name")
 }
@@ -169,7 +168,6 @@ model chat_messages {
   sent_at      DateTime? @default(now()) @db.Timestamp(6)
   delivered_at DateTime? @db.Timestamp(6)
   read_at      DateTime? @db.Timestamp(6)
-  chats        chats     @relation(fields: [chat_id], references: [chat_id], onDelete: Cascade)
 
   @@index([chat_id], map: "idx_chat_messages_chat_id")
 }
@@ -177,7 +175,6 @@ model chat_messages {
 model chat_person {
   chat_id    Int
   contact_id Int
-  chats      chats    @relation(fields: [chat_id], references: [chat_id], onDelete: Cascade)
   contacts   contacts @relation(fields: [contact_id], references: [contact_id], onDelete: Cascade)
 
   @@id([chat_id, contact_id])
@@ -191,25 +188,25 @@ model chat_types {
   category     String?   @db.VarChar(50)
   created_at   DateTime? @default(now()) @db.Timestamp(6)
   updated_at   DateTime? @default(now()) @db.Timestamp(6)
-  chats        chats[]
 
   @@index([category], map: "idx_chat_types_category")
 }
 
 model chats {
-  chat_id       Int             @id @default(autoincrement())
-  subject       String          @db.VarChar(255)
-  chat_type_id  Int
-  channel_id    Int
-  created_at    DateTime?       @default(now()) @db.Timestamp(6)
-  updated_at    DateTime?       @default(now()) @db.Timestamp(6)
-  chat_messages chat_messages[]
-  chat_person   chat_person[]
-  chat_channels chat_channels   @relation(fields: [channel_id], references: [channel_id])
-  chat_types    chat_types      @relation(fields: [chat_type_id], references: [chat_type_id])
-
-  @@index([channel_id], map: "idx_chats_channel_id")
-  @@index([chat_type_id], map: "idx_chats_chat_type_id")
+  chat_id             Int            @id @default(autoincrement())
+  person_id           Int
+  channel_id          Int?
+  chat_classification String?        @db.VarChar(255)
+  chat_priority       String?        @default("medium") @db.VarChar(50)
+  chat_status         String?        @default("not_attended") @db.VarChar(50)
+  assigned_to         Int?
+  is_internal         Boolean?       @default(false)
+  created_at          DateTime?      @default(now()) @db.Timestamp(6)
+  updated_at          DateTime?      @default(now()) @db.Timestamp(6)
+  user_accounts       user_accounts? @relation(fields: [assigned_to], references: [user_id], onUpdate: NoAction, map: "fk_assigned_to")
+  chat_channels       channels?      @relation(fields: [channel_id], references: [channel_id], onUpdate: NoAction, map: "fk_channel")
+  persons             persons        @relation(fields: [person_id], references: [person_id], onDelete: Cascade, onUpdate: NoAction, map: "fk_person")
+  messages            messages[]
 }
 
 model cnae {
@@ -223,20 +220,19 @@ model cnae {
 model contact_types {
   contact_type_id Int        @id @default(autoincrement())
   description     String     @unique(map: "contact_types_description_unique") @db.VarChar(50)
+  channels        channels[]
   contacts        contacts[]
 }
 
 /// This model contains an expression index which requires additional setup for migrations. Visit https://pris.ly/d/expression-indexes for more info.
 model contacts {
-  contact_id                                      Int               @id @default(autoincrement())
-  contact_type_id                                 Int
-  contact_value                                   String            @db.VarChar(100)
-  contact_name                                    String?           @db.VarChar(150)
-  chat_person                                     chat_person[]
-  contact_types                                   contact_types     @relation(fields: [contact_type_id], references: [contact_type_id], onDelete: Cascade, onUpdate: NoAction, map: "fk_contact_type")
-  messages_messages_receiver_contact_idTocontacts messages[]        @relation("messages_receiver_contact_idTocontacts")
-  messages_messages_sender_contact_idTocontacts   messages[]        @relation("messages_sender_contact_idTocontacts")
-  person_contacts                                 person_contacts[]
+  contact_id      Int               @id @default(autoincrement())
+  contact_type_id Int
+  contact_value   String            @db.VarChar(100)
+  contact_name    String?           @db.VarChar(150)
+  chat_person     chat_person[]
+  contact_types   contact_types     @relation(fields: [contact_type_id], references: [contact_type_id], onDelete: Cascade, onUpdate: NoAction, map: "fk_contact_type")
+  person_contacts person_contacts[]
 }
 
 model contract_adjustment_history {
@@ -540,7 +536,7 @@ model items {
   updated_at  DateTime? @default(now()) @db.Timestamp(6)
   active      Boolean   @default(true)
   deleted_at  DateTime? @db.Timestamp(6)
-  type        String?   @db.VarChar(20)
+  products    products?
   services    services?
 }
 
@@ -590,29 +586,25 @@ model licenses {
 }
 
 model message_attachments {
-  attachment_id Int      @id @default(autoincrement())
+  attachment_id Int     @id @default(autoincrement())
   message_id    Int
-  file_path     String   @db.VarChar(255)
-  file_type     String?  @db.VarChar(50)
-  messages      messages @relation(fields: [message_id], references: [message_id], onDelete: NoAction, onUpdate: NoAction)
+  file_path     String  @db.VarChar(255)
+  file_type     String? @db.VarChar(50)
 }
 
 model message_channels {
-  channel_id   Int        @id @default(autoincrement())
-  channel_name String     @unique @db.VarChar(50)
-  messages     messages[]
+  channel_id   Int    @id @default(autoincrement())
+  channel_name String @unique @db.VarChar(50)
 }
 
 model message_directions {
-  direction_id   Int        @id @default(autoincrement())
-  direction_name String     @unique @db.VarChar(20)
-  messages       messages[]
+  direction_id   Int    @id @default(autoincrement())
+  direction_name String @unique @db.VarChar(20)
 }
 
 model message_entities {
-  message_entity_id Int        @id @default(autoincrement())
-  entity_name       String     @unique @db.VarChar(50)
-  messages          messages[]
+  message_entity_id Int    @id @default(autoincrement())
+  entity_name       String @unique @db.VarChar(50)
 }
 
 model message_logs {
@@ -624,9 +616,8 @@ model message_logs {
 }
 
 model message_status {
-  status_id   Int        @id @default(autoincrement())
-  status_name String     @unique @db.VarChar(50)
-  messages    messages[]
+  status_id   Int    @id @default(autoincrement())
+  status_name String @unique @db.VarChar(50)
 }
 
 model message_statuses {
@@ -645,23 +636,15 @@ model message_templates {
 }
 
 model messages {
-  message_id                                      Int                   @id @default(autoincrement())
-  channel_id                                      Int
-  direction_id                                    Int
-  content                                         String
-  timestamp                                       DateTime              @default(now()) @db.Timestamp(6)
-  sender_contact_id                               Int
-  receiver_contact_id                             Int
-  message_entity_id                               Int?
-  related_entity_id                               Int?
-  status_id                                       Int?
-  message_attachments                             message_attachments[]
-  message_channels                                message_channels      @relation(fields: [channel_id], references: [channel_id], onDelete: NoAction, onUpdate: NoAction)
-  message_directions                              message_directions    @relation(fields: [direction_id], references: [direction_id], onDelete: NoAction, onUpdate: NoAction)
-  message_entities                                message_entities?     @relation(fields: [message_entity_id], references: [message_entity_id], onDelete: NoAction, onUpdate: NoAction)
-  contacts_messages_receiver_contact_idTocontacts contacts              @relation("messages_receiver_contact_idTocontacts", fields: [receiver_contact_id], references: [contact_id], onDelete: NoAction, onUpdate: NoAction)
-  contacts_messages_sender_contact_idTocontacts   contacts              @relation("messages_sender_contact_idTocontacts", fields: [sender_contact_id], references: [contact_id], onDelete: NoAction, onUpdate: NoAction)
-  message_status                                  message_status?       @relation(fields: [status_id], references: [status_id], onDelete: NoAction, onUpdate: NoAction)
+  message_id      Int       @id @default(autoincrement())
+  chat_id         Int
+  sender_id       Int?
+  receiver_id     Int?
+  message_content String
+  message_status  String?   @default("pending") @db.VarChar(50)
+  created_at      DateTime? @default(now()) @db.Timestamp(6)
+  updated_at      DateTime? @default(now()) @db.Timestamp(6)
+  chats           chats     @relation(fields: [chat_id], references: [chat_id], onDelete: Cascade, onUpdate: NoAction, map: "fk_chat")
 }
 
 model movement_items {
@@ -1055,6 +1038,7 @@ model persons {
   social_capital                                     Decimal?              @db.Decimal(15, 2)
   updated_at                                         DateTime?             @default(now()) @db.Timestamp(6)
   addresses                                          addresses?
+  chats                                              chats[]
   contracts_recurring                                contracts_recurring[]
   cte_cte_receiver_person_idTopersons                cte[]                 @relation("cte_receiver_person_idTopersons")
   cte_cte_sender_person_idTopersons                  cte[]                 @relation("cte_sender_person_idTopersons")
@@ -1144,12 +1128,13 @@ model processes_types {
 }
 
 model product_groups {
-  product_group_id Int       @id @default(autoincrement())
-  name             String    @db.VarChar(255)
+  product_group_id Int        @id @default(autoincrement())
+  name             String     @db.VarChar(255)
   description      String?
-  ncm              String?   @db.VarChar(10)
-  created_at       DateTime? @default(now()) @db.Timestamp(6)
-  updated_at       DateTime? @default(now()) @db.Timestamp(6)
+  ncm              String?    @db.VarChar(10)
+  created_at       DateTime?  @default(now()) @db.Timestamp(6)
+  updated_at       DateTime?  @default(now()) @db.Timestamp(6)
+  products         products[]
 }
 
 model profile_permissions {
@@ -1355,15 +1340,17 @@ model temporary_tokens {
 }
 
 model user_accounts {
-  user_id                                                     Int              @id @default(autoincrement())
-  username                                                    String           @db.VarChar(50)
-  password                                                    String           @db.VarChar(255)
-  person_id                                                   Int              @unique(map: "unique_person_user")
+  user_id                                                     Int                @id @default(autoincrement())
+  username                                                    String             @db.VarChar(50)
+  password                                                    String             @db.VarChar(255)
+  person_id                                                   Int                @unique(map: "unique_person_user")
   profile_id                                                  Int
-  movement_items_movement_items_salesperson_idTouser_accounts movement_items[] @relation("movement_items_salesperson_idTouser_accounts")
-  movement_items_movement_items_technician_idTouser_accounts  movement_items[] @relation("movement_items_technician_idTouser_accounts")
-  persons                                                     persons          @relation(fields: [person_id], references: [person_id], onDelete: Cascade, onUpdate: NoAction)
-  profiles                                                    profiles         @relation(fields: [profile_id], references: [profile_id], onDelete: Cascade, onUpdate: NoAction)
+  chats                                                       chats[]
+  movement_items_movement_items_salesperson_idTouser_accounts movement_items[]   @relation("movement_items_salesperson_idTouser_accounts")
+  movement_items_movement_items_technician_idTouser_accounts  movement_items[]   @relation("movement_items_technician_idTouser_accounts")
+  persons                                                     persons            @relation(fields: [person_id], references: [person_id], onDelete: Cascade, onUpdate: NoAction)
+  profiles                                                    profiles           @relation(fields: [profile_id], references: [profile_id], onDelete: Cascade, onUpdate: NoAction)
+  user_departments                                            user_departments[]
   user_license                                                user_license[]
   user_roles                                                  user_roles[]
 }
@@ -1423,4 +1410,58 @@ model v_model_movement_id {
   model_movement_id Int?
 
   @@ignore
+}
+
+model channels {
+  channel_id      Int           @id @default(autoincrement())
+  channel_name    String        @db.VarChar(255)
+  contact_type_id Int
+  contact_value   String?       @db.VarChar(20)
+  is_active       Boolean?      @default(true)
+  department_id   Int?
+  created_at      DateTime?     @default(now()) @db.Timestamp(6)
+  updated_at      DateTime?     @default(now()) @db.Timestamp(6)
+  contact_types   contact_types @relation(fields: [contact_type_id], references: [contact_type_id], onDelete: Cascade, onUpdate: NoAction, map: "fk_contact_type")
+  departments     departments?  @relation(fields: [department_id], references: [department_id], onDelete: Cascade, onUpdate: NoAction, map: "fk_department")
+  chats           chats[]
+}
+
+model chat_logs {
+  chat_log_id   Int       @id @default(autoincrement())
+  chat_id       Int
+  event_type    String    @db.VarChar(255)
+  event_details Json?
+  performed_by  Int?
+  created_at    DateTime? @default(now()) @db.Timestamp(6)
+}
+
+model departments {
+  department_id    Int                @id @default(autoincrement())
+  department_name  String             @unique @db.VarChar(255)
+  permissions      Json?
+  created_at       DateTime?          @default(now()) @db.Timestamp(6)
+  channels         channels[]
+  user_departments user_departments[]
+}
+
+model products {
+  product_id       Int             @id @default(autoincrement())
+  item_id          Int             @unique
+  weight           Decimal?        @db.Decimal(10, 2)
+  dimensions       String?         @db.VarChar(50)
+  manufacturer     String?         @db.VarChar(255)
+  product_group_id Int?
+  product_groups   product_groups? @relation(fields: [product_group_id], references: [product_group_id], onUpdate: NoAction, map: "fk_product_group")
+  items            items           @relation(fields: [item_id], references: [item_id], onDelete: Cascade, onUpdate: NoAction, map: "fk_product_item")
+}
+
+model user_departments {
+  user_department_id Int           @id @default(autoincrement())
+  user_id            Int
+  department_id      Int
+  created_at         DateTime?     @default(now()) @db.Timestamp(6)
+  departments        departments   @relation(fields: [department_id], references: [department_id], onDelete: Cascade, onUpdate: NoAction, map: "fk_department")
+  user_accounts      user_accounts @relation(fields: [user_id], references: [user_id], onDelete: Cascade, onUpdate: NoAction, map: "fk_user")
+
+  @@unique([user_id, department_id], map: "unique_user_department")
 }

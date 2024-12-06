@@ -10,56 +10,58 @@ class PrismaServiceRepository extends IServiceRepository {
 
     async getAllServices(filters = {}, skip = 0, take = 10) {
         try {
-            let whereConditions = ['i.deleted_at IS NULL', 'i.active = true'];
-            let queryParams = [];
-            let paramCount = 1;
+            const where = {
+                items: {
+                    deleted_at: null,
+                    active: true,
+                    OR: filters.searchTerm ? [
+                        { name: { contains: filters.searchTerm, mode: 'insensitive' } },
+                        { description: { contains: filters.searchTerm, mode: 'insensitive' } }
+                    ] : undefined
+                },
+                service_group_id: filters.service_group_id ? parseInt(filters.service_group_id) : undefined
+            };
 
-            if (filters.searchTerm) {
-                whereConditions.push(`(i.name ILIKE $${paramCount} OR i.description ILIKE $${paramCount})`);
-                queryParams.push(`%${filters.searchTerm}%`);
-                paramCount++;
-            }
+            // Contagem total
+            const total = await this.prisma.services.count({
+                where
+            });
 
-            if (filters.service_group_id) {
-                whereConditions.push(`s.service_group_id = $${paramCount}`);
-                queryParams.push(parseInt(filters.service_group_id));
-                paramCount++;
-            }
+            // Buscar serviços
+            const services = await this.prisma.services.findMany({
+                where,
+                select: {
+                    items: {
+                        select: {
+                            item_id: true,
+                            code: true,
+                            name: true,
+                            description: true,
+                            price: true,
+                            created_at: true,
+                            updated_at: true,
+                            active: true
+                        }
+                    },
+                    service_group_id: true
+                },
+                skip: parseInt(skip),
+                take: parseInt(take),
+                orderBy: {
+                    items: {
+                        created_at: 'desc'
+                    }
+                }
+            });
 
-            const countQuery = `
-                SELECT COUNT(*) as total
-                FROM services s
-                INNER JOIN items i ON i.item_id = s.item_id
-                WHERE ${whereConditions.join(' AND ')}
-            `;
-            
-            const totalResult = await this.prisma.$queryRawUnsafe(countQuery, ...queryParams);
-            const total = parseInt(totalResult[0].total);
-
-            const query = `
-                SELECT 
-                    i.item_id,
-                    i.code,
-                    i.name,
-                    i.description,
-                    i.price,
-                    i.created_at,
-                    i.updated_at,
-                    s.service_group_id,
-                    i.active
-                FROM services s
-                INNER JOIN items i ON i.item_id = s.item_id
-                WHERE ${whereConditions.join(' AND ')}
-                ORDER BY i.created_at DESC
-                LIMIT $${paramCount} OFFSET $${paramCount + 1}
-            `;
-
-            queryParams.push(parseInt(take), parseInt(skip));
-
-            const result = await this.prisma.$queryRawUnsafe(query, ...queryParams);
+            // Formatar resultado
+            const data = services.map(service => ({
+                ...service.items,
+                service_group_id: service.service_group_id
+            }));
 
             return {
-                data: result,
+                data,
                 pagination: {
                     total,
                     currentPage: Math.floor(skip / take) + 1,
@@ -72,10 +74,8 @@ class PrismaServiceRepository extends IServiceRepository {
             };
 
         } catch (error) {
-            console.error('Erro SQL:', {
+            logger.error('Erro ao buscar serviços:', {
                 message: error.message,
-                code: error.code,
-                meta: error.meta,
                 filters,
                 skip,
                 take
@@ -86,28 +86,39 @@ class PrismaServiceRepository extends IServiceRepository {
 
     async getServiceById(id) {
         try {
-            const query = `
-                SELECT 
-                    i.item_id,
-                    i.code,
-                    i.name,
-                    i.description,
-                    i.price,
-                    i.created_at,
-                    i.updated_at,
-                    s.service_group_id,
-                    i.active
-                FROM services s
-                INNER JOIN items i ON i.item_id = s.item_id
-                WHERE i.item_id = $1
-                AND i.deleted_at IS NULL
-                AND i.active = true
-            `;
+            const service = await this.prisma.services.findFirst({
+                where: {
+                    item_id: parseInt(id),
+                    items: {
+                        deleted_at: null,
+                        active: true
+                    }
+                },
+                select: {
+                    items: {
+                        select: {
+                            item_id: true,
+                            code: true,
+                            name: true,
+                            description: true,
+                            price: true,
+                            created_at: true,
+                            updated_at: true,
+                            active: true
+                        }
+                    },
+                    service_group_id: true
+                }
+            });
 
-            const result = await this.prisma.$queryRawUnsafe(query, parseInt(id));
-            return result[0] || null;
+            if (!service) return null;
+
+            return {
+                ...service.items,
+                service_group_id: service.service_group_id
+            };
         } catch (error) {
-            console.error('Erro ao buscar serviço:', {
+            logger.error('Erro ao buscar serviço:', {
                 id,
                 error: error.message
             });
@@ -117,65 +128,45 @@ class PrismaServiceRepository extends IServiceRepository {
 
     async createService(data) {
         try {
-            // Primeiro, verificar se o código já existe
-            const existingItem = await this.prisma.$queryRaw`
-                SELECT item_id FROM items 
-                WHERE code = ${data.code} 
-                AND deleted_at IS NULL
-            `;
+            // Verificar código duplicado
+            const existingItem = await this.prisma.items.findFirst({
+                where: {
+                    code: data.code,
+                    deleted_at: null
+                }
+            });
 
-            if (existingItem.length > 0) {
+            if (existingItem) {
                 throw new Error('Service code already exists');
             }
 
-            // Inserir primeiro na tabela items
-            const itemQuery = `
-                INSERT INTO items (
-                    code,
-                    name,
-                    description,
-                    price,
-                    active,
-                    created_at,
-                    updated_at
-                ) VALUES (
-                    $1, $2, $3, $4, $5, NOW(), NOW()
-                )
-                RETURNING item_id
-            `;
+            // Criar serviço usando transação
+            const result = await this.prisma.$transaction(async (prisma) => {
+                // Criar item
+                const item = await prisma.items.create({
+                    data: {
+                        code: data.code,
+                        name: data.name,
+                        description: data.description,
+                        price: parseFloat(data.price),
+                        active: true
+                    }
+                });
 
-            const itemParams = [
-                data.code,
-                data.name,
-                data.description,
-                parseFloat(data.price),
-                true
-            ];
+                // Criar serviço
+                await prisma.services.create({
+                    data: {
+                        item_id: item.item_id,
+                        service_group_id: data.service_group_id ? parseInt(data.service_group_id) : null
+                    }
+                });
 
-            const itemResult = await this.prisma.$queryRawUnsafe(itemQuery, ...itemParams);
-            const itemId = itemResult[0].item_id;
+                return item.item_id;
+            });
 
-            // Inserir na tabela services
-            const serviceQuery = `
-                INSERT INTO services (
-                    item_id,
-                    service_group_id
-                ) VALUES (
-                    $1, $2
-                )
-                RETURNING service_id
-            `;
-
-            await this.prisma.$queryRawUnsafe(
-                serviceQuery, 
-                itemId,
-                data.service_group_id ? parseInt(data.service_group_id) : null
-            );
-
-            // Retornar o serviço completo
-            return this.getServiceById(itemId);
+            return this.getServiceById(result);
         } catch (error) {
-            console.error('Erro ao criar serviço:', {
+            logger.error('Erro ao criar serviço:', {
                 data,
                 error: error.message
             });
@@ -190,80 +181,52 @@ class PrismaServiceRepository extends IServiceRepository {
                 throw new Error('Service not found');
             }
 
-            // Verificar código duplicado se estiver sendo alterado
+            // Verificar código duplicado
             if (data.code && data.code !== service.code) {
-                const existingItem = await this.prisma.$queryRaw`
-                    SELECT item_id FROM items 
-                    WHERE code = ${data.code} 
-                    AND item_id != ${id}
-                    AND deleted_at IS NULL
-                `;
+                const existingItem = await this.prisma.items.findFirst({
+                    where: {
+                        code: data.code,
+                        item_id: { not: parseInt(id) },
+                        deleted_at: null
+                    }
+                });
 
-                if (existingItem.length > 0) {
+                if (existingItem) {
                     throw new Error('Service code already exists');
                 }
             }
 
-            // Atualizar items
-            let updateFields = [];
-            let params = [];
-            let paramCount = 1;
+            // Atualizar usando transação
+            await this.prisma.$transaction(async (prisma) => {
+                // Atualizar item
+                if (Object.keys(data).some(key => ['code', 'name', 'description', 'price', 'active'].includes(key))) {
+                    await prisma.items.update({
+                        where: { item_id: parseInt(id) },
+                        data: {
+                            ...(data.code && { code: data.code }),
+                            ...(data.name && { name: data.name }),
+                            ...(data.description !== undefined && { description: data.description }),
+                            ...(data.price && { price: parseFloat(data.price) }),
+                            ...(data.active !== undefined && { active: data.active }),
+                            updated_at: new Date()
+                        }
+                    });
+                }
 
-            if (data.code !== undefined) {
-                updateFields.push(`code = $${paramCount++}`);
-                params.push(data.code);
-            }
-
-            if (data.name !== undefined) {
-                updateFields.push(`name = $${paramCount++}`);
-                params.push(data.name);
-            }
-
-            if (data.description !== undefined) {
-                updateFields.push(`description = $${paramCount++}`);
-                params.push(data.description);
-            }
-
-            if (data.price !== undefined) {
-                updateFields.push(`price = $${paramCount++}`);
-                params.push(parseFloat(data.price));
-            }
-
-            if (data.active !== undefined) {
-                updateFields.push(`active = $${paramCount++}`);
-                params.push(data.active);
-            }
-
-            updateFields.push(`updated_at = NOW()`);
-
-            // Atualizar item
-            if (updateFields.length > 0) {
-                const itemQuery = `
-                    UPDATE items 
-                    SET ${updateFields.join(', ')}
-                    WHERE item_id = $${paramCount}
-                `;
-                params.push(parseInt(id));
-                await this.prisma.$queryRawUnsafe(itemQuery, ...params);
-            }
-
-            // Atualizar service_group_id se necessário
-            if (data.service_group_id !== undefined) {
-                const serviceQuery = `
-                    UPDATE services 
-                    SET service_group_id = $1
-                    WHERE item_id = $2
-                `;
-                await this.prisma.$queryRawUnsafe(
-                    serviceQuery,
-                    data.service_group_id ? parseInt(data.service_group_id) : null,
-                    parseInt(id)
-                );
-            }
+                // Atualizar service_group_id se necessário
+                if (data.service_group_id !== undefined) {
+                    await prisma.services.update({
+                        where: { item_id: parseInt(id) },
+                        data: {
+                            service_group_id: data.service_group_id ? parseInt(data.service_group_id) : null
+                        }
+                    });
+                }
+            });
 
             return this.getServiceById(id);
         } catch (error) {
-            console.error('Erro ao atualizar serviço:', {
+            logger.error('Erro ao atualizar serviço:', {
                 id,
                 data,
                 error: error.message
@@ -274,20 +237,20 @@ class PrismaServiceRepository extends IServiceRepository {
 
     async deleteService(id) {
         try {
-            const now = new Date();
-            
-            // Soft delete do item
-            const query = `
-                UPDATE items 
-                SET deleted_at = NOW(), active = false
-                WHERE item_id = $1
-                RETURNING item_id
-            `;
+            // Soft delete usando transação
+            const result = await this.prisma.$transaction(async (prisma) => {
+                return await prisma.items.update({
+                    where: { item_id: parseInt(id) },
+                    data: {
+                        deleted_at: new Date(),
+                        active: false
+                    }
+                });
+            });
 
-            const result = await this.prisma.$queryRawUnsafe(query, parseInt(id));
-            return result[0] || null;
+            return result;
         } catch (error) {
-            console.error('Erro ao deletar serviço:', {
+            logger.error('Erro ao deletar serviço:', {
                 id,
                 error: error.message
             });

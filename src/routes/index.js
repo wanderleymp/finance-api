@@ -17,6 +17,8 @@ const servicesRoutes = require('./services'); // Nova importação
 const accountsReceivableRoutes = require('./accountsReceivableRoutes');
 const messagingRoutes = require('./messagingRoutes');
 const boletoRoutes = require('./boletoRoutes');
+const installmentRoutes = require('./installmentRoutes');
+const movementPaymentRoutes = require('./movementPaymentRoutes');
 
 // Test route to check if API is working
 router.get('/', (req, res) => {
@@ -101,6 +103,12 @@ router.use('/accounts-receivable', accountsReceivableRoutes);
 
 // Boleto route
 router.use('/boleto', boletoRoutes);
+
+// Installment routes
+router.use('/installments', installmentRoutes);
+
+// Movement Payment routes
+router.use('/movement-payments', movementPaymentRoutes);
 
 // Rota de fallback para debug
 router.use((req, res, next) => {

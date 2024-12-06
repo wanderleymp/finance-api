@@ -1,90 +1,190 @@
-const MovementService = require('../services/MovementService');
+const PrismaMovementRepository = require('../repositories/implementations/PrismaMovementRepository');
 const logger = require('../../config/logger');
+const { MovementError } = require('../utils/errors/MovementError');
 
 class MovementController {
+    constructor(movementRepository) {
+        this.repository = movementRepository;
+    }
+
     async createMovement(req, res) {
         try {
-            const userId = req.user.id;
-            const movement = await MovementService.createMovement(req.body, userId);
+            const movement = await this.repository.createMovement(req.body);
+            
+            // Log audit trail
+            await this.repository.createMovementHistory({
+                movement_id: movement.movement_id,
+                user_id: req.user.id,
+                action: 'CREATE',
+                changes: JSON.stringify(movement)
+            });
+
             res.status(201).json(movement);
         } catch (error) {
-            logger.error('Error in createMovement:', error);
-            if (error.message.includes('required')) {
-                return res.status(400).json({ error: error.message });
+            logger.error('Error in create movement controller:', { 
+                error: error.message,
+                user: req.user?.id,
+                body: req.body
+            });
+            
+            if (error instanceof MovementError) {
+                return res.status(error.statusCode).json({ 
+                    error: error.message,
+                    details: error.details
+                });
             }
+            
             res.status(500).json({ error: 'Internal server error' });
         }
     }
 
     async getMovementById(req, res) {
         try {
-            const { id } = req.params;
-            const userId = req.user.id;
-            
-            const movement = await MovementService.getMovementById(id, userId);
+            const movement = await this.repository.getMovementById(req.params.id);
             res.json(movement);
         } catch (error) {
-            logger.error('Error in getMovementById:', error);
-            if (error.message === 'Movement not found') {
-                return res.status(404).json({ error: 'Movement not found' });
+            logger.error('Error in get movement by id controller:', { 
+                error: error.message,
+                user: req.user?.id,
+                movement_id: req.params.id
+            });
+            
+            if (error instanceof MovementError) {
+                return res.status(error.statusCode).json({ 
+                    error: error.message,
+                    details: error.details
+                });
             }
+            
             res.status(500).json({ error: 'Internal server error' });
         }
     }
 
     async getAllMovements(req, res) {
         try {
-            const { page = 1, limit = 10, ...filters } = req.query;
-            const userId = req.user.id;
-            
-            const result = await MovementService.getAllMovements(
+            const { 
+                page = 1, 
+                limit = 10, 
+                sort_field = 'movement_date',
+                sort_order = 'desc',
+                ...filters 
+            } = req.query;
+
+            const skip = (page - 1) * limit;
+            const movements = await this.repository.getAllMovements(
                 filters,
-                parseInt(page),
+                skip,
                 parseInt(limit),
-                userId
+                { field: sort_field, order: sort_order }
             );
-            
-            res.json(result);
+
+            res.json(movements);
         } catch (error) {
-            logger.error('Error in getAllMovements:', error);
+            logger.error('Error in get all movements controller:', { 
+                error: error.message,
+                user: req.user?.id,
+                query: req.query
+            });
+            
+            if (error instanceof MovementError) {
+                return res.status(error.statusCode).json({ 
+                    error: error.message,
+                    details: error.details
+                });
+            }
+            
             res.status(500).json({ error: 'Internal server error' });
         }
     }
 
     async updateMovement(req, res) {
         try {
-            const { id } = req.params;
-            const userId = req.user.id;
+            const oldMovement = await this.repository.getMovementById(req.params.id);
+            const movement = await this.repository.updateMovement(req.params.id, req.body);
             
-            const movement = await MovementService.updateMovement(id, req.body, userId);
+            // Log audit trail
+            await this.repository.createMovementHistory({
+                movement_id: movement.movement_id,
+                user_id: req.user.id,
+                action: 'UPDATE',
+                changes: JSON.stringify({
+                    before: oldMovement,
+                    after: movement
+                })
+            });
+
             res.json(movement);
         } catch (error) {
-            logger.error('Error in updateMovement:', error);
-            if (error.message === 'Movement not found') {
-                return res.status(404).json({ error: 'Movement not found' });
+            logger.error('Error in update movement controller:', { 
+                error: error.message,
+                user: req.user?.id,
+                movement_id: req.params.id,
+                body: req.body
+            });
+            
+            if (error instanceof MovementError) {
+                return res.status(error.statusCode).json({ 
+                    error: error.message,
+                    details: error.details
+                });
             }
-            if (error.message.includes('must be greater than')) {
-                return res.status(400).json({ error: error.message });
-            }
+            
             res.status(500).json({ error: 'Internal server error' });
         }
     }
 
     async deleteMovement(req, res) {
         try {
-            const { id } = req.params;
-            const userId = req.user.id;
+            await this.repository.deleteMovement(req.params.id);
             
-            await MovementService.deleteMovement(id, userId);
+            // Log audit trail
+            await this.repository.createMovementHistory({
+                movement_id: parseInt(req.params.id),
+                user_id: req.user.id,
+                action: 'DELETE',
+                changes: null
+            });
+
             res.status(204).send();
         } catch (error) {
-            logger.error('Error in deleteMovement:', error);
-            if (error.message === 'Movement not found') {
-                return res.status(404).json({ error: 'Movement not found' });
+            logger.error('Error in delete movement controller:', { 
+                error: error.message,
+                user: req.user?.id,
+                movement_id: req.params.id
+            });
+            
+            if (error instanceof MovementError) {
+                return res.status(error.statusCode).json({ 
+                    error: error.message,
+                    details: error.details
+                });
             }
+            
+            res.status(500).json({ error: 'Internal server error' });
+        }
+    }
+
+    async getMovementHistory(req, res) {
+        try {
+            const history = await this.repository.getMovementHistory(req.params.id);
+            res.json(history);
+        } catch (error) {
+            logger.error('Error in get movement history controller:', { 
+                error: error.message,
+                user: req.user?.id,
+                movement_id: req.params.id
+            });
+            
+            if (error instanceof MovementError) {
+                return res.status(error.statusCode).json({ 
+                    error: error.message,
+                    details: error.details
+                });
+            }
+            
             res.status(500).json({ error: 'Internal server error' });
         }
     }
 }
 
-module.exports = new MovementController();
+module.exports = MovementController;
