@@ -1,8 +1,10 @@
 const logger = require('../../config/logger');
+const InstallmentGenerationService = require('../services/InstallmentGenerationService');
 
 class MovementPaymentController {
     constructor(movementPaymentRepository) {
         this.movementPaymentRepository = movementPaymentRepository;
+        this.installmentGenerationService = new InstallmentGenerationService();
     }
 
     async getAllMovementPayments(req, res) {
@@ -35,26 +37,30 @@ class MovementPaymentController {
         try {
             const {
                 movement_id,
-                installment_id,
-                amount,
-                payment_date
+                payment_method_id,
+                total_amount
             } = req.body;
 
-            if (!movement_id || !amount) {
-                return res.status(400).json({ error: 'movement_id and amount are required' });
+            if (!movement_id || !payment_method_id || !total_amount) {
+                return res.status(400).json({ 
+                    error: 'movement_id, payment_method_id and total_amount are required' 
+                });
             }
 
             const payment = await this.movementPaymentRepository.create({
                 movement_id: parseInt(movement_id),
-                installment_id: installment_id ? parseInt(installment_id) : null,
-                amount: parseFloat(amount),
-                payment_date: payment_date ? new Date(payment_date) : new Date()
+                payment_method_id: parseInt(payment_method_id),
+                total_amount: parseFloat(total_amount),
+                status: 'Pendente'
             });
 
+            // Após criar o payment, gera as parcelas
+            await this.installmentGenerationService.generateInstallments(payment.payment_id);
+            
             return res.status(201).json(payment);
         } catch (error) {
             logger.error('Error creating movement payment', { error });
-            if (error.message === 'Movement not found' || error.message === 'Installment not found') {
+            if (error.message === 'Movement not found') {
                 return res.status(404).json({ error: error.message });
             }
             return res.status(500).json({ error: 'Internal server error' });
@@ -66,24 +72,21 @@ class MovementPaymentController {
             const { id } = req.params;
             const {
                 movement_id,
-                installment_id,
-                amount,
-                payment_date
+                total_amount,
+                status
             } = req.body;
 
             const payment = await this.movementPaymentRepository.update(parseInt(id), {
                 movement_id: movement_id ? parseInt(movement_id) : undefined,
-                installment_id: installment_id ? parseInt(installment_id) : undefined,
-                amount: amount ? parseFloat(amount) : undefined,
-                payment_date: payment_date ? new Date(payment_date) : undefined
+                total_amount: total_amount ? parseFloat(total_amount) : undefined,
+                status: status ? status : undefined
             });
 
             return res.json(payment);
         } catch (error) {
             logger.error('Error updating movement payment', { error });
             if (error.message === 'Movement payment not found' || 
-                error.message === 'Movement not found' || 
-                error.message === 'Installment not found') {
+                error.message === 'Movement not found') {
                 return res.status(404).json({ error: error.message });
             }
             return res.status(500).json({ error: 'Internal server error' });

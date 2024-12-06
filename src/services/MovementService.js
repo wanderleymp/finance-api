@@ -1,37 +1,95 @@
-const PrismaMovementRepository = require('../repositories/implementations/PrismaMovementRepository');
+const { PrismaClient } = require('@prisma/client');
 const logger = require('../../config/logger');
+const prisma = new PrismaClient();
 
 class MovementService {
-    constructor(repository = new PrismaMovementRepository()) {
-        this.repository = repository;
-    }
-
     async createMovement(data, userId) {
         try {
-            logger.info('[Service] Creating movement:', { data, userId });
+            logger.info('[MovementService] Iniciando criação de movimento:', { 
+                data, 
+                userId 
+            });
 
-            // Validações básicas
-            if (!data.movement_date) throw new Error('movement_date is required');
-            if (!data.person_id) throw new Error('person_id is required');
-            if (!data.total_amount) throw new Error('total_amount is required');
-            if (!data.license_id) throw new Error('license_id is required');
-            
-            // Garantir que total_amount seja positivo
-            if (data.total_amount <= 0) {
-                throw new Error('total_amount must be greater than 0');
+            // Validar campos obrigatórios
+            const requiredFields = ['person_id', 'movement_type_id', 'total_amount', 'license_id'];
+            for (const field of requiredFields) {
+                if (!data[field]) {
+                    logger.error(`[MovementService] Campo ${field} é obrigatório`, { data });
+                    throw new Error(`Campo ${field} é obrigatório`);
+                }
             }
 
-            const movement = await this.repository.createMovement({
-                ...data,
-                movement_date: new Date(data.movement_date),
-                total_amount: parseFloat(data.total_amount),
-                discount: data.discount ? parseFloat(data.discount) : 0,
-                addition: data.addition ? parseFloat(data.addition) : 0,
-                total_items: data.total_items ? parseFloat(data.total_items) : 0
+            // Validar itens
+            if (!data.items || !Array.isArray(data.items) || data.items.length === 0) {
+                logger.error('[MovementService] Itens inválidos ou ausentes', { items: data.items });
+                throw new Error('Itens da venda são obrigatórios');
+            }
+
+            // Iniciar transação
+            const movement = await prisma.$transaction(async (tx) => {
+                // Criar movimento
+                const createdMovement = await tx.movement.create({
+                    data: {
+                        person_id: data.person_id,
+                        movement_type_id: data.movement_type_id,
+                        movement_date: data.movement_date || new Date(),
+                        total_amount: data.total_amount,
+                        total_items: data.total_items || data.items.length,
+                        license_id: data.license_id,
+                        description: data.description || 'Movimento de venda',
+                        user_id: userId
+                    }
+                });
+
+                logger.info('[MovementService] Movimento criado:', { 
+                    movement_id: createdMovement.movement_id 
+                });
+
+                // Criar itens do movimento
+                const movementItems = await Promise.all(data.items.map(async (item) => {
+                    logger.info('[MovementService] Criando item de movimento:', { 
+                        movement_id: createdMovement.movement_id,
+                        item 
+                    });
+
+                    const createdItem = await tx.movement_item.create({
+                        data: {
+                            movement_id: createdMovement.movement_id,
+                            product_id: item.product_id,
+                            quantity: item.quantity,
+                            unit_value: item.unit_value
+                        }
+                    });
+
+                    logger.info('[MovementService] Item de movimento criado:', { 
+                        movement_item_id: createdItem.movement_item_id 
+                    });
+
+                    return createdItem;
+                }));
+
+                logger.info('[MovementService] Itens do movimento criados:', { 
+                    movement_id: createdMovement.movement_id,
+                    items_count: movementItems.length 
+                });
+
+                return {
+                    ...createdMovement,
+                    items: movementItems
+                };
             });
+
+            logger.info('[MovementService] Movimento completo criado:', { 
+                movement_id: movement.movement_id 
+            });
+
             return movement;
         } catch (error) {
-            logger.error('[Service] Error creating movement:', error);
+            logger.error('[MovementService] Erro ao criar movimento:', { 
+                error: error.message, 
+                stack: error.stack,
+                data 
+            });
             throw error;
         }
     }
@@ -40,7 +98,12 @@ class MovementService {
         try {
             logger.info('[Service] Getting movement by id:', { id, userId });
 
-            const movement = await this.repository.getMovementById(id);
+            const movement = await prisma.movement.findUnique({
+                where: { movement_id: id },
+                include: {
+                    items: true
+                }
+            });
             if (!movement) {
                 throw new Error('Movement not found');
             }
@@ -68,16 +131,21 @@ class MovementService {
                 order: ['asc', 'desc'].includes(sort.order) ? sort.order : 'desc'
             };
 
-            const result = await this.repository.getAllMovements(
-                filters, 
-                skip, 
-                validatedLimit,
-                validatedSort
-            );
+            const result = await prisma.movement.findMany({
+                where: filters,
+                skip,
+                take: validatedLimit,
+                orderBy: {
+                    [validatedSort.field]: validatedSort.order
+                },
+                include: {
+                    items: true
+                }
+            });
 
             // Adicionar metadados extras
             return {
-                data: result.data.map(movement => ({
+                data: result.map(movement => ({
                     ...movement,
                     formatted_date: movement.movement_date.toLocaleDateString(),
                     formatted_amount: new Intl.NumberFormat('pt-BR', {
@@ -86,9 +154,10 @@ class MovementService {
                     }).format(movement.total_amount)
                 })),
                 pagination: {
-                    ...result.pagination,
-                    nextPage: result.pagination.hasNext ? validatedPage + 1 : null,
-                    previousPage: result.pagination.hasPrevious ? validatedPage - 1 : null
+                    hasNext: validatedPage * validatedLimit < result.length,
+                    hasPrevious: validatedPage > 1,
+                    nextPage: result.length > validatedPage * validatedLimit ? validatedPage + 1 : null,
+                    previousPage: validatedPage > 1 ? validatedPage - 1 : null
                 },
                 filters: {
                     applied: filters,
@@ -122,7 +191,13 @@ class MovementService {
                 total_items: data.total_items ? parseFloat(data.total_items) : undefined
             };
 
-            const movement = await this.repository.updateMovement(id, updateData);
+            const movement = await prisma.movement.update({
+                where: { movement_id: id },
+                data: updateData,
+                include: {
+                    items: true
+                }
+            });
             if (!movement) {
                 throw new Error('Movement not found');
             }
@@ -138,7 +213,9 @@ class MovementService {
         try {
             logger.info('[Service] Deleting movement:', { id, userId });
 
-            const result = await this.repository.deleteMovement(id);
+            const result = await prisma.movement.delete({
+                where: { movement_id: id }
+            });
             if (!result) {
                 throw new Error('Movement not found');
             }

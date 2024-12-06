@@ -167,15 +167,25 @@ router.get('/:id', async (req, res) => {
  */
 router.post('/', async (req, res) => {
     try {
+        console.log('DEBUG: Dados recebidos para criação de venda', { body: req.body });
+
         const saleData = {
             ...req.body,
             movement_type_id: MOVEMENT_TYPE_SALES
         };
 
+        console.log('DEBUG: Dados processados para criação de venda', { saleData });
+
         const sale = await movementService.create(saleData);
+        console.log('DEBUG: Venda criada com sucesso', { sale });
+        
         res.status(201).json(sale);
     } catch (error) {
-        console.error(error);
+        console.error('DEBUG: Erro completo na criação de venda', { 
+            error: error.message, 
+            stack: error.stack,
+            body: req.body 
+        });
         res.status(500).json({ error: 'Erro ao criar venda' });
     }
 });
@@ -330,6 +340,204 @@ router.post('/:id/boleto', (req, res) => {
         movement_id, 
         installment_id 
     });
+});
+
+/**
+ * @swagger
+ * /sales/{id}/items:
+ *   post:
+ *     summary: Adiciona itens a uma venda existente
+ *     tags: [Sales]
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: integer
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             properties:
+ *               items:
+ *                 type: array
+ *                 items:
+ *                   type: object
+ *                   required:
+ *                     - item_id
+ *                     - quantity
+ *                     - unit_price
+ *                   properties:
+ *                     item_id:
+ *                       type: integer
+ *                     quantity:
+ *                       type: number
+ *                     unit_price:
+ *                       type: number
+ *                     salesperson_id:
+ *                       type: integer
+ *                     technician_id:
+ *                       type: integer
+ *     responses:
+ *       200:
+ *         description: Itens adicionados com sucesso
+ *       404:
+ *         description: Venda não encontrada
+ *       500:
+ *         description: Erro ao adicionar itens
+ */
+router.post('/:id/items', async (req, res) => {
+    try {
+        const { id } = req.params;
+        const { items } = req.body;
+
+        console.log('DEBUG: Adicionando itens à venda', { 
+            movementId: id, 
+            items: items 
+        });
+
+        // Validar se a venda existe
+        const existingSale = await movementService.getById(id);
+        if (!existingSale || existingSale.movement_type_id !== MOVEMENT_TYPE_SALES) {
+            console.log('DEBUG: Venda não encontrada', { 
+                movementId: id, 
+                existingSale: existingSale 
+            });
+            return res.status(404).json({ error: 'Venda não encontrada' });
+        }
+
+        // Adicionar itens à venda
+        const updatedSale = await movementService.addItems(id, items);
+        
+        console.log('DEBUG: Itens adicionados com sucesso', { 
+            movementId: id, 
+            updatedSale: updatedSale 
+        });
+
+        res.json(updatedSale);
+    } catch (error) {
+        console.error('Erro detalhado ao adicionar itens à venda', { 
+            error: error.message, 
+            stack: error.stack,
+            body: req.body,
+            params: req.params
+        });
+        res.status(500).json({ 
+            error: 'Erro ao adicionar itens à venda', 
+            details: error.message 
+        });
+    }
+});
+
+/**
+ * @swagger
+ * /sales/{id}/items/{itemId}:
+ *   delete:
+ *     summary: Remove um item de uma venda
+ *     tags: [Sales]
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: integer
+ *       - in: path
+ *         name: itemId
+ *         required: true
+ *         schema:
+ *           type: integer
+ *     responses:
+ *       200:
+ *         description: Item removido com sucesso
+ *       404:
+ *         description: Venda ou item não encontrado
+ *       500:
+ *         description: Erro ao remover item
+ */
+router.delete('/:id/items/:itemId', async (req, res) => {
+    try {
+        const { id, itemId } = req.params;
+
+        console.log('DEBUG: Removendo item da venda', { 
+            movementId: id, 
+            movementItemId: itemId 
+        });
+
+        // Validar se a venda existe
+        const existingSale = await movementService.getById(id);
+        if (!existingSale || existingSale.movement_type_id !== MOVEMENT_TYPE_SALES) {
+            console.log('DEBUG: Venda não encontrada', { 
+                movementId: id, 
+                existingSale: existingSale 
+            });
+            return res.status(404).json({ error: 'Venda não encontrada' });
+        }
+
+        // Remover o item e recalcular o total
+        const updatedSale = await movementService.deleteItem(id, itemId);
+        
+        console.log('DEBUG: Item removido com sucesso', { 
+            movementId: id, 
+            updatedSale: updatedSale 
+        });
+
+        res.json(updatedSale);
+    } catch (error) {
+        console.error('Erro detalhado ao remover item da venda', { 
+            error: error.message, 
+            stack: error.stack,
+            params: req.params
+        });
+        res.status(500).json({ 
+            error: 'Erro ao remover item da venda', 
+            details: error.message 
+        });
+    }
+});
+
+/**
+ * @swagger
+ * /sales/{id}/discount:
+ *   put:
+ *     summary: Adiciona ou atualiza desconto em uma venda
+ *     tags: [Sales]
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: integer
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             properties:
+ *               discount:
+ *                 type: number
+ *                 description: Valor do desconto
+ *     responses:
+ *       200:
+ *         description: Desconto aplicado com sucesso
+ */
+router.put('/:id/discount', async (req, res) => {
+    try {
+        const { id } = req.params;
+        const { discount } = req.body;
+
+        if (discount === undefined) {
+            return res.status(400).json({ error: 'Desconto é obrigatório' });
+        }
+
+        const updatedSale = await movementService.updateMovementDiscount(id, discount);
+        res.json(updatedSale);
+    } catch (error) {
+        console.error(error);
+        res.status(500).json({ error: 'Erro ao aplicar desconto' });
+    }
 });
 
 module.exports = router;

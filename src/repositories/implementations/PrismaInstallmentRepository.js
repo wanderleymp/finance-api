@@ -263,6 +263,85 @@ class PrismaInstallmentRepository extends IInstallmentRepository {
             throw error;
         }
     }
+
+    async findById(id) {
+        const requestId = uuidv4();
+        try {
+            logger.info('Buscando parcela por ID', { 
+                requestId,
+                id 
+            });
+
+            const response = await this.prisma.$queryRaw`
+                WITH ultimo_boleto AS (
+                    SELECT 
+                        b.installment_id,
+                        b.boleto_url,
+                        ROW_NUMBER() OVER (PARTITION BY b.installment_id ORDER BY b.last_status_update DESC) AS rn
+                    FROM boletos b
+                ),
+                boleto_a_receber AS (
+                    SELECT 
+                        b.installment_id,
+                        b.boleto_url
+                    FROM boletos b
+                    WHERE b.status = 'A_RECEBER'
+                ),
+                person_documents_json AS (
+                    SELECT 
+                        pd.person_id,
+                        JSON_AGG(
+                            JSON_BUILD_OBJECT(
+                                'document_type', dt.description,
+                                'document_value', pd.document_value
+                            )
+                        ) AS documents
+                    FROM person_documents pd
+                    JOIN document_types dt ON pd.document_type_id = dt.document_type_id
+                    GROUP BY pd.person_id
+                )
+                SELECT 
+                    m.movement_id,
+                    m.movement_date,
+                    m.movement_type_id,
+                    i.installment_id,
+                    i.due_date,
+                    i.balance,
+                    p.full_name,
+                    p.fantasy_name,
+                    i.installment_number,
+                    i.amount,
+                    i.status,
+                    i.expected_date,
+                    COALESCE(ua.boleto_url, u.boleto_url) AS boleto_url,
+                    pdj.documents AS person_documents
+                FROM installments i
+                JOIN movement_payments mp ON i.payment_id = mp.payment_id
+                JOIN movements m ON mp.movement_id = m.movement_id
+                JOIN persons p ON m.person_id = p.person_id
+                LEFT JOIN ultimo_boleto u ON i.installment_id = u.installment_id AND u.rn = 1
+                LEFT JOIN boleto_a_receber ua ON i.installment_id = ua.installment_id
+                LEFT JOIN person_documents_json pdj ON p.person_id = pdj.person_id
+                WHERE m.movement_status_id = 23
+                AND i.installment_id = ${id}
+            `;
+
+            logger.info('Resultado da busca de parcela por ID', { 
+                requestId,
+                response 
+            });
+
+            return response[0] || null;
+        } catch (error) {
+            logger.error('Erro ao buscar parcela por ID', { 
+                requestId,
+                id,
+                error: error.message,
+                stack: error.stack 
+            });
+            throw error;
+        }
+    }
 }
 
 module.exports = PrismaInstallmentRepository;

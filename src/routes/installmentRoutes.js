@@ -161,6 +161,54 @@ router.delete('/:id', authenticateToken, (req, res) => installmentController.del
 
 /**
  * @swagger
+ * /installments/{id}/message:
+ *   post:
+ *     tags: [Installments]
+ *     summary: Send message for an installment
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: integer
+ *     responses:
+ *       200:
+ *         description: Message sent successfully
+ *       404:
+ *         description: Installment not found
+ *       500:
+ *         description: Server error
+ */
+router.post('/:id/message', authenticateToken, (req, res) => installmentController.sendInstallmentMessage(req, res));
+
+/**
+ * @swagger
+ * /installments/{id}/boleto:
+ *   post:
+ *     tags: [Installments]
+ *     summary: Generate boleto for an installment
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: integer
+ *     responses:
+ *       200:
+ *         description: Boleto generated successfully
+ *       404:
+ *         description: Installment not found
+ *       500:
+ *         description: Server error
+ */
+router.post('/:id/boleto', authenticateToken, (req, res) => installmentController.generateInstallmentBoleto(req, res));
+
+/**
+ * @swagger
  * /installments/payment/{paymentId}:
  *   get:
  *     tags: [Installments]

@@ -14,6 +14,12 @@ class PrismaMovementRepository extends IMovementRepository {
 
     async createMovement(data) {
         try {
+            logger.info('🟢 [MOVEMENT-CREATE-START] Iniciando criação de movimento', { 
+                movement_date: data.movement_date, 
+                person_id: data.person_id, 
+                total_amount: data.total_amount 
+            });
+
             const movement = await this.prisma.movements.create({
                 data: {
                     movement_date: new Date(data.movement_date),
@@ -71,10 +77,18 @@ class PrismaMovementRepository extends IMovementRepository {
                 }
             });
 
-            logger.info('Movement created successfully', { movement_id: movement.movement_id });
+            logger.info('🟢 [MOVEMENT-CREATE-SUCCESS] Movimento criado', { 
+                movement_id: movement.movement_id, 
+                total_amount: movement.total_amount 
+            });
+
             return movement;
         } catch (error) {
-            logger.error('Error creating movement:', { error: error.message, stack: error.stack });
+            logger.error('🔴 [MOVEMENT-CREATE-ERROR] Erro ao criar movimento', { 
+                error: error.message, 
+                stack: error.stack,
+                data 
+            });
             if (error.code === 'P2002') {
                 throw new MovementError('Unique constraint violation', 400);
             } else if (error.code === 'P2003') {
@@ -86,8 +100,13 @@ class PrismaMovementRepository extends IMovementRepository {
 
     async getAllMovements(filters = {}, skip = 0, take = 10, sort = { field: 'movement_date', order: 'desc' }) {
         try {
-            logger.info('Getting all movements with filters:', { filters, skip, take, sort });
-            
+            logger.info('🔍 [MOVEMENT-FIND-ALL-START] Buscando todos os movimentos', { 
+                filters, 
+                skip, 
+                take, 
+                sort 
+            });
+
             const where = {};
             
             if (filters.movement_date_gte || filters.movement_date_lte) {
@@ -122,7 +141,7 @@ class PrismaMovementRepository extends IMovementRepository {
                 ];
             }
 
-            logger.debug('Constructed where clause:', { where });
+            logger.debug('[PrismaMovementRepository] Construindo cláusula where:', { where });
 
             const movements = await this.prisma.$transaction(async (prisma) => {
                 const result = await prisma.movements.findMany({
@@ -195,13 +214,13 @@ class PrismaMovementRepository extends IMovementRepository {
                     }
                 });
 
-                logger.info('Successfully retrieved movements', { count: result.length });
+                logger.info('🟢 [MOVEMENT-FIND-ALL-SUCCESS] Movimentos encontrados', { count: result.length });
                 return result;
             });
 
             return movements;
         } catch (error) {
-            logger.error('Error getting all movements:', { 
+            logger.error('🔴 [MOVEMENT-FIND-ALL-ERROR] Erro ao buscar movimentos', { 
                 error: error.message, 
                 stack: error.stack,
                 filters,
@@ -215,7 +234,7 @@ class PrismaMovementRepository extends IMovementRepository {
 
     async getMovementById(id) {
         try {
-            logger.info('Getting movement by id:', { id });
+            logger.info('🔍 [MOVEMENT-FIND-BY-ID-START] Buscando movimento por ID', { id });
 
             const movement = await this.prisma.$transaction(async (prisma) => {
                 const result = await prisma.movements.findUnique({
@@ -286,17 +305,17 @@ class PrismaMovementRepository extends IMovementRepository {
                 });
 
                 if (!result) {
-                    logger.warn('Movement not found:', { id });
-                    throw new MovementNotFoundError(`Movement with id ${id} not found`);
+                    logger.warn('🟠 [MOVEMENT-NOT-FOUND] Movimento não encontrado', { id });
+                    throw new MovementNotFoundError(`Movimento com ID ${id} não encontrado`);
                 }
 
-                logger.info('Successfully retrieved movement:', { id });
+                logger.info('🟢 [MOVEMENT-FIND-BY-ID-SUCCESS] Movimento encontrado', { id });
                 return result;
             });
 
             return movement;
         } catch (error) {
-            logger.error('Error getting movement by id:', { 
+            logger.error('🔴 [MOVEMENT-FIND-BY-ID-ERROR] Erro ao buscar movimento por ID', { 
                 error: error.message, 
                 stack: error.stack,
                 id 
@@ -307,6 +326,11 @@ class PrismaMovementRepository extends IMovementRepository {
 
     async updateMovement(id, data) {
         try {
+            logger.info('🔄 [MOVEMENT-UPDATE-START] Atualizando movimento', { 
+                movement_id: id, 
+                data 
+            });
+
             const updateData = {
                 ...(data.movement_date && { movement_date: new Date(data.movement_date) }),
                 ...(data.person_id && { person_id: parseInt(data.person_id) }),
@@ -358,9 +382,17 @@ class PrismaMovementRepository extends IMovementRepository {
                 }
             });
 
+            logger.info('🟢 [MOVEMENT-UPDATE-SUCCESS] Movimento atualizado', { 
+                movement_id: movement.movement_id 
+            });
+
             return movement;
         } catch (error) {
-            logger.error('Error updating movement:', { error: error.message, movement_id: id });
+            logger.error('🔴 [MOVEMENT-UPDATE-ERROR] Erro ao atualizar movimento', { 
+                error: error.message, 
+                stack: error.stack,
+                movement_id: id 
+            });
             if (error.code === 'P2025') {
                 throw new MovementNotFoundError(id);
             }
@@ -370,11 +402,19 @@ class PrismaMovementRepository extends IMovementRepository {
 
     async deleteMovement(id) {
         try {
+            logger.info('🗑️ [MOVEMENT-DELETE-START] Excluindo movimento', { id });
+
             await this.prisma.movements.delete({
                 where: { movement_id: parseInt(id) }
             });
+
+            logger.info('🟢 [MOVEMENT-DELETE-SUCCESS] Movimento excluído', { id });
         } catch (error) {
-            logger.error('Error deleting movement:', { error: error.message, movement_id: id });
+            logger.error('🔴 [MOVEMENT-DELETE-ERROR] Erro ao excluir movimento', { 
+                error: error.message, 
+                stack: error.stack,
+                movement_id: id 
+            });
             if (error.code === 'P2025') {
                 throw new MovementNotFoundError(id);
             }
@@ -384,6 +424,8 @@ class PrismaMovementRepository extends IMovementRepository {
 
     async getMovementHistory(id) {
         try {
+            logger.info('🔍 [MOVEMENT-HISTORY-START] Buscando histórico de movimento', { id });
+
             const history = await this.prisma.movement_status_history.findMany({
                 where: { movement_id: parseInt(id) },
                 orderBy: { changed_at: 'desc' },
@@ -392,9 +434,15 @@ class PrismaMovementRepository extends IMovementRepository {
                 }
             });
 
+            logger.info('🟢 [MOVEMENT-HISTORY-SUCCESS] Histórico de movimento encontrado', { id });
+
             return history;
         } catch (error) {
-            logger.error('Error fetching movement history:', { error: error.message, movement_id: id });
+            logger.error('🔴 [MOVEMENT-HISTORY-ERROR] Erro ao buscar histórico de movimento', { 
+                error: error.message, 
+                stack: error.stack,
+                movement_id: id 
+            });
             throw error;
         }
     }

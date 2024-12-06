@@ -1,4 +1,7 @@
 const logger = require('../../config/logger');
+const { v4: uuidv4 } = require('uuid');
+const messagingService = require('../services/messagingService');
+const boletoController = require('./boletoController');
 
 class InstallmentController {
     constructor(installmentRepository) {
@@ -260,6 +263,83 @@ class InstallmentController {
                 error: error.message,
                 stack: error.stack
             }, null, 2));
+            return res.status(500).json({ error: 'Internal server error' });
+        }
+    }
+
+    async sendInstallmentMessage(req, res) {
+        const requestId = uuidv4();
+        try {
+            const { id } = req.params;
+            
+            logger.info('Iniciando envio de mensagem para parcela', { 
+                requestId,
+                installment_id: id 
+            });
+
+            const installment = await this.installmentRepository.findById(parseInt(id));
+            
+            if (!installment) {
+                logger.warn('Parcela não encontrada para envio de mensagem', { 
+                    requestId,
+                    installment_id: id 
+                });
+                return res.status(404).json({ error: 'Installment not found' });
+            }
+
+            await messagingService.sendInstallmentMessage(parseInt(id));
+
+            logger.info('Mensagem enviada com sucesso', { 
+                requestId,
+                installment_id: id,
+                movement_id: installment.movement_id
+            });
+
+            return res.json({ message: 'Message sent successfully' });
+        } catch (error) {
+            logger.error('Erro ao enviar mensagem para parcela', { 
+                requestId,
+                installment_id: req.params.id,
+                error: error.message,
+                stack: error.stack
+            });
+            return res.status(500).json({ error: 'Internal server error' });
+        }
+    }
+
+    async generateInstallmentBoleto(req, res) {
+        const requestId = uuidv4();
+        try {
+            const { id } = req.params;
+            
+            logger.info('Iniciando geração de boleto para parcela', { 
+                requestId,
+                installment_id: id 
+            });
+
+            const installment = await this.installmentRepository.findById(parseInt(id));
+            
+            if (!installment) {
+                logger.warn('Parcela não encontrada para geração de boleto', { 
+                    requestId,
+                    installment_id: id 
+                });
+                return res.status(404).json({ error: 'Installment not found' });
+            }
+
+            // Chama o webhook de geração de boleto com os dados necessários
+            await boletoController.generateBoletoWebhook(req, res, {
+                movement_id: installment.movement_id,
+                installment_id: parseInt(id)
+            });
+
+        } catch (error) {
+            logger.error('Erro ao gerar boleto para parcela', { 
+                requestId,
+                installment_id: req.params.id,
+                error: error.message,
+                stack: error.stack
+            });
             return res.status(500).json({ error: 'Internal server error' });
         }
     }
