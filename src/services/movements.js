@@ -104,13 +104,18 @@ class MovementService {
     async getById(id) {
         try {
             const movement = await prisma.movements.findUnique({
-                where: { movement_id: id },
+                where: { movement_id: parseInt(id) },
                 include: {
                     movement_items: {
                         include: {
-                            product: true
+                            movements: true,
+                            user_accounts_movement_items_salesperson_idTouser_accounts: true,
+                            user_accounts_movement_items_technician_idTouser_accounts: true
                         }
-                    }
+                    },
+                    movement_statuses: true,
+                    movement_types: true,
+                    persons: true
                 }
             });
 
@@ -186,38 +191,44 @@ class MovementService {
             items
         } = data;
 
-        // Primeiro, excluir os itens existentes
-        await prisma.movement_items.deleteMany({
-            where: { movement_id: parseInt(id) }
-        });
+        const updateData = {
+            movement_date: movement_date ? new Date(movement_date) : undefined,
+            person_id: person_id ? parseInt(person_id) : undefined,
+            total_amount: total_amount ? parseFloat(total_amount) : undefined,
+            license_id: license_id ? parseInt(license_id) : undefined,
+            description
+        };
 
-        // Converter e validar os itens
-        const processedItems = items.map(item => {
-            const quantity = parseFloat(item.quantity);
-            const unitPrice = parseFloat(item.unit_price);
-            
-            return {
-                item_id: parseInt(item.item_id),
-                quantity: quantity,
-                unit_price: unitPrice,
-                total_price: quantity * unitPrice,
-                salesperson_id: item.salesperson_id ? parseInt(item.salesperson_id) : null,
-                technician_id: item.technician_id ? parseInt(item.technician_id) : null
+        // Só processa os itens se eles forem fornecidos
+        if (items && items.length > 0) {
+            // Primeiro, excluir os itens existentes
+            await prisma.movement_items.deleteMany({
+                where: { movement_id: parseInt(id) }
+            });
+
+            // Converter e validar os itens
+            const processedItems = items.map(item => {
+                const quantity = parseFloat(item.quantity);
+                const unitPrice = parseFloat(item.unit_price);
+                
+                return {
+                    item_id: parseInt(item.item_id),
+                    quantity: quantity,
+                    unit_price: unitPrice,
+                    total_price: quantity * unitPrice,
+                    salesperson_id: item.salesperson_id ? parseInt(item.salesperson_id) : null,
+                    technician_id: item.technician_id ? parseInt(item.technician_id) : null
+                };
+            });
+
+            updateData.movement_items = {
+                create: processedItems
             };
-        });
+        }
 
         return await prisma.movements.update({
             where: { movement_id: parseInt(id) },
-            data: {
-                movement_date: movement_date ? new Date(movement_date) : undefined,
-                person_id: person_id ? parseInt(person_id) : undefined,
-                total_amount: total_amount ? parseFloat(total_amount) : undefined,
-                license_id: license_id ? parseInt(license_id) : undefined,
-                description,
-                movement_items: {
-                    create: processedItems
-                }
-            }
+            data: updateData
         });
     }
 
@@ -279,7 +290,10 @@ class MovementService {
 
         // Verificar se o movimento existe
         const movement = await prisma.movements.findUnique({
-            where: { movement_id: movementId }
+            where: { movement_id: movementId },
+            include: {
+                movement_statuses: true
+            }
         });
 
         // Verificar se o movimento não existe
@@ -288,7 +302,7 @@ class MovementService {
         }
 
         // Verificar se o status é diferente de 19 (cancelado)
-        if (movement.movement_statuses?.movement_status_id === 19) {
+        if (movement.movement_status_id === 19) {
             return { 
                 message: 'Movimento já está cancelado',
                 movementId: movementId,
@@ -296,7 +310,7 @@ class MovementService {
             };
         }
 
-        const previousStatusId = movement.movement_statuses?.movement_status_id;
+        const previousStatusId = movement.movement_status_id;
 
         // Atualizar o status para cancelado (19) usando o repository
         const updatedMovement = await this.repository.updateMovementStatus(movementId, 19);

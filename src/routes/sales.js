@@ -214,16 +214,27 @@ router.put('/:id', async (req, res) => {
     try {
         const { id } = req.params;
         
+        console.log('DEBUG: Atualizando venda', { 
+            id, 
+            body: req.body 
+        });
+
         // Verifica se é uma venda
         const existingSale = await movementService.getById(id);
+        console.log('DEBUG: Venda encontrada', existingSale);
+
         if (!existingSale || existingSale.movement_type_id !== MOVEMENT_TYPE_SALES) {
             return res.status(404).json({ error: 'Venda não encontrada' });
         }
 
         const sale = await movementService.update(id, req.body);
+        console.log('DEBUG: Venda atualizada', sale);
         res.json(sale);
     } catch (error) {
-        console.error(error);
+        console.error('DEBUG: Erro ao atualizar venda', {
+            error: error.message,
+            stack: error.stack
+        });
         res.status(500).json({ error: 'Erro ao atualizar venda' });
     }
 });

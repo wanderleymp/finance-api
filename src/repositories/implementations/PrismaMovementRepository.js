@@ -14,7 +14,7 @@ class PrismaMovementRepository extends IMovementRepository {
 
     async createMovement(data) {
         try {
-            logger.info('🟢 [MOVEMENT-CREATE-START] Iniciando criação de movimento', { 
+            logger.info(' [MOVEMENT-CREATE-START] Iniciando criação de movimento', { 
                 movement_date: data.movement_date, 
                 person_id: data.person_id, 
                 total_amount: data.total_amount 
@@ -77,14 +77,14 @@ class PrismaMovementRepository extends IMovementRepository {
                 }
             });
 
-            logger.info('🟢 [MOVEMENT-CREATE-SUCCESS] Movimento criado', { 
+            logger.info(' [MOVEMENT-CREATE-SUCCESS] Movimento criado', { 
                 movement_id: movement.movement_id, 
                 total_amount: movement.total_amount 
             });
 
             return movement;
         } catch (error) {
-            logger.error('🔴 [MOVEMENT-CREATE-ERROR] Erro ao criar movimento', { 
+            logger.error(' [MOVEMENT-CREATE-ERROR] Erro ao criar movimento', { 
                 error: error.message, 
                 stack: error.stack,
                 data 
@@ -100,7 +100,7 @@ class PrismaMovementRepository extends IMovementRepository {
 
     async getAllMovements(filters = {}, skip = 0, take = 10, sort = { field: 'movement_date', order: 'desc' }) {
         try {
-            logger.info('🔍 [MOVEMENT-FIND-ALL-START] Buscando todos os movimentos', { 
+            logger.info(' [MOVEMENT-FIND-ALL-START] Buscando todos os movimentos', { 
                 filters, 
                 skip, 
                 take, 
@@ -214,13 +214,13 @@ class PrismaMovementRepository extends IMovementRepository {
                     }
                 });
 
-                logger.info('🟢 [MOVEMENT-FIND-ALL-SUCCESS] Movimentos encontrados', { count: result.length });
+                logger.info(' [MOVEMENT-FIND-ALL-SUCCESS] Movimentos encontrados', { count: result.length });
                 return result;
             });
 
             return movements;
         } catch (error) {
-            logger.error('🔴 [MOVEMENT-FIND-ALL-ERROR] Erro ao buscar movimentos', { 
+            logger.error(' [MOVEMENT-FIND-ALL-ERROR] Erro ao buscar movimentos', { 
                 error: error.message, 
                 stack: error.stack,
                 filters,
@@ -234,7 +234,7 @@ class PrismaMovementRepository extends IMovementRepository {
 
     async getMovementById(id) {
         try {
-            logger.info('🔍 [MOVEMENT-FIND-BY-ID-START] Buscando movimento por ID', { id });
+            logger.info(' [MOVEMENT-FIND-BY-ID-START] Buscando movimento por ID', { id });
 
             const movement = await this.prisma.$transaction(async (prisma) => {
                 const result = await prisma.movements.findUnique({
@@ -305,17 +305,17 @@ class PrismaMovementRepository extends IMovementRepository {
                 });
 
                 if (!result) {
-                    logger.warn('🟠 [MOVEMENT-NOT-FOUND] Movimento não encontrado', { id });
+                    logger.warn(' [MOVEMENT-NOT-FOUND] Movimento não encontrado', { id });
                     throw new MovementNotFoundError(`Movimento com ID ${id} não encontrado`);
                 }
 
-                logger.info('🟢 [MOVEMENT-FIND-BY-ID-SUCCESS] Movimento encontrado', { id });
+                logger.info(' [MOVEMENT-FIND-BY-ID-SUCCESS] Movimento encontrado', { id });
                 return result;
             });
 
             return movement;
         } catch (error) {
-            logger.error('🔴 [MOVEMENT-FIND-BY-ID-ERROR] Erro ao buscar movimento por ID', { 
+            logger.error(' [MOVEMENT-FIND-BY-ID-ERROR] Erro ao buscar movimento por ID', { 
                 error: error.message, 
                 stack: error.stack,
                 id 
@@ -326,7 +326,7 @@ class PrismaMovementRepository extends IMovementRepository {
 
     async updateMovement(id, data) {
         try {
-            logger.info('🔄 [MOVEMENT-UPDATE-START] Atualizando movimento', { 
+            logger.info(' [MOVEMENT-UPDATE-START] Atualizando movimento', { 
                 movement_id: id, 
                 data 
             });
@@ -382,13 +382,13 @@ class PrismaMovementRepository extends IMovementRepository {
                 }
             });
 
-            logger.info('🟢 [MOVEMENT-UPDATE-SUCCESS] Movimento atualizado', { 
+            logger.info(' [MOVEMENT-UPDATE-SUCCESS] Movimento atualizado', { 
                 movement_id: movement.movement_id 
             });
 
             return movement;
         } catch (error) {
-            logger.error('🔴 [MOVEMENT-UPDATE-ERROR] Erro ao atualizar movimento', { 
+            logger.error(' [MOVEMENT-UPDATE-ERROR] Erro ao atualizar movimento', { 
                 error: error.message, 
                 stack: error.stack,
                 movement_id: id 
@@ -402,15 +402,15 @@ class PrismaMovementRepository extends IMovementRepository {
 
     async deleteMovement(id) {
         try {
-            logger.info('🗑️ [MOVEMENT-DELETE-START] Excluindo movimento', { id });
+            logger.info(' [MOVEMENT-DELETE-START] Excluindo movimento', { id });
 
             await this.prisma.movements.delete({
                 where: { movement_id: parseInt(id) }
             });
 
-            logger.info('🟢 [MOVEMENT-DELETE-SUCCESS] Movimento excluído', { id });
+            logger.info(' [MOVEMENT-DELETE-SUCCESS] Movimento excluído', { id });
         } catch (error) {
-            logger.error('🔴 [MOVEMENT-DELETE-ERROR] Erro ao excluir movimento', { 
+            logger.error(' [MOVEMENT-DELETE-ERROR] Erro ao excluir movimento', { 
                 error: error.message, 
                 stack: error.stack,
                 movement_id: id 
@@ -424,7 +424,7 @@ class PrismaMovementRepository extends IMovementRepository {
 
     async getMovementHistory(id) {
         try {
-            logger.info('🔍 [MOVEMENT-HISTORY-START] Buscando histórico de movimento', { id });
+            logger.info(' [MOVEMENT-HISTORY-START] Buscando histórico de movimento', { id });
 
             const history = await this.prisma.movement_status_history.findMany({
                 where: { movement_id: parseInt(id) },
@@ -434,15 +434,61 @@ class PrismaMovementRepository extends IMovementRepository {
                 }
             });
 
-            logger.info('🟢 [MOVEMENT-HISTORY-SUCCESS] Histórico de movimento encontrado', { id });
+            logger.info(' [MOVEMENT-HISTORY-SUCCESS] Histórico de movimento encontrado', { id });
 
             return history;
         } catch (error) {
-            logger.error('🔴 [MOVEMENT-HISTORY-ERROR] Erro ao buscar histórico de movimento', { 
+            logger.error(' [MOVEMENT-HISTORY-ERROR] Erro ao buscar histórico de movimento', { 
                 error: error.message, 
                 stack: error.stack,
                 movement_id: id 
             });
+            throw error;
+        }
+    }
+
+    async updateMovementStatus(id, statusId) {
+        try {
+            logger.info(' [MOVEMENT-STATUS-UPDATE-START] Atualizando status do movimento', { 
+                movement_id: id,
+                new_status_id: statusId
+            });
+
+            const movement = await this.prisma.movements.update({
+                where: { movement_id: parseInt(id) },
+                data: {
+                    movement_status_id: parseInt(statusId)
+                },
+                include: {
+                    movement_statuses: true
+                }
+            });
+
+            // Registrar a mudança no histórico
+            await this.prisma.movement_status_history.create({
+                data: {
+                    movement_id: parseInt(id),
+                    movement_status_id: parseInt(statusId),
+                    changed_at: new Date()
+                }
+            });
+
+            logger.info(' [MOVEMENT-STATUS-UPDATE-SUCCESS] Status do movimento atualizado', { 
+                movement_id: id,
+                new_status_id: statusId
+            });
+
+            return movement;
+        } catch (error) {
+            logger.error(' [MOVEMENT-STATUS-UPDATE-ERROR] Erro ao atualizar status do movimento', { 
+                error: error.message, 
+                stack: error.stack,
+                movement_id: id,
+                status_id: statusId
+            });
+            if (error.code === 'P2025') {
+                throw new MovementNotFoundError(id);
+            }
             throw error;
         }
     }
