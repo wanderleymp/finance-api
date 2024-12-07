@@ -110,9 +110,6 @@ class PrismaMovementRepository extends IMovementRepository {
             const [result, total] = await Promise.all([
                 this.prisma.movements.findMany({
                     where,
-                    skip: Math.max(0, skip),
-                    take,
-                    orderBy: { [sort.field]: sort.order.toLowerCase() },
                     include: {
                         persons: {
                             select: {
@@ -148,7 +145,13 @@ class PrismaMovementRepository extends IMovementRepository {
                                 }
                             }
                         }
-                    }
+                    },
+                    orderBy: [
+                        { movement_date: 'desc' },
+                        { movement_id: 'desc' }
+                    ],
+                    take,
+                    skip
                 }),
                 this.prisma.movements.count({ where })
             ]);
