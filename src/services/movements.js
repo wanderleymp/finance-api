@@ -67,11 +67,9 @@ class MovementService {
 
         // Validando campo de ordenação
         const validSortFields = ['movement_date', 'total_amount', 'created_at', 'updated_at'];
-        const orderBy = {};
-        if (validSortFields.includes(sortBy)) {
-            orderBy[sortBy] = sortOrder.toLowerCase();
-        } else {
-            orderBy.movement_date = 'desc';
+        if (!validSortFields.includes(sortBy)) {
+            sortBy = 'movement_date';
+            sortOrder = 'desc';
         }
 
         // Calculando paginação
@@ -79,24 +77,22 @@ class MovementService {
         const limitInt = parseInt(limit);
         const skip = (pageInt - 1) * limitInt;
 
-        // Buscando total de registros
-        const total = await prisma.movements.count({ where });
-
-        // Buscando registros com paginação
-        const movements = await prisma.movements.findMany({
+        // Usando o repository para buscar os movimentos
+        const movements = await this.repository.getAllMovements(
             where,
-            orderBy,
             skip,
-            take: limitInt
-        });
+            limitInt,
+            { field: sortBy, order: sortOrder.toLowerCase() }
+        );
 
+        // Retornando os dados com paginação
         return {
-            data: movements,
+            data: movements.data,
             pagination: {
-                total,
+                total: movements.total,
                 page: pageInt,
                 limit: limitInt,
-                totalPages: Math.ceil(total / limitInt)
+                totalPages: Math.ceil(movements.total / limitInt)
             }
         };
     }

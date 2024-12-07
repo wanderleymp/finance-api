@@ -98,67 +98,32 @@ class PrismaMovementRepository extends IMovementRepository {
         }
     }
 
-    async getAllMovements(filters = {}, skip = 0, take = 10, sort = { field: 'movement_date', order: 'desc' }) {
+    async getAllMovements(where = {}, skip = 0, take = 10, sort = { field: 'movement_date', order: 'desc' }) {
         try {
             logger.info(' [MOVEMENT-FIND-ALL-START] Buscando todos os movimentos', { 
-                filters, 
+                where, 
                 skip, 
                 take, 
                 sort 
             });
 
-            const where = {};
-            
-            if (filters.movement_date_gte || filters.movement_date_lte) {
-                where.movement_date = {};
-                if (filters.movement_date_gte) {
-                    where.movement_date.gte = new Date(filters.movement_date_gte);
-                }
-                if (filters.movement_date_lte) {
-                    where.movement_date.lte = new Date(filters.movement_date_lte);
-                }
-            }
-
-            if (filters.movement_type_id) {
-                where.movement_type_id = filters.movement_type_id;
-            }
-
-            if (filters.movement_status_id) {
-                where.movement_status_id = filters.movement_status_id;
-            }
-
-            if (filters.search) {
-                where.OR = [
-                    {
-                        persons: {
-                            OR: [
-                                { full_name: { contains: filters.search, mode: 'insensitive' } },
-                                { fantasy_name: { contains: filters.search, mode: 'insensitive' } }
-                            ]
-                        }
-                    },
-                    { description: { contains: filters.search, mode: 'insensitive' } }
-                ];
-            }
-
-            logger.debug('[PrismaMovementRepository] Construindo cláusula where:', { where });
-
-            const movements = await this.prisma.$transaction(async (prisma) => {
-                const result = await prisma.movements.findMany({
+            const [result, total] = await Promise.all([
+                this.prisma.movements.findMany({
                     where,
                     skip: Math.max(0, skip),
                     take,
-                    orderBy: { [sort.field]: sort.order },
+                    orderBy: [
+                        { movement_date: 'desc' },
+                        { movement_id: 'desc' }
+                    ],
                     select: {
                         movement_id: true,
                         movement_date: true,
                         total_amount: true,
                         description: true,
-                        movement_type_id: true,
-                        movement_status_id: true,
+                        license_id: true,
                         persons: {
                             select: {
-                                person_id: true,
                                 full_name: true,
                                 fantasy_name: true,
                                 person_documents: {
@@ -175,58 +140,42 @@ class PrismaMovementRepository extends IMovementRepository {
                         },
                         movement_types: {
                             select: {
-                                movement_type_id: true,
                                 type_name: true
                             }
                         },
                         movement_statuses: {
                             select: {
-                                movement_status_id: true,
-                                status_name: true,
-                                description: true
-                            }
-                        },
-                        movement_payments: {
-                            select: {
-                                payment_id: true,
-                                total_amount: true,
-                                status: true,
-                                payment_methods: {
-                                    select: {
-                                        payment_method_id: true,
-                                        method_name: true,
-                                        description: true,
-                                        installment_count: true,
-                                        days_between_installments: true,
-                                        first_due_date_days: true
-                                    }
-                                },
-                                installments: {
-                                    select: {
-                                        installment_id: true,
-                                        due_date: true,
-                                        balance: true,
-                                        status: true
-                                    }
-                                }
+                                status_name: true
                             }
                         }
                     }
-                });
+                }),
+                this.prisma.movements.count({ where })
+            ]);
 
-                logger.info(' [MOVEMENT-FIND-ALL-SUCCESS] Movimentos encontrados', { count: result.length });
-                return result;
+            const transformedResult = result.map(movement => ({
+                movement_id: movement.movement_id,
+                movement_date: movement.movement_date,
+                total_amount: movement.total_amount,
+                description: movement.description,
+                license_id: movement.license_id,
+                full_name: movement.persons.full_name,
+                fantasy_name: movement.persons.fantasy_name,
+                person_documents: movement.persons.person_documents,
+                type_name: movement.movement_types.type_name,
+                status_name: movement.movement_statuses.status_name
+            }));
+
+            logger.info(' [MOVEMENT-FIND-ALL-SUCCESS] Movimentos encontrados', { 
+                count: transformedResult.length,
+                total: total
             });
 
-            return movements;
+            return { data: transformedResult, total };
         } catch (error) {
             logger.error(' [MOVEMENT-FIND-ALL-ERROR] Erro ao buscar movimentos', { 
                 error: error.message, 
-                stack: error.stack,
-                filters,
-                skip,
-                take,
-                sort
+                stack: error.stack 
             });
             throw error;
         }
