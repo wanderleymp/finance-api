@@ -406,44 +406,19 @@ class MovementService {
                 throw new Error('Campos obrigatórios para criação de pagamento: movement_id, payment_method_id, total_amount');
             }
 
-            // Criar pagamento de movimento
-            const movementPayment = await movementPaymentRepository.create({
+            // Criar pagamento de movimento com parcelas
+            const result = await movementPaymentRepository.createMovementPaymentWithInstallments({
                 movement_id: data.movement_id,
                 payment_method_id: data.payment_method_id,
-                total_amount: data.total_amount
+                total_amount: data.total_amount,
+                movement_date: new Date()
             });
 
-            // Enfileirar geração de parcelas (simulado, você pode substituir por um job real)
-            this.queueInstallmentGeneration({
-                payment_id: movementPayment.payment_id,
-                movement_id: data.movement_id,
-                payment_method_id: data.payment_method_id,
-                total_amount: data.total_amount
-            });
-
-            return movementPayment;
+            return result;
         } catch (error) {
             console.error('Erro ao criar pagamento de movimento:', error);
             throw error;
         }
-    }
-
-    // Método simulado para enfileirar geração de parcelas
-    queueInstallmentGeneration(data) {
-        // Em um ambiente real, você usaria um sistema de filas como Bull, RabbitMQ, etc.
-        setTimeout(async () => {
-            try {
-                const movementPaymentRepository = new PrismaMovementPaymentRepository();
-                const installments = await movementPaymentRepository.generateInstallments(data);
-                console.log('Parcelas geradas com sucesso para o pagamento:', {
-                    payment_id: data.payment_id,
-                    installments_count: installments.length,
-                    installments_details: installments
-                });
-            } catch (error) {
-                console.error('Erro ao gerar parcelas:', error);
-            }
-        }, 1000); // Simula processamento assíncrono
     }
 }
 

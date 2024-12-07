@@ -120,9 +120,10 @@ class PrismaMovementPaymentRepository extends IMovementPaymentRepository {
             const baseInstallmentAmount = Number((data.total_amount / totalInstallments).toFixed(2));
             const roundingDifference = Number((data.total_amount - (baseInstallmentAmount * totalInstallments)).toFixed(2));
 
-            // Definir data da primeira parcela
-            let currentDueDate = new Date(data.movement_date || new Date());
-            currentDueDate.setDate(currentDueDate.getDate() + (paymentMethod.first_due_date_days || 0));
+            // Definir data base para cálculo das parcelas
+            const baseDate = new Date(data.movement_date || new Date());
+            const firstDueDate = new Date(baseDate);
+            firstDueDate.setDate(firstDueDate.getDate() + (paymentMethod.first_due_date_days || 0));
 
             // Gerar parcelas
             const installments = [];
@@ -132,10 +133,16 @@ class PrismaMovementPaymentRepository extends IMovementPaymentRepository {
                     ? baseInstallmentAmount + roundingDifference 
                     : baseInstallmentAmount;
 
+                // Calcular data de vencimento para esta parcela
+                const dueDate = new Date(firstDueDate);
+                if (i > 1) {
+                    dueDate.setDate(firstDueDate.getDate() + ((i - 1) * (paymentMethod.days_between_installments || 30)));
+                }
+
                 const installmentData = {
                     payment_id: data.payment_id,
                     installment_number: `${i}/${totalInstallments}`,
-                    due_date: currentDueDate,
+                    due_date: dueDate,
                     amount: installmentAmount,
                     balance: installmentAmount,
                     status: 'Pendente',
@@ -144,9 +151,6 @@ class PrismaMovementPaymentRepository extends IMovementPaymentRepository {
 
                 const installment = await this.createInstallment(installmentData);
                 installments.push(installment);
-
-                // Incrementar data para próxima parcela
-                currentDueDate.setDate(currentDueDate.getDate() + (paymentMethod.days_between_installments || 30));
             }
 
             logger.info('🟢 [INSTALLMENTS-GENERATE-SUCCESS] Parcelas geradas', { 
