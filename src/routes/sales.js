@@ -2,6 +2,8 @@ const express = require('express');
 const router = express.Router();
 const movementService = require('../services/movements');
 const boletoController = require('../controllers/boletoController');
+const PrismaMovementPaymentRepository = require('../repositories/implementations/PrismaMovementPaymentRepository');
+const InstallmentGenerationService = require('../services/InstallmentGenerationService');
 
 const MOVEMENT_TYPE_SALES = 1;
 
@@ -537,6 +539,64 @@ router.put('/:id/discount', async (req, res) => {
     } catch (error) {
         console.error(error);
         res.status(500).json({ error: 'Erro ao aplicar desconto' });
+    }
+});
+
+/**
+ * @swagger
+ * /sales/{id}/movement_payment:
+ *   post:
+ *     summary: Adiciona um pagamento para uma venda
+ *     tags: [Sales]
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: integer
+ *         description: ID da venda
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             properties:
+ *               payment_method_id:
+ *                 type: integer
+ *                 description: ID do método de pagamento
+ *               amount:
+ *                 type: number
+ *                 description: Valor do pagamento
+ *     responses:
+ *       200:
+ *         description: Pagamento adicionado com sucesso
+ *       400:
+ *         description: Erro na requisição
+ *       500:
+ *         description: Erro interno do servidor
+ */
+router.post('/:id/movement_payment', async (req, res) => {
+    try {
+        const { id } = req.params;
+        const { payment_method_id, amount } = req.body;
+
+        // Validar entrada
+        if (!payment_method_id || !amount) {
+            return res.status(400).json({ error: 'Dados de pagamento incompletos' });
+        }
+
+        // Criar pagamento de movimento usando o serviço de movimentos
+        const movementPayment = await movementService.createMovementPayment({
+            movement_id: parseInt(id),
+            payment_method_id: parseInt(payment_method_id),
+            total_amount: parseFloat(amount)
+        });
+
+        res.status(201).json(movementPayment);
+    } catch (error) {
+        console.error('Erro ao adicionar pagamento de movimento:', error);
+        res.status(500).json({ error: 'Erro ao processar pagamento', details: error.message });
     }
 });
 

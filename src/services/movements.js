@@ -2,6 +2,8 @@ const { PrismaClient } = require('@prisma/client');
 const prisma = new PrismaClient();
 const axios = require('axios');
 const PrismaMovementRepository = require('../repositories/implementations/PrismaMovementRepository');
+const PrismaMovementPaymentRepository = require('../repositories/implementations/PrismaMovementPaymentRepository');
+const PrismaInstallmentRepository = require('../repositories/implementations/PrismaInstallmentRepository');
 
 class MovementService {
     constructor() {
@@ -83,18 +85,6 @@ class MovementService {
         // Buscando registros com paginação
         const movements = await prisma.movements.findMany({
             where,
-            include: {
-                persons: true,
-                licenses: true,
-                movement_statuses: true,
-                movement_items: {
-                    include: {
-                        movements: true,
-                        user_accounts_movement_items_salesperson_idTouser_accounts: true,
-                        user_accounts_movement_items_technician_idTouser_accounts: true
-                    }
-                }
-            },
             orderBy,
             skip,
             take: limitInt
@@ -112,20 +102,32 @@ class MovementService {
     }
 
     async getById(id) {
-        return await prisma.movements.findUnique({
-            where: { movement_id: parseInt(id) },
-            include: {
-                persons: true,
-                licenses: true,
-                movement_statuses: true,
-                movement_items: {
-                    include: {
-                        movements: true,
-                        user_accounts_movement_items_salesperson_idTouser_accounts: true,
-                        user_accounts_movement_items_technician_idTouser_accounts: true
+        try {
+            const movement = await prisma.movements.findUnique({
+                where: { movement_id: id },
+                include: {
+                    movement_items: {
+                        include: {
+                            product: true
+                        }
                     }
                 }
+            });
+
+            if (!movement) {
+                throw new Error(`Movimento com ID ${id} não encontrado`);
             }
+
+            return movement;
+        } catch (error) {
+            console.error('Erro ao buscar movimento por ID:', error);
+            throw error;
+        }
+    }
+
+    async getByIdOriginal(id) {
+        return await prisma.movements.findUnique({
+            where: { movement_id: parseInt(id) }
         });
     }
 
@@ -169,18 +171,6 @@ class MovementService {
                 description,
                 movement_items: {
                     create: processedItems
-                }
-            },
-            include: {
-                persons: true,
-                licenses: true,
-                movement_statuses: true,
-                movement_items: {
-                    include: {
-                        movements: true,
-                        user_accounts_movement_items_salesperson_idTouser_accounts: true,
-                        user_accounts_movement_items_technician_idTouser_accounts: true
-                    }
                 }
             }
         });
@@ -226,18 +216,6 @@ class MovementService {
                 description,
                 movement_items: {
                     create: processedItems
-                }
-            },
-            include: {
-                persons: true,
-                licenses: true,
-                movement_statuses: true,
-                movement_items: {
-                    include: {
-                        movements: true,
-                        user_accounts_movement_items_salesperson_idTouser_accounts: true,
-                        user_accounts_movement_items_technician_idTouser_accounts: true
-                    }
                 }
             }
         });
@@ -301,10 +279,7 @@ class MovementService {
 
         // Verificar se o movimento existe
         const movement = await prisma.movements.findUnique({
-            where: { movement_id: movementId },
-            include: {
-                movement_statuses: true
-            }
+            where: { movement_id: movementId }
         });
 
         // Verificar se o movimento não existe
@@ -373,18 +348,6 @@ class MovementService {
             data: {
                 total_amount: totalAmount,
                 total_items: totalItemsValue  // Usando total_price como total_items
-            },
-            include: {
-                persons: true,
-                licenses: true,
-                movement_statuses: true,
-                movement_items: {
-                    include: {
-                        movements: true,
-                        user_accounts_movement_items_salesperson_idTouser_accounts: true,
-                        user_accounts_movement_items_technician_idTouser_accounts: true
-                    }
-                }
             }
         });
 
@@ -432,6 +395,55 @@ class MovementService {
 
         // Recalcular o total do movimento
         return await this.recalculateMovementTotal(movementId_int);
+    }
+
+    async createMovementPayment(data) {
+        try {
+            const movementPaymentRepository = new PrismaMovementPaymentRepository();
+
+            // Validar campos obrigatórios
+            if (!data.movement_id || !data.payment_method_id || !data.total_amount) {
+                throw new Error('Campos obrigatórios para criação de pagamento: movement_id, payment_method_id, total_amount');
+            }
+
+            // Criar pagamento de movimento
+            const movementPayment = await movementPaymentRepository.create({
+                movement_id: data.movement_id,
+                payment_method_id: data.payment_method_id,
+                total_amount: data.total_amount
+            });
+
+            // Enfileirar geração de parcelas (simulado, você pode substituir por um job real)
+            this.queueInstallmentGeneration({
+                payment_id: movementPayment.payment_id,
+                movement_id: data.movement_id,
+                payment_method_id: data.payment_method_id,
+                total_amount: data.total_amount
+            });
+
+            return movementPayment;
+        } catch (error) {
+            console.error('Erro ao criar pagamento de movimento:', error);
+            throw error;
+        }
+    }
+
+    // Método simulado para enfileirar geração de parcelas
+    queueInstallmentGeneration(data) {
+        // Em um ambiente real, você usaria um sistema de filas como Bull, RabbitMQ, etc.
+        setTimeout(async () => {
+            try {
+                const movementPaymentRepository = new PrismaMovementPaymentRepository();
+                const installments = await movementPaymentRepository.generateInstallments(data);
+                console.log('Parcelas geradas com sucesso para o pagamento:', {
+                    payment_id: data.payment_id,
+                    installments_count: installments.length,
+                    installments_details: installments
+                });
+            } catch (error) {
+                console.error('Erro ao gerar parcelas:', error);
+            }
+        }, 1000); // Simula processamento assíncrono
     }
 }
 
