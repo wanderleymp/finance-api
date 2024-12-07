@@ -103,6 +103,8 @@ router.get('/', async (req, res) => {
             limit: req.query.limit
         };
 
+        console.log('DEBUG: Filtros recebidos', { filters });
+
         const sales = await movementService.list(MOVEMENT_TYPE_SALES, filters);
         res.json(sales);
     } catch (error) {

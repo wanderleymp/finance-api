@@ -112,30 +112,13 @@ class PrismaMovementRepository extends IMovementRepository {
                     where,
                     skip: Math.max(0, skip),
                     take,
-                    orderBy: [
-                        { movement_date: 'desc' },
-                        { movement_id: 'desc' }
-                    ],
-                    select: {
-                        movement_id: true,
-                        movement_date: true,
-                        total_amount: true,
-                        description: true,
-                        license_id: true,
+                    orderBy: { [sort.field]: sort.order.toLowerCase() },
+                    include: {
                         persons: {
                             select: {
                                 full_name: true,
                                 fantasy_name: true,
-                                person_documents: {
-                                    select: {
-                                        document_value: true,
-                                        document_types: {
-                                            select: {
-                                                description: true
-                                            }
-                                        }
-                                    }
-                                }
+                                person_documents: true
                             }
                         },
                         movement_types: {
@@ -147,31 +130,98 @@ class PrismaMovementRepository extends IMovementRepository {
                             select: {
                                 status_name: true
                             }
+                        },
+                        invoices: {
+                            take: 1,
+                            select: {
+                                pdf_url: true,
+                                xml_url: true
+                            }
+                        },
+                        movement_payments: {
+                            include: {
+                                payment_methods: {
+                                    select: {
+                                        payment_method_id: true,
+                                        method_name: true
+                                    }
+                                }
+                            }
                         }
                     }
                 }),
                 this.prisma.movements.count({ where })
             ]);
 
-            const transformedResult = result.map(movement => ({
-                movement_id: movement.movement_id,
-                movement_date: movement.movement_date,
-                total_amount: movement.total_amount,
-                description: movement.description,
-                license_id: movement.license_id,
-                full_name: movement.persons.full_name,
-                fantasy_name: movement.persons.fantasy_name,
-                person_documents: movement.persons.person_documents,
-                type_name: movement.movement_types.type_name,
-                status_name: movement.movement_statuses.status_name
-            }));
-
-            logger.info(' [MOVEMENT-FIND-ALL-SUCCESS] Movimentos encontrados', { 
-                count: transformedResult.length,
-                total: total
+            // Buscar installments separadamente
+            const installmentsMap = await this.prisma.installments.findMany({
+                where: {
+                    payment_id: { in: result.map(m => m.movement_payments[0]?.payment_id).filter(Boolean) }
+                },
+                include: {
+                    boletos: {
+                        select: {
+                            boleto_url: true,
+                            status: true
+                        }
+                    }
+                },
+                orderBy: {
+                    installment_number: 'asc'
+                }
             });
 
-            return { data: transformedResult, total };
+            // Transformar o resultado
+            const transformedResult = result.map(movement => {
+                const movementPayment = movement.movement_payments[0];
+                const relatedInstallments = installmentsMap
+                    .filter(inst => inst.payment_id === movementPayment?.payment_id)
+                    .map(inst => ({
+                        installment_id: inst.installment_id,
+                        installment_number: inst.installment_number,
+                        due_date: inst.due_date,
+                        amount: inst.amount,
+                        status: inst.status,
+                        boleto_url: inst.boletos[0]?.boleto_url || null,
+                        boleto_status: inst.boletos[0]?.status || null
+                    }));
+
+                return {
+                    movement_id: movement.movement_id,
+                    movement_date: movement.movement_date,
+                    total_amount: movement.total_amount,
+                    description: movement.description,
+                    license_id: movement.license_id,
+                    full_name: movement.persons?.full_name,
+                    fantasy_name: movement.persons?.fantasy_name,
+                    person_documents: movement.persons?.person_documents,
+                    type_name: movement.movement_types?.type_name,
+                    status_name: movement.movement_statuses?.status_name,
+                    invoice_url: movement.invoices[0]?.pdf_url || movement.invoices[0]?.xml_url || null,
+                    payment_method: movementPayment?.payment_methods?.method_name || null,
+                    installments: relatedInstallments
+                };
+            });
+
+            logger.info(' [DEBUG] Movimentos encontrados', { 
+                count: result.length,
+                movements: result.map(m => ({
+                    movement_id: m.movement_id,
+                    payments: m.movement_payments?.map(p => ({
+                        payment_id: p.payment_id
+                    }))
+                }))
+            });
+
+            return {
+                data: transformedResult,
+                pagination: {
+                    total,
+                    page: Math.floor(skip / take) + 1,
+                    limit: take,
+                    totalPages: Math.ceil(total / take)
+                }
+            };
         } catch (error) {
             logger.error(' [MOVEMENT-FIND-ALL-ERROR] Erro ao buscar movimentos', { 
                 error: error.message, 
@@ -228,24 +278,29 @@ class PrismaMovementRepository extends IMovementRepository {
                         movement_payments: {
                             select: {
                                 payment_id: true,
+                                payment_method_id: true,
                                 total_amount: true,
                                 status: true,
                                 payment_methods: {
                                     select: {
                                         payment_method_id: true,
-                                        method_name: true,
-                                        description: true,
-                                        installment_count: true,
-                                        days_between_installments: true,
-                                        first_due_date_days: true
+                                        method_name: true
                                     }
                                 },
                                 installments: {
-                                    select: {
-                                        installment_id: true,
-                                        due_date: true,
-                                        balance: true,
-                                        status: true
+                                    where: {
+                                        payment_id: { equals: payment_id }
+                                    },
+                                    include: {
+                                        boletos: {
+                                            select: {
+                                                boleto_url: true,
+                                                status: true
+                                            }
+                                        }
+                                    },
+                                    orderBy: {
+                                        installment_number: 'asc'
                                     }
                                 }
                             }
@@ -409,7 +464,12 @@ class PrismaMovementRepository extends IMovementRepository {
                     movement_status_id: parseInt(statusId)
                 },
                 include: {
-                    movement_statuses: true
+                    movement_statuses: true,
+                    movement_payments: {
+                        include: {
+                            installments: true
+                        }
+                    }
                 }
             });
 

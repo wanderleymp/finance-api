@@ -1,0 +1,17 @@
+# Iniciar a aplicação
+npm run dev
+
+# Ver logs em tempo real
+tail -f logs/app.log
+
+# Matar processos na porta 3000
+lsof -i :3000 | grep LISTEN | awk '{print $2}' | xargs kill -9
+
+# Listar processos usando a porta 3000
+lsof -i :3000
+
+# Matar todos os processos node
+pkill -f node
+
+# Reiniciar a aplicação
+pkill -f node && npm run dev

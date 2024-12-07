@@ -27,7 +27,6 @@ class MovementService {
         } = filters;
 
         const where = {
-            movement_type_id: parseInt(movement_type_id),
             is_template: false
         };
 
@@ -64,6 +63,9 @@ class MovementService {
         // Outros filtros
         if (license_id) where.license_id = parseInt(license_id);
         if (status_id) where.status_id = parseInt(status_id);
+        if (movement_type_id) where.movement_type_id = parseInt(movement_type_id);
+
+        console.log('DEBUG: Where montado', { where, movement_type_id });
 
         // Validando campo de ordenação
         const validSortFields = ['movement_date', 'total_amount', 'created_at', 'updated_at'];
