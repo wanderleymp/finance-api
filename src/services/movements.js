@@ -140,7 +140,7 @@ class MovementService {
         const {
             movement_date,
             person_id,
-            total_amount,
+            total_amount = 0,
             license_id,
             movement_type_id,
             description,
@@ -149,35 +149,40 @@ class MovementService {
             movement_status_id = 23 // Alterado para movement_status_id padrão 23
         } = data;
 
-        // Converter e validar os itens
-        const processedItems = items.map(item => {
-            const quantity = parseFloat(item.quantity);
-            const unitPrice = parseFloat(item.unit_price);
-            
-            return {
-                item_id: parseInt(item.item_id),
-                quantity: quantity,
-                unit_price: unitPrice,
-                total_price: quantity * unitPrice, // Agora usando total_price ao invés de total_value
-                salesperson_id: item.salesperson_id ? parseInt(item.salesperson_id) : null,
-                technician_id: item.technician_id ? parseInt(item.technician_id) : null
+        const createData = {
+            movement_date: movement_date ? new Date(movement_date) : new Date(),
+            person_id: parseInt(person_id),
+            total_amount: parseFloat(total_amount),
+            license_id: parseInt(license_id),
+            movement_type_id: parseInt(movement_type_id),
+            payment_method_id: payment_method_id ? parseInt(payment_method_id) : null,
+            movement_status_id: parseInt(movement_status_id),
+            description
+        };
+
+        // Se tiver items, processar e incluir no createData
+        if (items && items.length > 0) {
+            const processedItems = items.map(item => {
+                const quantity = parseFloat(item.quantity);
+                const unitPrice = parseFloat(item.unit_price);
+                
+                return {
+                    item_id: parseInt(item.item_id),
+                    quantity: quantity,
+                    unit_price: unitPrice,
+                    total_price: quantity * unitPrice,
+                    salesperson_id: item.salesperson_id ? parseInt(item.salesperson_id) : null,
+                    technician_id: item.technician_id ? parseInt(item.technician_id) : null
+                };
+            });
+
+            createData.movement_items = {
+                create: processedItems
             };
-        });
+        }
 
         return await prisma.movements.create({
-            data: {
-                movement_date: new Date(movement_date),
-                person_id: parseInt(person_id),
-                total_amount: parseFloat(total_amount),
-                license_id: parseInt(license_id),
-                movement_type_id: parseInt(movement_type_id),
-                payment_method_id: payment_method_id ? parseInt(payment_method_id) : null,
-                movement_status_id: parseInt(movement_status_id), // Atualizado para movement_status_id
-                description,
-                movement_items: {
-                    create: processedItems
-                }
-            }
+            data: createData
         });
     }
 
@@ -431,6 +436,56 @@ class MovementService {
             return result;
         } catch (error) {
             console.error('Erro ao criar pagamento de movimento:', error);
+            throw error;
+        }
+    }
+
+    async createSaleWithItems(saleData) {
+        try {
+            // Iniciar transação com timeout maior
+            return await prisma.$transaction(async (tx) => {
+                // 1. Criar o movimento base (sem items)
+                const movement = await this.create({
+                    movement_type_id: 1, // Venda
+                    movement_status_id: saleData.movement_status_id,
+                    description: saleData.description,
+                    person_id: saleData.person_id,
+                    license_id: saleData.license_id,
+                    discount: saleData.discount || 0,
+                    addition: saleData.addition || 0,
+                    total_amount: 0 // Será recalculado após adicionar os items
+                });
+
+                // 2. Se houver items, adicionar cada um
+                if (saleData.items && saleData.items.length > 0) {
+                    await this.addItems(movement.movement_id, saleData.items.map(item => ({
+                        item_id: item.item_id,
+                        quantity: item.quantity || 1,
+                        unit_price: item.unit_price || movement.total_amount,
+                        salesperson_id: saleData.seller_id,
+                        technician_id: saleData.technician_id
+                    })));
+                }
+
+                // 3. Buscar o movimento atualizado com o total recalculado
+                const updatedMovement = await this.getById(movement.movement_id);
+
+                // 4. Se tiver forma de pagamento, criar o pagamento
+                if (saleData.payment_method_id) {
+                    await this.createMovementPayment({
+                        movement_id: movement.movement_id,
+                        payment_method_id: saleData.payment_method_id,
+                        total_amount: updatedMovement.total_amount
+                    });
+                }
+
+                // 5. Retornar o movimento final
+                return this.getById(movement.movement_id);
+            }, {
+                timeout: 30000 // 30 segundos
+            });
+        } catch (error) {
+            console.error('Erro ao criar venda completa:', error);
             throw error;
         }
     }

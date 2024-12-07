@@ -171,14 +171,7 @@ router.post('/', async (req, res) => {
     try {
         console.log('DEBUG: Dados recebidos para criação de venda', { body: req.body });
 
-        const saleData = {
-            ...req.body,
-            movement_type_id: MOVEMENT_TYPE_SALES
-        };
-
-        console.log('DEBUG: Dados processados para criação de venda', { saleData });
-
-        const sale = await movementService.create(saleData);
+        const sale = await movementService.createSaleWithItems(req.body);
         console.log('DEBUG: Venda criada com sucesso', { sale });
         
         res.status(201).json(sale);
@@ -188,7 +181,11 @@ router.post('/', async (req, res) => {
             stack: error.stack,
             body: req.body 
         });
-        res.status(500).json({ error: 'Erro ao criar venda' });
+        res.status(500).json({ 
+            error: 'Erro ao criar venda',
+            details: error.message,
+            stack: error.stack
+        });
     }
 });
 
