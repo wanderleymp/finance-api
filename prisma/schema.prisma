@@ -808,6 +808,7 @@ model movements {
   persons                 persons                   @relation(fields: [person_id], references: [person_id], onDelete: Cascade, onUpdate: NoAction, map: "fk_person")
   movement_statuses       movement_statuses?        @relation(fields: [movement_status_id], references: [movement_status_id], onDelete: NoAction, onUpdate: NoAction)
   movement_types          movement_types?           @relation(fields: [movement_type_id], references: [movement_type_id], onDelete: NoAction, onUpdate: NoAction)
+  tasks                   tasks[]
 
   @@index([movement_date], map: "idx_movements_date")
   @@index([license_id], map: "idx_movements_license")
