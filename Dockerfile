@@ -27,6 +27,9 @@ RUN npm ci --only=production --no-optional --no-audit \
 # Copiar o resto dos arquivos (exceto os definidos no .dockerignore)
 COPY --chown=nodeuser:nodejs . .
 
+# Criar diretório .npm e ajustar permissões
+RUN mkdir -p /app/.npm && chown -R nodeuser:nodejs /app/.npm
+
 # Mudar para usuário não-root e gerar prisma client
 USER nodeuser
 RUN npx prisma generate
