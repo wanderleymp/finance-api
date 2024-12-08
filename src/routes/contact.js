@@ -1,7 +1,11 @@
 const express = require('express');
 const ContactController = require('../controllers/contactController');
+const authenticateToken = require('../middlewares/authMiddleware');
 
 const router = express.Router();
+
+// Aplicar middleware de autenticação em todas as rotas
+router.use(authenticateToken);
 
 /**
  * @swagger

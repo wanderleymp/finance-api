@@ -1,8 +1,12 @@
 const express = require('express');
 const router = express.Router();
 const LogsController = require('../controllers/logsController');
+const authenticateToken = require('../middlewares/authMiddleware');
 
 const controller = new LogsController();
+
+// Aplicar middleware de autenticação em todas as rotas
+router.use(authenticateToken);
 
 /**
  * @swagger

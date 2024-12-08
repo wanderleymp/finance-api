@@ -20,3 +20,23 @@ pkill -f node && npm run dev
 lsof -i :3000
 kill -9 12734
 npm run dev
+
+# Comandos Docker
+
+# Build da imagem especificando a plataforma linux/amd64
+docker build --platform linux/amd64 -t wanderleymp/finance-api:1.0.1 .
+
+# Push da imagem para o Docker Hub
+docker push wanderleymp/finance-api:1.0.1
+
+# Build e Push em um único comando (recomendado)
+docker buildx build --platform linux/amd64 --push -t wanderleymp/finance-api:1.0.1 .
+
+# Para verificar a plataforma da imagem
+docker inspect wanderleymp/finance-api:1.0.1 | grep "Architecture"
+
+# Para remover imagem local
+docker rmi wanderleymp/finance-api:1.0.1
+
+# Para atualizar a imagem no servidor
+docker pull wanderleymp/finance-api:1.0.1

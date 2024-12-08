@@ -114,7 +114,9 @@ const movementController = new MovementController(movementRepository);
  *                     hasPrevious:
  *                       type: boolean
  */
-router.get('/', authenticateToken, (req, res) => movementController.getAllMovements(req, res));
+router.use(authenticateToken);
+
+router.get('/', (req, res) => movementController.getAllMovements(req, res));
 
 /**
  * @swagger
@@ -140,7 +142,7 @@ router.get('/', authenticateToken, (req, res) => movementController.getAllMoveme
  *       404:
  *         description: Movimento não encontrado
  */
-router.get('/:id', authenticateToken, (req, res) => movementController.getMovementById(req, res));
+router.get('/:id', (req, res) => movementController.getMovementById(req, res));
 
 /**
  * @swagger
@@ -160,7 +162,7 @@ router.get('/:id', authenticateToken, (req, res) => movementController.getMoveme
  *       200:
  *         description: Histórico do movimento
  */
-router.get('/:id/history', authenticateToken, (req, res) => movementController.getMovementHistory(req, res));
+router.get('/:id/history', (req, res) => movementController.getMovementHistory(req, res));
 
 /**
  * @swagger
@@ -184,7 +186,7 @@ router.get('/:id/history', authenticateToken, (req, res) => movementController.g
  *             schema:
  *               $ref: '#/components/schemas/Movement'
  */
-router.post('/', [authenticateToken, validateMovement], (req, res) => movementController.createMovement(req, res));
+router.post('/', [validateMovement], (req, res) => movementController.createMovement(req, res));
 
 /**
  * @swagger
@@ -216,7 +218,7 @@ router.post('/', [authenticateToken, validateMovement], (req, res) => movementCo
  *       404:
  *         description: Movimento não encontrado
  */
-router.put('/:id', [authenticateToken, validateMovement], (req, res) => movementController.updateMovement(req, res));
+router.put('/:id', [validateMovement], (req, res) => movementController.updateMovement(req, res));
 
 /**
  * @swagger
@@ -238,6 +240,6 @@ router.put('/:id', [authenticateToken, validateMovement], (req, res) => movement
  *       404:
  *         description: Movimento não encontrado
  */
-router.delete('/:id', authenticateToken, (req, res) => movementController.deleteMovement(req, res));
+router.delete('/:id', (req, res) => movementController.deleteMovement(req, res));
 
 module.exports = router;

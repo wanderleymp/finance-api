@@ -1,6 +1,10 @@
 const express = require('express');
 const router = express.Router();
 const movementService = require('../services/movements');
+const authenticateToken = require('../middlewares/authMiddleware');
+
+// Aplicar middleware de autenticação em todas as rotas
+router.use(authenticateToken);
 
 const MOVEMENT_TYPE_PURCHASES = 2;
 

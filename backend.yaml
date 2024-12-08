@@ -1,23 +1,49 @@
 version: '3.8'
 
 services:
-  backend:
-    image: wanderleymp/backend:latest
-    restart: always
-    environment:
-      NODE_ENV: production
-      DATABASE_CONNECTION_URI: postgresql://postgres:ffcaa89a3e19bd98e911475c7974309b@10.1.0.2:5432/AgileDB?connection_limit=20
-
-    networks:
-      - AgileNet
+  finance-api:
+    image: wanderleymp/finance-api:1.0.1
+    restart: unless-stopped
     deploy:
+      resources:
+        limits:
+          cpus: '1'
+          memory: 1G
+        reservations:
+          cpus: '0.5'
+          memory: 512M
+      restart_policy:
+        condition: on-failure
+        delay: 5s
+        max_attempts: 3
+        window: 120s
       labels:
         - "traefik.enable=true"
-        - "traefik.http.routers.backend.rule=Host(`api.agilefinance.com.br`)"
-        - "traefik.http.services.backend.loadbalancer.server.port=3000"
-        - "traefik.http.routers.backend.tls.certresolver=letsencryptresolver"
+        - "traefik.http.routers.finance-api.rule=Host(`api.agilefinance.com.br`)"
+        - "traefik.http.services.finance-api.loadbalancer.server.port=3000"
+        - "traefik.http.routers.finance-api.tls.certresolver=letsencryptresolver"
         - "traefik.docker.network=AgileNet"
-        - "traefik.http.routers.backend.entrypoints=websecure"
+        - "traefik.http.routers.finance-api.entrypoints=websecure"
+        - "traefik.http.middlewares.finance-api-ratelimit.ratelimit.average=100"
+        - "traefik.http.middlewares.finance-api-ratelimit.ratelimit.burst=50"
+        - "traefik.http.routers.finance-api.middlewares=finance-api-ratelimit"
+    environment:
+      NODE_ENV: production
+      PORT: "3000"
+      DATABASE_CONNECTION_URI: "${DATABASE_CONNECTION_URI}"
+      JWT_SECRET: "${JWT_SECRET}"
+      N8N_URL: "${N8N_URL}"
+      N8N_API_SECRET: "${N8N_API_SECRET}"
+      N8N_API_API_KEY: "${N8N_API_KEY}"
+      RABBITMQ_URL: "${RABBITMQ_URL}"
+    healthcheck:
+      test: ["CMD", "node", "healthcheck.js"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+    networks:
+      - AgileNet
 
 networks:
   AgileNet:

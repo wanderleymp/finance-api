@@ -6,9 +6,13 @@ const PrismaMovementPaymentRepository = require('../repositories/implementations
 const InstallmentGenerationService = require('../services/InstallmentGenerationService');
 const PrismaMovementRepository = require('../repositories/implementations/PrismaMovementRepository');
 const MovementController = require('../controllers/MovementController');
+const authenticateToken = require('../middlewares/authMiddleware');
 
 const movementRepositoryInstance = new PrismaMovementRepository();
 const movementController = new MovementController(movementRepositoryInstance);
+
+// Aplicar middleware de autenticação em todas as rotas
+router.use(authenticateToken);
 
 const MOVEMENT_TYPE_SALES = 1;
 

@@ -2,6 +2,7 @@ const express = require('express');
 const router = express.Router();
 const { PrismaClient } = require('@prisma/client');
 const { taskProcessorService } = require('../services/task-processor.service');
+const authenticateToken = require('../middlewares/authMiddleware');
 
 const prisma = new PrismaClient();
 
@@ -34,6 +35,8 @@ const prisma = new PrismaClient();
  *       500:
  *         description: Erro ao criar tarefa
  */
+router.use(authenticateToken);
+
 router.post('/', async (req, res) => {
     try {
         const { 
