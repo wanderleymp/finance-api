@@ -125,6 +125,22 @@ class PrismaMovementPaymentRepository extends IMovementPaymentRepository {
             const firstDueDate = new Date(baseDate);
             firstDueDate.setDate(firstDueDate.getDate() + (paymentMethod.first_due_date_days || 0));
 
+            // Verificar se já existem parcelas para este pagamento
+            const existingInstallments = await this.prisma.installments.findMany({
+                where: { 
+                    payment_id: data.payment_id,
+                    deleted_at: null // Apenas parcelas não deletadas
+                }
+            });
+
+            if (existingInstallments && existingInstallments.length > 0) {
+                logger.warn('⚠️ [INSTALLMENTS-ALREADY-EXISTS] Já existem parcelas para este pagamento', {
+                    payment_id: data.payment_id,
+                    existing_installments: existingInstallments.length
+                });
+                return existingInstallments;
+            }
+
             // Gerar parcelas
             const installments = [];
             for (let i = 1; i <= totalInstallments; i++) {
@@ -151,6 +167,14 @@ class PrismaMovementPaymentRepository extends IMovementPaymentRepository {
 
                 const installment = await this.createInstallment(installmentData);
                 installments.push(installment);
+
+                logger.info('✅ [INSTALLMENT-CREATED] Parcela criada', {
+                    installment_id: installment.installment_id,
+                    installment_number: installment.installment_number,
+                    amount: installment.amount,
+                    balance: installment.balance,
+                    status: installment.status
+                });
             }
 
             logger.info('🟢 [INSTALLMENTS-GENERATE-SUCCESS] Parcelas geradas', { 
@@ -369,7 +393,34 @@ class PrismaMovementPaymentRepository extends IMovementPaymentRepository {
 
     async createMovementPaymentWithInstallments(data) {
         try {
-            logger.info('🔄 [MOVEMENT-PAYMENT-CREATE-START] Criando pagamento de movimento com parcelas', { data });
+            logger.info('🔄 [MOVEMENT-PAYMENT-CREATE-START] Criando pagamento de movimento com parcelas', { 
+                movement_id: data.movement_id,
+                payment_method_id: data.payment_method_id,
+                total_amount: data.total_amount,
+                movement_date: data.movement_date
+            });
+
+            // Verificar se já existe pagamento para este movimento
+            const existingPayments = await this.prisma.movement_payments.findMany({
+                where: { 
+                    movement_id: data.movement_id,
+                    deleted_at: null // Apenas pagamentos não deletados
+                },
+                include: {
+                    installments: true
+                }
+            });
+
+            if (existingPayments && existingPayments.length > 0) {
+                logger.warn('⚠️ [MOVEMENT-PAYMENT-ALREADY-EXISTS] Já existe um pagamento para este movimento', {
+                    movement_id: data.movement_id,
+                    existing_payment_ids: existingPayments.map(p => p.payment_id)
+                });
+                return {
+                    movementPayment: existingPayments[0],
+                    installments: existingPayments[0].installments || []
+                };
+            }
 
             // Iniciar transação
             const result = await this.prisma.$transaction(async (prisma) => {
@@ -381,6 +432,10 @@ class PrismaMovementPaymentRepository extends IMovementPaymentRepository {
                         total_amount: data.total_amount,
                         status: 'Pendente'
                     }
+                });
+
+                logger.info('✅ [MOVEMENT-PAYMENT-CREATED] Pagamento de movimento criado', {
+                    payment_id: movementPayment.payment_id
                 });
 
                 // Gerar parcelas
@@ -407,7 +462,7 @@ class PrismaMovementPaymentRepository extends IMovementPaymentRepository {
             logger.error('🔴 [MOVEMENT-PAYMENT-CREATE-ERROR] Erro ao criar pagamento de movimento com parcelas', { 
                 error: error.message, 
                 stack: error.stack,
-                data
+                data 
             });
             throw error;
         }

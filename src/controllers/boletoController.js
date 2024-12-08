@@ -1,9 +1,11 @@
 const PrismaBoletoRepository = require('../repositories/implementations/PrismaBoletoRepository');
 const logger = require('../../config/logger');
 const axios = require('axios');
-const db = require('../../config/db'); // assuming db is defined in this file
+const db = require('../../config/db'); 
+const boletoRabbitMQService = require('../services/boletoRabbitMqService');
 
 const boletoRepository = new PrismaBoletoRepository();
+const boletoRabbitMQServiceInstance = boletoRabbitMQService;
 
 // Função para buscar o movement_id de uma installment
 async function getMovementIdFromInstallment(installmentId) {
@@ -120,6 +122,25 @@ exports.deleteBoleto = async (req, res) => {
     }
 };
 
+async function callBoletoWebhook(movement_id) {
+    const webhookBaseUrl = process.env.N8N_URL;
+    const apiKey = process.env.N8N_API_SECRET;
+    const webhookUrl = `${webhookBaseUrl}/vendas/boleto`;
+
+    logger.info('Chamando webhook de geração de boleto:', {
+        url: webhookUrl,
+        movement_id
+    });
+
+    const response = await axios.post(webhookUrl, 
+        { movement_id },
+        { headers: { 'apikey': apiKey } }
+    );
+
+    logger.info('Webhook chamado com sucesso');
+    return response;
+}
+
 exports.generateBoletoWebhook = async (req, res, params = {}) => {
     try {
         const movement_id = params.movement_id || req.body.movement_id;
@@ -139,35 +160,43 @@ exports.generateBoletoWebhook = async (req, res, params = {}) => {
                 details: 'Não foi encontrada nenhuma parcela para esta venda. É necessário ter parcelas cadastradas para gerar o boleto.'
             });
         }
-        
-        const webhookBaseUrl = process.env.N8N_URL;
-        const apiKey = process.env.N8N_API_SECRET;
-        const webhookUrl = `${webhookBaseUrl}/vendas/boleto`;
 
-        console.log('DEBUG: Enviando requisição para webhook:', {
-            url: webhookUrl,
-            movement_id,
-            headers: { 'apikey': apiKey }
-        });
+        try {
+            // Tentar criar a tarefa primeiro
+            const taskResult = await boletoRabbitMQService.publishBoletoGenerationTask(movement_id);
+            
+            logger.info('Tarefa de geração de boleto criada com sucesso', {
+                task_id: taskResult.task_id,
+                movement_id,
+                scheduled_for: taskResult.scheduled_for
+            });
 
-        await axios.post(webhookUrl, 
-            { movement_id },
-            { headers: { 'apikey': apiKey } }
-        );
+            res.json({ 
+                message: 'Solicitação de geração de boleto agendada com sucesso',
+                task_id: taskResult.task_id,
+                scheduled_for: taskResult.scheduled_for
+            });
+        } catch (taskError) {
+            // Se falhar ao criar a tarefa, tenta chamar o webhook diretamente
+            logger.warn('Falha ao criar tarefa de geração de boleto, tentando webhook direto:', {
+                error: taskError.message,
+                movement_id
+            });
 
-        console.log('DEBUG: Requisição enviada com sucesso');
-        res.json({ message: 'Solicitação de geração de boleto enviada com sucesso' });
+            await callBoletoWebhook(movement_id);
+            
+            res.json({ 
+                message: 'Solicitação de geração de boleto enviada com sucesso (modo direto)',
+                warning: 'Não foi possível criar a tarefa de acompanhamento'
+            });
+        }
     } catch (error) {
-        console.error('Erro ao enviar para webhook:', error);
-        console.error('Detalhes do erro:', {
-            message: error.message,
-            response: error.response?.data,
-            config: {
-                url: error.config?.url,
-                headers: error.config?.headers,
-                data: error.config?.data
-            }
+        logger.error('Erro ao processar geração de boleto:', {
+            error: error.message,
+            stack: error.stack,
+            movement_id: params.movement_id || req.body.movement_id
         });
+
         res.status(500).json({ 
             error: 'Erro interno do servidor',
             details: 'Ocorreu um erro ao tentar gerar o boleto. Por favor, tente novamente.'

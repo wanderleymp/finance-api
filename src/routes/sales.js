@@ -4,6 +4,11 @@ const movementService = require('../services/movements');
 const boletoController = require('../controllers/boletoController');
 const PrismaMovementPaymentRepository = require('../repositories/implementations/PrismaMovementPaymentRepository');
 const InstallmentGenerationService = require('../services/InstallmentGenerationService');
+const PrismaMovementRepository = require('../repositories/implementations/PrismaMovementRepository');
+const MovementController = require('../controllers/MovementController');
+
+const movementRepositoryInstance = new PrismaMovementRepository();
+const movementController = new MovementController(movementRepositoryInstance);
 
 const MOVEMENT_TYPE_SALES = 1;
 
@@ -176,7 +181,11 @@ router.post('/', async (req, res) => {
         const sale = await movementService.createSaleWithItems(req.body);
         console.log('DEBUG: Venda criada com sucesso', { sale });
         
-        res.status(201).json(sale);
+        // Retornar apenas o ID do movimento
+        res.status(201).json({ 
+            movement_id: sale.movement_id,
+            message: 'Venda criada com sucesso'
+        });
     } catch (error) {
         console.error('DEBUG: Erro completo na criação de venda', { 
             error: error.message, 
@@ -353,6 +362,50 @@ router.post('/:id/boleto', (req, res) => {
         installment_id 
     });
 });
+
+/**
+ * @swagger
+ * /sales/{id}/boleto:
+ *   post:
+ *     summary: Gerar boleto para uma venda
+ *     tags: [Sales]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: integer
+ *     responses:
+ *       201:
+ *         description: Boleto gerado com sucesso
+ *       500:
+ *         description: Erro ao gerar boleto
+ */
+router.post('/:id/boleto', (req, res) => movementController.generateBoleto(req, res));
+
+/**
+ * @swagger
+ * /sales/{id}/nfse:
+ *   post:
+ *     summary: Gerar NFSe para uma venda
+ *     tags: [Sales]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: integer
+ *     responses:
+ *       201:
+ *         description: NFSe gerada com sucesso
+ *       500:
+ *         description: Erro ao gerar NFSe
+ */
+router.post('/:id/nfse', (req, res) => movementController.generateNfse(req, res));
 
 /**
  * @swagger
@@ -609,5 +662,11 @@ router.post('/:id/movement_payment', async (req, res) => {
         res.status(500).json({ error: 'Erro ao processar pagamento', details: error.message });
     }
 });
+
+// Rotas de boleto
+router.post('/movements/:movementId/boleto', movementController.generateBoleto.bind(movementController));
+router.get('/movements/boleto/status/:taskId', movementController.getBoletoStatus.bind(movementController));
+router.post('/movements/:movementId/nfse', movementController.generateNfse.bind(movementController));
+router.get('/movements/nfse/status/:taskId', movementController.getNfseStatus.bind(movementController));
 
 module.exports = router;

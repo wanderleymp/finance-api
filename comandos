@@ -15,3 +15,8 @@ pkill -f node
 
 # Reiniciar a aplicação
 pkill -f node && npm run dev
+
+
+lsof -i :3000
+kill -9 12734
+npm run dev

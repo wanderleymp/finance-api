@@ -5,6 +5,34 @@ const authenticateToken = require('../middlewares/authMiddleware');
 
 /**
  * @swagger
+ * /boletos/generate/{movement_id}:
+ *   post:
+ *     summary: Gerar boleto para um movimento específico
+ *     tags: [Boletos]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: movement_id
+ *         required: true
+ *         schema:
+ *           type: integer
+ *         description: ID do movimento para gerar o boleto
+ *     responses:
+ *       200:
+ *         description: Solicitação de geração de boleto enviada com sucesso
+ *       400:
+ *         description: Movimento não encontrado ou sem parcelas
+ *       500:
+ *         description: Erro interno do servidor
+ */
+router.post('/generate/:movement_id', authenticateToken, (req, res) => {
+    const movement_id = req.params.movement_id;
+    boletoController.generateBoletoWebhook(req, res, { movement_id });
+});
+
+/**
+ * @swagger
  * /boletos:
  *   post:
  *     summary: Gerar boleto via webhook

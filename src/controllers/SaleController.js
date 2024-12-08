@@ -87,30 +87,23 @@ class SaleController {
             };
 
             logger.info('🟢 [SALE-PAYMENT-CREATE] Criando pagamento', paymentData);
-            const payment = await this.movementPaymentRepository.create(paymentData);
-            logger.info('🟢 [SALE-PAYMENT] Pagamento criado', {
-                payment_id: payment.payment_id,
-                total_amount: payment.total_amount
-            });
-
-            // 3. Gerar parcelas
-            logger.info('🟢 [SALE-INSTALLMENTS-GENERATE] Gerando parcelas para o pagamento', { payment_id: payment.payment_id });
-            const installments = await this.installmentGenerationService.generateInstallments(payment.payment_id);
-            logger.info('🟢 [SALE-INSTALLMENTS] Parcelas geradas', {
-                payment_id: payment.payment_id,
-                installments_count: installments.length
+            const payment = await this.movementPaymentRepository.createMovementPaymentWithInstallments(paymentData);
+            logger.info('🟢 [SALE-PAYMENT] Pagamento criado com parcelas', {
+                payment_id: payment.movementPayment.payment_id,
+                total_amount: payment.movementPayment.total_amount,
+                installments_count: payment.installments.length
             });
 
             logger.info('🔵 [SALE-COMPLETE] Venda concluída com sucesso', {
                 sale_id: sale.movement_id,
-                payment_id: payment.payment_id,
+                payment_id: payment.movementPayment.payment_id,
                 total_amount: sale.total_amount
             });
 
             res.status(201).json({
                 sale,
-                payment,
-                installments
+                payment: payment.movementPayment,
+                installments: payment.installments
             });
         } catch (error) {
             logger.error('🔴 [SALE-ERROR] Erro ao criar venda', { 

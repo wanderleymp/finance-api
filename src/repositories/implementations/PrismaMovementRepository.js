@@ -2,6 +2,7 @@ const { PrismaClient } = require('@prisma/client');
 const IMovementRepository = require('../interfaces/IMovementRepository');
 const logger = require('../../../config/logger');
 const { MovementError, MovementNotFoundError } = require('../../utils/errors/MovementError');
+const axios = require('axios');
 
 class PrismaMovementRepository extends IMovementRepository {
     constructor() {
@@ -291,9 +292,6 @@ class PrismaMovementRepository extends IMovementRepository {
                                     }
                                 },
                                 installments: {
-                                    where: {
-                                        payment_id: { equals: payment_id }
-                                    },
                                     include: {
                                         boletos: {
                                             select: {
@@ -502,6 +500,210 @@ class PrismaMovementRepository extends IMovementRepository {
                 throw new MovementNotFoundError(id);
             }
             throw error;
+        }
+    }
+
+    async generateBoleto(movementId) {
+        // Converte para inteiro
+        movementId = parseInt(movementId);
+
+        // Busca movimento
+        const movement = await this.prisma.movements.findUnique({
+            where: { movement_id: movementId },
+            include: {
+                movement_payments: {
+                    include: {
+                        payment_methods: true
+                    }
+                }
+            }
+        });
+
+        if (!movement) {
+            throw new Error(`Movimento ${movementId} não encontrado`);
+        }
+
+        // Verifica se já existe boleto
+        const existingBoleto = await this.prisma.boletos.findFirst({
+            where: { movement_id: movementId }
+        });
+
+        if (existingBoleto) {
+            return existingBoleto;
+        }
+
+        // Gera boleto
+        const boletoData = {
+            movement_id: movementId,
+            boleto_number: `BOLETO-${movementId}-${Date.now()}`,
+            boleto_url: `https://exemplo.com/boleto/${movementId}`,
+            amount: movement.total_amount,
+            due_date: new Date(new Date().setDate(new Date().getDate() + 15))
+        };
+
+        return this.prisma.boletos.create({
+            data: boletoData
+        });
+    }
+
+    async generateNfse(movementId) {
+        // Converte para inteiro
+        movementId = parseInt(movementId);
+
+        // Busca movimento para validar existência
+        const movement = await this.prisma.movements.findUnique({
+            where: { movement_id: movementId }
+        });
+
+        if (!movement) {
+            throw new Error(`Movimento ${movementId} não encontrado`);
+        }
+
+        // Preparar dados para chamada do webhook
+        const webhookData = {
+            movement_id: movementId
+        };
+
+        const webhookUrl = process.env.N8N_NFSE_WEBHOOK_URL;
+        
+        if (!webhookUrl) {
+            throw new Error('URL do webhook de NFSe não configurada');
+        }
+
+        try {
+            const response = await axios.post(webhookUrl, webhookData, {
+                headers: {
+                    'Authorization': `Bearer ${process.env.N8N_WEBHOOK_TOKEN}`,
+                    'Content-Type': 'application/json'
+                }
+            });
+
+            // Processar resposta do webhook
+            if (response.data && response.data.nfse_id) {
+                // Criar registro na tabela de NFSe
+                return await this.prisma.nfse.create({
+                    data: {
+                        invoice_id: response.data.invoice_id, // Assumindo que o webhook retorna o invoice_id
+                        integration_nfse_id: response.data.nfse_id
+                    }
+                });
+            }
+
+            throw new Error('Falha ao gerar NFSe');
+        } catch (error) {
+            console.error('Erro ao chamar webhook de NFSe:', error);
+            throw new Error(`Erro ao gerar NFSe: ${error.message}`);
+        }
+    }
+
+    generateNfseAccessKey() {
+        const randomPart = () => Math.random().toString(36).substring(2, 15);
+        return `NFSe-${randomPart()}-${randomPart()}`.toUpperCase();
+    }
+
+    async createNfseTask(movementId) {
+        // Converte para inteiro
+        movementId = parseInt(movementId);
+
+        // Busca movimento para validar existência
+        const movement = await this.prisma.movements.findUnique({
+            where: { movement_id: movementId }
+        });
+
+        if (!movement) {
+            throw new Error(`Movimento ${movementId} não encontrado`);
+        }
+
+        // Criar tarefa assíncrona para geração de NFSe
+        const asyncTask = await this.prisma.async_tasks.create({
+            data: {
+                task_type: 'GENERATE_NFSE',
+                status: 'PENDING',
+                payload: JSON.stringify({ movement_id: movementId }),
+                created_at: new Date(),
+                updated_at: new Date()
+            }
+        });
+
+        return asyncTask;
+    }
+
+    async processNfseTask(taskId) {
+        // Busca a tarefa
+        const task = await this.prisma.async_tasks.findUnique({
+            where: { task_id: taskId }
+        });
+
+        if (!task) {
+            throw new Error(`Tarefa ${taskId} não encontrada`);
+        }
+
+        if (task.status !== 'PENDING') {
+            throw new Error(`Tarefa ${taskId} já processada`);
+        }
+
+        const payload = JSON.parse(task.payload);
+        const movementId = payload.movement_id;
+
+        try {
+            // Preparar dados para chamada do webhook
+            const webhookData = {
+                movement_id: movementId
+            };
+
+            const webhookUrl = `${process.env.N8N_URL}/nuvemfiscal/nfse/emitir`;
+            
+            if (!webhookUrl) {
+                throw new Error('URL do webhook de NFSe não configurada');
+            }
+
+            const response = await axios.post(webhookUrl, webhookData, {
+                headers: {
+                    'Authorization': `Bearer ${process.env.N8N_API_SECRET}`,
+                    'Content-Type': 'application/json'
+                }
+            });
+
+            // Processar resposta do webhook
+            if (response.data && response.data.invoice_id) {
+                // Atualizar tarefa como concluída
+                await this.prisma.async_tasks.update({
+                    where: { task_id: taskId },
+                    data: {
+                        status: 'COMPLETED',
+                        result: JSON.stringify(response.data),
+                        updated_at: new Date()
+                    }
+                });
+
+                // Retorna o invoice_id gerado
+                return response.data.invoice_id;
+            }
+
+            // Se não gerou invoice, marca como falha
+            await this.prisma.async_tasks.update({
+                where: { task_id: taskId },
+                data: {
+                    status: 'FAILED',
+                    result: JSON.stringify({ error: 'Falha ao gerar NFSe' }),
+                    updated_at: new Date()
+                }
+            });
+
+            throw new Error('Falha ao gerar NFSe');
+        } catch (error) {
+            // Em caso de erro, marca a tarefa como falha
+            await this.prisma.async_tasks.update({
+                where: { task_id: taskId },
+                data: {
+                    status: 'FAILED',
+                    result: JSON.stringify({ error: error.message }),
+                    updated_at: new Date()
+                }
+            });
+
+            console.error('Erro ao chamar webhook de NFSe:', error);
+            throw new Error(`Erro ao gerar NFSe: ${error.message}`);
         }
     }
 }

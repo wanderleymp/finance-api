@@ -47,17 +47,16 @@ class MovementPaymentController {
                 });
             }
 
-            const payment = await this.movementPaymentRepository.create({
+            const result = await this.movementPaymentRepository.createMovementPaymentWithInstallments({
                 movement_id: parseInt(movement_id),
                 payment_method_id: parseInt(payment_method_id),
-                total_amount: parseFloat(total_amount),
-                status: 'Pendente'
+                total_amount: parseFloat(total_amount)
             });
-
-            // Após criar o payment, gera as parcelas
-            await this.installmentGenerationService.generateInstallments(payment.payment_id);
             
-            return res.status(201).json(payment);
+            return res.status(201).json({
+                payment: result.movementPayment,
+                installments: result.installments
+            });
         } catch (error) {
             logger.error('Error creating movement payment', { error });
             if (error.message === 'Movement not found') {

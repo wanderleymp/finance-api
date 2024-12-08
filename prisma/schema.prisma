@@ -152,6 +152,20 @@ model boletos_history {
   boletos           boletos   @relation(fields: [boleto_id], references: [boleto_id], onDelete: Cascade, onUpdate: NoAction, map: "fk_boleto")
 }
 
+model channels {
+  channel_id      Int           @id @default(autoincrement())
+  channel_name    String        @db.VarChar(255)
+  contact_type_id Int
+  contact_value   String?       @db.VarChar(20)
+  is_active       Boolean?      @default(true)
+  department_id   Int?
+  created_at      DateTime?     @default(now()) @db.Timestamp(6)
+  updated_at      DateTime?     @default(now()) @db.Timestamp(6)
+  contact_types   contact_types @relation(fields: [contact_type_id], references: [contact_type_id], onDelete: Cascade, onUpdate: NoAction, map: "fk_contact_type")
+  departments     departments?  @relation(fields: [department_id], references: [department_id], onDelete: Cascade, onUpdate: NoAction, map: "fk_department")
+  chats           chats[]
+}
+
 model chat_channels {
   channel_id   Int       @id @default(autoincrement())
   channel_name String    @unique @db.VarChar(50)
@@ -159,6 +173,15 @@ model chat_channels {
   updated_at   DateTime? @default(now()) @db.Timestamp(6)
 
   @@index([channel_name], map: "idx_chat_channels_channel_name")
+}
+
+model chat_logs {
+  chat_log_id   Int       @id @default(autoincrement())
+  chat_id       Int
+  event_type    String    @db.VarChar(255)
+  event_details Json?
+  performed_by  Int?
+  created_at    DateTime? @default(now()) @db.Timestamp(6)
 }
 
 model chat_messages {
@@ -204,7 +227,7 @@ model chats {
   created_at          DateTime?      @default(now()) @db.Timestamp(6)
   updated_at          DateTime?      @default(now()) @db.Timestamp(6)
   user_accounts       user_accounts? @relation(fields: [assigned_to], references: [user_id], onUpdate: NoAction, map: "fk_assigned_to")
-  chat_channels       channels?      @relation(fields: [channel_id], references: [channel_id], onUpdate: NoAction, map: "fk_channel")
+  channels            channels?      @relation(fields: [channel_id], references: [channel_id], onUpdate: NoAction, map: "fk_channel")
   persons             persons        @relation(fields: [person_id], references: [person_id], onDelete: Cascade, onUpdate: NoAction, map: "fk_person")
   messages            messages[]
 }
@@ -361,6 +384,15 @@ model cte {
   invoices                                invoices @relation(fields: [invoice_id], references: [invoice_id], onDelete: Cascade, onUpdate: NoAction)
   persons_cte_receiver_person_idTopersons persons? @relation("cte_receiver_person_idTopersons", fields: [receiver_person_id], references: [person_id], onDelete: NoAction, onUpdate: NoAction)
   persons_cte_sender_person_idTopersons   persons? @relation("cte_sender_person_idTopersons", fields: [sender_person_id], references: [person_id], onDelete: NoAction, onUpdate: NoAction)
+}
+
+model departments {
+  department_id    Int                @id @default(autoincrement())
+  department_name  String             @unique @db.VarChar(255)
+  permissions      Json?
+  created_at       DateTime?          @default(now()) @db.Timestamp(6)
+  channels         channels[]
+  user_departments user_departments[]
 }
 
 /// This model contains an expression index which requires additional setup for migrations. Visit https://pris.ly/d/expression-indexes for more info.
@@ -525,7 +557,6 @@ model invoices {
   nfse                                             nfse[]
 }
 
-/// This table has subclasses and requires additional setup for migrations. Visit https://pris.ly/d/table-inheritance for more info.
 model items {
   item_id     Int       @id @unique(map: "unique_item_id") @default(autoincrement())
   code        String    @db.VarChar(50)
@@ -1137,6 +1168,17 @@ model product_groups {
   products         products[]
 }
 
+model products {
+  product_id       Int             @id @default(autoincrement())
+  item_id          Int             @unique
+  weight           Decimal?        @db.Decimal(10, 2)
+  dimensions       String?         @db.VarChar(50)
+  manufacturer     String?         @db.VarChar(255)
+  product_group_id Int?
+  product_groups   product_groups? @relation(fields: [product_group_id], references: [product_group_id], onUpdate: NoAction, map: "fk_product_group")
+  items            items           @relation(fields: [item_id], references: [item_id], onDelete: Cascade, onUpdate: NoAction, map: "fk_product_item")
+}
+
 model profile_permissions {
   permission_id   Int             @id @default(autoincrement())
   profile_id      Int
@@ -1289,6 +1331,7 @@ model task_logs {
 model tasks {
   task_id                                               Int                  @id @default(autoincrement())
   process_id                                            Int
+  movement_id                                           Int?
   name                                                  String               @db.VarChar(255)
   description                                           String?
   assigned_to                                           Int?
@@ -1304,6 +1347,7 @@ model tasks {
   tasks_execution_mode                                  tasks_execution_mode @relation(fields: [execution_mode_id], references: [execution_mode_id], onDelete: NoAction, onUpdate: NoAction)
   processes                                             processes            @relation(fields: [process_id], references: [process_id], onDelete: Cascade, onUpdate: NoAction)
   tasks_status                                          tasks_status         @relation(fields: [status_id], references: [status_id], onDelete: NoAction, onUpdate: NoAction)
+  movement                                              movements?           @relation(fields: [movement_id], references: [movement_id], onDelete: SetNull, onUpdate: Cascade)
   user_assignments                                      user_assignments[]
 }
 
@@ -1363,6 +1407,17 @@ model user_assignments {
   tasks         tasks     @relation(fields: [task_id], references: [task_id], onDelete: Cascade, onUpdate: NoAction)
 }
 
+model user_departments {
+  user_department_id Int           @id @default(autoincrement())
+  user_id            Int
+  department_id      Int
+  created_at         DateTime?     @default(now()) @db.Timestamp(6)
+  departments        departments   @relation(fields: [department_id], references: [department_id], onDelete: Cascade, onUpdate: NoAction, map: "fk_department")
+  user_accounts      user_accounts @relation(fields: [user_id], references: [user_id], onDelete: Cascade, onUpdate: NoAction, map: "fk_user")
+
+  @@unique([user_id, department_id], map: "unique_user_department")
+}
+
 model user_license {
   user_license_id Int           @id @default(autoincrement())
   user_id         Int
@@ -1410,58 +1465,4 @@ model v_model_movement_id {
   model_movement_id Int?
 
   @@ignore
-}
-
-model channels {
-  channel_id      Int           @id @default(autoincrement())
-  channel_name    String        @db.VarChar(255)
-  contact_type_id Int
-  contact_value   String?       @db.VarChar(20)
-  is_active       Boolean?      @default(true)
-  department_id   Int?
-  created_at      DateTime?     @default(now()) @db.Timestamp(6)
-  updated_at      DateTime?     @default(now()) @db.Timestamp(6)
-  contact_types   contact_types @relation(fields: [contact_type_id], references: [contact_type_id], onDelete: Cascade, onUpdate: NoAction, map: "fk_contact_type")
-  departments     departments?  @relation(fields: [department_id], references: [department_id], onDelete: Cascade, onUpdate: NoAction, map: "fk_department")
-  chats           chats[]
-}
-
-model chat_logs {
-  chat_log_id   Int       @id @default(autoincrement())
-  chat_id       Int
-  event_type    String    @db.VarChar(255)
-  event_details Json?
-  performed_by  Int?
-  created_at    DateTime? @default(now()) @db.Timestamp(6)
-}
-
-model departments {
-  department_id    Int                @id @default(autoincrement())
-  department_name  String             @unique @db.VarChar(255)
-  permissions      Json?
-  created_at       DateTime?          @default(now()) @db.Timestamp(6)
-  channels         channels[]
-  user_departments user_departments[]
-}
-
-model products {
-  product_id       Int             @id @default(autoincrement())
-  item_id          Int             @unique
-  weight           Decimal?        @db.Decimal(10, 2)
-  dimensions       String?         @db.VarChar(50)
-  manufacturer     String?         @db.VarChar(255)
-  product_group_id Int?
-  product_groups   product_groups? @relation(fields: [product_group_id], references: [product_group_id], onUpdate: NoAction, map: "fk_product_group")
-  items            items           @relation(fields: [item_id], references: [item_id], onDelete: Cascade, onUpdate: NoAction, map: "fk_product_item")
-}
-
-model user_departments {
-  user_department_id Int           @id @default(autoincrement())
-  user_id            Int
-  department_id      Int
-  created_at         DateTime?     @default(now()) @db.Timestamp(6)
-  departments        departments   @relation(fields: [department_id], references: [department_id], onDelete: Cascade, onUpdate: NoAction, map: "fk_department")
-  user_accounts      user_accounts @relation(fields: [user_id], references: [user_id], onDelete: Cascade, onUpdate: NoAction, map: "fk_user")
-
-  @@unique([user_id, department_id], map: "unique_user_department")
 }

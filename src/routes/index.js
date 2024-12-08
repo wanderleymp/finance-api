@@ -19,6 +19,9 @@ const messagingRoutes = require('./messagingRoutes');
 const boletoRoutes = require('./boletoRoutes');
 const installmentRoutes = require('./installmentRoutes');
 const movementPaymentRoutes = require('./movementPaymentRoutes');
+const tasksRoutes = require('./tasks');
+const MovementController = require('../controllers/MovementController');
+const TaskController = require('../controllers/TaskController');
 
 // Test route to check if API is working
 router.get('/', (req, res) => {
@@ -109,6 +112,11 @@ router.use('/installments', installmentRoutes);
 
 // Movement Payment routes
 router.use('/movement-payments', movementPaymentRoutes);
+
+// Tasks routes
+router.get('/tasks/failed', TaskController.listFailedTasks.bind(TaskController));
+router.post('/tasks/:task_id/retry', TaskController.retryTask.bind(TaskController));
+router.use('/tasks', tasksRoutes);
 
 // Rota de fallback para debug
 router.use((req, res, next) => {

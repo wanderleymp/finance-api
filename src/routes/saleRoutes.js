@@ -2,9 +2,14 @@ const express = require('express');
 const router = express.Router();
 const SaleController = require('../controllers/SaleController');
 const authMiddleware = require('../middlewares/authMiddleware');
+const PrismaMovementRepository = require('../repositories/implementations/PrismaMovementRepository');
+const MovementController = require('../controllers/MovementController');
 
 // Aplicar middleware de autenticação em todas as rotas
 router.use(authMiddleware);
+
+const movementRepositoryInstance = new PrismaMovementRepository();
+const movementController = new MovementController(movementRepositoryInstance);
 
 /**
  * @swagger
@@ -180,5 +185,55 @@ router.put('/:id', (req, res) => SaleController.updateSale(req, res));
  *         description: Erro interno do servidor
  */
 router.delete('/:id', (req, res) => SaleController.deleteSale(req, res));
+
+/**
+ * @swagger
+ * /sales/{movementId}/boleto:
+ *   post:
+ *     summary: Gerar boleto para uma venda
+ *     tags: [Sales]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: movementId
+ *         required: true
+ *         schema:
+ *           type: integer
+ *     responses:
+ *       201:
+ *         description: Boleto gerado com sucesso
+ *       500:
+ *         description: Erro ao gerar boleto
+ */
+router.post('/:movementId/boleto', 
+    authMiddleware, 
+    (req, res) => movementController.generateBoleto(req, res)
+);
+
+/**
+ * @swagger
+ * /sales/{movementId}/nfse:
+ *   post:
+ *     summary: Gerar NFSe para uma venda
+ *     tags: [Sales]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: movementId
+ *         required: true
+ *         schema:
+ *           type: integer
+ *     responses:
+ *       201:
+ *         description: NFSe gerada com sucesso
+ *       500:
+ *         description: Erro ao gerar NFSe
+ */
+router.post('/:movementId/nfse', 
+    authMiddleware, 
+    (req, res) => movementController.generateNfse(req, res)
+);
 
 module.exports = router;
