@@ -4,17 +4,20 @@ FROM node:20-slim
 # Definir variáveis de ambiente para melhor segurança e performance
 ENV NODE_ENV=production \
     NODE_OPTIONS="--max-old-space-size=2048" \
-    NPM_CONFIG_LOGLEVEL=warn
+    NPM_CONFIG_LOGLEVEL=warn \
+    HOME=/app
 
 # Criar usuário não-root com UID/GID específicos
 RUN addgroup --system --gid 1001 nodejs \
-    && adduser --system --uid 1001 --ingroup nodejs nodeuser
+    && adduser --system --uid 1001 --ingroup nodejs nodeuser \
+    && mkdir -p /app \
+    && chown -R nodeuser:nodejs /app
 
 # Definir diretório de trabalho
 WORKDIR /app
 
 # Copiar apenas os arquivos necessários para instalar dependências
-COPY package*.json ./
+COPY --chown=nodeuser:nodejs package*.json ./
 
 # Instalar dependências com flags de segurança e performance
 RUN npm ci --only=production --no-optional --no-audit \
@@ -24,7 +27,7 @@ RUN npm ci --only=production --no-optional --no-audit \
 # Copiar o resto dos arquivos (exceto os definidos no .dockerignore)
 COPY --chown=nodeuser:nodejs . .
 
-# Gerar prisma client com usuário não-root
+# Mudar para usuário não-root e gerar prisma client
 USER nodeuser
 RUN npx prisma generate
 
