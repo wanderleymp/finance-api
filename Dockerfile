@@ -7,8 +7,9 @@ ENV NODE_ENV=production \
     NPM_CONFIG_LOGLEVEL=warn \
     HOME=/app
 
-# Criar usuário não-root com UID/GID específicos
-RUN addgroup --system --gid 1001 nodejs \
+# Instalar OpenSSL e criar usuário não-root com UID/GID específicos
+RUN apt-get update -y && apt-get install -y openssl \
+    && addgroup --system --gid 1001 nodejs \
     && adduser --system --uid 1001 --ingroup nodejs nodeuser \
     && mkdir -p /app \
     && chown -R nodeuser:nodejs /app
@@ -22,13 +23,17 @@ COPY --chown=nodeuser:nodejs package*.json ./
 # Instalar dependências com flags de segurança e performance
 RUN npm ci --only=production --no-optional --no-audit \
     && npm cache clean --force \
-    && rm -rf /root/.npm
+    && rm -rf /root/.npm \
+    && chown -R nodeuser:nodejs /app
 
 # Copiar o resto dos arquivos (exceto os definidos no .dockerignore)
 COPY --chown=nodeuser:nodejs . .
 
 # Criar diretório .npm e ajustar permissões
-RUN mkdir -p /app/.npm && chown -R nodeuser:nodejs /app/.npm
+RUN mkdir -p /app/.npm \
+    && mkdir -p /app/node_modules/.prisma \
+    && chown -R nodeuser:nodejs /app/.npm \
+    && chown -R nodeuser:nodejs /app/node_modules
 
 # Mudar para usuário não-root e gerar prisma client
 USER nodeuser
@@ -42,4 +47,4 @@ HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
 EXPOSE 3000
 
 # Definir comando de inicialização com flags de segurança
-CMD ["node", "--no-deprecation", "src/server.js"]
+CMD ["node", "src/server.js"]
