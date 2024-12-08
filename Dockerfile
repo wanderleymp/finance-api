@@ -1,32 +1,39 @@
-FROM node:18-slim
+# Usar uma imagem base mais recente e segura
+FROM node:20-slim
 
-# Criar usuário não-root
+# Definir variáveis de ambiente para melhor segurança e performance
+ENV NODE_ENV=production \
+    NODE_OPTIONS="--max-old-space-size=2048" \
+    NPM_CONFIG_LOGLEVEL=warn
+
+# Criar usuário não-root com UID/GID específicos
 RUN addgroup --system --gid 1001 nodejs \
     && adduser --system --uid 1001 --ingroup nodejs nodeuser
 
+# Definir diretório de trabalho
 WORKDIR /app
 
 # Copiar apenas os arquivos necessários para instalar dependências
 COPY package*.json ./
 
-# Instalar dependências e limpar cache
-RUN npm ci --only=production \
-    && npm cache clean --force
+# Instalar dependências com flags de segurança e performance
+RUN npm ci --only=production --no-optional --no-audit \
+    && npm cache clean --force \
+    && rm -rf /root/.npm
 
 # Copiar o resto dos arquivos (exceto os definidos no .dockerignore)
-COPY . .
+COPY --chown=nodeuser:nodejs . .
 
-# Gerar prisma client
+# Gerar prisma client com usuário não-root
+USER nodeuser
 RUN npx prisma generate
 
-# Mudar para usuário não-root
-USER nodeuser
-
-# Healthcheck
-HEALTHCHECK --interval=30s --timeout=30s --start-period=5s --retries=3 \
+# Healthcheck mais robusto
+HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
     CMD node healthcheck.js || exit 1
 
 # Expor porta
 EXPOSE 3000
 
-CMD ["npm", "run", "start"]
+# Definir comando de inicialização com flags de segurança
+CMD ["node", "--no-deprecation", "src/server.js"]
