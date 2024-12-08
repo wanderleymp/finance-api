@@ -91,10 +91,10 @@ class MovementService {
         return {
             data: movements.data,
             pagination: {
-                total: movements.total,
+                total: movements.pagination.total,
                 page: pageInt,
                 limit: limitInt,
-                totalPages: Math.ceil(movements.total / limitInt)
+                totalPages: Math.ceil(movements.pagination.total / limitInt)
             }
         };
     }
