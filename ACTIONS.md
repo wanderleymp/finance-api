@@ -1,161 +1,229 @@
-# Histórico de Ações no Projeto
+# Histórico de Ações no Projeto Finance API
 
-## Configuração ESLint e Prettier 
+## Configuração Inicial do Projeto
 
-### Dependências Instaladas
-- eslint
-- @typescript-eslint/parser
-- @typescript-eslint/eslint-plugin
-- prettier
-- eslint-config-prettier
-- eslint-plugin-prettier
-
-### Arquivos Configurados
-- Criado `.eslintrc.json` com configurações para TypeScript
-- Criado `.prettierrc` com regras de formatação de código
-- Adicionados scripts de lint no `package.json`:
-  - `lint`: Verificar código
-  - `lint:fix`: Corrigir automaticamente problemas de lint
-
-### Detalhes da Configuração
-- Integração completa entre ESLint e Prettier
-- Regras recomendadas para TypeScript
-- Configurações para manter a consistência e qualidade do código
-
-**Data:** 09/12/2024
-
-## Configuração Jest 
-
-### Dependências Instaladas
-- jest
-- ts-jest
-- @types/jest
-
-### Arquivos Configurados
-- Criado `jest.config.js` com configurações para TypeScript
-- Adicionados scripts de teste no `package.json`:
-  - `test`: Executar testes
-  - `test:watch`: Executar testes em modo de observação
-  - `test:coverage`: Gerar relatório de cobertura de testes
-
-### Detalhes da Configuração
-- Preset configurado para ts-jest
-- Ambiente de teste definido como Node.js
-- Configurações de cobertura de código definidas
-- Suporte para testes em TypeScript
-
-**Data:** 09/12/2024
-
-## Configuração Git e Branch 
-
-### Ações Realizadas
-- Inicialização do repositório Git
-- Criação do branch de desenvolvimento 1.1.0
-- Commit inicial do projeto
-
-### Detalhes da Configuração
-- Repositório Git configurado na raiz do projeto
-- Branch atual: 1.1.0
-- Preparação para desenvolvimento incremental
-
-**Data:** 09/12/2024
-
-## Definição da Arquitetura Inicial 
+### Configuração do Ambiente de Desenvolvimento
+- **Ferramentas Instaladas**:
+  - Node.js
+  - npm
+  - TypeScript
+  - Git
 
 ### Estrutura de Pastas
-- Criadas pastas base do projeto:
+- Criação das pastas principais:
   - `src/routes/`
   - `src/controllers/`
   - `src/services/`
   - `src/repositories/`
   - `src/config/`
   - `src/utils/`
+  - `src/controllers/__tests__/`
 
-### Configuração do Servidor
-- Instalado Express e @types/express
-- Criado `src/app.ts` com configurações básicas
-  - Middleware para parsing de JSON
-- Criado `src/server.ts` para inicialização do servidor
-  - Definida porta 3000
-  - Adicionado log de inicialização
+## Configuração de Ferramentas de Desenvolvimento
 
-### Ajustes no Projeto
-- Adicionado script `dev` no `package.json`
-- Atualizada versão para 1.1.0
+### ESLint e Prettier
+- **Dependências Instaladas**:
+  - eslint
+  - @typescript-eslint/parser
+  - @typescript-eslint/eslint-plugin
+  - prettier
+  - eslint-config-prettier
+  - eslint-plugin-prettier
 
-**Data:** 09/12/2024
+- **Arquivos Configurados**:
+  - `.eslintrc.json`
+  - `.prettierrc`
 
-## Configuração de Variáveis de Ambiente 
+- **Scripts Adicionados**:
+  - `lint`: Verificar código
+  - `lint:fix`: Corrigir automaticamente
 
-### Dependências
-- Instalado pacote `dotenv`
+### Configuração de Testes
+- **Dependências Instaladas**:
+  - jest
+  - ts-jest
+  - @types/jest
+
+- **Arquivos Configurados**:
+  - `jest.config.js`
+
+- **Scripts de Teste**:
+  - `test`
+  - `test:watch`
+  - `test:coverage`
+
+## Configuração do Servidor
+
+### Dependências Web
+- **Instaladas**:
+  - express
+  - @types/express
 
 ### Arquivos Criados
-- `.env.example` com variáveis de configuração
-- `src/config/env.ts` para gerenciamento de variáveis de ambiente
-  - Função para obter variáveis com valor padrão
-  - Exportação de variáveis principais
+- `src/app.ts`: Configuração básica do servidor
+- `src/server.ts`: Inicialização do servidor
+- Rota de health check implementada
 
-## Configuração do Banco de Dados com Prisma 
+## Variáveis de Ambiente
 
-### Dependências
-- Instalado Prisma e @prisma/client
+### Configuração
+- **Dependências**:
+  - dotenv
+  - @types/dotenv
+
+### Arquivos Criados
+- `.env.example`
+- `src/config/env.ts`: Gerenciamento de variáveis de ambiente
+
+## Banco de Dados
+
+### Prisma ORM
+- **Dependências Instaladas**:
+  - @prisma/client
+  - prisma
 
 ### Configurações
-- Configurado banco de dados PostgreSQL
-- Atualizado `.env` com URL de conexão
-- Criado modelo `User` no `schema.prisma`
-  - Campos: id, user_name, password, createdAt, updatedAt
-- Aplicada primeira migração
-- Criado `src/config/prisma.ts` para exportar instância do PrismaClient
-
-### Detalhes Técnicos
 - Banco de dados: PostgreSQL
-- Banco de desenvolvimento: finance_dev
-- Configuração de conexão no endereço 10.1.0.2:5432
+- `prisma/schema.prisma` criado
+- Modelo `User` implementado
+- Primeira migração aplicada
 
-**Data:** 09/12/2024
+## Autenticação e Segurança
 
-## Primeira Rota de Exemplo 
+### Dependências de Segurança
+- **Instaladas**:
+  - argon2
+  - jsonwebtoken
+  - @types/jsonwebtoken
 
-### Rota de Health Check
-- Criado `src/routes/healthRoutes.ts`
-- Criado `src/controllers/healthController.ts`
-  - Implementação do endpoint `/health`
-  - Retorno de status e timestamp
-
-### Ajustes no Servidor
-- Atualizado `src/app.ts` para incluir rota de health check
-
-**Data:** 09/12/2024
-
-## Configuração de Autenticação e Segurança 
-
-### Dependências
-- Instalado Argon2 para hash de senhas
-- Instalado jsonwebtoken para geração de tokens JWT
+### Funcionalidades Implementadas
+- Registro de usuários
+- Login de usuários
+- Hash de senhas com Argon2
+- Geração de tokens JWT
 
 ### Arquivos Criados
 - `src/controllers/authController.ts`
-  - Funções de registro e login
-  - Validação de usuário
-  - Geração de tokens JWT
 - `src/routes/authRoutes.ts`
-  - Rotas `/auth/register` e `/auth/login`
 - `src/controllers/__tests__/authController.test.ts`
-  - Testes unitários para funções de autenticação
 
-### Funcionalidades Implementadas
-- Hash de senhas com Argon2
-- Registro de novos usuários
-- Login com validação de credenciais
-- Geração de tokens JWT
-- Testes para cenários de registro e login
+### Rotas de Autenticação
+- `POST /auth/register`
+- `POST /auth/login`
 
-### Detalhes Técnicos
-- Uso de Prisma para operações de banco de dados
-- Tokens JWT com expiração de 1 hora
-- Proteção contra usuários duplicados
-- Tratamento de erros de autenticação
+## Infraestrutura de Mensageria
 
-**Data:** 09/12/2024
+### Implementação de Infraestrutura de Mensageria
+- **Data**: 09/12/2024 - 21:16
+- **Detalhes**:
+  - Instalação de dependências RabbitMQ
+    - Pacotes: `amqplib`, `@types/amqplib`
+  - Criação de configuração de conexão RabbitMQ
+    - Arquivo: `src/config/rabbitmq.ts`
+    - Funções: `connectRabbitMQ()`, `closeRabbitMQ()`, `assertQueue()`
+  - Desenvolvimento de sistema de filas
+    - Arquivo: `src/queues/taskQueue.ts`
+    - Funções: `publishTask()`, `consumeTasks()`
+  - Implementação de serviço de tarefas
+    - Arquivo: `src/services/taskService.ts`
+    - Funções: `scheduleTask()`, `startTaskConsumer()`, `processTask()`
+  - Criação de rotas para gerenciamento de tarefas
+    - Arquivo: `src/routes/taskRoutes.ts`
+    - Endpoint: `POST /api/tasks`
+  - Atualização do servidor para inicialização do RabbitMQ
+    - Arquivo: `src/server.ts`
+    - Adicionado: Conexão RabbitMQ, inicialização de consumidor
+  - Implementação de testes de rotas de tarefas
+    - Arquivo: `src/controllers/__tests__/taskRoutes.test.ts`
+    - Testes: Agendamento de tarefa, validação de entrada
+
+### Aprimoramento da Infraestrutura de Mensageria
+- **Data**: 09/12/2024 - 21:22
+- **Detalhes**:
+  - Implementar reconexão automática no RabbitMQ
+    - Adicionar listener de conexão perdida
+    - Configurar tentativas de reconexão a cada 5 segundos
+  - Melhorar validação de payload nas filas
+    - Criar função `validatePayload()` para validações robustas
+    - Adicionar verificações de tipo e formato
+  - Expandir casos de teste para rotas de tarefas
+    - Adicionar testes para cenários de payload inválido
+    - Verificar tratamento de erros em diferentes situações
+  - Atualizar tratamento de erros nas rotas
+    - Implementar status code dinâmico
+    - Melhorar mensagens de erro
+
+### Melhorias Técnicas
+- Validação de entrada mais rigorosa
+- Tratamento de erros mais granular
+- Logs mais detalhados
+
+## Implementação de Logs
+
+### 09/12/2024 - 21:30 | Implementação de Sistema de Logs
+- [x] Instalar dependências de log
+  - Pacotes: `winston`, `express-winston`
+- [x] Criar configuração de logger
+  - Arquivo: `src/config/logger.ts`
+  - Configurar logs de erro e combinados
+  - Suporte a diferentes níveis de log
+- [x] Implementar middleware de logs
+  - Arquivo: `src/middleware/loggerMiddleware.ts`
+  - Registrar detalhes de requisições HTTP
+  - Capturar tempo de resposta
+- [x] Criar rota de visualização de logs
+  - Arquivo: `src/routes/logRoutes.ts`
+  - Endpoint: `/logs`
+  - Recuperar e exibir logs recentes
+- [x] Atualizar aplicação principal
+  - Adicionar middleware de logs
+  - Incluir rota de logs
+
+### Melhorias Técnicas
+- Logs detalhados para rastreamento de requisições
+- Suporte a diferentes ambientes (desenvolvimento/produção)
+- Armazenamento de logs em arquivos separados
+
+## Documentação Automática da API
+
+### 09/12/2024 - 21:32 | Documentação Automática da API
+- [x] Instalar dependências de documentação
+  - Pacotes: `swagger-jsdoc`, `swagger-ui-express`
+  - Adicionar tipos TypeScript
+- [x] Criar configuração do Swagger
+  - Arquivo: `src/config/swagger.ts`
+  - Definir especificação OpenAPI 3.0
+  - Configurar informações básicas da API
+- [x] Documentar rotas existentes
+  - Adicionar anotações Swagger em rotas de autenticação
+  - Adicionar anotações Swagger em rotas de tarefas
+  - Incluir esquemas de requisição e resposta
+- [x] Implementar rota de documentação
+  - Adicionar endpoint `/docs`
+  - Configurar Swagger UI no Express
+- [x] Atualizar aplicação principal
+  - Importar configuração do Swagger
+  - Adicionar middleware de documentação
+
+### Melhorias Técnicas
+- Documentação clara e detalhada das rotas
+- Suporte a especificação OpenAPI
+- Interface interativa de documentação
+
+## Testes Unitários
+
+### Cobertura
+- Testes de registro de usuário
+- Testes de login de usuário
+- Cenários de sucesso e erro cobertos
+
+## Próximos Passos
+- [ ] Implementar middleware de autenticação avançado
+- [ ] Criar CRUD completo para entidades
+- [ ] Configurar Docker e ambiente de produção
+
+## Versão Atual
+- **Versão**: 1.1.3
+- **Data**: 09/12/2024
+- **Status**: Em desenvolvimento
+- **Fase**: Autenticação e Segurança

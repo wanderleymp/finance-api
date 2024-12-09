@@ -1,8 +1,25 @@
 import app from './app.js';
+import { connectRabbitMQ } from './config/rabbitmq.js';
+import { startTaskConsumer } from './services/taskService.js';
+import logger from './config/logger.js';
 
-const PORT = 3000;
+const PORT = process.env.PORT || 3000;
 
-app.listen(PORT, () => {
-  console.log(`🚀 Servidor rodando na porta ${PORT}`);
-  console.log(`Acesse em: http://162.55.160.99:${PORT}`);
-});
+(async () => {
+  try {
+    // Conectar ao RabbitMQ
+    await connectRabbitMQ();
+    
+    // Iniciar consumidor de tarefas
+    await startTaskConsumer();
+
+    // Iniciar servidor
+    app.listen(PORT, () => {
+      logger.info(`Servidor rodando na porta ${PORT}`);
+      logger.info(`Ambiente: ${process.env.NODE_ENV || 'development'}`);
+    });
+  } catch (error) {
+    logger.error('Erro ao iniciar servidor:', error);
+    process.exit(1);
+  }
+})();
