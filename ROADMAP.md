@@ -23,20 +23,23 @@ Este documento descreve o plano de desenvolvimento para o projeto Finance API, u
     - [x] Criar `jest.config.js`
 
 ### Fase 2: Definição da Arquitetura e Pastas
-- [ ] Criar estrutura de pastas do projeto
-    - [ ] `src/routes/`: Definição de rotas
-    - [ ] `src/controllers/`: Lógica de controle das requisições
-    - [ ] `src/services/`: Regras de negócio
-    - [ ] `src/repositories/`: Camada de acesso a dados
-    - [ ] `src/config/`: Configurações do projeto
-    - [ ] `src/utils/`: Utilitários e funções auxiliares
-- [ ] Criar `app.ts` ou `main.ts` com configuração do Express
-    - [ ] Configurar middleware básico
-    - [ ] Carregar rotas dinamicamente
-- [ ] Definir convenções de código
-    - [ ] Padrões de nomenclatura de arquivos
-    - [ ] Estrutura de commits
-    - [ ] Guia de contribuição
+- [x] Criar estrutura de pastas do projeto
+    - [x] `src/routes/`: Definição de rotas
+    - [x] `src/controllers/`: Lógica de controle das requisições
+    - [x] `src/services/`: Regras de negócio
+    - [x] `src/repositories/`: Camada de acesso a dados
+    - [x] `src/config/`: Configurações do projeto
+    - [x] `src/utils/`: Utilitários e funções auxiliares
+- [x] Criar `app.ts` com configuração do Express
+    - [x] Configurar middleware básico
+    - [x] Habilitar parsing de JSON
+- [x] Criar `server.ts` para inicialização do servidor
+    - [x] Definir porta de execução
+    - [x] Adicionar log de inicialização
+- [x] Definir convenções de código
+    - [x] Padrões de nomenclatura de arquivos
+    - [x] Estrutura de commits
+    - [x] Guia de contribuição
 
 ### Fase 3: Configuração do Banco de Dados com Prisma
 - [ ] Configurar Prisma ORM

@@ -59,3 +59,28 @@
 - Preparação para desenvolvimento incremental
 
 **Data:** 09/12/2024
+
+## Definição da Arquitetura Inicial ✅
+
+### Estrutura de Pastas
+- Criadas pastas base do projeto:
+  - `src/routes/`
+  - `src/controllers/`
+  - `src/services/`
+  - `src/repositories/`
+  - `src/config/`
+  - `src/utils/`
+
+### Configuração do Servidor
+- Instalado Express e @types/express
+- Criado `src/app.ts` com configurações básicas
+  - Middleware para parsing de JSON
+- Criado `src/server.ts` para inicialização do servidor
+  - Definida porta 3000
+  - Adicionado log de inicialização
+
+### Ajustes no Projeto
+- Adicionado script `dev` no `package.json`
+- Atualizada versão para 1.1.0
+
+**Data:** 09/12/2024
