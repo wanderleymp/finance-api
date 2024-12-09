@@ -7,6 +7,7 @@ const InstallmentGenerationService = require('../services/InstallmentGenerationS
 const PrismaMovementRepository = require('../repositories/implementations/PrismaMovementRepository');
 const MovementController = require('../controllers/MovementController');
 const authenticateToken = require('../middlewares/authMiddleware');
+const axios = require('axios');
 
 const movementRepositoryInstance = new PrismaMovementRepository();
 const movementController = new MovementController(movementRepositoryInstance);
@@ -180,27 +181,24 @@ router.get('/:id', async (req, res) => {
  */
 router.post('/', async (req, res) => {
     try {
-        console.log('DEBUG: Dados recebidos para criação de venda', { body: req.body });
-
         const sale = await movementService.createSaleWithItems(req.body);
-        console.log('DEBUG: Venda criada com sucesso', { sale });
         
-        // Retornar apenas o ID do movimento
-        res.status(201).json({ 
-            movement_id: sale.movement_id,
-            message: 'Venda criada com sucesso'
-        });
+        // Se payment_method_id estiver presente, chamar rota de pagamento
+        if (req.body.payment_method_id) {
+            try {
+                await axios.post(`/sales/${sale.id}/movement_payments`, {
+                    payment_method_id: req.body.payment_method_id,
+                    total_amount: req.body.total_amount
+                });
+            } catch (paymentError) {
+                console.error('Erro ao criar pagamento automático:', paymentError);
+            }
+        }
+        
+        res.status(201).json(sale);
     } catch (error) {
-        console.error('DEBUG: Erro completo na criação de venda', { 
-            error: error.message, 
-            stack: error.stack,
-            body: req.body 
-        });
-        res.status(500).json({ 
-            error: 'Erro ao criar venda',
-            details: error.message,
-            stack: error.stack
-        });
+        console.error('Erro ao criar venda:', error);
+        res.status(500).json({ error: 'Erro ao criar venda', details: error.message });
     }
 });
 
@@ -664,6 +662,72 @@ router.post('/:id/movement_payment', async (req, res) => {
     } catch (error) {
         console.error('Erro ao adicionar pagamento de movimento:', error);
         res.status(500).json({ error: 'Erro ao processar pagamento', details: error.message });
+    }
+});
+
+/**
+ * @swagger
+ * /sales/{id}/movement_payments:
+ *   post:
+ *     summary: Registra um pagamento para uma venda
+ *     tags: [Sales]
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: integer
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             properties:
+ *               payment_method_id:
+ *                 type: integer
+ *               total_amount:
+ *                 type: string
+ *     responses:
+ *       200:
+ *         description: Pagamento registrado com sucesso
+ *       400:
+ *         description: Dados inválidos
+ *       404:
+ *         description: Venda não encontrada
+ *       500:
+ *         description: Erro ao registrar pagamento
+ */
+router.post('/:id/movement_payments', async (req, res) => {
+    try {
+        const { id } = req.params;
+        const { payment_method_id, total_amount } = req.body;
+
+        // Validar se a venda existe
+        const existingSale = await movementService.getById(id);
+        if (!existingSale || existingSale.movement_type_id !== MOVEMENT_TYPE_SALES) {
+            return res.status(404).json({ error: 'Venda não encontrada' });
+        }
+
+        // Chamar método de criação de pagamento do serviço de movimento
+        const paymentResult = await movementService.createMovementPayment({
+            movement_id: parseInt(id),
+            payment_method_id,
+            total_amount
+        });
+
+        res.json(paymentResult);
+    } catch (error) {
+        console.error('Erro ao registrar pagamento de venda', { 
+            error: error.message, 
+            stack: error.stack,
+            body: req.body,
+            params: req.params
+        });
+        res.status(500).json({ 
+            error: 'Erro ao registrar pagamento da venda', 
+            details: error.message 
+        });
     }
 });
 

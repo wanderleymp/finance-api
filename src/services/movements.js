@@ -5,6 +5,8 @@ const PrismaMovementRepository = require('../repositories/implementations/Prisma
 const PrismaMovementPaymentRepository = require('../repositories/implementations/PrismaMovementPaymentRepository');
 const PrismaInstallmentRepository = require('../repositories/implementations/PrismaInstallmentRepository');
 
+const MOVEMENT_TYPE_SALES = 1;
+
 class MovementService {
     constructor() {
         this.repository = new PrismaMovementRepository();
@@ -428,7 +430,7 @@ class MovementService {
                 movement_id: data.movement_id,
                 payment_method_id: data.payment_method_id,
                 total_amount: data.total_amount,
-                movement_date: new Date()
+                movement_date: data.movement_date || new Date() // Usar data atual se não for fornecida
             });
 
             return result;
@@ -438,52 +440,55 @@ class MovementService {
         }
     }
 
-    async createSaleWithItems(saleData) {
+    async createSaleWithItems(data) {
         try {
-            // Iniciar transação com timeout maior
-            return await prisma.$transaction(async (tx) => {
-                // 1. Criar o movimento base (sem items)
-                const movement = await this.create({
-                    movement_type_id: 1, // Venda
-                    movement_status_id: saleData.movement_status_id,
-                    description: saleData.description,
-                    person_id: saleData.person_id,
-                    license_id: saleData.license_id,
-                    discount: saleData.discount || 0,
-                    addition: saleData.addition || 0,
-                    total_amount: 0 // Será recalculado após adicionar os items
+            // Iniciar transação
+            const result = await prisma.$transaction(async (prisma) => {
+                // Definir a data do movimento como a data atual
+                const movementDate = new Date();
+
+                // Criar movimento
+                const movement = await prisma.movements.create({
+                    data: {
+                        person_id: data.person_id,
+                        license_id: data.license_id,
+                        total_amount: data.total_amount,
+                        movement_type_id: MOVEMENT_TYPE_SALES,
+                        movement_date: movementDate, 
+                        status_id: 1 
+                    }
                 });
 
-                // 2. Se houver items, adicionar cada um
-                if (saleData.items && saleData.items.length > 0) {
-                    await this.addItems(movement.movement_id, saleData.items.map(item => ({
-                        item_id: item.item_id,
-                        quantity: item.quantity || 1,
-                        unit_price: item.unit_price || movement.total_amount,
-                        salesperson_id: saleData.seller_id,
-                        technician_id: saleData.technician_id
-                    })));
-                }
-
-                // 3. Buscar o movimento atualizado com o total recalculado
-                const updatedMovement = await this.getById(movement.movement_id);
-
-                // 4. Se tiver forma de pagamento, criar o pagamento
-                if (saleData.payment_method_id) {
-                    await this.createMovementPayment({
-                        movement_id: movement.movement_id,
-                        payment_method_id: saleData.payment_method_id,
-                        total_amount: updatedMovement.total_amount
+                // Criar itens do movimento
+                const movementItems = await Promise.all(data.items.map(async (item) => {
+                    return prisma.movement_items.create({
+                        data: {
+                            movement_id: movement.id,
+                            item_id: item.item_id,
+                            quantity: item.quantity,
+                            unit_price: item.unit_price,
+                            total_price: item.quantity * item.unit_price
+                        }
                     });
+                }));
+
+                // Se um método de pagamento foi fornecido, criar pagamento automaticamente
+                if (data.payment_method_id) {
+                    const movementPayment = await this.createMovementPayment({
+                        movement_id: movement.id,
+                        payment_method_id: data.payment_method_id,
+                        total_amount: data.total_amount,
+                        movement_date: movementDate 
+                    });
+
                 }
 
-                // 5. Retornar o movimento final
-                return this.getById(movement.movement_id);
-            }, {
-                timeout: 30000 // 30 segundos
+                return movement;
             });
+
+            return result;
         } catch (error) {
-            console.error('Erro ao criar venda completa:', error);
+            console.error('Erro ao criar venda:', error);
             throw error;
         }
     }

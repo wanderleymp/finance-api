@@ -128,8 +128,7 @@ class PrismaMovementPaymentRepository extends IMovementPaymentRepository {
             // Verificar se já existem parcelas para este pagamento
             const existingInstallments = await this.prisma.installments.findMany({
                 where: { 
-                    payment_id: data.payment_id,
-                    deleted_at: null // Apenas parcelas não deletadas
+                    payment_id: data.payment_id
                 }
             });
 
@@ -403,11 +402,11 @@ class PrismaMovementPaymentRepository extends IMovementPaymentRepository {
             // Verificar se já existe pagamento para este movimento
             const existingPayments = await this.prisma.movement_payments.findMany({
                 where: { 
-                    movement_id: data.movement_id,
-                    deleted_at: null // Apenas pagamentos não deletados
+                    movement_id: data.movement_id
                 },
                 include: {
-                    installments: true
+                    movements: true,
+                    payment_methods: true
                 }
             });
 
