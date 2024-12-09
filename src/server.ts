@@ -1,8 +1,8 @@
-import app from './app';
+import app from './app.js';
 
 const PORT = 3000;
 
 app.listen(PORT, () => {
   console.log(`🚀 Servidor rodando na porta ${PORT}`);
-  console.log(`Acesse em: http://localhost:${PORT}`);
+  console.log(`Acesse em: http://162.55.160.99:${PORT}`);
 });

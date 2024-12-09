@@ -40,14 +40,25 @@ Este documento descreve o plano de desenvolvimento para o projeto Finance API, u
     - [x] Padrões de nomenclatura de arquivos
     - [x] Estrutura de commits
     - [x] Guia de contribuição
+- [x] Configurar variáveis de ambiente
+    - [x] Instalar e configurar dotenv
+    - [x] Criar `.env.example`
+    - [x] Criar configuração de variáveis de ambiente
+- [x] Criar primeira rota de exemplo
+    - [x] Rota de health check
+    - [x] Configurar controller de health check
 
 ### Fase 3: Configuração do Banco de Dados com Prisma
-- [ ] Configurar Prisma ORM
-    - [ ] Instalar `prisma` e `@prisma/client`
-    - [ ] Executar `npx prisma init`
-    - [ ] Configurar `DATABASE_URL`
+- [x] Configurar Prisma ORM
+    - [x] Instalar Prisma e @prisma/client
+    - [x] Inicializar configuração do Prisma
+    - [x] Definir schema de banco de dados
+    - [x] Criar modelo de User com user_name
+    - [x] Aplicar migração inicial
+- [x] Criar configuração de conexão com banco de dados
+    - [x] Exportar instância do PrismaClient
+    - [x] Configurar variável de ambiente DATABASE_URL
 - [ ] Definir schema inicial
-    - [ ] Criar modelo `User`
     - [ ] Criar modelo `AccountMovement`
     - [ ] Definir relacionamentos
 - [ ] Gerenciar migrações
@@ -57,20 +68,26 @@ Este documento descreve o plano de desenvolvimento para o projeto Finance API, u
     - [ ] Criar `DB_SCHEMA.md` com detalhes do banco de dados
 
 ### Fase 4: Autenticação e Segurança
-- [ ] Implementar modelo de usuário
-    - [ ] Criar schema de User no Prisma
-    - [ ] Implementar hash de senhas com Argon2
-- [ ] Desenvolver rotas de autenticação
-    - [ ] Criar rota `POST /auth/register`
-    - [ ] Criar rota `POST /auth/login`
-- [ ] Integrar autenticação JWT
-    - [ ] Gerar e validar tokens
-    - [ ] Middleware de autenticação
-    - [ ] Rotas protegidas
-- [ ] Testes de autenticação
-    - [ ] Testes unitários para registro
-    - [ ] Testes unitários para login
-    - [ ] Testes de middleware de autenticação
+- [x] Implementar modelo de User
+    - [x] Criar modelo de User com user_name
+    - [x] Configurar campos de autenticação
+- [x] Implementar hash de senhas
+    - [x] Instalar Argon2
+    - [x] Implementar hash de senhas no registro
+    - [x] Implementar verificação de senhas no login
+- [x] Desenvolver rotas de autenticação
+    - [x] Criar controller de registro
+    - [x] Criar controller de login
+    - [x] Implementar rota POST /auth/register
+    - [x] Implementar rota POST /auth/login
+- [x] Integrar JWT para autenticação de rotas
+    - [x] Instalar jsonwebtoken
+    - [x] Gerar token JWT no registro
+    - [x] Gerar token JWT no login
+- [x] Criar testes unitários
+    - [x] Testes para registro de usuário
+    - [x] Testes para login de usuário
+    - [x] Cobrir cenários de sucesso e erro
 
 ### Fase 5: Integração com RabbitMQ
 - [ ] Configurar RabbitMQ
