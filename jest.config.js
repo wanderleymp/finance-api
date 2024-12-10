@@ -15,5 +15,6 @@ module.exports = {
   coverageReporters: ['text', 'lcov'],
   verbose: true,
   bail: false,
-  maxWorkers: '50%'
+  maxWorkers: '50%',
+  globalSetup: '<rootDir>/jest.setup.js'
 };

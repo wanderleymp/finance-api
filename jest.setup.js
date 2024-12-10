@@ -7,17 +7,19 @@ dotenv.config({ path: '.env.test' });
 
 // Configurar cliente Prisma para testes
 const prisma = new PrismaClient();
-global.prisma = prisma;
 
-// Limpar dados do banco antes de cada teste
-beforeEach(async () => {
-  // Limpar dados de todas as tabelas
+module.exports = async () => {
+  // Configurações globais de setup
+  global.prisma = prisma;
+
+  // Limpar dados do banco antes de cada teste
   await prisma.notification.deleteMany();
   await prisma.userActionLog.deleteMany();
   await prisma.user.deleteMany();
-});
 
-// Fechar conexão do Prisma após todos os testes
-afterAll(async () => {
-  await prisma.$disconnect();
-});
+  // Retornar uma função de teardown
+  return async () => {
+    // Fechar conexão do Prisma após todos os testes
+    await prisma.$disconnect();
+  };
+};
