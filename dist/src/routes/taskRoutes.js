@@ -78,3 +78,4 @@ router.post('/schedule', authMiddleware_1.authMiddleware, async (req, res) => {
     }
 });
 exports.default = router;
+//# sourceMappingURL=taskRoutes.js.map

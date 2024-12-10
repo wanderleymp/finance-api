@@ -210,17 +210,152 @@
 - Suporte a especificação OpenAPI
 - Interface interativa de documentação
 
-## Testes Unitários
+## Sistema de Notificações 🔔
 
-### Cobertura
-- Testes de registro de usuário
-- Testes de login de usuário
-- Cenários de sucesso e erro cobertos
+### Tarefas Concluídas
+- [x] Criar modelo de Notificação no schema do Prisma
+- [x] Implementar serviço de notificações (`NotificationService`)
+- [x] Adicionar rotas para gerenciar notificações
+- [x] Integrar notificações em rotas de criação/atualização de usuário
+- [x] Adicionar middleware de registro de tentativas de login
+- [x] Criar migrações para adicionar tabela de notificações
 
-## Próximos Passos
-- [ ] Implementar middleware de autenticação avançado
-- [ ] Criar CRUD completo para entidades
-- [ ] Configurar Docker e ambiente de produção
+### Próximos Passos
+- [ ] Implementar interface administrativa para visualização de notificações
+- [ ] Adicionar filtros avançados para busca de notificações
+- [ ] Implementar sistema de notificações em tempo real (WebSockets)
+
+### Detalhes da Implementação
+- **Tipos de Notificação**: 
+  - `USER_CREATED`
+  - `USER_UPDATED`
+  - `USER_PERMISSIONS_CHANGED`
+  - `LOGIN_FAILED`
+  - `LOGIN_SUCCESSFUL`
+
+### Considerações de Segurança
+- Notificações sensíveis são registradas com metadados controlados
+- Usuários não-admin só podem ver suas próprias notificações
+
+## Registro de Ações do Projeto
+
+### 📅 10 de Dezembro de 2024
+
+#### 🚀 Implementações
+- **Sistema de Logs de Ações de Usuário**
+  - Criado modelo `UserActionLog` no Prisma
+  - Adicionado enum `UserActionType` para categorizar ações
+  - Desenvolvido serviço `UserActionLogService` para gerenciar logs
+  - Implementadas rotas para registrar e recuperar logs de ações
+
+#### 🔧 Modificações
+- Atualizadas rotas de usuário para registrar logs de criação e exclusão
+- Adicionada nova rota `/users/logs` para buscar logs de ações
+- Atualizado ROADMAP.md com novos itens concluídos
+
+#### 📊 Detalhes Técnicos
+- **Tecnologias Utilizadas**:
+  - Prisma ORM
+  - TypeScript
+  - JWT para autenticação
+- **Campos de Log Registrados**:
+  - Tipo de ação (CREATE, DELETE, etc.)
+  - Usuário que realizou a ação
+  - Usuário afetado
+  - Detalhes adicionais da ação
+  - Timestamp
+
+#### 🔒 Considerações de Segurança
+- Logs acessíveis apenas para usuários admin
+- Armazenamento seguro de informações de ações
+- Registro detalhado para auditoria
+
+### Próximos Passos
+- Adicionar mais tipos de ações (UPDATE, LOGIN, etc.)
+- Implementar rotina de limpeza/arquivamento de logs antigos
+- Criar relatórios e dashboards de atividades
+
+## Ações Pendentes
+
+## Concluídas
+- [x] Implementar CRUD completo de usuários
+- [x] Adicionar validações para criação e atualização de usuários
+- [x] Configurar rotas de gerenciamento de usuários
+- [x] Implementar middleware de validação de usuário
+- [x] Adicionar controle de acesso para rotas de usuário
+
+## Curto Prazo
+### Desenvolvimento
+- [ ] Implementar validações de entrada mais robustas
+- [ ] Adicionar mais logs de segurança
+- [ ] Revisar middlewares de autenticação
+- [ ] Criar testes para rotas de usuário
+
+### Segurança
+- [ ] Revisar política de senhas
+- [ ] Implementar mecanismo de bloqueio de conta
+- [ ] Adicionar validação de força de senha
+
+## Médio Prazo
+### Infraestrutura
+- [ ] Configurar variáveis de ambiente para diferentes ambientes
+- [ ] Preparar configuração de Docker
+- [ ] Implementar scripts de deploy
+
+### Monitoramento
+- [ ] Configurar sistema de monitoramento de logs
+- [ ] Criar dashboards de performance
+- [ ] Implementar alertas de sistema
+
+## Longo Prazo
+### Recursos
+- [ ] Desenvolver sistema de permissões granulares
+- [ ] Implementar autenticação multi-fator
+- [ ] Criar interface administrativa
+
+## Próximas Sprints
+1. Adicionar filtros e paginação para usuários
+2. Implementar busca avançada de usuários
+3. Configurar ambiente de testes
+4. Preparar documentação técnica
+
+## Melhorias Técnicas
+- [ ] Refatorar código para maior modularidade
+- [ ] Otimizar consultas ao banco de dados
+- [ ] Revisar tratamento de erros
+- [ ] Implementar testes de integração
+
+## Testes Automatizados 🧪
+
+### Tarefas Concluídas
+- [x] Configurar Jest para testes de API
+- [x] Criar ambiente de testes isolado
+- [x] Implementar testes para rotas de usuário
+  - [x] Teste de listagem de usuários
+  - [x] Teste de criação de usuário
+  - [x] Teste de atualização de usuário
+  - [x] Teste de exclusão de usuário
+- [x] Configurar cobertura de testes
+- [x] Adicionar scripts de teste no package.json
+
+### Próximos Passos
+- [ ] Aumentar cobertura de testes para outras rotas
+- [ ] Implementar testes de integração
+- [ ] Configurar testes em ambiente de CI/CD
+
+### Detalhes da Implementação
+- **Ferramentas**:
+  - Jest como framework de testes
+  - Supertest para testes de API
+  - Prisma para manipulação de banco de dados de teste
+- **Cobertura**:
+  - Testes cobrem cenários de sucesso e falha
+  - Ambiente de teste isolado com banco de dados separado
+
+### Considerações
+- Testes executados em ambiente completamente isolado
+- Dados de teste são limpos antes e após cada execução
+- Suporte para execução contínua (watch mode) e geração de relatório de cobertura
 
 ## Versão Atual
 - **Versão**: 1.1.3

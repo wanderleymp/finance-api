@@ -85,17 +85,26 @@ async function authenticateUser(user_name, password) {
         throw error;
     }
 }
-async function verifyToken(token) {
+function verifyToken(token) {
     try {
-        console.log('Verificando token:', token);
+        console.log('🔐 DEBUG - Verificando token:', token);
+        console.log('🔑 DEBUG - Chave secreta usada:', JWT_SECRET.substring(0, 10) + '...');
         const decoded = jsonwebtoken_1.default.verify(token, JWT_SECRET);
-        console.log('Token decodificado:', decoded);
-        logger_1.default.info('Token verificado com sucesso', { decoded });
+        console.log('✅ DEBUG - Token decodificado:', decoded);
+        logger_1.default.info('Token verificado com sucesso', {
+            decoded,
+            tokenLength: token.length
+        });
         return decoded;
     }
     catch (error) {
-        console.error('Erro na verificação do token:', error);
-        logger_1.default.error('Erro na verificação do token', error);
+        console.log('❌ DEBUG - Erro na verificação do token:', error);
+        logger_1.default.error('Erro na verificação do token', {
+            error: error,
+            tokenLength: token.length,
+            errorName: error.name,
+            errorMessage: error.message
+        });
         throw new Error(`Token inválido: ${error.message}`);
     }
 }
@@ -113,3 +122,4 @@ async function isAdmin(userId) {
         return false;
     }
 }
+//# sourceMappingURL=authService.js.map

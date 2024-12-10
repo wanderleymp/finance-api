@@ -63,7 +63,9 @@ app.use(express_1.default.json());
 app.use(loggerMiddleware_1.loggerMiddleware);
 // Log de todas as rotas registradas
 app.use((req, res, next) => {
-    console.log(`Requisição recebida: ${req.method} ${req.path}`);
+    console.log(`🌐 DEBUG - Requisição recebida: ${req.method} ${req.path}`);
+    console.log(`🔑 DEBUG - Headers: ${JSON.stringify(req.headers, null, 2)}`);
+    console.log(`🔢 DEBUG - Corpo da requisição: ${JSON.stringify(req.body, null, 2)}`);
     next();
 });
 // Rotas
@@ -91,8 +93,14 @@ console.log('Rotas registradas:', {
 });
 // Log de rotas não encontradas
 app.use((req, res, next) => {
-    console.log(`Rota não encontrada: ${req.method} ${req.path}`);
-    res.status(404).json({ message: 'Rota não encontrada' });
+    console.log(`❌ DEBUG - Rota não encontrada: ${req.method} ${req.path}`);
+    console.log(`🔍 DEBUG - Headers: ${JSON.stringify(req.headers, null, 2)}`);
+    res.status(404).json({
+        message: 'Rota não encontrada',
+        method: req.method,
+        path: req.path,
+        headers: req.headers
+    });
 });
 // Rota de documentação Swagger
 app.use('/docs', swaggerUi.serve, swaggerUi.setup(swagger_1.default));
@@ -106,3 +114,4 @@ app.use((err, req, res, next) => {
     });
 });
 exports.default = app;
+//# sourceMappingURL=app.js.map

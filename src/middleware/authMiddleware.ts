@@ -1,6 +1,7 @@
 import { Request, Response, NextFunction } from 'express';
 import { verifyToken } from '../services/authService';
 import logger from '../config/logger';
+import NotificationService from '../services/notificationService';
 
 export async function authMiddleware(req: Request, res: Response, next: NextFunction) {
   // Extrair token do cabeçalho de autorização
@@ -100,4 +101,43 @@ export function adminMiddleware(req: Request, res: Response, next: NextFunction)
   }
 
   next();
+}
+
+// Middleware para registrar tentativas de login
+export async function loginAttemptMiddleware(req: Request, res: Response, next: NextFunction) {
+  const { user_name } = req.body;
+
+  try {
+    // Middleware de login bem-sucedido
+    res.on('finish', async () => {
+      if (res.statusCode === 200) {
+        // Login bem-sucedido
+        await NotificationService.createNotification({
+          type: 'LOGIN_SUCCESSFUL',
+          description: `Login realizado: ${user_name}`,
+          metadata: {
+            username: user_name,
+            ip: req.ip
+          }
+        });
+      } else if (res.statusCode === 401 || res.statusCode === 403) {
+        // Login mal-sucedido
+        await NotificationService.createNotification({
+          type: 'LOGIN_FAILED',
+          description: `Tentativa de login falha: ${user_name}`,
+          metadata: {
+            username: user_name,
+            ip: req.ip,
+            status: res.statusCode
+          }
+        });
+      }
+    });
+
+    next();
+  } catch (error) {
+    console.error('Erro ao registrar tentativa de login', error);
+    logger.error('Erro ao registrar tentativa de login', error);
+    next();
+  }
 }

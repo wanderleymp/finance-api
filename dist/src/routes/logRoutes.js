@@ -44,3 +44,4 @@ router.get('/', (req, res) => {
     }
 });
 exports.default = router;
+//# sourceMappingURL=logRoutes.js.map

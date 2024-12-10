@@ -83,13 +83,40 @@ Este roadmap define as etapas de desenvolvimento para a Finance API, começando 
   - Implementar autorização de admin
 - [x] Adicionar rota de logout
 
-### Próximas Fases
-- [ ] Criar CRUD completo para entidades
-- [ ] Configurar Docker e ambiente de produção
-- [ ] Implementar logs de auditoria
+## Progresso Atual
+- [x] Configuração inicial do projeto
+- [x] Implementação de autenticação JWT
+- [x] Middleware de autenticação
+- [x] Rotas de autenticação (login, registro)
+- [x] Tratamento de erros e logs
+- [x] Validação de entrada de dados
+- [x] Implementação de CRUD completo para usuários
+- [x] Middleware de validação de usuário
+- [x] Rotas de gerenciamento de usuários com controle de acesso
+
+## Próximas Etapas
+### ✅ Concluído
+- [x] Implementação de autenticação JWT
+- [x] Criação de rotas de usuário (CRUD)
+- [x] Sistema de logs de ações de usuário
+
+### 🚧 Em Progresso
+- [ ] Implementação de testes unitários
+- [ ] Configuração de integração contínua
+
+### 🔜 Próximos Passos
+- [ ] Adicionar mais validações de segurança
+- [ ] Implementar recuperação de senha
+- [ ] Criar documentação detalhada da API
+
+### 📝 Últimas Atualizações
+- Adicionado sistema de logs de ações de usuário
+  - Registra criação, atualização e exclusão de usuários
+  - Armazena logs no banco de dados
+  - Inclui informações detalhadas sobre as ações
 
 ## 🏁 Status Atual
 - **Versão**: 1.2.0
 - **Data**: 09/12/2024
 - **Fase Atual**: Implementação de Autenticação e Autorização JWT
-- **Próximo Passo**: CRUD Completo para Entidades
+- **Próximo Passo**: Implementação de Recursos Avançados

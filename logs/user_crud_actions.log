@@ -1,0 +1,55 @@
+## User CRUD Action Log
+
+### Test Session Details
+- Date: 2024-12-10
+- Time: 03:59 UTC
+- Environment: Development
+
+### Test Steps
+
+1. ADMIN REGISTRATION
+- Endpoint: /auth/register
+- Username: admin
+- Status: SUCCESS
+- Timestamp: 2024-12-10T03:56:45Z
+
+2. ADMIN LOGIN
+- Endpoint: /auth/login
+- Username: admin
+- Status: SUCCESS
+- Token Generated: ✅
+- Timestamp: 2024-12-10T03:57:25Z
+
+3. USER CREATION
+- Endpoint: POST /users
+- Username: testuser
+- Role: USER
+- Status: SUCCESS
+- User ID: a5f11222-6e3c-417c-a179-6753f5ee13be
+- Timestamp: 2024-12-10T03:57:45Z
+
+4. USER RETRIEVAL
+- Endpoint: GET /users/:id
+- User ID: a5f11222-6e3c-417c-a179-6753f5ee13be
+- Status: SUCCESS
+- Details Retrieved: ✅
+- Timestamp: 2024-12-10T03:58:11Z
+
+5. USER DELETION
+- Endpoint: DELETE /users/:id
+- User ID: a5f11222-6e3c-417c-a179-6753f5ee13be
+- Status: SUCCESS
+- Deleted: ✅
+- Timestamp: 2024-12-10T03:59:09Z
+
+### Summary
+- Total Tests: 5
+- Passed: 5
+- Failed: 0
+- Success Rate: 100%
+
+### Environment
+- Server: localhost:3000
+- Mode: Development
+- Authentication: JWT
+- Authorization: Admin Role Required

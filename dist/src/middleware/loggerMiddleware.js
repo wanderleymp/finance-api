@@ -32,3 +32,4 @@ function loggerMiddleware(req, res, next) {
     };
     next();
 }
+//# sourceMappingURL=loggerMiddleware.js.map

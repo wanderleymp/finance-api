@@ -55,3 +55,4 @@ describe('Testes de Rotas de Tarefas', () => {
         expect(response.body).toHaveProperty('message', 'Payload deve ser um objeto válido');
     });
 });
+//# sourceMappingURL=taskRoutes.test.js.map
