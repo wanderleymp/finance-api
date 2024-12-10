@@ -1,1 +1,87 @@
 {"level":"info","message":"Usuário administrador admin registrado com sucesso","timestamp":"2024-12-09 21:46:09"}
+{"date":"Tue Dec 10 2024 02:46:45 GMT+0000 (Coordinated Universal Time)","error":{"code":"MODULE_NOT_FOUND","requireStack":["/home/admin/finance-api/dist/config/rabbitmq.js","/home/admin/finance-api/dist/queues/taskQueue.js","/home/admin/finance-api/dist/services/taskService.js","/home/admin/finance-api/dist/routes/taskRoutes.js","/home/admin/finance-api/dist/app.js"]},"exception":true,"level":"error","message":"uncaughtException: Cannot find module 'amqplib'\nRequire stack:\n- /home/admin/finance-api/dist/config/rabbitmq.js\n- /home/admin/finance-api/dist/queues/taskQueue.js\n- /home/admin/finance-api/dist/services/taskService.js\n- /home/admin/finance-api/dist/routes/taskRoutes.js\n- /home/admin/finance-api/dist/app.js\nError: Cannot find module 'amqplib'\nRequire stack:\n- /home/admin/finance-api/dist/config/rabbitmq.js\n- /home/admin/finance-api/dist/queues/taskQueue.js\n- /home/admin/finance-api/dist/services/taskService.js\n- /home/admin/finance-api/dist/routes/taskRoutes.js\n- /home/admin/finance-api/dist/app.js\n    at Function._resolveFilename (node:internal/modules/cjs/loader:1249:15)\n    at Function._load (node:internal/modules/cjs/loader:1075:27)\n    at TracingChannel.traceSync (node:diagnostics_channel:322:14)\n    at wrapModuleLoad (node:internal/modules/cjs/loader:219:24)\n    at Module.require (node:internal/modules/cjs/loader:1340:12)\n    at require (node:internal/modules/helpers:138:16)\n    at Object.<anonymous> (/home/admin/finance-api/dist/config/rabbitmq.js:10:35)\n    at Module._compile (node:internal/modules/cjs/loader:1565:14)\n    at Object..js (node:internal/modules/cjs/loader:1708:10)\n    at Module.load (node:internal/modules/cjs/loader:1318:32)","os":{"loadavg":[0.63,0.49,0.27],"uptime":45701.3},"process":{"argv":["/home/admin/.nvm/versions/node/v22.12.0/bin/node","/home/admin/finance-api/dist/app.js"],"cwd":"/home/admin/finance-api","execPath":"/home/admin/.nvm/versions/node/v22.12.0/bin/node","gid":1000,"memoryUsage":{"arrayBuffers":16819,"external":2182426,"heapTotal":33488896,"heapUsed":17064136,"rss":82870272},"pid":145258,"uid":1000,"version":"v22.12.0"},"stack":"Error: Cannot find module 'amqplib'\nRequire stack:\n- /home/admin/finance-api/dist/config/rabbitmq.js\n- /home/admin/finance-api/dist/queues/taskQueue.js\n- /home/admin/finance-api/dist/services/taskService.js\n- /home/admin/finance-api/dist/routes/taskRoutes.js\n- /home/admin/finance-api/dist/app.js\n    at Function._resolveFilename (node:internal/modules/cjs/loader:1249:15)\n    at Function._load (node:internal/modules/cjs/loader:1075:27)\n    at TracingChannel.traceSync (node:diagnostics_channel:322:14)\n    at wrapModuleLoad (node:internal/modules/cjs/loader:219:24)\n    at Module.require (node:internal/modules/cjs/loader:1340:12)\n    at require (node:internal/modules/helpers:138:16)\n    at Object.<anonymous> (/home/admin/finance-api/dist/config/rabbitmq.js:10:35)\n    at Module._compile (node:internal/modules/cjs/loader:1565:14)\n    at Object..js (node:internal/modules/cjs/loader:1708:10)\n    at Module.load (node:internal/modules/cjs/loader:1318:32)","timestamp":"2024-12-10 02:46:45","trace":[{"column":15,"file":"node:internal/modules/cjs/loader","function":"Function._resolveFilename","line":1249,"method":"_resolveFilename","native":false},{"column":27,"file":"node:internal/modules/cjs/loader","function":"Function._load","line":1075,"method":"_load","native":false},{"column":14,"file":"node:diagnostics_channel","function":"TracingChannel.traceSync","line":322,"method":"traceSync","native":false},{"column":24,"file":"node:internal/modules/cjs/loader","function":"wrapModuleLoad","line":219,"method":null,"native":false},{"column":12,"file":"node:internal/modules/cjs/loader","function":"Module.require","line":1340,"method":"require","native":false},{"column":16,"file":"node:internal/modules/helpers","function":"require","line":138,"method":null,"native":false},{"column":35,"file":"/home/admin/finance-api/dist/config/rabbitmq.js","function":null,"line":10,"method":null,"native":false},{"column":14,"file":"node:internal/modules/cjs/loader","function":"Module._compile","line":1565,"method":"_compile","native":false},{"column":10,"file":"node:internal/modules/cjs/loader","function":"Object..js","line":1708,"method":".js","native":false},{"column":32,"file":"node:internal/modules/cjs/loader","function":"Module.load","line":1318,"method":"load","native":false}]}
+{"level":"info","message":"Carregando rotas de usuários","timestamp":"2024-12-10 02:54:21"}
+{"level":"info","message":"Carregando rotas de usuários","timestamp":"2024-12-10 02:54:33"}
+{"level":"info","message":"Carregando rotas de usuários","timestamp":"2024-12-10 02:59:39"}
+{"level":"info","message":"Carregando rotas de usuários","timestamp":"2024-12-10 03:00:53"}
+{"level":"info","message":"Carregando rotas de usuários","timestamp":"2024-12-10 03:02:54"}
+{"level":"info","message":"Carregando rotas de usuários","timestamp":"2024-12-10 03:02:55"}
+{"level":"info","message":"Carregando rotas de usuários","timestamp":"2024-12-10 03:02:55"}
+{"level":"info","message":"Carregando rotas de usuários","timestamp":"2024-12-10 03:02:55"}
+{"level":"info","message":"Carregando rotas de usuários","timestamp":"2024-12-10 03:03:04"}
+{"level":"info","message":"Carregando rotas de usuários","timestamp":"2024-12-10 03:03:04"}
+{"level":"info","message":"Carregando rotas de usuários","timestamp":"2024-12-10 03:03:04"}
+{"level":"info","message":"Carregando rotas de usuários","timestamp":"2024-12-10 03:03:13"}
+{"level":"info","message":"Carregando rotas de usuários","timestamp":"2024-12-10 03:04:10"}
+{"level":"info","message":"Carregando rotas de usuários","timestamp":"2024-12-10 03:04:10"}
+{"level":"info","message":"Carregando rotas de usuários","timestamp":"2024-12-10 03:04:10"}
+{"level":"info","message":"Carregando rotas de usuários","timestamp":"2024-12-10 03:04:11"}
+{"level":"info","message":"Carregando rotas de usuários","timestamp":"2024-12-10 03:04:42"}
+{"level":"info","message":"Carregando rotas de usuários","timestamp":"2024-12-10 03:04:42"}
+{"level":"info","message":"Carregando rotas de usuários","timestamp":"2024-12-10 03:04:42"}
+{"level":"info","message":"Carregando rotas de usuários","timestamp":"2024-12-10 03:04:42"}
+{"level":"info","message":"Carregando rotas de usuários","timestamp":"2024-12-10 03:05:00"}
+{"address":"::","code":"EADDRINUSE","errno":-98,"level":"error","message":"Erro no servidor: listen EADDRINUSE: address already in use :::3000","port":3000,"stack":"Error: listen EADDRINUSE: address already in use :::3000\n    at Server.setupListenHandle [as _listen2] (node:net:1912:16)\n    at listenInCluster (node:net:1969:12)\n    at Server.listen (node:net:2074:7)\n    at Function.listen (/home/admin/finance-api/node_modules/express/lib/application.js:635:24)\n    at /home/admin/finance-api/src/server.ts:25:24\n    at processTicksAndRejections (node:internal/process/task_queues:105:5)","syscall":"listen","timestamp":"2024-12-10 03:05:01"}
+{"level":"info","message":"Carregando rotas de usuários","timestamp":"2024-12-10 03:08:51"}
+{"level":"info","message":"Carregando rotas de usuários","timestamp":"2024-12-10 03:08:51"}
+{"level":"info","message":"Carregando rotas de usuários","timestamp":"2024-12-10 03:08:51"}
+{"level":"info","message":"Carregando rotas de usuários","timestamp":"2024-12-10 03:09:33"}
+{"level":"info","message":"Carregando rotas de usuários","timestamp":"2024-12-10 03:15:31"}
+{"level":"info","message":"Carregando rotas de usuários","timestamp":"2024-12-10 03:16:43"}
+{"level":"info","message":"Carregando rotas de usuários","timestamp":"2024-12-10 03:17:29"}
+{"level":"info","message":"Carregando rotas de usuários","timestamp":"2024-12-10 03:20:43"}
+{"level":"info","message":"Servidor rodando na porta 3000","timestamp":"2024-12-10 03:20:43"}
+{"level":"info","message":"Ambiente: development","timestamp":"2024-12-10 03:20:43"}
+{"body":{"password":"Agile2025","user_name":"admin"},"ip":"::ffff:179.255.102.241","level":"info","message":"[POST] /auth/login","method":"POST","path":"/auth/login","timestamp":"2024-12-10 03:21:05"}
+{"level":"info","message":"Tentativa de login: {\"user_name\":\"admin\",\"password\":\"Agile2025\"}","timestamp":"2024-12-10 03:21:05"}
+{"level":"info","message":"IP do cliente: ::ffff:179.255.102.241, Headers: {\"content-type\":\"application/json\",\"user-agent\":\"PostmanRuntime/7.43.0\",\"accept\":\"*/*\",\"postman-token\":\"8490f8e9-5430-4064-8837-50786ba01ac9\",\"host\":\"162.55.160.99:3000\",\"accept-encoding\":\"gzip, deflate, br\",\"connection\":\"keep-alive\",\"content-length\":\"57\"}","timestamp":"2024-12-10 03:21:05"}
+{"level":"info","message":"Iniciando autenticação: admin","timestamp":"2024-12-10 03:21:05"}
+{"level":"info","message":"Usuário autenticado com sucesso: admin","timestamp":"2024-12-10 03:21:05"}
+{"level":"info","message":"Usuário admin autenticado com sucesso","timestamp":"2024-12-10 03:21:05"}
+{"duration":646,"level":"info","message":"[POST] /auth/login - 200","method":"POST","path":"/auth/login","statusCode":200,"timestamp":"2024-12-10 03:21:05"}
+{"ip":"::ffff:179.255.102.241","level":"info","message":"[GET] /health","method":"GET","path":"/health","timestamp":"2024-12-10 03:21:18"}
+{"duration":2,"level":"info","message":"[GET] /health - 200","method":"GET","path":"/health","statusCode":200,"timestamp":"2024-12-10 03:21:18"}
+{"ip":"::ffff:179.255.102.241","level":"info","message":"[GET] /users","method":"GET","path":"/users","timestamp":"2024-12-10 03:21:30"}
+{"headers":{"accept":"*/*","accept-encoding":"gzip, deflate, br","authorization":"Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VySWQiOiI5MGEyMmQyZS01M2VkLTQzNjctODUxYi1kODc1YzY4ZDNjMDciLCJ1c2VyTmFtZSI6ImFkbWluIiwicm9sZSI6ImFkbWluIiwiaWF0IjoxNzMzODAwODY1LCJleHAiOjE3MzM4ODcyNjV9.etdLx1dJB499aTHcHWqNMiJfoZjqATWbbQs34VPXwXY","connection":"keep-alive","host":"162.55.160.99:3000","postman-token":"a0c064ec-6d32-4a0d-8be6-3b172ba1b509","user-agent":"PostmanRuntime/7.43.0"},"level":"info","message":"Headers de autorização recebidos","path":"/","timestamp":"2024-12-10 03:21:30"}
+{"level":"info","message":"Partes do token","parts":["Bearer","eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VySWQiOiI5MGEyMmQyZS01M2VkLTQzNjctODUxYi1kODc1YzY4ZDNjMDciLCJ1c2VyTmFtZSI6ImFkbWluIiwicm9sZSI6ImFkbWluIiwiaWF0IjoxNzMzODAwODY1LCJleHAiOjE3MzM4ODcyNjV9.etdLx1dJB499aTHcHWqNMiJfoZjqATWbbQs34VPXwXY"],"timestamp":"2024-12-10 03:21:30"}
+{"decoded":{"exp":1733887265,"iat":1733800865,"role":"admin","userId":"90a22d2e-53ed-4367-851b-d875c68d3c07","userName":"admin"},"level":"info","message":"Token verificado com sucesso","timestamp":"2024-12-10 03:21:30","tokenLength":237}
+{"decoded":{},"level":"info","message":"Token decodificado com sucesso","timestamp":"2024-12-10 03:21:30"}
+{"level":"info","message":"Verificando permissão de admin","timestamp":"2024-12-10 03:21:30","user":{}}
+{"level":"warn","message":"Tentativa de acesso não autorizada","timestamp":"2024-12-10 03:21:30","user":{}}
+{"duration":16,"level":"info","message":"[GET] /users - 403","method":"GET","path":"/users","statusCode":403,"timestamp":"2024-12-10 03:21:30"}
+{"level":"info","message":"Carregando rotas de usuários","timestamp":"2024-12-10 03:23:00"}
+{"level":"info","message":"Carregando rotas de usuários","timestamp":"2024-12-10 03:26:05"}
+{"address":"::","code":"EADDRINUSE","errno":-98,"level":"error","message":"Erro no servidor: listen EADDRINUSE: address already in use :::3000","port":3000,"stack":"Error: listen EADDRINUSE: address already in use :::3000\n    at Server.setupListenHandle [as _listen2] (node:net:1912:16)\n    at listenInCluster (node:net:1969:12)\n    at Server.listen (node:net:2074:7)\n    at Function.listen (/home/admin/finance-api/node_modules/express/lib/application.js:635:24)\n    at /home/admin/finance-api/src/server.ts:25:24\n    at processTicksAndRejections (node:internal/process/task_queues:105:5)","syscall":"listen","timestamp":"2024-12-10 03:26:06"}
+{"level":"info","message":"Carregando rotas de usuários","timestamp":"2024-12-10 03:26:21"}
+{"ip":"::ffff:179.255.102.241","level":"info","message":"[GET] /users","method":"GET","path":"/users","timestamp":"2024-12-10 03:26:24"}
+{"level":"info","message":"Carregando rotas de usuários","timestamp":"2024-12-10 03:26:57"}
+{"level":"info","message":"Carregando rotas de usuários","timestamp":"2024-12-10 03:27:06"}
+{"level":"info","message":"Carregando rotas de usuários","timestamp":"2024-12-10 03:27:15"}
+{"level":"info","message":"Carregando rotas de usuários","timestamp":"2024-12-10 03:32:27"}
+{"level":"info","message":"Servidor rodando na porta 3000","timestamp":"2024-12-10 03:32:27"}
+{"level":"info","message":"Ambiente: development","timestamp":"2024-12-10 03:32:27"}
+{"ip":"::ffff:179.255.102.241","level":"info","message":"[GET] /users","method":"GET","path":"/users","timestamp":"2024-12-10 03:32:42"}
+{"headers":{"accept":"*/*","accept-encoding":"gzip, deflate, br","authorization":"Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VySWQiOiI5MGEyMmQyZS01M2VkLTQzNjctODUxYi1kODc1YzY4ZDNjMDciLCJ1c2VyTmFtZSI6ImFkbWluIiwicm9sZSI6ImFkbWluIiwiaWF0IjoxNzMzODAwODY1LCJleHAiOjE3MzM4ODcyNjV9.etdLx1dJB499aTHcHWqNMiJfoZjqATWbbQs34VPXwXY","connection":"keep-alive","host":"162.55.160.99:3000","postman-token":"d5389d5b-032d-4394-b09a-a5c43c51762f","user-agent":"PostmanRuntime/7.43.0"},"level":"info","message":"Headers de autorização recebidos","path":"/","timestamp":"2024-12-10 03:32:42"}
+{"level":"info","message":"Partes do token","parts":["Bearer","eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VySWQiOiI5MGEyMmQyZS01M2VkLTQzNjctODUxYi1kODc1YzY4ZDNjMDciLCJ1c2VyTmFtZSI6ImFkbWluIiwicm9sZSI6ImFkbWluIiwiaWF0IjoxNzMzODAwODY1LCJleHAiOjE3MzM4ODcyNjV9.etdLx1dJB499aTHcHWqNMiJfoZjqATWbbQs34VPXwXY"],"timestamp":"2024-12-10 03:32:42"}
+{"decoded":{"exp":1733887265,"iat":1733800865,"role":"admin","userId":"90a22d2e-53ed-4367-851b-d875c68d3c07","userName":"admin"},"level":"info","message":"Token verificado com sucesso","timestamp":"2024-12-10 03:32:42","tokenLength":237}
+{"decoded":{},"level":"info","message":"Token decodificado com sucesso","timestamp":"2024-12-10 03:32:42"}
+{"level":"info","message":"Verificando permissão de admin","timestamp":"2024-12-10 03:32:42","user":{}}
+{"level":"warn","message":"Tentativa de acesso não autorizada","timestamp":"2024-12-10 03:32:42","user":{}}
+{"duration":22,"level":"info","message":"[GET] /users - 403","method":"GET","path":"/users","statusCode":403,"timestamp":"2024-12-10 03:32:42"}
+{"level":"info","message":"Carregando rotas de usuários","timestamp":"2024-12-10 03:33:52"}
+{"level":"info","message":"Servidor rodando na porta 3000","timestamp":"2024-12-10 03:33:52"}
+{"level":"info","message":"Ambiente: development","timestamp":"2024-12-10 03:33:52"}
+{"level":"info","message":"Carregando rotas de usuários","timestamp":"2024-12-10 03:34:02"}
+{"level":"info","message":"Servidor rodando na porta 3000","timestamp":"2024-12-10 03:34:02"}
+{"level":"info","message":"Ambiente: development","timestamp":"2024-12-10 03:34:02"}
+{"level":"info","message":"Carregando rotas de usuários","timestamp":"2024-12-10 03:34:19"}
+{"level":"info","message":"Servidor rodando na porta 3000","timestamp":"2024-12-10 03:34:19"}
+{"level":"info","message":"Ambiente: development","timestamp":"2024-12-10 03:34:19"}
+{"ip":"::ffff:179.255.102.241","level":"info","message":"[GET] /users","method":"GET","path":"/users","timestamp":"2024-12-10 03:34:38"}
+{"headers":{"accept":"*/*","accept-encoding":"gzip, deflate, br","authorization":"Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VySWQiOiI5MGEyMmQyZS01M2VkLTQzNjctODUxYi1kODc1YzY4ZDNjMDciLCJ1c2VyTmFtZSI6ImFkbWluIiwicm9sZSI6ImFkbWluIiwiaWF0IjoxNzMzODAwODY1LCJleHAiOjE3MzM4ODcyNjV9.etdLx1dJB499aTHcHWqNMiJfoZjqATWbbQs34VPXwXY","connection":"keep-alive","host":"162.55.160.99:3000","postman-token":"140ffc65-5bab-4b68-92ce-e6b36444b5ad","user-agent":"PostmanRuntime/7.43.0"},"level":"info","message":"Headers de autorização recebidos","path":"/","timestamp":"2024-12-10 03:34:38"}
+{"level":"info","message":"Partes do token","parts":["Bearer","eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VySWQiOiI5MGEyMmQyZS01M2VkLTQzNjctODUxYi1kODc1YzY4ZDNjMDciLCJ1c2VyTmFtZSI6ImFkbWluIiwicm9sZSI6ImFkbWluIiwiaWF0IjoxNzMzODAwODY1LCJleHAiOjE3MzM4ODcyNjV9.etdLx1dJB499aTHcHWqNMiJfoZjqATWbbQs34VPXwXY"],"timestamp":"2024-12-10 03:34:38"}
+{"decoded":{"exp":1733887265,"iat":1733800865,"role":"admin","userId":"90a22d2e-53ed-4367-851b-d875c68d3c07","userName":"admin"},"level":"info","message":"Token verificado com sucesso","timestamp":"2024-12-10 03:34:38","tokenLength":237}
+{"decoded":{"exp":1733887265,"iat":1733800865,"role":"admin","userId":"90a22d2e-53ed-4367-851b-d875c68d3c07","userName":"admin"},"level":"info","message":"Token decodificado com sucesso","timestamp":"2024-12-10 03:34:38"}
+{"level":"info","message":"Verificando permissão de admin","timestamp":"2024-12-10 03:34:38","user":{"exp":1733887265,"iat":1733800865,"role":"admin","userId":"90a22d2e-53ed-4367-851b-d875c68d3c07","userName":"admin"}}
+{"level":"info","message":"Tentativa de listagem de usuários","timestamp":"2024-12-10 03:34:38"}
+{"duration":20,"level":"info","message":"[GET] /users - 200","method":"GET","path":"/users","statusCode":200,"timestamp":"2024-12-10 03:34:38"}

@@ -1,0 +1,7 @@
+{
+  "watch": ["src"],
+  "ext": "ts",
+  "exec": "ts-node ./src/server.ts",
+  "verbose": true,
+  "legacyWatch": true
+}

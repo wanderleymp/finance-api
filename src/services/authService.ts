@@ -53,7 +53,7 @@ export async function registerAdmin(user_name: string, password: string): Promis
       { 
         userId: newAdmin.id, 
         userName: newAdmin.user_name, 
-        role: newAdmin.role 
+        role: newAdmin.role.toLowerCase() 
       }, 
       JWT_SECRET, 
       { expiresIn: TOKEN_EXPIRATION }
@@ -93,7 +93,7 @@ export async function authenticateUser(user_name: string, password: string): Pro
       { 
         userId: user.id, 
         userName: user.user_name, 
-        role: user.role 
+        role: user.role.toLowerCase() 
       }, 
       JWT_SECRET, 
       { expiresIn: TOKEN_EXPIRATION }
@@ -107,14 +107,29 @@ export async function authenticateUser(user_name: string, password: string): Pro
   }
 }
 
-export async function verifyToken(token: string): Promise<any> {
+export function verifyToken(token: string): any {
   try {
+    console.log('🔐 DEBUG - Verificando token:', token);
+    console.log('🔑 DEBUG - Chave secreta usada:', JWT_SECRET.substring(0, 10) + '...');
+    
     const decoded = jwt.verify(token, JWT_SECRET);
-    logger.info('Token verificado com sucesso');
+    
+    console.log('✅ DEBUG - Token decodificado:', decoded);
+    logger.info('Token verificado com sucesso', { 
+      decoded,
+      tokenLength: token.length 
+    });
+    
     return decoded;
   } catch (error) {
-    logger.error('Erro na verificação do token', error);
-    throw new Error('Token inválido');
+    console.log('❌ DEBUG - Erro na verificação do token:', error);
+    logger.error('Erro na verificação do token', { 
+      error: error,
+      tokenLength: token.length,
+      errorName: (error as Error).name,
+      errorMessage: (error as Error).message
+    });
+    throw new Error(`Token inválido: ${(error as Error).message}`);
   }
 }
 

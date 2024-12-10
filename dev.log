@@ -1,0 +1,67 @@
+
+> finance-api@1.2.0 dev
+> nodemon src/app.ts
+
+[33m[nodemon] 3.1.7[39m
+[33m[nodemon] to restart at any time, enter `rs`[39m
+[33m[nodemon] watching path(s): *.*[39m
+[33m[nodemon] watching extensions: ts,json[39m
+[32m[nodemon] starting `ts-node src/app.ts`[39m
+Carregando rotas de usuários
+info: Carregando rotas de usuários {"timestamp":"2024-12-10 03:00:53"}
+Rotas registradas: {
+  healthRoutes: [ '/health' ],
+  authRoutes: [ '/auth/register', '/auth/login', '/auth/logout' ],
+  taskRoutes: [ '/tasks/schedule' ],
+  userRoutes: [ '/users/', '/users/:id', '/users/:id', '/users/:id' ],
+  logRoutes: [ '/logs/' ]
+}
+[32m[nodemon] clean exit - waiting for changes before restart[39m
+[32m[nodemon] restarting due to changes...[39m
+[32m[nodemon] starting `ts-node src/app.ts`[39m
+Carregando rotas de usuários
+info: Carregando rotas de usuários {"timestamp":"2024-12-10 03:02:55"}
+Rotas registradas: {
+  healthRoutes: [ '/health' ],
+  authRoutes: [ '/auth/register', '/auth/login', '/auth/logout' ],
+  taskRoutes: [ '/tasks/schedule' ],
+  userRoutes: [ '/users/', '/users/:id', '/users/:id', '/users/:id' ],
+  logRoutes: [ '/logs/' ]
+}
+[32m[nodemon] clean exit - waiting for changes before restart[39m
+[32m[nodemon] restarting due to changes...[39m
+[32m[nodemon] starting `ts-node src/app.ts`[39m
+Carregando rotas de usuários
+info: Carregando rotas de usuários {"timestamp":"2024-12-10 03:03:04"}
+Rotas registradas: {
+  healthRoutes: [ '/health' ],
+  authRoutes: [ '/auth/register', '/auth/login', '/auth/logout' ],
+  taskRoutes: [ '/tasks/schedule' ],
+  userRoutes: [ '/users/', '/users/:id', '/users/:id', '/users/:id' ],
+  logRoutes: [ '/logs/' ]
+}
+[32m[nodemon] clean exit - waiting for changes before restart[39m
+[32m[nodemon] restarting due to changes...[39m
+[32m[nodemon] starting `ts-node src/app.ts`[39m
+Carregando rotas de usuários
+info: Carregando rotas de usuários {"timestamp":"2024-12-10 03:04:10"}
+Rotas registradas: {
+  healthRoutes: [ '/health' ],
+  authRoutes: [ '/auth/register', '/auth/login', '/auth/logout' ],
+  taskRoutes: [ '/tasks/schedule' ],
+  userRoutes: [ '/users/', '/users/:id', '/users/:id', '/users/:id' ],
+  logRoutes: [ '/logs/' ]
+}
+[32m[nodemon] clean exit - waiting for changes before restart[39m
+[32m[nodemon] restarting due to changes...[39m
+[32m[nodemon] starting `ts-node src/app.ts`[39m
+Carregando rotas de usuários
+info: Carregando rotas de usuários {"timestamp":"2024-12-10 03:04:42"}
+Rotas registradas: {
+  healthRoutes: [ '/health' ],
+  authRoutes: [ '/auth/register', '/auth/login', '/auth/logout' ],
+  taskRoutes: [ '/tasks/schedule' ],
+  userRoutes: [ '/users/', '/users/:id', '/users/:id', '/users/:id' ],
+  logRoutes: [ '/logs/' ]
+}
+[32m[nodemon] clean exit - waiting for changes before restart[39m

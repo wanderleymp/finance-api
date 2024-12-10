@@ -1,3 +1,6 @@
+import { ConsumeMessage } from 'amqplib';
+import logger from '../config/logger';
+import { processTaskMessage } from '../services/taskService';
 import { channel, assertQueue } from '../config/rabbitmq';
 
 const TASK_QUEUE = 'tasks_queue';
@@ -23,49 +26,65 @@ export async function publishTask(taskName: string, payload: any = {}) {
 
     await assertQueue(TASK_QUEUE);
 
-    const message = JSON.stringify({
-      taskName,
-      payload,
-      timestamp: new Date().toISOString()
-    });
+    channel.sendToQueue(
+      TASK_QUEUE, 
+      Buffer.from(JSON.stringify({ taskName, payload, timestamp: new Date().toISOString() })),
+      { persistent: true }
+    );
 
-    const sent = channel.sendToQueue(TASK_QUEUE, Buffer.from(message), {
-      persistent: true
-    });
-
-    console.log(`📋 Tarefa "${taskName}" enviada para fila`);
-    return sent;
+    console.log(`📋 Tarefa "${taskName}" publicada com sucesso`);
   } catch (error) {
     console.error('Erro ao publicar tarefa:', error);
     throw error;
   }
 }
 
+async function processTask(msg: ConsumeMessage | null) {
+  if (!msg || !channel) return;
+
+  try {
+    const content = JSON.parse(msg.content.toString());
+    logger.info('Processando tarefa', { content });
+
+    // Processar tarefa
+    const result = await processTaskMessage(content);
+
+    if (result) {
+      channel.ack(msg);
+    } else {
+      channel.nack(msg, false, false);
+    }
+  } catch (error) {
+    logger.error('Erro ao processar tarefa', { error });
+    channel.nack(msg, false, false);
+  }
+}
+
 export async function consumeTasks(onMessage: (msg: any) => Promise<void>) {
   if (!channel) {
-    throw new Error('Canal RabbitMQ não inicializado');
+    console.error('Canal do RabbitMQ não disponível');
+    return;
   }
 
-  await assertQueue(TASK_QUEUE);
-
-  channel.consume(TASK_QUEUE, async (msg) => {
-    if (msg) {
-      try {
-        const content = JSON.parse(msg.content.toString());
-        
-        // Validar conteúdo da mensagem antes de processar
-        validatePayload(content.taskName, content.payload);
-        
-        await onMessage(content);
-        channel.ack(msg);
-      } catch (error) {
-        console.error('Erro ao processar tarefa:', error);
-        channel.nack(msg, false, false);
+  try {
+    await assertQueue(TASK_QUEUE);
+    await channel.consume(TASK_QUEUE, async (msg) => {
+      if (msg) {
+        try {
+          const content = JSON.parse(msg.content.toString());
+          await onMessage(content);
+          channel?.ack(msg);
+        } catch (error) {
+          console.error('Erro ao processar tarefa:', error);
+          channel?.nack(msg, false, false);
+        }
       }
-    }
-  });
+    }, { noAck: false });
 
-  console.log('🚀 Consumidor de tarefas iniciado');
+    console.log('🚀 Consumidor de tarefas iniciado');
+  } catch (error) {
+    console.error('Erro ao iniciar consumidor de tarefas:', error);
+  }
 }
 
 export const TASK_QUEUE_NAME = TASK_QUEUE;

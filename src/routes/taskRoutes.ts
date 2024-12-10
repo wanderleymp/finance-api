@@ -1,5 +1,5 @@
 import { Router, Request, Response } from 'express';
-import { scheduleTask } from '../services/taskService';
+import { publishTask as publishTaskQueue } from '../queues/taskQueue';
 import { authMiddleware, adminMiddleware } from '../middleware/authMiddleware';
 import logger from '../config/logger';
 
@@ -17,7 +17,7 @@ function validateTaskInput(taskName: string, payload: any) {
 
 /**
  * @swagger
- * /api/tasks:
+ * /tasks:
  *   post:
  *     summary: Agendar nova tarefa
  *     tags: [Tarefas]
@@ -51,37 +51,33 @@ function validateTaskInput(taskName: string, payload: any) {
  *                 taskName:
  *                   type: string
  *       400:
- *         description: Erro de validação
+ *         description: Erro na validação dos dados
  *       401:
  *         description: Não autorizado
- *       500:
- *         description: Erro interno do servidor
  */
-router.post('/tasks', authMiddleware, adminMiddleware, async (req: Request, res: Response) => {
+router.post('/schedule', authMiddleware, async (req: Request, res: Response) => {
   try {
-    const { taskName, payload } = req.body;
+    const { taskName, data, scheduledTime } = req.body;
 
-    // Validação de entrada
-    validateTaskInput(taskName, payload);
+    validateTaskInput(taskName || 'unnamed_task', data);
 
-    await scheduleTask(taskName, payload || {});
+    const scheduledTask = await publishTaskQueue(
+      taskName || 'unnamed_task', 
+      data || {}
+    );
 
-    logger.info(`Tarefa ${taskName} agendada por usuário admin`);
     res.status(201).json({ 
-      message: 'Tarefa agendada com sucesso!',
-      taskName 
+      message: 'Tarefa agendada com sucesso',
+      task: {
+        taskName: taskName || 'unnamed_task', 
+        scheduledTime: new Date().toISOString()
+      }
     });
   } catch (error) {
     logger.error('Erro ao agendar tarefa', error);
-    
-    // Tratamento de diferentes tipos de erro
-    const errorMessage = (error as Error).message;
-    const statusCode = errorMessage.includes('taskName') || 
-                       errorMessage.includes('Payload') ? 400 : 500;
-
-    res.status(statusCode).json({ 
-      message: errorMessage, 
-      error: errorMessage 
+    res.status(500).json({ 
+      message: 'Erro ao agendar tarefa', 
+      error: (error as Error).message 
     });
   }
 });
