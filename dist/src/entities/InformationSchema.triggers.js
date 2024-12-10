@@ -1,0 +1,39 @@
+"use strict";
+var __decorate = (this && this.__decorate) || function (decorators, target, key, desc) {
+    var c = arguments.length, r = c < 3 ? target : desc === null ? desc = Object.getOwnPropertyDescriptor(target, key) : desc, d;
+    if (typeof Reflect === "object" && typeof Reflect.decorate === "function") r = Reflect.decorate(decorators, target, key, desc);
+    else for (var i = decorators.length - 1; i >= 0; i--) if (d = decorators[i]) r = (c < 3 ? d(r) : c > 3 ? d(target, key, r) : d(target, key)) || r;
+    return c > 3 && r && Object.defineProperty(target, key, r), r;
+};
+Object.defineProperty(exports, "__esModule", { value: true });
+exports.InformationSchema = void 0;
+const typeorm_1 = require("typeorm");
+let InformationSchema = class InformationSchema {
+};
+exports.InformationSchema = InformationSchema;
+exports.InformationSchema = InformationSchema = __decorate([
+    (0, typeorm_1.Entity)('information_schema.triggers')
+], InformationSchema);
+triggers;
+{
+    action_order: number;
+    created: string;
+    trigger_catalog: string;
+    trigger_schema: string;
+    trigger_name: string;
+    event_manipulation: string;
+    event_object_catalog: string;
+    event_object_schema: string;
+    event_object_table: string;
+    action_condition: string;
+    action_statement: string;
+    action_orientation: string;
+    action_timing: string;
+    action_reference_old_table: string;
+    action_reference_new_table: string;
+    action_reference_old_row: string;
+    action_reference_new_row: string;
+    created_at: Date;
+    updated_at: Date;
+}
+//# sourceMappingURL=InformationSchema.triggers.js.map

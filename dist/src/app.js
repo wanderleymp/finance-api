@@ -1,117 +1,83 @@
 "use strict";
-var __createBinding = (this && this.__createBinding) || (Object.create ? (function(o, m, k, k2) {
-    if (k2 === undefined) k2 = k;
-    var desc = Object.getOwnPropertyDescriptor(m, k);
-    if (!desc || ("get" in desc ? !m.__esModule : desc.writable || desc.configurable)) {
-      desc = { enumerable: true, get: function() { return m[k]; } };
-    }
-    Object.defineProperty(o, k2, desc);
-}) : (function(o, m, k, k2) {
-    if (k2 === undefined) k2 = k;
-    o[k2] = m[k];
-}));
-var __setModuleDefault = (this && this.__setModuleDefault) || (Object.create ? (function(o, v) {
-    Object.defineProperty(o, "default", { enumerable: true, value: v });
-}) : function(o, v) {
-    o["default"] = v;
-});
-var __importStar = (this && this.__importStar) || (function () {
-    var ownKeys = function(o) {
-        ownKeys = Object.getOwnPropertyNames || function (o) {
-            var ar = [];
-            for (var k in o) if (Object.prototype.hasOwnProperty.call(o, k)) ar[ar.length] = k;
-            return ar;
-        };
-        return ownKeys(o);
-    };
-    return function (mod) {
-        if (mod && mod.__esModule) return mod;
-        var result = {};
-        if (mod != null) for (var k = ownKeys(mod), i = 0; i < k.length; i++) if (k[i] !== "default") __createBinding(result, mod, k[i]);
-        __setModuleDefault(result, mod);
-        return result;
-    };
-})();
 var __importDefault = (this && this.__importDefault) || function (mod) {
     return (mod && mod.__esModule) ? mod : { "default": mod };
 };
 Object.defineProperty(exports, "__esModule", { value: true });
 const express_1 = __importDefault(require("express"));
-const swaggerUi = __importStar(require("swagger-ui-express"));
 const cors_1 = __importDefault(require("cors"));
+const swagger_ui_express_1 = __importDefault(require("swagger-ui-express"));
+const authMiddleware_1 = require("./middleware/authMiddleware");
+const errorMiddleware_1 = require("./middleware/errorMiddleware");
+const logger_1 = __importDefault(require("./config/logger"));
 const swagger_1 = __importDefault(require("./config/swagger"));
-const healthRoutes_1 = __importDefault(require("./routes/healthRoutes"));
+const typeorm_1 = require("./config/typeorm");
+// Importações de rotas
+const userRoutes_1 = __importDefault(require("./routes/userRoutes"));
+const personRoutes_1 = __importDefault(require("./routes/personRoutes"));
 const authRoutes_1 = __importDefault(require("./routes/authRoutes"));
+const healthRoutes_1 = __importDefault(require("./routes/healthRoutes"));
 const taskRoutes_1 = __importDefault(require("./routes/taskRoutes"));
 const logRoutes_1 = __importDefault(require("./routes/logRoutes"));
-const userRoutes_1 = __importDefault(require("./routes/userRoutes"));
-const loggerMiddleware_1 = require("./middleware/loggerMiddleware");
-const logger_1 = __importDefault(require("./config/logger"));
 const app = (0, express_1.default)();
-// Configuração do CORS
-const corsOptions = {
-    origin: ['http://localhost:3000', 'http://162.55.160.99:3000', '*'],
-    methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
-    allowedHeaders: ['Content-Type', 'Authorization'],
-    credentials: true
-};
-// Middleware
-app.use((0, cors_1.default)(corsOptions));
-// Middleware para parsear JSON
-app.use(express_1.default.json());
-// Middleware de logs
-app.use(loggerMiddleware_1.loggerMiddleware);
-// Log de todas as rotas registradas
+const PORT = process.env.PORT ? parseInt(process.env.PORT) : 3000;
+// Middleware de logging
 app.use((req, res, next) => {
-    console.log(`🌐 DEBUG - Requisição recebida: ${req.method} ${req.path}`);
-    console.log(`🔑 DEBUG - Headers: ${JSON.stringify(req.headers, null, 2)}`);
-    console.log(`🔢 DEBUG - Corpo da requisição: ${JSON.stringify(req.body, null, 2)}`);
+    logger_1.default.info(`${req.method} ${req.path}`);
     next();
 });
-// Rotas
-app.use(healthRoutes_1.default);
+// Middleware padrão
+app.use((0, cors_1.default)());
+app.use(express_1.default.json());
+app.use(express_1.default.urlencoded({ extended: true }));
+// Rotas públicas
+app.use('/health', healthRoutes_1.default);
 app.use('/auth', authRoutes_1.default);
 app.use('/tasks', taskRoutes_1.default);
-app.use('/users', userRoutes_1.default);
 app.use('/logs', logRoutes_1.default);
-console.log('Rotas registradas:', {
-    healthRoutes: healthRoutes_1.default.stack
-        .filter((r) => r.route && r.route.path)
-        .map((r) => r.route.path),
-    authRoutes: authRoutes_1.default.stack
-        .filter((r) => r.route && r.route.path)
-        .map((r) => `/auth${r.route.path}`),
-    taskRoutes: taskRoutes_1.default.stack
-        .filter((r) => r.route && r.route.path)
-        .map((r) => `/tasks${r.route.path}`),
-    userRoutes: userRoutes_1.default.stack
-        .filter((r) => r.route && r.route.path)
-        .map((r) => `/users${r.route.path}`),
-    logRoutes: logRoutes_1.default.stack
-        .filter((r) => r.route && r.route.path)
-        .map((r) => `/logs${r.route.path}`)
-});
-// Log de rotas não encontradas
-app.use((req, res, next) => {
-    console.log(`❌ DEBUG - Rota não encontrada: ${req.method} ${req.path}`);
-    console.log(`🔍 DEBUG - Headers: ${JSON.stringify(req.headers, null, 2)}`);
+// Middleware de autenticação
+app.use(authMiddleware_1.authMiddleware);
+// Rotas protegidas
+app.use('/users', userRoutes_1.default);
+app.use('/persons', personRoutes_1.default);
+// Middleware de tratamento de erros
+app.use(errorMiddleware_1.errorMiddleware);
+// Documentação Swagger
+app.use('/docs', swagger_ui_express_1.default.serve, swagger_ui_express_1.default.setup(swagger_1.default));
+// Rota 404
+app.use((req, res) => {
     res.status(404).json({
-        message: 'Rota não encontrada',
-        method: req.method,
-        path: req.path,
-        headers: req.headers
+        error: 'Rota não encontrada',
+        status: 404
     });
 });
-// Rota de documentação Swagger
-app.use('/docs', swaggerUi.serve, swaggerUi.setup(swagger_1.default));
-// Tratamento de erros global
-app.use((err, req, res, next) => {
-    console.error('Erro não tratado:', err);
-    logger_1.default.error('Erro não tratado:', err);
-    res.status(500).json({
-        message: 'Erro interno do servidor',
-        error: process.env.NODE_ENV === 'production' ? {} : err.message
-    });
-});
+// Função para iniciar o servidor
+async function startServer() {
+    try {
+        // Inicializar conexão com banco de dados
+        await typeorm_1.AppDataSource.initialize();
+        logger_1.default.info('✅ Conexão com banco de dados estabelecida');
+        // Iniciar servidor Express
+        const server = app.listen(PORT, () => {
+            logger_1.default.info(`🚀 Servidor rodando na porta ${PORT}`);
+            logger_1.default.info(`🌐 Ambiente: ${process.env.NODE_ENV || 'development'}`);
+        });
+        // Tratamento de erros no servidor
+        server.on('error', (error) => {
+            if (error.code === 'EADDRINUSE') {
+                logger_1.default.error(`❌ Porta ${PORT} já está em uso`);
+            }
+            else {
+                logger_1.default.error('❌ Erro ao iniciar servidor:', error);
+            }
+            process.exit(1);
+        });
+    }
+    catch (error) {
+        logger_1.default.error('❌ Falha ao inicializar aplicação:', error);
+        process.exit(1);
+    }
+}
+// Iniciar o servidor
+startServer();
 exports.default = app;
 //# sourceMappingURL=app.js.map

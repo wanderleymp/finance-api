@@ -16,12 +16,12 @@ class NotificationService {
     static async createNotification(notification) {
         try {
             // Verificar se o usuário existe, se um ID de usuário for fornecido
-            if (notification.userId) {
+            if (notification.user) {
                 const userExists = await prisma.user.findUnique({
-                    where: { id: notification.userId }
+                    where: { id: notification.user }
                 });
                 if (!userExists) {
-                    throw new Error(`Usuário com ID ${notification.userId} não encontrado`);
+                    throw new Error(`Usuário com ID ${notification.user} não encontrado`);
                 }
             }
             // Criar notificação
@@ -29,7 +29,7 @@ class NotificationService {
                 data: {
                     type: notification.type,
                     description: notification.description,
-                    userId: notification.userId,
+                    user: notification.user,
                     metadata: notification.metadata
                         ? JSON.parse(JSON.stringify(notification.metadata))
                         : undefined
@@ -39,7 +39,7 @@ class NotificationService {
             logger_1.default.info('Nova notificação criada', {
                 notificationId: newNotification.id,
                 type: newNotification.type,
-                userId: newNotification.userId
+                user: newNotification.user
             });
             console.log('DEBUG: Notificação criada', util_1.default.inspect(newNotification, { depth: null }));
             return newNotification;
@@ -61,8 +61,8 @@ class NotificationService {
         try {
             const where = {};
             // Filtros opcionais
-            if (filters.userId) {
-                where.userId = filters.userId;
+            if (filters.user) {
+                where.user = filters.user;
             }
             if (filters.type) {
                 where.type = filters.type;

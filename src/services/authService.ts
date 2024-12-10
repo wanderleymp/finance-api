@@ -52,7 +52,7 @@ export async function registerAdmin(user_name: string, password: string): Promis
     // Gerar token JWT
     const token = jwt.sign(
       { 
-        userId: newAdmin.id, 
+        user: newAdmin.id, 
         userName: newAdmin.user_name, 
         role: newAdmin.role.toLowerCase() 
       }, 
@@ -92,7 +92,7 @@ export async function authenticateUser(user_name: string, password: string): Pro
     // Gerar token JWT
     const token = jwt.sign(
       { 
-        userId: user.id, 
+        user: user.id, 
         userName: user.user_name, 
         role: user.role.toLowerCase() 
       }, 
@@ -134,17 +134,17 @@ export function verifyToken(token: string): any {
   }
 }
 
-export async function isAdmin(userId: string): Promise<boolean> {
+export async function isAdmin(user: string): Promise<boolean> {
   try {
     const user = await prisma.user.findUnique({
-      where: { id: userId }
+      where: { id: user }
     });
 
     const isAdminUser = user?.role === UserRole.ADMIN;
-    logger.info(`Verificação de admin para usuário ${userId}: ${isAdminUser}`);
+    logger.info(`Verificação de admin para usuário ${user}: ${isAdminUser}`);
     return isAdminUser;
   } catch (error) {
-    logger.error(`Erro ao verificar admin para usuário ${userId}`, error);
+    logger.error(`Erro ao verificar admin para usuário ${user}`, error);
     return false;
   }
 }

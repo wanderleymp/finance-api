@@ -3,6 +3,7 @@ Object.defineProperty(exports, "__esModule", { value: true });
 exports.scheduleTask = scheduleTask;
 exports.startTaskConsumer = startTaskConsumer;
 exports.processTask = processTask;
+exports.processTaskMessage = processTaskMessage;
 const taskQueue_1 = require("../queues/taskQueue");
 async function scheduleTask(taskName, payload) {
     try {
@@ -34,3 +35,23 @@ async function processTask(taskName, payload) {
     console.log(`Processando tarefa ${taskName} manualmente`);
     // Adicione lógica de processamento específica aqui
 }
+async function processTaskMessage(content) {
+    try {
+        console.log(`🎯 Processando tarefa: ${content.taskName}`, content);
+        // Lógica de processamento da tarefa
+        switch (content.taskName) {
+            case 'example_task':
+                // Exemplo de processamento
+                console.log('Processando tarefa de exemplo');
+                return true;
+            default:
+                console.warn(`Tarefa desconhecida: ${content.taskName}`);
+                return false;
+        }
+    }
+    catch (error) {
+        console.error('Erro ao processar tarefa:', error);
+        return false;
+    }
+}
+//# sourceMappingURL=taskService.js.map

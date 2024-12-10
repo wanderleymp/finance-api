@@ -115,8 +115,64 @@ Este roadmap define as etapas de desenvolvimento para a Finance API, começando 
   - Armazena logs no banco de dados
   - Inclui informações detalhadas sobre as ações
 
+## Modelagem de Dados
+- [x] Implementar modelos de Person
+- [x] Criar enums para ContactType e DocumentType
+- [x] Configurar relacionamentos e índices
+- [x] Criar serviços para manipulação de Person
+- [x] Implementar rotas para gerenciamento de Person
+- [x] Adicionar documentação Swagger para Person
+
+- [x] Implementar modelos de Contact
+- [x] Criar repositório de Contact
+- [x] Desenvolver serviço de Contact
+- [x] Implementar controlador de Contact
+- [x] Adicionar rotas para Contact
+- [x] Documentar rotas de Contact no Swagger
+
+- [x] Implementar modelos de PersonContact
+- [x] Criar repositório de PersonContact
+- [x] Desenvolver serviço de PersonContact
+- [x] Implementar controlador de PersonContact
+- [x] Adicionar rotas para PersonContact
+- [x] Documentar rotas de PersonContact no Swagger
+
+- [x] Implementar modelos de PersonAddress
+- [x] Criar repositório de PersonAddress
+- [x] Desenvolver serviço de PersonAddress
+- [x] Implementar controlador de PersonAddress
+- [x] Adicionar rotas para PersonAddress
+- [x] Documentar rotas de PersonAddress no Swagger
+
+- [x] Implementar modelos de PersonDocument
+- [x] Criar repositório de PersonDocument
+- [x] Desenvolver serviço de PersonDocument
+- [x] Implementar controlador de PersonDocument
+- [x] Adicionar rotas para PersonDocument
+- [x] Documentar rotas de PersonDocument no Swagger
+
+### Próximos Passos
+1. Desenvolver testes unitários para todos os novos modelos
+2. Implementar validações adicionais de negócio
+3. Criar casos de teste de integração
+4. Revisar performance das consultas
+5. Adicionar tratamento de erros específicos
+6. Implementar logging detalhado para operações
+
+### Pendências
+- Revisão do sistema de testes
+- Configuração de hooks de teste
+- Padronização de configurações de ambiente
+- Otimização de consultas com índices
+- Implementação de cache para consultas frequentes
+
+### Melhorias Futuras
+- Adicionar suporte a soft delete
+- Implementar auditoria de alterações
+- Criar relatórios e dashboards
+- Desenvolver estratégias de backup e recuperação
+- Implementar autenticação de dois fatores
+
 ## 🏁 Status Atual
-- **Versão**: 1.2.0
-- **Data**: 09/12/2024
-- **Fase Atual**: Implementação de Autenticação e Autorização JWT
-- **Próximo Passo**: Implementação de Recursos Avançados
+- **Versão**: 1.3.0
+- **Data**: 10/12/2024

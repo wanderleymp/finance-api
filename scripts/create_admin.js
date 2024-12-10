@@ -17,3 +17,4 @@ async function createInitialAdmin() {
     }
 }
 createInitialAdmin();
+//# sourceMappingURL=create_admin.js.map

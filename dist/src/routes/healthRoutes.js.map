@@ -1,1 +1,1 @@
-{"version":3,"file":"healthRoutes.js","sourceRoot":"","sources":["../../../src/routes/healthRoutes.ts"],"names":[],"mappings":";;AAAA,qCAAiC;AACjC,sEAAkE;AAElE,MAAM,YAAY,GAAG,IAAA,gBAAM,GAAE,CAAC;AAE9B,YAAY,CAAC,GAAG,CAAC,SAAS,EAAE,kCAAe,CAAC,CAAC;AAE7C,kBAAe,YAAY,CAAC"}
+{"version":3,"file":"healthRoutes.js","sourceRoot":"","sources":["../../../src/routes/healthRoutes.ts"],"names":[],"mappings":";;AAAA,qCAAiC;AACjC,sEAAkE;AAClE,MAAM,YAAY,GAAG,IAAA,gBAAM,GAAE,CAAC;AAC9B,YAAY,CAAC,GAAG,CAAC,SAAS,EAAE,kCAAe,CAAC,CAAC;AAC7C,kBAAe,YAAY,CAAC"}

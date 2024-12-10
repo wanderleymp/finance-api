@@ -50,3 +50,4 @@ async function assertQueue(queueName) {
     }
     await channel.assertQueue(queueName, { durable: true });
 }
+//# sourceMappingURL=rabbitmq.js.map

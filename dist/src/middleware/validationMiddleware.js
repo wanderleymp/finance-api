@@ -1,82 +1,96 @@
 "use strict";
-var __importDefault = (this && this.__importDefault) || function (mod) {
-    return (mod && mod.__esModule) ? mod : { "default": mod };
-};
 Object.defineProperty(exports, "__esModule", { value: true });
+exports.schemas = exports.validateRequest = void 0;
 exports.validateLogin = validateLogin;
 exports.validateRegistration = validateRegistration;
+exports.validatePerson = validatePerson;
+exports.validateContact = validateContact;
+exports.validatePersonContact = validatePersonContact;
 exports.globalErrorHandler = globalErrorHandler;
-const logger_1 = __importDefault(require("../config/logger"));
+const zod_1 = require("zod");
+const apiErrors_1 = require("../utils/apiErrors");
+const validateRequest = (schema) => {
+    return (req, res, next) => {
+        try {
+            schema.parse({
+                body: req.body,
+                query: req.query,
+                params: req.params
+            });
+            next();
+        }
+        catch (error) {
+            if (error instanceof zod_1.z.ZodError) {
+                const errorMessages = error.errors.map(err => ({
+                    field: err.path.join('.'),
+                    message: err.message
+                }));
+                throw new apiErrors_1.ApiError('Erro de validação', 400, errorMessages);
+            }
+            next(error);
+        }
+    };
+};
+exports.validateRequest = validateRequest;
+// Esquemas de validação comuns
+exports.schemas = {
+    login: zod_1.z.object({
+        body: zod_1.z.object({
+            user_name: zod_1.z.string().min(3, 'Nome de usuário deve ter pelo menos 3 caracteres').max(50, 'Nome de usuário deve ter no máximo 50 caracteres'),
+            password: zod_1.z.string().min(8, 'Senha deve ter pelo menos 8 caracteres').max(100, 'Senha deve ter no máximo 100 caracteres')
+        })
+    }),
+    registration: zod_1.z.object({
+        body: zod_1.z.object({
+            user_name: zod_1.z.string().min(3, 'Nome de usuário deve ter pelo menos 3 caracteres').max(50, 'Nome de usuário deve ter no máximo 50 caracteres'),
+            password: zod_1.z.string().min(8, 'Senha deve ter pelo menos 8 caracteres').max(100, 'Senha deve ter no máximo 100 caracteres')
+                .refine((password) => /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d).+$/.test(password), 'Senha deve conter pelo menos 1 letra maiúscula, 1 letra minúscula e 1 número')
+        })
+    }),
+    person: zod_1.z.object({
+        body: zod_1.z.object({
+            full_name: zod_1.z.string().min(2, 'Nome deve ter pelo menos 2 caracteres'),
+            fantasy_name: zod_1.z.string().optional(),
+            isCompany: zod_1.z.boolean().optional()
+        })
+    }),
+    contact: zod_1.z.object({
+        body: zod_1.z.object({
+            type: zod_1.z.enum(['PHONE', 'EMAIL', 'WHATSAPP', 'TELEGRAM', 'OTHER']),
+            value: zod_1.z.string().min(3, 'Valor do contato inválido')
+        })
+    }),
+    personContact: zod_1.z.object({
+        body: zod_1.z.object({
+            person: zod_1.z.string().uuid('ID da pessoa inválido'),
+            contactId: zod_1.z.string().uuid('ID do contato inválido'),
+            description: zod_1.z.string().optional()
+        })
+    })
+};
+// Funções de validação específicas
 function validateLogin(req, res, next) {
-    try {
-        const { user_name, password } = req.body;
-        // Validar nome de usuário
-        if (!user_name) {
-            logger_1.default.warn('Tentativa de login sem nome de usuário');
-            return res.status(400).json({ message: 'Nome de usuário é obrigatório' });
-        }
-        // Validar senha
-        if (!password) {
-            logger_1.default.warn('Tentativa de login sem senha');
-            return res.status(400).json({ message: 'Senha é obrigatória' });
-        }
-        next();
-    }
-    catch (error) {
-        logger_1.default.error('Erro na validação de login', error);
-        res.status(500).json({
-            message: 'Erro na validação de login',
-            error: process.env.NODE_ENV === 'development' ? error.message : 'Ocorreu um erro inesperado'
-        });
-    }
+    return (0, exports.validateRequest)(exports.schemas.login)(req, res, next);
 }
 function validateRegistration(req, res, next) {
-    try {
-        const { user_name, password } = req.body;
-        // Validar nome de usuário
-        if (!user_name) {
-            logger_1.default.warn('Tentativa de registro sem nome de usuário');
-            return res.status(400).json({ message: 'Nome de usuário é obrigatório' });
-        }
-        // Validar comprimento do nome de usuário
-        if (user_name.length < 3 || user_name.length > 50) {
-            logger_1.default.warn(`Nome de usuário inválido: ${user_name}`);
-            return res.status(400).json({ message: 'Nome de usuário deve ter entre 3 e 50 caracteres' });
-        }
-        // Validar senha
-        if (!password) {
-            logger_1.default.warn('Tentativa de registro sem senha');
-            return res.status(400).json({ message: 'Senha é obrigatória' });
-        }
-        // Validar comprimento da senha
-        if (password.length < 8 || password.length > 100) {
-            logger_1.default.warn('Senha não atende aos requisitos de comprimento');
-            return res.status(400).json({ message: 'Senha deve ter entre 8 e 100 caracteres' });
-        }
-        // Validar força de senha (exemplo: pelo menos 1 letra maiúscula, 1 minúscula, 1 número)
-        const passwordRegex = /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d).+$/;
-        if (!passwordRegex.test(password)) {
-            logger_1.default.warn('Senha não atende aos requisitos de complexidade');
-            return res.status(400).json({
-                message: 'Senha deve conter pelo menos 1 letra maiúscula, 1 letra minúscula e 1 número'
-            });
-        }
-        next();
-    }
-    catch (error) {
-        logger_1.default.error('Erro na validação de registro', error);
-        res.status(500).json({
-            message: 'Erro na validação de registro',
-            error: process.env.NODE_ENV === 'development' ? error.message : 'Ocorreu um erro inesperado'
-        });
-    }
+    return (0, exports.validateRequest)(exports.schemas.registration)(req, res, next);
+}
+function validatePerson(req, res, next) {
+    return (0, exports.validateRequest)(exports.schemas.person)(req, res, next);
+}
+function validateContact(req, res, next) {
+    return (0, exports.validateRequest)(exports.schemas.contact)(req, res, next);
+}
+function validatePersonContact(req, res, next) {
+    return (0, exports.validateRequest)(exports.schemas.personContact)(req, res, next);
 }
 function globalErrorHandler(err, req, res, next) {
-    logger_1.default.error('Erro não tratado:', {
-        error: err,
-        path: req.path,
-        method: req.method
-    });
+    if (err instanceof apiErrors_1.ApiError) {
+        return res.status(err.statusCode).json({
+            message: err.message,
+            errors: err.details
+        });
+    }
     res.status(500).json({
         message: 'Erro interno do servidor',
         error: process.env.NODE_ENV === 'development' ? err.message : 'Ocorreu um erro inesperado'

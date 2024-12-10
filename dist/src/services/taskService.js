@@ -12,7 +12,7 @@ async function scheduleTask(taskName, payload) {
         return true;
     }
     catch (error) {
-        console.error('Erro ao agendar tarefa:', error);
+        console.error("Erro ao agendar tarefa:", error);
         throw error;
     }
 }
@@ -21,9 +21,9 @@ async function startTaskConsumer() {
         console.log(`🎯 Processando tarefa: ${task.taskName}`, task.payload);
         // Lógica de processamento da tarefa
         switch (task.taskName) {
-            case 'example_task':
+            case "example_task":
                 // Exemplo de processamento
-                console.log('Processando tarefa de exemplo');
+                console.log("Processando tarefa de exemplo");
                 break;
             default:
                 console.warn(`Tarefa desconhecida: ${task.taskName}`);
@@ -40,9 +40,9 @@ async function processTaskMessage(content) {
         console.log(`🎯 Processando tarefa: ${content.taskName}`, content);
         // Lógica de processamento da tarefa
         switch (content.taskName) {
-            case 'example_task':
+            case "example_task":
                 // Exemplo de processamento
-                console.log('Processando tarefa de exemplo');
+                console.log("Processando tarefa de exemplo");
                 return true;
             default:
                 console.warn(`Tarefa desconhecida: ${content.taskName}`);
@@ -50,7 +50,7 @@ async function processTaskMessage(content) {
         }
     }
     catch (error) {
-        console.error('Erro ao processar tarefa:', error);
+        console.error("Erro ao processar tarefa:", error);
         return false;
     }
 }

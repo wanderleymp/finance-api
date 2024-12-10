@@ -7,7 +7,7 @@ const prisma = new PrismaClient();
 export interface NotificationInput {
   type: NotificationType;
   description: string;
-  userId?: string;
+  user?: string;
   metadata?: Record<string, any>;
 }
 
@@ -19,13 +19,13 @@ export class NotificationService {
   static async createNotification(notification: NotificationInput) {
     try {
       // Verificar se o usuário existe, se um ID de usuário for fornecido
-      if (notification.userId) {
+      if (notification.user) {
         const userExists = await prisma.user.findUnique({ 
-          where: { id: notification.userId } 
+          where: { id: notification.user } 
         });
 
         if (!userExists) {
-          throw new Error(`Usuário com ID ${notification.userId} não encontrado`);
+          throw new Error(`Usuário com ID ${notification.user} não encontrado`);
         }
       }
 
@@ -34,7 +34,7 @@ export class NotificationService {
         data: {
           type: notification.type,
           description: notification.description,
-          userId: notification.userId,
+          user: notification.user,
           metadata: notification.metadata 
             ? JSON.parse(JSON.stringify(notification.metadata)) 
             : undefined
@@ -45,7 +45,7 @@ export class NotificationService {
       logger.info('Nova notificação criada', {
         notificationId: newNotification.id,
         type: newNotification.type,
-        userId: newNotification.userId
+        user: newNotification.user
       });
 
       console.log('DEBUG: Notificação criada', util.inspect(newNotification, { depth: null }));
@@ -66,7 +66,7 @@ export class NotificationService {
    * @param filters Filtros para busca de notificações
    */
   static async getNotifications(filters: {
-    userId?: string;
+    user?: string;
     type?: NotificationType;
     isRead?: boolean;
     startDate?: Date;
@@ -76,8 +76,8 @@ export class NotificationService {
       const where: any = {};
 
       // Filtros opcionais
-      if (filters.userId) {
-        where.userId = filters.userId;
+      if (filters.user) {
+        where.user = filters.user;
       }
 
       if (filters.type) {

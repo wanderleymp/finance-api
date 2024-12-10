@@ -43,7 +43,7 @@ async function registerAdmin(user_name, password) {
         logger_1.default.info(`Admin criado com sucesso: ${user_name}`);
         // Gerar token JWT
         const token = jsonwebtoken_1.default.sign({
-            userId: newAdmin.id,
+            user: newAdmin.id,
             userName: newAdmin.user_name,
             role: newAdmin.role.toLowerCase()
         }, JWT_SECRET, { expiresIn: TOKEN_EXPIRATION });
@@ -73,7 +73,7 @@ async function authenticateUser(user_name, password) {
         }
         // Gerar token JWT
         const token = jsonwebtoken_1.default.sign({
-            userId: user.id,
+            user: user.id,
             userName: user.user_name,
             role: user.role.toLowerCase()
         }, JWT_SECRET, { expiresIn: TOKEN_EXPIRATION });
@@ -108,17 +108,17 @@ function verifyToken(token) {
         throw new Error(`Token inválido: ${error.message}`);
     }
 }
-async function isAdmin(userId) {
+async function isAdmin(user) {
     try {
         const user = await prisma.user.findUnique({
-            where: { id: userId }
+            where: { id: user }
         });
         const isAdminUser = user?.role === client_1.UserRole.ADMIN;
-        logger_1.default.info(`Verificação de admin para usuário ${userId}: ${isAdminUser}`);
+        logger_1.default.info(`Verificação de admin para usuário ${user}: ${isAdminUser}`);
         return isAdminUser;
     }
     catch (error) {
-        logger_1.default.error(`Erro ao verificar admin para usuário ${userId}`, error);
+        logger_1.default.error(`Erro ao verificar admin para usuário ${user}`, error);
         return false;
     }
 }

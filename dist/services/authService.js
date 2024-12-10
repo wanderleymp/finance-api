@@ -45,7 +45,7 @@ async function registerAdmin(user_name, password) {
         const token = jsonwebtoken_1.default.sign({
             userId: newAdmin.id,
             userName: newAdmin.user_name,
-            role: newAdmin.role
+            role: newAdmin.role.toLowerCase()
         }, JWT_SECRET, { expiresIn: TOKEN_EXPIRATION });
         return token;
     }
@@ -75,7 +75,7 @@ async function authenticateUser(user_name, password) {
         const token = jsonwebtoken_1.default.sign({
             userId: user.id,
             userName: user.user_name,
-            role: user.role
+            role: user.role.toLowerCase()
         }, JWT_SECRET, { expiresIn: TOKEN_EXPIRATION });
         logger_1.default.info(`Usuário autenticado com sucesso: ${user_name}`);
         return token;
@@ -85,15 +85,27 @@ async function authenticateUser(user_name, password) {
         throw error;
     }
 }
-async function verifyToken(token) {
+function verifyToken(token) {
     try {
+        console.log('🔐 DEBUG - Verificando token:', token);
+        console.log('🔑 DEBUG - Chave secreta usada:', JWT_SECRET.substring(0, 10) + '...');
         const decoded = jsonwebtoken_1.default.verify(token, JWT_SECRET);
-        logger_1.default.info('Token verificado com sucesso');
+        console.log('✅ DEBUG - Token decodificado:', decoded);
+        logger_1.default.info('Token verificado com sucesso', {
+            decoded,
+            tokenLength: token.length
+        });
         return decoded;
     }
     catch (error) {
-        logger_1.default.error('Erro na verificação do token', error);
-        throw new Error('Token inválido');
+        console.log('❌ DEBUG - Erro na verificação do token:', error);
+        logger_1.default.error('Erro na verificação do token', {
+            error: error,
+            tokenLength: token.length,
+            errorName: error.name,
+            errorMessage: error.message
+        });
+        throw new Error(`Token inválido: ${error.message}`);
     }
 }
 async function isAdmin(userId) {
@@ -110,3 +122,4 @@ async function isAdmin(userId) {
         return false;
     }
 }
+//# sourceMappingURL=authService.js.map

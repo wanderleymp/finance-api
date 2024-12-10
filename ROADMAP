@@ -1,0 +1,51 @@
+# 🚀 Finance API - Roadmap de Implementação
+
+## 1. Fundações de Cadastro
+### 1.1 Tipos e Configurações
+- [ ] `person_types`: Definir tipos de pessoa (física/jurídica)
+- [ ] `document_types`: Padronizar tipos de documentos
+- [ ] `contact_types`: Categorizar canais de contato
+
+### 1.2 Cadastro Principal
+- [ ] `persons`: Modelo central de cadastro
+  - Integração com tipos
+  - Documentos
+  - Contatos
+  - Endereços
+
+### 1.3 Complementos de Cadastro
+- [ ] `person_documents`: Gestão de documentos
+- [ ] `person_contacts`: Canais de comunicação
+- [ ] `person_addresses`: Endereçamento
+
+## 2. Autenticação (Fase Preparatória)
+- [ ] Criar estrutura de `users`
+- [ ] Middleware de bypass temporário
+- [ ] Rota de criação de usuário vinculada à pessoa
+
+## 3. Movimentações Financeiras
+- [ ] `movement_types`: Tipificação de movimentos
+- [ ] `movement_categories`: Categorização
+- [ ] `movement_tags`: Etiquetagem
+- [ ] `movements`: Registro de movimentações
+
+## 4. Contratos
+- [ ] `contract_types`: Tipificação de contratos
+- [ ] `contracts`: Registro de contratos
+- [ ] `contract_groups`: Agrupamento
+- [ ] `contract_installments`: Gestão de parcelas
+
+## 5. Licenciamento
+- [ ] `licenses`: Registro de licenças
+- [ ] `license_types`: Tipificação
+- [ ] Vinculações de licenças
+
+## Estratégia de Implementação
+- Sempre começar por tipos e configurações
+- Construir relacionamentos incrementalmente
+- Manter foco em flexibilidade e extensibilidade
+
+## Próximos Passos
+- Definir prioridades específicas
+- Criar documentação detalhada
+- Estabelecer padrões de desenvolvimento

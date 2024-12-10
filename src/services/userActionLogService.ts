@@ -64,7 +64,7 @@ export class UserActionLogService {
    * @param filters Filtros para busca de logs
    */
   static async getUserActionLogs(filters: {
-    userId?: string;
+    user?: string;
     actionType?: UserActionType;
     startDate?: Date;
     endDate?: Date;
@@ -82,10 +82,10 @@ export class UserActionLogService {
       const where: any = {};
 
       // Filtros opcionais
-      if (filters.userId) {
+      if (filters.user) {
         where.OR = [
-          { performedBy: filters.userId },
-          { targetUser: filters.userId }
+          { performedBy: filters.user },
+          { targetUser: filters.user }
         ];
       }
 

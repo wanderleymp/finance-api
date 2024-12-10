@@ -5,6 +5,7 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
 Object.defineProperty(exports, "__esModule", { value: true });
 const express_1 = require("express");
 const authService_1 = require("../services/authService");
+const validationMiddleware_1 = require("../middleware/validationMiddleware");
 const authMiddleware_1 = require("../middleware/authMiddleware");
 const logger_1 = __importDefault(require("../config/logger"));
 const router = (0, express_1.Router)();
@@ -12,7 +13,7 @@ const router = (0, express_1.Router)();
  * @swagger
  * /auth/register:
  *   post:
- *     summary: Registrar usuário administrador inicial
+ *     summary: Registrar administrador
  *     tags: [Autenticação]
  *     requestBody:
  *       required: true
@@ -26,42 +27,28 @@ const router = (0, express_1.Router)();
  *             properties:
  *               user_name:
  *                 type: string
- *                 description: Nome de usuário único
  *               password:
  *                 type: string
- *                 description: Senha do usuário
  *     responses:
  *       201:
- *         description: Usuário registrado com sucesso
+ *         description: Administrador registrado com sucesso
  *       400:
- *         description: Erro de validação
- *       500:
- *         description: Erro interno do servidor
+ *         description: Dados inválidos
  */
-router.post('/register', async (req, res) => {
+router.post('/register', validationMiddleware_1.validateRegistration, async (req, res) => {
     try {
         const { user_name, password } = req.body;
-        logger_1.default.info(`Tentativa de registro: ${JSON.stringify(req.body)}`);
-        logger_1.default.info(`IP do cliente: ${req.ip}, Headers: ${JSON.stringify(req.headers)}`);
-        // Validações básicas
-        if (!user_name || !password) {
-            logger_1.default.warn('Registro inválido: campos incompletos');
-            return res.status(400).json({
-                message: 'Nome de usuário e senha são obrigatórios'
-            });
-        }
-        // Registrar usuário admin
+        logger_1.default.info('Tentativa de registro de administrador', { user_name });
         const token = await (0, authService_1.registerAdmin)(user_name, password);
-        logger_1.default.info(`Usuário ${user_name} registrado com sucesso`);
         res.status(201).json({
-            message: 'Usuário administrador registrado com sucesso',
+            message: 'Administrador registrado com sucesso',
             token
         });
     }
     catch (error) {
-        logger_1.default.error('Erro no registro de admin', error);
+        logger_1.default.error('Erro no registro de administrador', error);
         res.status(500).json({
-            message: 'Erro ao registrar usuário',
+            message: 'Erro ao registrar administrador',
             error: error.message
         });
     }
@@ -70,7 +57,7 @@ router.post('/register', async (req, res) => {
  * @swagger
  * /auth/login:
  *   post:
- *     summary: Autenticar usuário
+ *     summary: Login de administrador
  *     tags: [Autenticação]
  *     requestBody:
  *       required: true
@@ -88,59 +75,70 @@ router.post('/register', async (req, res) => {
  *                 type: string
  *     responses:
  *       200:
- *         description: Login bem-sucedido
- *       401:
+ *         description: Login realizado com sucesso
+ *       400:
  *         description: Credenciais inválidas
- *       500:
- *         description: Erro interno do servidor
  */
-router.post('/login', async (req, res) => {
+router.post('/login', authMiddleware_1.loginAttemptMiddleware, validationMiddleware_1.validateLogin, async (req, res) => {
     try {
         const { user_name, password } = req.body;
-        logger_1.default.info(`Tentativa de login: ${JSON.stringify(req.body)}`);
-        logger_1.default.info(`IP do cliente: ${req.ip}, Headers: ${JSON.stringify(req.headers)}`);
-        // Validações básicas
-        if (!user_name || !password) {
-            logger_1.default.warn('Login inválido: campos incompletos');
-            return res.status(400).json({
-                message: 'Nome de usuário e senha são obrigatórios'
-            });
-        }
-        // Autenticar usuário
+        logger_1.default.info('Tentativa de login de administrador', { user_name });
         const token = await (0, authService_1.authenticateUser)(user_name, password);
-        logger_1.default.info(`Usuário ${user_name} autenticado com sucesso`);
         res.status(200).json({
             message: 'Login realizado com sucesso',
             token
         });
     }
     catch (error) {
-        logger_1.default.error('Erro no login', error);
+        logger_1.default.error('Erro no login de administrador', error);
         res.status(401).json({
-            message: 'Credenciais inválidas',
+            message: 'Erro no login',
             error: error.message
         });
     }
 });
 /**
  * @swagger
- * /auth/logout:
+ * /auth/verify:
  *   post:
- *     summary: Logout do usuário
+ *     summary: Verificar token de autenticação
  *     tags: [Autenticação]
- *     security:
- *       - bearerAuth: []
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required:
+ *               - token
+ *             properties:
+ *               token:
+ *                 type: string
  *     responses:
  *       200:
- *         description: Logout realizado com sucesso
+ *         description: Token válido
  *       401:
- *         description: Não autorizado
+ *         description: Token inválido
  */
-router.post('/logout', authMiddleware_1.authMiddleware, (req, res) => {
-    // No JWT stateless, o logout é feito no cliente (remover token)
-    logger_1.default.info('Logout realizado');
-    res.status(200).json({
-        message: 'Logout realizado com sucesso'
-    });
+router.post('/verify', authMiddleware_1.authMiddleware, async (req, res) => {
+    try {
+        const token = req.headers.authorization?.split(' ')[1];
+        if (!token) {
+            return res.status(401).json({ message: 'Token não fornecido' });
+        }
+        const decoded = await (0, authService_1.verifyToken)(token);
+        res.status(200).json({
+            message: 'Token válido',
+            user: decoded
+        });
+    }
+    catch (error) {
+        logger_1.default.error('Erro na verificação do token', error);
+        res.status(401).json({
+            message: 'Token inválido',
+            error: error.message
+        });
+    }
 });
 exports.default = router;
+//# sourceMappingURL=authRoutes.js.map

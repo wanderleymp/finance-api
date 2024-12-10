@@ -65,10 +65,10 @@ class UserActionLogService {
             });
             const where = {};
             // Filtros opcionais
-            if (filters.userId) {
+            if (filters.user) {
                 where.OR = [
-                    { performedBy: filters.userId },
-                    { targetUser: filters.userId }
+                    { performedBy: filters.user },
+                    { targetUser: filters.user }
                 ];
             }
             if (filters.actionType) {

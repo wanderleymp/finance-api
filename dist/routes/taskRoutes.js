@@ -4,7 +4,7 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
 };
 Object.defineProperty(exports, "__esModule", { value: true });
 const express_1 = require("express");
-const taskService_1 = require("../services/taskService");
+const taskQueue_1 = require("../queues/taskQueue");
 const authMiddleware_1 = require("../middleware/authMiddleware");
 const logger_1 = __importDefault(require("../config/logger"));
 const router = (0, express_1.Router)();
@@ -56,29 +56,26 @@ function validateTaskInput(taskName, payload) {
  *       401:
  *         description: Não autorizado
  */
-router.post('/', authMiddleware_1.authMiddleware, authMiddleware_1.adminMiddleware, async (req, res) => {
+router.post('/schedule', authMiddleware_1.authMiddleware, async (req, res) => {
     try {
-        const { taskName, payload } = req.body;
-        validateTaskInput(taskName, payload);
-        const scheduledTask = await (0, taskService_1.scheduleTask)(taskName, payload);
-        logger_1.default.info(`Tarefa agendada: ${taskName}`);
+        const { taskName, data, scheduledTime } = req.body;
+        validateTaskInput(taskName || 'unnamed_task', data);
+        const scheduledTask = await (0, taskQueue_1.publishTask)(taskName || 'unnamed_task', data || {});
         res.status(201).json({
             message: 'Tarefa agendada com sucesso',
-            taskName: scheduledTask.name
+            task: {
+                taskName: taskName || 'unnamed_task',
+                scheduledTime: new Date().toISOString()
+            }
         });
     }
     catch (error) {
         logger_1.default.error('Erro ao agendar tarefa', error);
-        if (error instanceof Error) {
-            return res.status(400).json({
-                message: 'Erro na validação dos dados',
-                error: error.message
-            });
-        }
         res.status(500).json({
-            message: 'Erro interno do servidor',
-            error: 'Falha ao agendar tarefa'
+            message: 'Erro ao agendar tarefa',
+            error: error.message
         });
     }
 });
 exports.default = router;
+//# sourceMappingURL=taskRoutes.js.map
