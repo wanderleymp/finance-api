@@ -18,9 +18,11 @@ app.use(loggerMiddleware);
 
 // Importar rotas
 const userRoutes = require('./routes/userRoutes');
+const healthRoutes = require('./routes/healthRoutes');
 
 // Configurar rotas
 app.use('/api/users', userRoutes);
+app.use('/health', healthRoutes);
 
 // Rota raiz para verificação de saúde
 app.get('/', (req, res) => {
