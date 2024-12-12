@@ -15,29 +15,38 @@
 - Configurado `.gitignore` para ignorar arquivos sensíveis
 - Criado `README.md` com instruções de instalação e uso
 
-## [0.3.0] - 2024-12-12
+## [1.0.0] - 2024-12-12
 ### Adicionado
-- Funções `startTask` e `finishTask` para registrar o andamento de tarefas no banco `dev_history`.
-- Registro automático no roadmap ao iniciar ou concluir tarefas.
-- Função `getTaskByTitle` para buscar detalhes de tarefas específicas.
-
-## [0.4.0] - 2024-12-12
-### Adicionado
-- Integração de registro automático de tarefas ao servidor Node.js.
-- Atualização automática de status ao iniciar ou concluir tarefas.
-- Tratamento de erros durante o registro de tarefas.
+- Conexão ao RabbitMQ remoto configurada via variável de ambiente.
+- Arquivo de configuração atualizado para reutilizar a conexão.
+- Teste de conexão adicionado ao iniciar o servidor.
+- Tratamento de erros na conexão com RabbitMQ.
+- Logs detalhados para conexão e erros do RabbitMQ.
+- Endpoint `/health` com verificação de saúde do RabbitMQ.
+- Função de verificação de saúde com teste de criação e exclusão de fila temporária.
 
 ### Modificado
-- Atualizada inicialização do servidor para incluir registro de tarefas.
+- Atualizada versão da API para 1.0.0.
+- Removida importação de rotas de health check separadas.
 
-## [0.5.0] - 2024-12-12
+## [0.8.0] - 2024-12-12
 ### Adicionado
-- Endpoint `/roadmap` para consulta de tarefas do roadmap.
-- Suporte a filtro de tarefas por status.
-- Testes automatizados para o endpoint de roadmap.
+- Logs estruturados usando Winston e Morgan.
+- Registro de requisições, respostas e erros não tratados.
+- Logs separados para erros críticos e eventos gerais.
+- Tratamento de exceções não capturadas.
+- Configuração de log com rotação de arquivos.
+- Middleware de log centralizado.
 
 ### Modificado
-- Estrutura de rotas para incluir consulta de roadmap.
+- Atualizada estrutura de tratamento de erros.
+- Melhorada a captura de informações de log.
+
+## [0.7.0] - 2024-12-12
+### Adicionado
+- Implementação de arquitetura de repositório, serviço e controlador.
+- Endpoints para gerenciamento de roadmap.
+- Configuração inicial do banco de dados PostgreSQL.
 
 ## [0.6.0] - 2024-12-12
 ### Refatorado
@@ -56,24 +65,29 @@
 - Endpoints de roadmap para suportar operações CRUD.
 - Tratamento de erros e validações na camada de serviço.
 
-## [0.7.0] - 2024-12-12
+## [0.5.0] - 2024-12-12
 ### Adicionado
-- Implementação de arquitetura de repositório, serviço e controlador.
-- Endpoints para gerenciamento de roadmap.
-- Configuração inicial do banco de dados PostgreSQL.
-
-## [0.8.0] - 2024-12-12
-### Adicionado
-- Logs estruturados usando Winston e Morgan.
-- Registro de requisições, respostas e erros não tratados.
-- Logs separados para erros críticos e eventos gerais.
-- Tratamento de exceções não capturadas.
-- Configuração de log com rotação de arquivos.
-- Middleware de log centralizado.
+- Endpoint `/roadmap` para consulta de tarefas do roadmap.
+- Suporte a filtro de tarefas por status.
+- Testes automatizados para o endpoint de roadmap.
 
 ### Modificado
-- Atualizada estrutura de tratamento de erros.
-- Melhorada a captura de informações de log.
+- Estrutura de rotas para incluir consulta de roadmap.
+
+## [0.4.0] - 2024-12-12
+### Adicionado
+- Integração de registro automático de tarefas ao servidor Node.js.
+- Atualização automática de status ao iniciar ou concluir tarefas.
+- Tratamento de erros durante o registro de tarefas.
+
+### Modificado
+- Atualizada inicialização do servidor para incluir registro de tarefas.
+
+## [0.3.0] - 2024-12-12
+### Adicionado
+- Funções `startTask` e `finishTask` para registrar o andamento de tarefas no banco `dev_history`.
+- Registro automático no roadmap ao iniciar ou concluir tarefas.
+- Função `getTaskByTitle` para buscar detalhes de tarefas específicas.
 
 ## Configuração do Banco de Dados de Logs de Desenvolvimento
 
