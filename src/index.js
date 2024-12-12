@@ -4,6 +4,7 @@ const cors = require('cors');
 const dotenv = require('dotenv');
 const { httpLogger, logger } = require('./middlewares/logger');
 const { createRabbitMQConnection, checkRabbitMQHealth } = require('./config/rabbitmq');
+const roadmapService = require('./services/roadmapService');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -99,6 +100,12 @@ process.on('unhandledRejection', (reason, promise) => {
 (async () => {
   try {
     await createRabbitMQConnection();
+    
+    // Atualizar tarefa de RabbitMQ no roadmap
+    await roadmapService.completeRoadmapTask(
+      'Conexão RabbitMQ', 
+      'Configuração de conexão ao RabbitMQ remoto via .env, com verificação de saúde e tratamento de erros'
+    );
   } catch (error) {
     logger.error('Falha ao conectar ao RabbitMQ durante a inicialização', {
       error: error.message

@@ -190,6 +190,48 @@ class RoadmapService {
       throw error;
     }
   }
+
+  // Atualizar tarefa automaticamente no roadmap
+  async completeRoadmapTask(title, description) {
+    try {
+      // Buscar tarefa existente pelo título
+      const tasks = await this.listTasks();
+      const existingTask = tasks.find(task => task.title.toLowerCase() === title.toLowerCase());
+
+      if (existingTask) {
+        // Atualizar tarefa existente
+        const updatedTask = await this.updateTask(existingTask.id, {
+          status: 'concluído',
+          description: description || existingTask.description
+        });
+
+        logger.info('Tarefa do roadmap atualizada automaticamente', {
+          task: updatedTask,
+          action: 'auto_complete_roadmap_task'
+        });
+
+        return updatedTask;
+      } else {
+        // Criar nova tarefa se não existir
+        const newTask = await this.createTask(title, description, 'concluído');
+
+        logger.info('Nova tarefa criada no roadmap', {
+          task: newTask,
+          action: 'auto_create_roadmap_task'
+        });
+
+        return newTask;
+      }
+    } catch (error) {
+      logger.error('Erro ao atualizar tarefa do roadmap automaticamente', {
+        error: error.message,
+        title,
+        description,
+        action: 'auto_update_roadmap_task_error'
+      });
+      throw error;
+    }
+  }
 }
 
 module.exports = new RoadmapService();

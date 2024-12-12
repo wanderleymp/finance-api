@@ -15,6 +15,18 @@
 - Configurado `.gitignore` para ignorar arquivos sensíveis
 - Criado `README.md` com instruções de instalação e uso
 
+## [1.1.0] - 2024-12-12
+### Adicionado
+- Atualização automática do roadmap sempre que uma funcionalidade for concluída.
+- Método `completeRoadmapTask` para atualizar ou criar tarefas no roadmap.
+- Registro de tarefa concluída ao iniciar o servidor.
+- Teste de conexão com RabbitMQ configurado.
+- Logs detalhados para atualização automática de tarefas.
+
+### Modificado
+- Atualizada versão da API para 1.1.0.
+- Melhorada a flexibilidade do gerenciamento de roadmap.
+
 ## [1.0.0] - 2024-12-12
 ### Adicionado
 - Conexão ao RabbitMQ remoto configurada via variável de ambiente.
