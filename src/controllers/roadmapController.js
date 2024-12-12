@@ -1,156 +1,134 @@
-const { devDatabase } = require('../config/database');
+const roadmapService = require('../services/roadmapService');
 const { logger } = require('../middlewares/logger');
 
-// Inicia uma tarefa
-async function startTask(title) {
+// Listar tarefas
+async function listTasks(req, res) {
   try {
-    // Verificar se a tabela existe antes de executar a query
-    await devDatabase.query(`SELECT 1 FROM roadmap LIMIT 1`);
+    const { status } = req.query;
+    const tasks = await roadmapService.listTasks(status);
 
-    const result = await devDatabase.query(
-      `UPDATE roadmap 
-       SET status = 'em progresso', started_at = NOW(), updated_at = NOW() 
-       WHERE title = $1 
-       RETURNING *`,
-      [title]
-    );
-    
-    if (result.rowCount > 0) {
-      logger.info(`✅ Tarefa Iniciada: ${title}`, { 
-        task: result.rows[0],
-        action: 'start_task' 
-      });
-      return result.rows[0];
-    } else {
-      logger.warn(`⚠️ Tarefa não encontrada: ${title}`, { 
-        action: 'start_task_not_found' 
-      });
-      return null;
-    }
+    res.status(200).json({
+      status: 'success',
+      total: tasks.length,
+      tasks: tasks
+    });
   } catch (error) {
-    // Logar o erro específico
-    logger.error(`❌ Erro ao iniciar tarefa: ${title}`, { 
+    logger.error('Erro ao listar tarefas do roadmap', {
       error: error.message,
-      action: 'start_task_error' 
+      action: 'list_roadmap_tasks_error'
     });
 
-    // Se for um erro de tabela não existente, tentar criar a tabela
-    if (error.code === '42P01') {
-      try {
-        await devDatabase.query(`
-          CREATE TABLE IF NOT EXISTS roadmap (
-            id SERIAL PRIMARY KEY,
-            title VARCHAR(255) NOT NULL,
-            description TEXT,
-            status VARCHAR(50) DEFAULT 'pendente',
-            started_at TIMESTAMPTZ,
-            finished_at TIMESTAMPTZ,
-            created_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP,
-            updated_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP
-          );
-          CREATE INDEX IF NOT EXISTS idx_roadmap_status ON roadmap(status);
-        `);
-        logger.info('Tabela roadmap criada automaticamente', { action: 'create_roadmap_table' });
-      } catch (createError) {
-        logger.error('Erro ao criar tabela roadmap', { 
-          error: createError.message,
-          action: 'create_roadmap_table_error' 
-        });
-      }
-    }
-
-    throw error;
+    res.status(500).json({
+      status: 'error',
+      message: 'Erro ao listar tarefas do roadmap',
+      error: error.message
+    });
   }
 }
 
-// Finaliza uma tarefa
-async function finishTask(title) {
+// Criar nova tarefa
+async function createTask(req, res) {
   try {
-    const result = await devDatabase.query(
-      `UPDATE roadmap 
-       SET status = 'concluído', finished_at = NOW(), updated_at = NOW() 
-       WHERE title = $1 
-       RETURNING *`,
-      [title]
-    );
-    
-    if (result.rowCount > 0) {
-      logger.info(`✅ Tarefa Concluída: ${title}`, { 
-        task: result.rows[0],
-        action: 'finish_task' 
-      });
-      return result.rows[0];
-    } else {
-      logger.warn(`⚠️ Tarefa não encontrada: ${title}`, { 
-        action: 'finish_task_not_found' 
-      });
-      return null;
-    }
-  } catch (error) {
-    logger.error(`❌ Erro ao finalizar tarefa: ${title}`, { 
-      error: error.message,
-      action: 'finish_task_error' 
+    const { title, description, status } = req.body;
+    const task = await roadmapService.createTask(title, description, status);
+
+    res.status(201).json({
+      status: 'success',
+      task: task
     });
-    throw error;
+  } catch (error) {
+    logger.error('Erro ao criar tarefa no roadmap', {
+      error: error.message,
+      action: 'create_roadmap_task_error'
+    });
+
+    res.status(400).json({
+      status: 'error',
+      message: 'Erro ao criar tarefa no roadmap',
+      error: error.message
+    });
   }
 }
 
-// Busca uma tarefa pelo título
-async function getTaskByTitle(title) {
+// Atualizar status da tarefa
+async function updateTaskStatus(req, res) {
   try {
-    const result = await devDatabase.query(
-      `SELECT * FROM roadmap WHERE title = $1`,
-      [title]
-    );
-    
-    if (result.rowCount > 0) {
-      return result.rows[0];
-    } else {
-      logger.warn(`⚠️ Tarefa não encontrada: ${title}`, { 
-        action: 'get_task_not_found' 
-      });
-      return null;
-    }
-  } catch (error) {
-    logger.error(`❌ Erro ao buscar tarefa: ${title}`, { 
-      error: error.message,
-      action: 'get_task_error' 
+    const { id } = req.params;
+    const { status } = req.body;
+    const task = await roadmapService.updateTaskStatus(id, status);
+
+    res.status(200).json({
+      status: 'success',
+      task: task
     });
-    throw error;
+  } catch (error) {
+    logger.error('Erro ao atualizar status da tarefa', {
+      error: error.message,
+      action: 'update_roadmap_task_status_error'
+    });
+
+    res.status(400).json({
+      status: 'error',
+      message: 'Erro ao atualizar status da tarefa',
+      error: error.message
+    });
   }
 }
 
-// Buscar tarefas do roadmap com filtro opcional
-async function getRoadmapTasks(status) {
+// Atualizar descrição da tarefa
+async function updateTaskDescription(req, res) {
   try {
-    let query = 'SELECT * FROM roadmap';
-    const params = [];
+    const { id } = req.params;
+    const { description } = req.body;
+    const task = await roadmapService.updateTaskDescription(id, description);
 
-    // Adicionar filtro de status se fornecido
-    if (status) {
-      query += ' WHERE status = $1';
-      params.push(status);
-    }
-
-    // Ordenar por data de criação, mais recentes primeiro
-    query += ' ORDER BY created_at DESC';
-
-    const result = await devDatabase.query(query, params);
-    
-    return result.rows;
-  } catch (error) {
-    logger.error('Erro ao buscar tarefas do roadmap', { 
-      error: error.message,
-      status: status,
-      action: 'get_roadmap_tasks_error' 
+    res.status(200).json({
+      status: 'success',
+      task: task
     });
-    throw error;
+  } catch (error) {
+    logger.error('Erro ao atualizar descrição da tarefa', {
+      error: error.message,
+      action: 'update_roadmap_task_description_error'
+    });
+
+    res.status(400).json({
+      status: 'error',
+      message: 'Erro ao atualizar descrição da tarefa',
+      error: error.message
+    });
   }
 }
 
-module.exports = { 
-  startTask, 
-  finishTask,
-  getTaskByTitle,
-  getRoadmapTasks 
+// Atualizar tarefa
+async function updateTask(req, res) {
+  try {
+    const { id } = req.params;
+    const updateData = req.body;
+    const task = await roadmapService.updateTask(id, updateData);
+
+    res.status(200).json({
+      status: 'success',
+      task: task
+    });
+  } catch (error) {
+    logger.error('Erro ao atualizar tarefa', {
+      error: error.message,
+      action: 'update_roadmap_task_error'
+    });
+
+    res.status(400).json({
+      status: 'error',
+      message: 'Erro ao atualizar tarefa',
+      error: error.message
+    });
+  }
+}
+
+module.exports = {
+  listTasks,
+  createTask,
+  updateTaskStatus,
+  updateTaskDescription,
+  updateTask
 };

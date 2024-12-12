@@ -39,6 +39,23 @@
 ### Modificado
 - Estrutura de rotas para incluir consulta de roadmap.
 
+## [0.6.0] - 2024-12-12
+### Refatorado
+- Arquitetura do projeto para seguir padrão de repositório, serviço e controlador.
+- Separação de responsabilidades entre camadas de acesso a dados, lógica de negócio e controle.
+
+### Adicionado
+- Repositório `RoadmapRepository` para acesso direto ao banco de dados.
+- Serviço `RoadmapService` para lógica de negócio.
+- Novos endpoints RESTful para gerenciamento de tarefas do roadmap:
+  - `GET /roadmap`: Listar tarefas
+  - `POST /roadmap`: Criar nova tarefa
+  - `PUT /roadmap/:id`: Atualizar status da tarefa
+
+### Modificado
+- Endpoints de roadmap para suportar operações CRUD.
+- Tratamento de erros e validações na camada de serviço.
+
 ## Configuração do Banco de Dados de Logs de Desenvolvimento
 
 - **Banco de Dados:** dev_history
