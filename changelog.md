@@ -15,6 +15,17 @@
 - Configurado `.gitignore` para ignorar arquivos sensíveis
 - Criado `README.md` com instruções de instalação e uso
 
+## [1.2.0] - 2024-12-12
+### Adicionado
+- Script completo de roadmap para registro no banco de dados.
+- Script `roadmap:populate` para popular roadmap com tarefas detalhadas.
+- Mapeamento completo de etapas do projeto no roadmap.
+- Suporte a registro em lote de tarefas.
+
+### Modificado
+- Atualizada versão da API para 1.2.0.
+- Expandido o escopo de gerenciamento de roadmap.
+
 ## [1.1.0] - 2024-12-12
 ### Adicionado
 - Atualização automática do roadmap sempre que uma funcionalidade for concluída.
