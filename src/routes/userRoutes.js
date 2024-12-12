@@ -13,11 +13,6 @@ router.post('/register', UserController.register);
 router.post('/login', UserController.login);
 
 // Exemplo de rota protegida
-router.get('/profile', authMiddleware, (req, res) => {
-  res.status(200).json({
-    message: 'Perfil do usuário',
-    userId: req.userId
-  });
-});
+// Rota de usuário removida temporariamente
 
 module.exports = router;

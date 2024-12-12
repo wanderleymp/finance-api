@@ -1,4 +1,4 @@
-# Changelog
+# Changelog - Finance API
 
 ## [Não Lançado]
 
@@ -55,6 +55,25 @@
 ### Modificado
 - Endpoints de roadmap para suportar operações CRUD.
 - Tratamento de erros e validações na camada de serviço.
+
+## [0.7.0] - 2024-12-12
+### Adicionado
+- Implementação de arquitetura de repositório, serviço e controlador.
+- Endpoints para gerenciamento de roadmap.
+- Configuração inicial do banco de dados PostgreSQL.
+
+## [0.8.0] - 2024-12-12
+### Adicionado
+- Logs estruturados usando Winston e Morgan.
+- Registro de requisições, respostas e erros não tratados.
+- Logs separados para erros críticos e eventos gerais.
+- Tratamento de exceções não capturadas.
+- Configuração de log com rotação de arquivos.
+- Middleware de log centralizado.
+
+### Modificado
+- Atualizada estrutura de tratamento de erros.
+- Melhorada a captura de informações de log.
 
 ## Configuração do Banco de Dados de Logs de Desenvolvimento
 

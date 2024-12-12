@@ -1,8 +1,17 @@
 const winston = require('winston');
+const morgan = require('morgan');
+const fs = require('fs');
+const path = require('path');
 
-// Configuração do logger
+// Caminho absoluto para logs
+const logDir = '/tmp/finance-api-logs';
+if (!fs.existsSync(logDir)) {
+  fs.mkdirSync(logDir, { recursive: true });
+}
+
+// Configuração do Logger Winston
 const logger = winston.createLogger({
-  level: process.env.LOG_LEVEL || 'info',
+  level: 'info',
   format: winston.format.combine(
     winston.format.timestamp({
       format: 'YYYY-MM-DD HH:mm:ss'
@@ -13,70 +22,47 @@ const logger = winston.createLogger({
   ),
   defaultMeta: { service: 'finance-api' },
   transports: [
-    // Logs de erro em um arquivo separado
+    // Logs de erro em arquivo separado
     new winston.transports.File({ 
-      filename: 'logs/error.log', 
-      level: 'error' 
+      filename: path.join(logDir, 'error.log'), 
+      level: 'error',
+      maxsize: 5242880, // 5MB
+      maxFiles: 5
     }),
     // Logs combinados em outro arquivo
     new winston.transports.File({ 
-      filename: 'logs/combined.log' 
+      filename: path.join(logDir, 'combined.log'),
+      maxsize: 5242880, // 5MB
+      maxFiles: 5
+    }),
+    // Log no console para desenvolvimento
+    new winston.transports.Console({
+      format: winston.format.combine(
+        winston.format.colorize(),
+        winston.format.simple()
+      )
     })
   ]
 });
 
-// Se não estiver em produção, adiciona log no console
-if (process.env.NODE_ENV !== 'production') {
-  logger.add(new winston.transports.Console({
-    format: winston.format.simple()
-  }));
-}
+// Configuração do Morgan para logs HTTP
+const httpLogger = morgan('combined', {
+  stream: {
+    write: (message) => logger.info(message.trim())
+  }
+});
 
-// Middleware de logging
-const loggerMiddleware = (req, res, next) => {
-  const startTime = Date.now();
-
-  // Log de requisição
-  logger.info(`${req.method} ${req.url}`, {
-    method: req.method,
-    url: req.url,
-    body: req.body,
-    query: req.query,
-    headers: req.headers
+// Função para log de erro centralizada
+const logError = (error, context = {}) => {
+  logger.error('Erro capturado', {
+    message: error.message,
+    stack: error.stack,
+    ...context
   });
-
-  // Captura a resposta original
-  const oldWrite = res.write;
-  const oldEnd = res.end;
-  const chunks = [];
-
-  res.write = function(chunk) {
-    chunks.push(chunk);
-    oldWrite.apply(res, arguments);
-  };
-
-  res.end = function(chunk) {
-    if (chunk) {
-      chunks.push(chunk);
-    }
-    
-    const responseTime = Date.now() - startTime;
-    
-    // Log de resposta
-    logger.info(`${req.method} ${req.url} - ${res.statusCode}`, {
-      method: req.method,
-      url: req.url,
-      status: res.statusCode,
-      responseTime: `${responseTime}ms`
-    });
-
-    oldEnd.apply(res, arguments);
-  };
-
-  next();
 };
 
-module.exports = {
-  logger,
-  loggerMiddleware
+module.exports = { 
+  logger, 
+  httpLogger,
+  logError 
 };
