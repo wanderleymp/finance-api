@@ -3,6 +3,7 @@ const bodyParser = require('body-parser');
 const cors = require('cors');
 const dotenv = require('dotenv');
 const { logger, loggerMiddleware } = require('./middlewares/logger');
+const { startTask, finishTask } = require('./controllers/roadmapController');
 
 // Carregar variáveis de ambiente
 dotenv.config();
@@ -19,10 +20,12 @@ app.use(loggerMiddleware);
 // Importar rotas
 const userRoutes = require('./routes/userRoutes');
 const healthRoutes = require('./routes/healthRoutes');
+const roadmapRoutes = require('./routes/roadmapRoutes');
 
 // Configurar rotas
 app.use('/api/users', userRoutes);
 app.use('/health', healthRoutes);
+app.use('/roadmap', roadmapRoutes);
 
 // Rota raiz para verificação de saúde
 app.get('/', (req, res) => {
@@ -50,8 +53,24 @@ app.use((err, req, res, next) => {
 });
 
 // Iniciar servidor
-const server = app.listen(PORT, () => {
-  logger.info(`Servidor rodando na porta ${PORT}`);
+const server = app.listen(PORT, async () => {
+  try {
+    // Iniciar tarefa de registro automático
+    await startTask('Registro Automático de Tarefas');
+
+    logger.info(`🚀 Servidor rodando em http://localhost:${PORT}`, {
+      port: PORT,
+      environment: process.env.NODE_ENV
+    });
+
+    // Finalizar tarefa após inicialização bem-sucedida
+    await finishTask('Registro Automático de Tarefas');
+  } catch (error) {
+    logger.error('Erro ao iniciar o servidor', { 
+      error: error.message,
+      action: 'server_startup_error' 
+    });
+  }
 });
 
 // Tratamento de encerramento graciosos

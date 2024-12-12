@@ -7,11 +7,38 @@
 - Configuração básica do servidor Express
 - Configuração do ambiente de desenvolvimento
 - Estrutura de pastas para a API RESTful
+- Tabela roadmap criada no banco de desenvolvimento dev_history para gerenciar o progresso do projeto finance-api.
+- Etapas principais do desenvolvimento registradas no banco de desenvolvimento dev_history, tabela roadmap.
 
 ### Configurações
 - Adicionado `.env` para gerenciamento de variáveis de ambiente
 - Configurado `.gitignore` para ignorar arquivos sensíveis
 - Criado `README.md` com instruções de instalação e uso
+
+## [0.3.0] - 2024-12-12
+### Adicionado
+- Funções `startTask` e `finishTask` para registrar o andamento de tarefas no banco `dev_history`.
+- Registro automático no roadmap ao iniciar ou concluir tarefas.
+- Função `getTaskByTitle` para buscar detalhes de tarefas específicas.
+
+## [0.4.0] - 2024-12-12
+### Adicionado
+- Integração de registro automático de tarefas ao servidor Node.js.
+- Atualização automática de status ao iniciar ou concluir tarefas.
+- Tratamento de erros durante o registro de tarefas.
+
+### Modificado
+- Atualizada inicialização do servidor para incluir registro de tarefas.
+
+## [0.5.0] - 2024-12-12
+### Adicionado
+- Endpoint `/roadmap` para consulta de tarefas do roadmap.
+- Suporte a filtro de tarefas por status.
+- Testes automatizados para o endpoint de roadmap.
+
+### Modificado
+- Estrutura de rotas para incluir consulta de roadmap.
+
 ## Configuração do Banco de Dados de Logs de Desenvolvimento
 
 - **Banco de Dados:** dev_history
