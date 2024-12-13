@@ -100,33 +100,32 @@ process.on('unhandledRejection', (reason, promise) => {
 // Função de inicialização
 async function startServer() {
   try {
-    console.log('🔄 Verificando Banco de Dados…');
+    // Executar migrações antes de iniciar o servidor
     await runMigrations('system');
-    console.log('✅ Banco de Dados Atualizado');
-
+    
     // Conexão com RabbitMQ
     await createRabbitMQConnection();
     await roadmapService.completeRoadmapTask('RabbitMQ Connection', 'Estabelecida conexão com RabbitMQ');
 
-    app.listen(PORT, () => {
-      console.log(`🚀 Servidor rodando em http://localhost:${PORT}`);
+    const server = app.listen(PORT, () => {
+      logger.info(`Servidor rodando na porta ${PORT}`);
+    });
+
+    // Configurações de shutdown gracioso
+    process.on('SIGTERM', () => {
+      logger.info('Desligamento iniciado');
+      server.close(() => {
+        logger.info('Servidor fechado');
+        process.exit(0);
+      });
     });
   } catch (error) {
-    logger.error('Falha ao iniciar aplicação', { error: error.message });
+    logger.error('Falha ao iniciar o servidor', { error: error.message });
     process.exit(1);
   }
 }
 
 // Iniciar o servidor
 startServer();
-
-// Graceful shutdown
-process.on('SIGTERM', () => {
-  logger.info('Recebido sinal SIGTERM. Encerrando graciosamente...');
-  app.close(() => {
-    logger.info('Servidor encerrado.');
-    process.exit(0);
-  });
-});
 
 module.exports = app;

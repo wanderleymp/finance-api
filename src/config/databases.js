@@ -4,15 +4,14 @@ require('dotenv').config();
 const databases = {
   system: {
     url: process.env.SYSTEM_DATABASE_URL.replace('ssl=false', ''),
-    migrationsPath: './src/migrations/system',
-    name: 'AgileDev'
+    migrationsPath: './src/migrations/system', // Alterado o caminho
+    name: 'FinanceDev'
   },
-  // Exemplo de como adicionar outro banco no futuro
-  // dev: {
-  //   url: process.env.DEV_DATABASE_URL,
-  //   migrationsPath: './src/migrations/dev',
-  //   name: 'dev_history'
-  // }
+  dev: {
+    url: process.env.DEV_DATABASE_URL.replace('ssl=false', ''),
+    migrationsPath: './src/migrations/dev', // Alterado o caminho
+    name: 'FinanceDev'
+  }
 };
 
 function parseDatabaseConfig(databaseConfig) {

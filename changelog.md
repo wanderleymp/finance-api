@@ -36,6 +36,17 @@
 - Criado `migrate.js` para gerenciamento de migrações
 - Atualizado `index.js` com nova função de inicialização do servidor
 
+## [1.1.1] - 2024-12-13
+### Adicionado
+- Configuração centralizada de versões da aplicação
+- Função de verificação de compatibilidade de versões
+- Suporte a versionamento semântico
+
+### Detalhes Técnicos
+- Criado `src/config/version.js` para gerenciar versões
+- Implementada lógica de comparação de versões
+- Adicionado suporte para verificações de compatibilidade de versão
+
 ## [1.1.0] - 2024-12-12
 ### Adicionado
 - Atualização automática do roadmap sempre que uma funcionalidade for concluída.
