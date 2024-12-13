@@ -1,9 +1,12 @@
 const personRepository = require('../repositories/personRepository');
 const { ValidationError } = require('../utils/errors');
+const PaginationHelper = require('../utils/paginationHelper');
 
 class PersonService {
-    async listPersons() {
-        return await personRepository.findAll();
+    async listPersons(page, limit) {
+        const { page: validPage, limit: validLimit } = PaginationHelper.validateParams(page, limit);
+        const { data, total } = await personRepository.findAll(validPage, validLimit);
+        return PaginationHelper.formatResponse(data, total, validPage, validLimit);
     }
 
     async getPerson(personId) {

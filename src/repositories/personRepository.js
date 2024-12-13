@@ -1,25 +1,35 @@
 const { systemDatabase } = require('../config/database');
 const { logger } = require('../middlewares/logger');
+const PaginationHelper = require('../utils/paginationHelper');
 
 class PersonRepository {
     constructor() {
         this.pool = systemDatabase.pool;
     }
 
-    async findAll() {
+    async findAll(page = 1, limit = 10) {
         try {
-            const query = 'SELECT * FROM persons ORDER BY created_at DESC';
-            logger.info('Executando consulta findAll', { 
-                query: query,
-                queryType: typeof query,
-                queryLength: query.length
+            const { limit: validLimit, offset } = PaginationHelper.getPaginationParams(page, limit);
+            
+            const countQuery = 'SELECT COUNT(*) FROM persons';
+            const dataQuery = 'SELECT * FROM persons ORDER BY created_at DESC LIMIT $1 OFFSET $2';
+            
+            logger.info('Executando consulta findAll paginada', { 
+                query: dataQuery,
+                page,
+                limit: validLimit,
+                offset
             });
-            const { rows } = await systemDatabase.query(query);
-            logger.info('Consulta findAll executada com sucesso', { 
-                rowCount: rows.length,
-                rowSample: rows.slice(0, 2)
-            });
-            return rows;
+
+            const [dataResult, countResult] = await Promise.all([
+                systemDatabase.query(dataQuery, [validLimit, offset]),
+                systemDatabase.query(countQuery)
+            ]);
+
+            return {
+                data: dataResult.rows,
+                total: parseInt(countResult.rows[0].count)
+            };
         } catch (error) {
             logger.error('Erro detalhado ao buscar todas as pessoas', { 
                 errorMessage: error.message,

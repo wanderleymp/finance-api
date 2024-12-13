@@ -13,6 +13,6 @@ router.put('/:id',
     validateRequest(personSchema.updatePerson, 'body'), 
     personController.update
 );
-router.delete('/:id', validateRequest(personSchema.getPersonById, 'params'), personController.destroy);
+router.delete('/:id', validateRequest(personSchema.getPersonById, 'params'), personController.delete);
 
 module.exports = router;

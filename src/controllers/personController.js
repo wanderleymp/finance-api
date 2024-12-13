@@ -6,12 +6,16 @@ class PersonController {
     async index(req, res) {
         try {
             logger.info('Iniciando listagem de pessoas');
-            const persons = await personService.listPersons();
+            const { page, limit } = req.query;
+            const result = await personService.listPersons(page, limit);
+            
             logger.info('Listagem de pessoas concluída', { 
-                count: persons.length, 
-                persons: persons.map(person => ({ id: person.id, name: person.name })) 
+                count: result.data.length,
+                currentPage: result.meta.current_page,
+                totalRecords: result.meta.total
             });
-            handleResponse(res, persons);
+            
+            handleResponse(res, 200, result);
         } catch (error) {
             logger.error('Erro na listagem de pessoas', {
                 errorMessage: error.message,
@@ -25,7 +29,7 @@ class PersonController {
         try {
             const { id } = req.params;
             const person = await personService.getPerson(id);
-            handleResponse(res, person);
+            handleResponse(res, 200, { data: person });
         } catch (error) {
             handleError(res, error);
         }
@@ -35,7 +39,7 @@ class PersonController {
         try {
             const personData = req.body;
             const newPerson = await personService.createPerson(personData);
-            handleResponse(res, newPerson, 201);
+            handleResponse(res, 201, { data: newPerson });
         } catch (error) {
             handleError(res, error);
         }
@@ -46,17 +50,17 @@ class PersonController {
             const { id } = req.params;
             const personData = req.body;
             const updatedPerson = await personService.updatePerson(id, personData);
-            handleResponse(res, updatedPerson);
+            handleResponse(res, 200, { data: updatedPerson });
         } catch (error) {
             handleError(res, error);
         }
     }
 
-    async destroy(req, res) {
+    async delete(req, res) {
         try {
             const { id } = req.params;
             await personService.deletePerson(id);
-            handleResponse(res, null, 204);
+            handleResponse(res, 204);
         } catch (error) {
             handleError(res, error);
         }

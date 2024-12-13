@@ -1,10 +1,7 @@
 const { logger } = require('../middlewares/logger');
 
-function handleResponse(res, data, statusCode = 200) {
-    res.status(statusCode).json({
-        status: 'success',
-        data
-    });
+function handleResponse(res, statusCode = 200, data) {
+    res.status(statusCode).json(data);
 }
 
 function handleError(res, error) {
