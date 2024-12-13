@@ -23,8 +23,10 @@ app.use(bodyParser.urlencoded({ extended: true }));
 // Importar rotas
 const roadmapRoutes = require('./routes/roadmapRoutes');
 const personRoutes = require('./routes/personRoutes');
+const personDocumentRoutes = require('./routes/personDocumentRoutes');
 app.use('/roadmap/', roadmapRoutes);
 app.use('/persons/', personRoutes);
+app.use('/person-documents/', personDocumentRoutes);
 
 // Rota inicial
 app.get('/', (req, res) => {
