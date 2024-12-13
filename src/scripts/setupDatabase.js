@@ -1,36 +1,65 @@
-const { Client } = require('pg');
+const fs = require('fs');
+const path = require('path');
+const { Pool } = require('pg');
 const { databases, parseDatabaseConfig } = require('../config/databases');
 
 async function setupDatabase(databaseKey = 'system') {
-  const databaseConfig = databases[databaseKey];
-  if (!databaseConfig) {
-    throw new Error(`Configuração de banco de dados não encontrada para: ${databaseKey}`);
-  }
-
-  const { connectionParams, database } = parseDatabaseConfig(databaseConfig);
-
-  const client = new Client(connectionParams);
-
-  try {
-    await client.connect();
-
-    const dbCheck = await client.query(
-      `SELECT 1 FROM pg_database WHERE datname = $1`,
-      [database]
-    );
-
-    if (dbCheck.rows.length === 0) {
-      await client.query(`CREATE DATABASE "${database}"`);
-      console.log(`📊 Banco de dados "${database}" criado com sucesso.`);
-    } else {
-      console.log(`✅ Banco de dados "${database}" já existe.`);
+    const databaseConfig = databases[databaseKey];
+    if (!databaseConfig) {
+        throw new Error(`Configuração de banco de dados não encontrada para: ${databaseKey}`);
     }
-  } catch (error) {
-    console.error(`❌ Erro ao verificar/criar banco de dados ${database}:`, error.message);
-    process.exit(1);
-  } finally {
-    await client.end();
-  }
+
+    const parsedConfig = parseDatabaseConfig(databaseConfig);
+    const { url } = databaseConfig;
+
+    const pool = new Pool({
+        connectionString: url,
+        ssl: false
+    });
+
+    let client;
+    try {
+        client = await pool.connect();
+
+        // Verifica se o banco existe
+        const databaseExists = await checkDatabaseExists(client, parsedConfig.database);
+        
+        if (!databaseExists) {
+            console.log(`✅ Criando banco de dados "${parsedConfig.database}"...`);
+            await createDatabase(client, parsedConfig.database);
+            
+            // Aplica o schema base para banco novo
+            const baseSchemaPath = path.join(__dirname, 'base_schema.sql');
+            if (fs.existsSync(baseSchemaPath)) {
+                const baseSchema = fs.readFileSync(baseSchemaPath, 'utf8');
+                await client.query(baseSchema);
+                console.log('✅ Schema base aplicado com sucesso');
+            }
+        } else {
+            console.log(`✅ Banco de dados "${parsedConfig.database}" já existe.`);
+        }
+
+        return true;
+    } catch (error) {
+        console.error('Erro ao configurar banco de dados:', error);
+        throw error;
+    } finally {
+        if (client) {
+            client.release();
+        }
+    }
+}
+
+async function checkDatabaseExists(client, databaseName) {
+    const result = await client.query(
+        'SELECT 1 FROM pg_database WHERE datname = $1',
+        [databaseName]
+    );
+    return result.rows.length > 0;
+}
+
+async function createDatabase(client, databaseName) {
+    await client.query(`CREATE DATABASE "${databaseName}"`);
 }
 
 module.exports = { setupDatabase };

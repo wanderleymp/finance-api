@@ -92,6 +92,30 @@ O projeto utiliza uma configuração centralizada para conexões com banco de da
    - `AgileDB`: Banco principal do sistema
    - `dev_history`: Banco de desenvolvimento/histórico
 
+5. **Estrutura de Tabelas**
+
+   a. **Persons**
+   - Armazena informações básicas de pessoas físicas e jurídicas
+   - Suporte a paginação global (page, limit)
+   - Campos principais: person_id, full_name, person_type, etc.
+
+   b. **Person Documents**
+   - Documentos associados a pessoas (CPF, CNPJ, RG, etc.)
+   - Utiliza ENUM para tipos de documentos (document_type_enum)
+   - Índice único para person_id + document_type + document_value
+   - Campos principais:
+     ```sql
+     person_document_id: SERIAL PRIMARY KEY
+     person_id: INTEGER (FK -> persons)
+     document_type: document_type_enum ('CPF', 'CNPJ', 'RG', 'CNH', 'OUTROS')
+     document_value: VARCHAR(50)
+     ```
+
+6. **Versionamento do Banco**
+   - Controle via tabela `migrations`
+   - Versão atual: 1.0.0.5
+   - Scripts de migração em `src/migrations/system/`
+
 ## Testes
 ```bash
 npm test
