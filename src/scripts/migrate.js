@@ -61,17 +61,31 @@ async function runMigrations(databaseKey = 'system') {
     
     console.log('📋 Arquivos de migração encontrados:', files);
 
-    // Criar backup antes de qualquer migração
-    const backupFile = createDatabaseBackup(parsedConfig.database, backupPath, parsedConfig);
-    
-    if (!backupFile || !fs.existsSync(backupFile)) {
-      throw new Error('Falha na criação do backup do banco de dados');
-    }
-    
-    console.log(`💾 Backup criado: ${backupFile}`);
-
     // Conectar ao banco de dados
     client = await pool.connect();
+
+    // Verificar se as migrações já foram aplicadas
+    const migrationCheck = await client.query(`
+      SELECT COUNT(*) as migration_count 
+      FROM migrations 
+      WHERE database_name = $1
+    `, [parsedConfig.database]);
+
+    const hasPreviousMigrations = parseInt(migrationCheck.rows[0].migration_count) > 0;
+
+    // Só criar backup se houver migrações para aplicar
+    let backupFile = null;
+    if (files.length > 0 && !hasPreviousMigrations) {
+      backupFile = createDatabaseBackup(parsedConfig.database, backupPath, parsedConfig);
+      
+      if (!backupFile || !fs.existsSync(backupFile)) {
+        throw new Error('Falha na criação do backup do banco de dados');
+      }
+      
+      console.log(`💾 Backup criado: ${backupFile}`);
+    } else {
+      console.log('📝 Nenhuma migração pendente ou já migrado. Backup não necessário.');
+    }
 
     // Dropando e recriando tabelas de migração e configuração
     await client.query(`
