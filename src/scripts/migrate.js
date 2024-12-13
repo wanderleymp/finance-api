@@ -80,9 +80,30 @@ async function runMigrations(databaseKey = 'system') {
       hasPreviousMigrations = false;
     }
 
+    // Verificar se há migrações pendentes
+    async function getPendingMigrations(client, files, databaseName) {
+      const pendingMigrations = [];
+
+      for (const migrationFile of files) {
+        const migrationCheck = await client.query(
+          `SELECT * FROM migrations 
+           WHERE migration_name = $1 AND database_name = $2`,
+          [migrationFile, databaseName]
+        );
+
+        if (migrationCheck.rows.length === 0) {
+          pendingMigrations.push(migrationFile);
+        }
+      }
+
+      return pendingMigrations;
+    }
+
+    const pendingMigrations = await getPendingMigrations(client, files, parsedConfig.database);
+
     // Só criar backup se houver migrações para aplicar
     let backupFile = null;
-    if (files.length > 0 && !hasPreviousMigrations) {
+    if (pendingMigrations.length > 0 && !hasPreviousMigrations) {
       backupFile = createDatabaseBackup(parsedConfig.database, backupPath, parsedConfig);
       
       if (!backupFile || !fs.existsSync(backupFile)) {
@@ -92,6 +113,12 @@ async function runMigrations(databaseKey = 'system') {
       console.log(`💾 Backup criado: ${backupFile}`);
     } else {
       console.log('📝 Nenhuma migração pendente ou já migrado. Backup não necessário.');
+    }
+
+    // Se não há migrações pendentes, retornar
+    if (pendingMigrations.length === 0) {
+      console.log('🎉 Nenhuma migração pendente. Processo concluído.');
+      return;
     }
 
     // Dropando e recriando tabelas de migração e configuração
@@ -120,14 +147,41 @@ async function runMigrations(databaseKey = 'system') {
       );
     `);
 
-    // Execução das migrações com mais verificações
-    if (files.length === 0) {
-      console.warn('⚠️ Nenhum arquivo de migração encontrado');
-      return;
+    // Verificar estrutura da tabela
+    async function checkTableStructure(client, tableName, expectedColumns) {
+      try {
+        const structureQuery = `
+          SELECT column_name, data_type 
+          FROM information_schema.columns 
+          WHERE table_name = $1
+        `;
+        const result = await client.query(structureQuery, [tableName]);
+        
+        const currentColumns = result.rows.map(row => ({
+          name: row.column_name,
+          type: row.data_type
+        }));
+
+        // Comparar estruturas
+        const missingColumns = expectedColumns.filter(
+          expected => !currentColumns.some(
+            current => current.name === expected.name && 
+                       current.type.toLowerCase() === expected.type.toLowerCase()
+          )
+        );
+
+        return missingColumns.length === 0;
+      } catch (error) {
+        // Tabela não existe
+        return false;
+      }
     }
 
-    // Execução das migrações
-    for (const migrationFile of files) {
+    // Execução das migrações com mais verificações
+    console.log(`🔍 Migrações pendentes: ${pendingMigrations.length}`);
+
+    // Executar apenas migrações pendentes
+    for (const migrationFile of pendingMigrations) {
       try {
         const migrationSql = fs.readFileSync(path.join(fullMigrationsPath, migrationFile), 'utf8');
         await client.query(migrationSql);

@@ -24,8 +24,8 @@ CREATE TABLE IF NOT EXISTS system_config (
 -- Inserir configuração inicial de versão do banco de dados
 INSERT INTO system_config (config_key, config_value, description) 
 VALUES 
-    ('db_version', '1.0.0', 'Versão inicial do banco de dados do sistema'),
-    ('app_version', '1.1.0', 'Versão inicial da aplicação')
+    ('db_version', '1.0.0.1', 'Versão inicial do banco de dados do sistema'),
+    ('app_version', '1.0.0.1', 'Versão inicial da aplicação')
 ON CONFLICT (config_key) DO NOTHING;
 
 -- Criar esquemas padrão se não existirem

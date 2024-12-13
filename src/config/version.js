@@ -1,5 +1,5 @@
 module.exports = {
-  appVersion: '1.1.1',
+  appVersion: '1.0.0.1',
   requiredDbVersion: '1.0.0.1',
   
   // Função para comparar versões

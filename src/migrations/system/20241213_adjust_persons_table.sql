@@ -1,61 +1,155 @@
 -- Migração para ajuste da tabela persons (Versão 1.0.0.1)
 
--- Criar tipo ENUM para person_type
-DO $$
-BEGIN
-    IF NOT EXISTS (
-        SELECT 1 
-        FROM pg_type 
-        WHERE typname = 'person_type_enum'
-    ) THEN
-        CREATE TYPE person_type_enum AS ENUM ('PF', 'PJ', 'PR', 'OT');
-    END IF;
-END $$;
+-- Remover dependências da tabela persons
+
+-- Dropar views e materialized views dependentes
+DROP VIEW IF EXISTS vw_cr_payments CASCADE;
+DROP VIEW IF EXISTS vw_cr_pending CASCADE;
+DROP VIEW IF EXISTS vw_contracts_movements CASCADE;
+DROP VIEW IF EXISTS vw_installment CASCADE;
+DROP MATERIALIZED VIEW IF EXISTS vw_persons_complete_mat CASCADE;
+DROP VIEW IF EXISTS vw_persons_complete CASCADE;
+
+-- Views específicas que dependem da coluna social_capital
+DROP VIEW IF EXISTS person_details_view CASCADE;
+DROP VIEW IF EXISTS contact_shared_view CASCADE;
+DROP VIEW IF EXISTS vw_user_details CASCADE;
+
+-- Dropar funções que dependem das views
+DROP FUNCTION IF EXISTS fn_persons_search(text) CASCADE;
+DROP FUNCTION IF EXISTS fn_persons_search_by_user(text, integer) CASCADE;
+
+-- Dropar tipo ENUM existente
+DROP TYPE IF EXISTS person_type_enum CASCADE;
+
+-- Recriar tipo ENUM
+CREATE TYPE person_type_enum AS ENUM ('PF', 'PJ', 'PR', 'OT');
 
 -- Criar ou ajustar tabela persons
+CREATE TABLE IF NOT EXISTS public.persons (
+    person_id SERIAL PRIMARY KEY,
+    full_name VARCHAR(255) NOT NULL,
+    birth_date DATE,
+    person_type person_type_enum DEFAULT 'PJ'::person_type_enum,
+    created_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP,
+    fantasy_name VARCHAR(255),
+    updated_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP
+);
+
+-- Remover colunas antigas se existirem e adicionar nova coluna
 DO $$
 BEGIN
-    -- Verificar se a tabela persons existe
+    -- Verificar e dropar colunas específicas
+    IF EXISTS (
+        SELECT 1 
+        FROM information_schema.columns 
+        WHERE table_name = 'persons' 
+        AND column_name = 'person_type_id'
+    ) THEN
+        EXECUTE 'ALTER TABLE public.persons DROP COLUMN person_type_id';
+    END IF;
+
+    IF EXISTS (
+        SELECT 1 
+        FROM information_schema.columns 
+        WHERE table_name = 'persons' 
+        AND column_name = 'social_capital'
+    ) THEN
+        EXECUTE 'ALTER TABLE public.persons DROP COLUMN social_capital';
+    END IF;
+
+    -- Adicionar coluna person_type se não existir
     IF NOT EXISTS (
         SELECT 1 
-        FROM information_schema.tables 
-        WHERE table_schema = 'public' 
-        AND table_name = 'persons'
+        FROM information_schema.columns 
+        WHERE table_name = 'persons' 
+        AND column_name = 'person_type'
     ) THEN
-        -- Criar tabela se não existir
-        CREATE TABLE public.persons (
-            person_id SERIAL PRIMARY KEY,
-            full_name VARCHAR(255) NOT NULL,
-            birth_date DATE,
-            person_type person_type_enum DEFAULT 'PJ'::person_type_enum,
-            created_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP,
-            fantasy_name VARCHAR(255),
-            updated_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP
-        );
-    ELSE
-        -- Remover colunas antigas, se existirem
-        BEGIN
-            ALTER TABLE public.persons 
-            DROP COLUMN IF EXISTS social_capital,
-            DROP COLUMN IF EXISTS person_type_id;
-        EXCEPTION WHEN OTHERS THEN
-            RAISE NOTICE 'Erro ao remover colunas antigas';
-        END;
-
-        -- Adicionar coluna person_type se não existir
-        BEGIN
-            ALTER TABLE public.persons 
-            ADD COLUMN IF NOT EXISTS person_type person_type_enum DEFAULT 'PJ'::person_type_enum;
-        EXCEPTION WHEN OTHERS THEN
-            RAISE NOTICE 'Erro ao adicionar coluna person_type';
-        END;
+        EXECUTE 'ALTER TABLE public.persons ADD COLUMN person_type person_type_enum DEFAULT ''PJ''::person_type_enum';
     END IF;
+EXCEPTION 
+    WHEN OTHERS THEN
+        RAISE NOTICE 'Erro ao manipular colunas: %', SQLERRM;
 END $$;
 
--- Criar índices
+-- Recriar índices
 CREATE INDEX IF NOT EXISTS idx_persons_fantasy_name ON public.persons (fantasy_name);
 CREATE INDEX IF NOT EXISTS idx_persons_full_name ON public.persons (full_name);
 CREATE INDEX IF NOT EXISTS idx_persons_upper_full_name ON public.persons (upper(full_name));
+
+-- Verificar e recriar views com tratamento de erro
+DO $$
+BEGIN
+    -- Verificar se a coluna person_type existe antes de criar views
+    PERFORM column_name 
+    FROM information_schema.columns 
+    WHERE table_name = 'persons' AND column_name = 'person_type';
+
+    -- Criar views somente se a coluna existir
+    EXECUTE 'CREATE OR REPLACE VIEW vw_persons_complete AS
+    SELECT 
+        p.person_id,
+        p.full_name,
+        p.fantasy_name,
+        p.birth_date,
+        p.person_type,
+        p.created_at,
+        p.updated_at
+    FROM 
+        public.persons p';
+
+    EXECUTE 'CREATE OR REPLACE VIEW person_details_view AS
+    SELECT 
+        p.person_id,
+        p.full_name,
+        p.fantasy_name,
+        p.person_type,
+        p.birth_date,
+        p.created_at
+    FROM 
+        public.persons p';
+
+    EXECUTE 'CREATE OR REPLACE VIEW contact_shared_view AS
+    SELECT 
+        p.person_id,
+        p.full_name,
+        p.person_type
+    FROM 
+        public.persons p';
+
+    EXECUTE 'CREATE OR REPLACE VIEW vw_user_details AS
+    SELECT 
+        p.person_id,
+        p.full_name,
+        p.person_type
+    FROM 
+        public.persons p';
+
+EXCEPTION 
+    WHEN OTHERS THEN
+        RAISE NOTICE 'Erro ao criar views: %', SQLERRM;
+END $$;
+
+-- Exemplo de função de busca
+CREATE OR REPLACE FUNCTION fn_persons_search(search_term text)
+RETURNS TABLE (
+    person_id INTEGER,
+    full_name VARCHAR(255),
+    person_type person_type_enum
+) AS $$
+BEGIN
+    RETURN QUERY 
+    SELECT 
+        p.person_id, 
+        p.full_name, 
+        p.person_type
+    FROM 
+        public.persons p
+    WHERE 
+        p.full_name ILIKE '%' || search_term || '%'
+        OR p.fantasy_name ILIKE '%' || search_term || '%';
+END;
+$$ LANGUAGE plpgsql;
 
 -- Atualizar versão do banco de dados
 INSERT INTO system_config (config_key, config_value, description)
