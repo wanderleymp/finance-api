@@ -65,13 +65,20 @@ async function runMigrations(databaseKey = 'system') {
     client = await pool.connect();
 
     // Verificar se as migrações já foram aplicadas
-    const migrationCheck = await client.query(`
-      SELECT COUNT(*) as migration_count 
-      FROM migrations 
-      WHERE database_name = $1
-    `, [parsedConfig.database]);
-
-    const hasPreviousMigrations = parseInt(migrationCheck.rows[0].migration_count) > 0;
+    let hasPreviousMigrations = false;
+    try {
+      const migrationCheck = await client.query(`
+        SELECT COUNT(*) as migration_count 
+        FROM migrations 
+        WHERE database_name = $1
+      `, [parsedConfig.database]);
+      
+      hasPreviousMigrations = parseInt(migrationCheck.rows[0].migration_count) > 0;
+    } catch (tableNotExistsError) {
+      // Se a tabela não existe, consideramos que não há migrações prévias
+      console.log('📝 Tabela de migrações não existe. Iniciando primeira migração.');
+      hasPreviousMigrations = false;
+    }
 
     // Só criar backup se houver migrações para aplicar
     let backupFile = null;
