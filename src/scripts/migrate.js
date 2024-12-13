@@ -23,6 +23,17 @@ class DatabaseMigrator {
 
             this.client = await this.pool.connect();
             console.log('🔌 Conectado ao banco de dados');
+
+            // Verifica se as tabelas essenciais existem
+            const hasMigrations = await this.checkMigrationTable();
+            const hasSystemConfig = await this.checkSystemConfigTable();
+
+            // Só faz setup se as tabelas essenciais não existirem
+            if (!hasMigrations || !hasSystemConfig) {
+                console.log('🔧 Realizando setup inicial do banco...');
+                await setupDatabase(this.client);
+            }
+
         } catch (error) {
             console.error('❌ Erro ao conectar ao banco:', error);
             throw error;
@@ -35,6 +46,17 @@ class DatabaseMigrator {
                 SELECT FROM information_schema.tables 
                 WHERE table_schema = 'public' 
                 AND table_name = 'migrations'
+            );
+        `);
+        return result.rows[0].exists;
+    }
+
+    async checkSystemConfigTable() {
+        const result = await this.client.query(`
+            SELECT EXISTS (
+                SELECT FROM information_schema.tables 
+                WHERE table_schema = 'public' 
+                AND table_name = 'system_config'
             );
         `);
         return result.rows[0].exists;
@@ -153,35 +175,24 @@ class DatabaseMigrator {
         return pendingMigrations;
     }
 
-    async checkTableStructure(file) {
+    async checkTableStructure(tableName, columns, extraChecks) {
         try {
-            if (file === '20241214_adjust_person_documents.sql') {
-                // Verifica se já está com a estrutura final desejada
-                const result = await this.client.query(`
-                    SELECT EXISTS (
-                        SELECT 1 
-                        FROM pg_type 
-                        WHERE typname = 'document_type_enum'
-                    ) as has_enum,
-                    EXISTS (
-                        SELECT 1 
-                        FROM information_schema.columns 
-                        WHERE table_name = 'person_documents' 
-                        AND column_name = 'document_type' 
-                        AND udt_name = 'document_type_enum'
-                    ) as has_document_type,
-                    EXISTS (
-                        SELECT 1 
-                        FROM information_schema.columns 
-                        WHERE table_name = 'persons' 
-                        AND column_name = 'active'
-                    ) as has_active;
-                `);
+            const result = await this.client.query(`
+                SELECT column_name, data_type 
+                FROM information_schema.columns 
+                WHERE table_schema = 'public' 
+                AND table_name = $1
+            `, [tableName]);
 
-                const { has_enum, has_document_type, has_active } = result.rows[0];
-                return has_enum && has_document_type && has_active;
+            const tableColumns = result.rows.map(row => ({ name: row.column_name, type: row.data_type }));
+            const hasAllColumns = columns.every(col => tableColumns.find(tableCol => tableCol.name === col.name && tableCol.type === col.type));
+
+            if (extraChecks) {
+                const extraCheckResult = await extraChecks(this.client);
+                return hasAllColumns && extraCheckResult;
             }
-            return false;
+
+            return hasAllColumns;
         } catch (error) {
             console.error('Erro ao verificar estrutura:', error);
             return false;
@@ -332,88 +343,81 @@ class DatabaseMigrator {
     async migrate() {
         try {
             console.log('🚀 Iniciando processo de migração...');
-            
-            // Conectar ao banco primeiro
-            this.client = await this.pool.connect();
-            console.log('🔌 Conectado ao banco de dados');
+            await this.init();
 
-            // Setup inicial do banco se necessário
-            console.log('🔧 Realizando setup inicial do banco...');
-            await setupDatabase(this.client);
-            
-            // Verifica versão atual
             const currentVersion = await this.getCurrentVersion();
             console.log(`📊 Versão atual do banco: ${currentVersion}`);
-            console.log(`📊 Versão requerida: ${this.requiredDbVersion || '1.0.0'}`);
-            
-            // Se não tiver versão requerida, usa 1.0.0 como padrão
-            this.requiredDbVersion = this.requiredDbVersion || '1.0.0';
-            
-            // Se a versão atual for 0.0.0, não precisa verificar compatibilidade
-            if (currentVersion !== '0.0.0' && !isCompatibleVersion(currentVersion, this.requiredDbVersion)) {
-                throw new Error(`Versão do banco ${currentVersion} não é compatível com a versão requerida ${this.requiredDbVersion}`);
+            console.log(`📊 Versão requerida: ${this.requiredDbVersion}`);
+
+            // Verifica se há migrações pendentes antes de fazer backup
+            const files = this.getMigrationFiles();
+            const pendingMigrations = await this.getPendingMigrations(files);
+
+            // Só faz backup se houver migrações pendentes
+            if (pendingMigrations.length > 0) {
+                console.log('📦 Iniciando backup pré-migração...');
+                await createDatabaseBackup(this.client, this.backupPath, this.config.database);
             }
 
-            // Criar backup antes das migrações
-            console.log('📦 Iniciando backup pré-migração...');
-            await createDatabaseBackup(this.client, this.backupPath, this.config.database);
-            
-            // Ler arquivos de migração
-            const migrationsPath = path.join(__dirname, '..', 'migrations');
-            console.log(`📂 Buscando migrações em: ${migrationsPath}`);
-            
-            const directories = ['system'];
-            let allMigrations = [];
-            
-            for (const dir of directories) {
-                const dirPath = path.join(migrationsPath, dir);
-                console.log(`  ↳ Verificando diretório: ${dir}`);
-                
-                if (fs.existsSync(dirPath)) {
-                    const files = fs.readdirSync(dirPath)
-                        .filter(file => file.endsWith('.sql') && !file.endsWith('_down.sql'))
-                        .sort();
-                    console.log(`    📄 Encontradas ${files.length} migrações`);
-                    allMigrations = [...allMigrations, ...files];
-                } else {
-                    console.log(`    ⚠️ Diretório não encontrado: ${dirPath}`);
-                }
-            }
+            console.log('📂 Buscando migrações em:', path.resolve(process.cwd(), 'src/migrations'));
+            console.log('  ↳ Verificando diretório:', this.config.database);
+            console.log(`    📄 Encontradas ${files.length} migrações`);
 
-            // Verificar migrações pendentes
             console.log('🔍 Verificando migrações pendentes...');
-            const pendingMigrations = await this.getPendingMigrations(allMigrations);
             console.log(`  ↳ ${pendingMigrations.length} migrações pendentes encontradas`);
-            
+
             if (pendingMigrations.length === 0) {
                 console.log('✅ Banco já está atualizado!');
                 return;
             }
 
-            // Executar migrações pendentes
-            console.log('🔄 Executando migrações pendentes...');
+            // Executa as migrações pendentes
             for (const file of pendingMigrations) {
-                const migrationPath = path.join(migrationsPath, 'system', file);
-                console.log(`  ↳ Executando: ${file}`);
-                
-                const migrationContent = fs.readFileSync(migrationPath, 'utf8');
-                await this.executeMigration(file, migrationContent);
+                await this.executeMigration(file, this.getMigrationContent(file));
             }
 
-            // Atualizar versão do sistema
-            console.log('📝 Atualizando versão do sistema...');
-            await this.updateSystemVersion();
-            
-            console.log('✅ Processo de migração concluído com sucesso!');
+            console.log('✅ Migrações concluídas com sucesso!');
         } catch (error) {
             console.error('❌ Erro durante migração:', error);
             throw error;
         } finally {
             if (this.client) {
                 console.log('🔌 Fechando conexão com o banco...');
-                await this.client.release();
+                this.client.release();
             }
         }
+    }
+
+    getMigrationFiles() {
+        const migrationsPath = path.join(__dirname, '..', 'migrations');
+        console.log(`📂 Buscando migrações em: ${migrationsPath}`);
+        
+        const directories = ['system'];
+        let allMigrations = [];
+        
+        for (const dir of directories) {
+            const dirPath = path.join(migrationsPath, dir);
+            console.log(`  ↳ Verificando diretório: ${dir}`);
+            
+            if (fs.existsSync(dirPath)) {
+                const files = fs.readdirSync(dirPath)
+                    .filter(file => file.endsWith('.sql') && !file.endsWith('_down.sql'))
+                    .sort();
+                console.log(`    📄 Encontradas ${files.length} migrações`);
+                allMigrations = [...allMigrations, ...files];
+            } else {
+                console.log(`    ⚠️ Diretório não encontrado: ${dirPath}`);
+            }
+        }
+
+        return allMigrations;
+    }
+
+    getMigrationContent(file) {
+        const migrationPath = path.join(__dirname, '..', 'migrations', 'system', file);
+        console.log(`  ↳ Executando: ${file}`);
+        
+        return fs.readFileSync(migrationPath, 'utf8');
     }
 
     static async runMigrations(config) {

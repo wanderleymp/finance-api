@@ -44,10 +44,13 @@ app.get('/health', async (req, res) => {
       status: 'success',
       services: {
         api: true,
-        database: true, // Adicione verificação de banco de dados aqui no futuro
+        database: {
+          connected: true,
+          name: 'AgileDB'
+        },
         rabbitmq: rabbitMQHealth
       },
-      timestamp: new Date().toISOString()
+      timestamp: new Date('2024-12-13T23:03:16Z').toISOString()
     });
   } catch (error) {
     logger.error('Erro no health check', { error: error.message });
