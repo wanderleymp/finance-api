@@ -72,6 +72,10 @@ EXCEPTION
         RAISE NOTICE 'Erro ao manipular colunas: %', SQLERRM;
 END $$;
 
+-- Dropar triggers existentes
+DROP TRIGGER IF EXISTS trigger_format_person_full_name ON persons;
+DROP FUNCTION IF EXISTS fn_format_person_full_name() CASCADE;
+
 -- Recriar índices
 CREATE INDEX IF NOT EXISTS idx_persons_fantasy_name ON public.persons (fantasy_name);
 CREATE INDEX IF NOT EXISTS idx_persons_full_name ON public.persons (full_name);

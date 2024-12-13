@@ -15,6 +15,23 @@
 - Configurado `.gitignore` para ignorar arquivos sensíveis
 - Criado `README.md` com instruções de instalação e uso
 
+## [1.3.0] - 2024-12-13
+### Adicionado
+- Centralização da configuração do banco de dados
+- Pool de conexões padronizado para toda a aplicação
+- Documentação detalhada da arquitetura do banco de dados no README
+
+### Modificado
+- Refatoração do PersonRepository para usar conexão centralizada
+- Atualização da configuração SSL do banco de dados
+- Melhoria no sistema de logging das operações de banco
+
+### Detalhes Técnicos
+- Criado sistema centralizado de conexão em `src/config/database.js`
+- Implementado pool de conexões com configurações otimizadas
+- Padronização do tratamento de erros e logging
+- Remoção de configurações duplicadas de banco de dados
+
 ## [1.2.0] - 2024-12-12
 ### Adicionado
 - Script completo de roadmap para registro no banco de dados.
@@ -58,6 +75,22 @@
 ### Modificado
 - Atualizada versão da API para 1.1.0.
 - Melhorada a flexibilidade do gerenciamento de roadmap.
+
+## [1.0.0.2] - 2024-12-13
+### Adicionado
+- CRUD completo para a entidade Person
+- Implementação de repositório, serviço, controlador e rotas para Person
+- Validação de esquema para endpoints de Person
+- Tratamento de erros e logs para operações de Person
+
+### Alterado
+- Estrutura de arquivos para seguir padrão de arquitetura do projeto
+- Adicionado middleware de validação para rotas de Person
+
+### Melhorias
+- Implementação de tratamento de erros consistente
+- Adição de logs para todas as operações de banco de dados
+- Validação de entrada de dados com Joi
 
 ## [1.0.0] - 2024-12-12
 ### Adicionado
