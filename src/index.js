@@ -5,6 +5,7 @@ const dotenv = require('dotenv');
 const { httpLogger, logger } = require('./middlewares/logger');
 const { createRabbitMQConnection, checkRabbitMQHealth } = require('./config/rabbitmq');
 const roadmapService = require('./services/roadmapService');
+const { runMigrations } = require('./scripts/migrate');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -96,32 +97,33 @@ process.on('unhandledRejection', (reason, promise) => {
   });
 });
 
-// Testar conexão com RabbitMQ ao iniciar o servidor
-(async () => {
+// Função de inicialização
+async function startServer() {
   try {
+    console.log('🔄 Verificando Banco de Dados…');
+    await runMigrations('system');
+    console.log('✅ Banco de Dados Atualizado');
+
+    // Conexão com RabbitMQ
     await createRabbitMQConnection();
-    
-    // Atualizar tarefa de RabbitMQ no roadmap
-    await roadmapService.completeRoadmapTask(
-      'Conexão RabbitMQ', 
-      'Configuração de conexão ao RabbitMQ remoto via .env, com verificação de saúde e tratamento de erros'
-    );
-  } catch (error) {
-    logger.error('Falha ao conectar ao RabbitMQ durante a inicialização', {
-      error: error.message
+    await roadmapService.completeRoadmapTask('RabbitMQ Connection', 'Estabelecida conexão com RabbitMQ');
+
+    app.listen(PORT, () => {
+      console.log(`🚀 Servidor rodando em http://localhost:${PORT}`);
     });
+  } catch (error) {
+    logger.error('Falha ao iniciar aplicação', { error: error.message });
+    process.exit(1);
   }
-})();
+}
 
 // Iniciar o servidor
-const server = app.listen(PORT, () => {
-  logger.info(`🚀 Servidor rodando na porta ${PORT}`);
-});
+startServer();
 
 // Graceful shutdown
 process.on('SIGTERM', () => {
   logger.info('Recebido sinal SIGTERM. Encerrando graciosamente...');
-  server.close(() => {
+  app.close(() => {
     logger.info('Servidor encerrado.');
     process.exit(0);
   });

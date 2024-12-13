@@ -21,10 +21,20 @@
 - Script `roadmap:populate` para popular roadmap com tarefas detalhadas.
 - Mapeamento completo de etapas do projeto no roadmap.
 - Suporte a registro em lote de tarefas.
+- Verificação e criação automática do banco de dados ao iniciar
+- Script de migração com registro automático na tabela migrations
+- Função de inicialização do servidor com tratamento de erros
 
 ### Modificado
 - Atualizada versão da API para 1.2.0.
 - Expandido o escopo de gerenciamento de roadmap.
+- Refatoração do processo de inicialização do servidor
+- Melhoria no tratamento de erros durante a inicialização
+
+### Detalhes Técnicos
+- Implementado `setupDatabase.js` para verificação e criação do banco
+- Criado `migrate.js` para gerenciamento de migrações
+- Atualizado `index.js` com nova função de inicialização do servidor
 
 ## [1.1.0] - 2024-12-12
 ### Adicionado
