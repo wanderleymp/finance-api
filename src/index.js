@@ -116,33 +116,29 @@ async function testDatabaseConnection() {
 
 // Função de inicialização
 async function startServer() {
-    try {
-        // Executar migrações antes de iniciar o servidor
-        await runMigrations('system');
-        
-        // Testar conexão com banco de dados
-        await testDatabaseConnection();
-        
-        // Conexão com RabbitMQ
-        await createRabbitMQConnection();
-        await roadmapService.completeRoadmapTask('RabbitMQ Connection', 'Estabelecida conexão com RabbitMQ');
+  try {
+    // Executar migrações do banco
+    const config = {
+      database: 'system',
+      pool: systemDatabase.pool,
+      migrationsPath: './src/migrations/system'
+    };
 
-        const server = app.listen(PORT, () => {
-            logger.info(`Servidor rodando na porta ${PORT}`);
-        });
+    console.log('Iniciando migrações com config:', config);
+    await runMigrations(config);
 
-        // Configurações de shutdown gracioso
-        process.on('SIGTERM', () => {
-            logger.info('Desligamento iniciado');
-            server.close(() => {
-                logger.info('Servidor fechado');
-                process.exit(0);
-            });
-        });
-    } catch (error) {
-        logger.error('Falha ao iniciar o servidor', { error: error.message });
-        process.exit(1);
-    }
+    // Iniciar servidor Express
+    app.listen(PORT, () => {
+      logger.info(`Servidor rodando na porta ${PORT}`);
+    });
+
+    // Configurar conexão com RabbitMQ
+    await createRabbitMQConnection();
+    await checkRabbitMQHealth();
+  } catch (error) {
+    logger.error('Falha ao iniciar o servidor', { error: error.message || error });
+    process.exit(1);
+  }
 }
 
 // Iniciar o servidor
