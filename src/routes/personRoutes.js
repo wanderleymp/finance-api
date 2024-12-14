@@ -5,7 +5,8 @@ const personSchema = require('../schemas/personSchema');
 
 const router = express.Router();
 
-router.get('/', personController.index);
+router.get('/', validateRequest(personSchema.listPersons, 'query'), personController.index);
+router.get('/all', validateRequest(personSchema.listPersons, 'query'), personController.indexWithRelations);
 router.get('/:id', validateRequest(personSchema.getPersonById, 'params'), personController.show);
 router.get('/:id/details', validateRequest(personSchema.getPersonById, 'params'), personController.showWithDetails);
 router.get('/:id/documents', validateRequest(personSchema.getPersonById, 'params'), personController.documents);

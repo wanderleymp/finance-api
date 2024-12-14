@@ -6,13 +6,18 @@ class PersonController {
     async index(req, res) {
         try {
             logger.info('Iniciando listagem de pessoas');
-            const { page, limit } = req.query;
-            const result = await personService.listPersons(page, limit);
+            const { page, limit, include } = req.query;
+            
+            // Converte o parâmetro include em array
+            const includes = include ? [include] : [];
+            
+            const result = await personService.listPersons(page, limit, includes);
             
             logger.info('Listagem de pessoas concluída', { 
                 count: result.data.length,
                 currentPage: result.meta.current_page,
-                totalRecords: result.meta.total
+                totalRecords: result.meta.total,
+                includeDocuments: includes.includes('documents')
             });
             
             handleResponse(res, 200, result);
@@ -82,6 +87,29 @@ class PersonController {
             await personService.deletePerson(id);
             handleResponse(res, 204);
         } catch (error) {
+            handleError(res, error);
+        }
+    }
+
+    async indexWithRelations(req, res) {
+        try {
+            logger.info('Iniciando listagem de pessoas com relacionamentos');
+            const { page, limit } = req.query;
+            
+            const result = await personService.listPersonsWithRelations(page, limit);
+            
+            logger.info('Listagem de pessoas com relacionamentos concluída', { 
+                count: result.data.length,
+                currentPage: result.meta.current_page,
+                totalRecords: result.meta.total
+            });
+            
+            handleResponse(res, 200, result);
+        } catch (error) {
+            logger.error('Erro na listagem de pessoas com relacionamentos', {
+                errorMessage: error.message,
+                errorStack: error.stack
+            });
             handleError(res, error);
         }
     }

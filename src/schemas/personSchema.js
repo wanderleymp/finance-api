@@ -7,6 +7,12 @@ const personSchema = {
         id: Joi.number().integer().positive().required()
     }),
 
+    listPersons: Joi.object({
+        page: Joi.number().integer().min(1).optional(),
+        limit: Joi.number().integer().min(1).max(100).optional(),
+        include: Joi.string().valid('documents').optional()
+    }),
+
     createPerson: Joi.object({
         full_name: Joi.string()
             .trim()

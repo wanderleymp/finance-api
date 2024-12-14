@@ -12,7 +12,7 @@ class PersonRepository {
             const { limit: validLimit, offset } = PaginationHelper.getPaginationParams(page, limit);
             
             const countQuery = 'SELECT COUNT(*) FROM persons';
-            const dataQuery = 'SELECT * FROM persons ORDER BY created_at DESC LIMIT $1 OFFSET $2';
+            const dataQuery = 'SELECT * FROM persons ORDER BY full_name ASC LIMIT $1 OFFSET $2';
             
             logger.info('Executando consulta findAll paginada', { 
                 query: dataQuery,
