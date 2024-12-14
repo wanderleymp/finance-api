@@ -35,6 +35,31 @@
 - [x] Documentar novo endpoint
 - [x] Atualizar changelog
 
+## Próximas Melhorias
+
+### Infraestrutura e Qualidade
+- [x] Implementar middleware de validação de requisições
+- [ ] Adicionar mais testes unitários para rotas de endereço
+- [ ] Implementar cache para consultas de CEP
+- [ ] Adicionar mais tratamentos de erro específicos
+
+### Funcionalidades
+- [x] Consulta de CEP via ViaCEP
+- [ ] Adicionar suporte para CEPs internacionais
+- [ ] Criar endpoint para geocodificação de endereços
+
+### Performance
+- [ ] Otimizar middleware de validação
+- [ ] Implementar rate limiting para rotas de consulta
+- [ ] Adicionar métricas de performance para consultas externas
+
+## Histórico de Implementações
+
+### Dezembro 2024
+- Implementação da rota de consulta de CEP
+- Correção do middleware de validação de requisições
+- Adição de logs detalhados para consultas de endereço
+
 ## Próximas Versões
 
 ### 1.0.1 - Melhorias e Otimizações

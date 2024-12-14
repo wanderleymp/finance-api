@@ -130,6 +130,22 @@ O projeto utiliza uma configuração centralizada para conexões com banco de da
    - Versão atual: 1.0.0.5
    - Scripts de migração em `src/migrations/system/`
 
+## Funcionalidades
+
+- Gerenciamento de pessoas
+- Consulta de CEP via ViaCEP
+  - Rota: `GET /addresses/cep/:cep`
+  - Retorna informações detalhadas de endereço
+  - Validação de formato de CEP
+  - Tratamento de erros e logs
+
+### Rotas Disponíveis
+
+#### Endereços
+- `GET /addresses/cep/:cep` - Consulta detalhes de endereço por CEP
+  - Exemplo: `GET /addresses/cep/01310930`
+  - Retorna: logradouro, complemento, bairro, cidade, estado, código postal e código IBGE
+
 ## Endpoints
 
 ### Consulta de CEP
@@ -151,6 +167,10 @@ O projeto utiliza uma configuração centralizada para conexões com banco de da
       }
     }
     ```
+
+## Validação de Requisições
+
+A API utiliza middleware de validação baseado em Joi para garantir a integridade dos dados recebidos. Cada rota possui schemas específicos para validação de parâmetros, body e query.
 
 ## Testes
 ```bash

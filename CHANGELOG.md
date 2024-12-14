@@ -1,5 +1,17 @@
 # Changelog - Finance API
 
+## [1.0.0.7] - 2024-12-14
+
+### Corrigido
+- Middleware de validação de requisições
+  - Corrigido erro no processamento de schemas do Joi
+  - Adicionada lógica para seleção correta de schemas
+  - Removida chamada incorreta de `schema.describe()`
+
+### Melhorado
+- Tratamento de erros no middleware de validação
+- Logs de validação de requisições
+
 ## [1.0.0.6] - 2024-12-14
 
 ### Adicionado
