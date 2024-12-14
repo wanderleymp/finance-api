@@ -24,9 +24,11 @@ app.use(bodyParser.urlencoded({ extended: true }));
 const roadmapRoutes = require('./routes/roadmapRoutes');
 const personRoutes = require('./routes/personRoutes');
 const personDocumentRoutes = require('./routes/personDocumentRoutes');
+const contactRoutes = require('./routes/contactRoutes');
 app.use('/roadmap/', roadmapRoutes);
 app.use('/persons/', personRoutes);
 app.use('/person-documents/', personDocumentRoutes);
+app.use('/contacts/', contactRoutes);
 
 // Rota inicial
 app.get('/', (req, res) => {
