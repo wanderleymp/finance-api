@@ -5,19 +5,18 @@ const { logger } = require('../middlewares/logger');
 class PersonController {
     async index(req, res) {
         try {
-            logger.info('Iniciando listagem de pessoas');
-            const { page, limit, include } = req.query;
+            logger.info('Iniciando listagem de pessoas', {
+                query: req.query
+            });
             
-            // Converte o parâmetro include em array
-            const includes = include ? [include] : [];
-            
-            const result = await personService.listPersons(page, limit, includes);
+            const { page, limit, search } = req.query;
+            const result = await personService.listPersons(page, limit, search);
             
             logger.info('Listagem de pessoas concluída', { 
                 count: result.data.length,
                 currentPage: result.meta.current_page,
                 totalRecords: result.meta.total,
-                includeDocuments: includes.includes('documents')
+                searchTerm: search || null
             });
             
             handleResponse(res, 200, result);
@@ -93,15 +92,18 @@ class PersonController {
 
     async indexWithRelations(req, res) {
         try {
-            logger.info('Iniciando listagem de pessoas com relacionamentos');
-            const { page, limit } = req.query;
+            logger.info('Iniciando listagem de pessoas com relacionamentos', {
+                query: req.query
+            });
             
-            const result = await personService.listPersonsWithRelations(page, limit);
+            const { page, limit, search } = req.query;
+            const result = await personService.listPersonsWithRelations(page, limit, search);
             
             logger.info('Listagem de pessoas com relacionamentos concluída', { 
                 count: result.data.length,
                 currentPage: result.meta.current_page,
-                totalRecords: result.meta.total
+                totalRecords: result.meta.total,
+                searchTerm: search || null
             });
             
             handleResponse(res, 200, result);

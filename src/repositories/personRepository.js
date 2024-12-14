@@ -7,36 +7,66 @@ class PersonRepository {
         this.pool = systemDatabase.pool;
     }
 
-    async findAll(page = 1, limit = 10) {
+    async findAll(page = 1, limit = 10, search = '') {
         try {
             const { limit: validLimit, offset } = PaginationHelper.getPaginationParams(page, limit);
             
-            const countQuery = 'SELECT COUNT(*) FROM persons';
-            const dataQuery = 'SELECT * FROM persons ORDER BY full_name ASC LIMIT $1 OFFSET $2';
+            let whereClause = '';
+            let queryParams = [];
+            
+            if (search && search.trim()) {
+                whereClause = `
+                    WHERE (
+                        LOWER(full_name) LIKE LOWER($1)
+                        OR LOWER(fantasy_name) LIKE LOWER($1)
+                        OR EXISTS (
+                            SELECT 1 FROM person_documents pd 
+                            WHERE pd.person_id = persons.person_id 
+                            AND LOWER(pd.document_value) LIKE LOWER($1)
+                        )
+                    )
+                `;
+                queryParams = [`%${search.trim()}%`];
+            }
+            
+            const countQuery = `
+                SELECT COUNT(*) 
+                FROM persons 
+                ${whereClause}
+            `;
+
+            // Executa a query de contagem primeiro
+            const { rows: [{ count }] } = await systemDatabase.query(countQuery, queryParams);
+
+            // Adiciona limit e offset para a query de dados
+            queryParams.push(validLimit, offset);
+            
+            const dataQuery = `
+                SELECT * FROM persons 
+                ${whereClause}
+                ORDER BY full_name ASC 
+                LIMIT $${queryParams.length - 1} OFFSET $${queryParams.length}
+            `;
             
             logger.info('Executando consulta findAll paginada', { 
-                query: dataQuery,
-                page,
-                limit: validLimit,
-                offset
+                dataQuery,
+                countQuery,
+                params: queryParams.map((p, i) => `$${i + 1}: ${p}`),
+                whereClause,
+                searchTerm: search || null
             });
-
-            const [dataResult, countResult] = await Promise.all([
-                systemDatabase.query(dataQuery, [validLimit, offset]),
-                systemDatabase.query(countQuery)
-            ]);
-
+            
+            const { rows: data } = await systemDatabase.query(dataQuery, queryParams);
+            
             return {
-                data: dataResult.rows,
-                total: parseInt(countResult.rows[0].count)
+                data,
+                total: parseInt(count)
             };
         } catch (error) {
-            logger.error('Erro detalhado ao buscar todas as pessoas', { 
-                errorMessage: error.message,
-                errorStack: error.stack,
-                errorCode: error.code,
-                errorName: error.name,
-                query: 'findAll'
+            logger.error('Erro ao executar findAll', {
+                error: error.message,
+                stack: error.stack,
+                searchTerm: search || null
             });
             throw error;
         }

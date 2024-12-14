@@ -5,12 +5,11 @@ const { ValidationError } = require('../utils/errors');
 const PaginationHelper = require('../utils/paginationHelper');
 
 class PersonService {
-    async listPersons(page, limit, include = []) {
+    async listPersons(page, limit, search = '', include = []) {
         const { page: validPage, limit: validLimit } = PaginationHelper.validateParams(page, limit);
-        const { data, total } = await personRepository.findAll(validPage, validLimit);
+        const { data, total } = await personRepository.findAll(validPage, validLimit, search);
 
         if (include.includes('documents')) {
-            // Buscar documentos para todas as pessoas
             const personsWithDocuments = await Promise.all(
                 data.map(async (person) => {
                     const documents = await personDocumentRepository.findByPersonId(person.person_id);
@@ -83,21 +82,17 @@ class PersonService {
         await personRepository.delete(personId);
     }
 
-    async listPersonsWithRelations(page, limit) {
+    async listPersonsWithRelations(page, limit, search = '') {
         const { page: validPage, limit: validLimit } = PaginationHelper.validateParams(page, limit);
-        const { data, total } = await personRepository.findAll(validPage, validLimit);
+        const { data, total } = await personRepository.findAll(validPage, validLimit, search);
 
         // Buscar documentos para todas as pessoas
         const personsWithRelations = await Promise.all(
             data.map(async (person) => {
-                // Por enquanto só temos documents, mas no futuro podemos adicionar outros relacionamentos aqui
                 const documents = await personDocumentRepository.findByPersonId(person.person_id);
                 return {
                     ...person,
-                    documents,
-                    // contacts: [], // Futuro
-                    // addresses: [], // Futuro
-                    // etc...
+                    documents
                 };
             })
         );

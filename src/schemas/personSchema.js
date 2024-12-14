@@ -10,7 +10,8 @@ const personSchema = {
     listPersons: Joi.object({
         page: Joi.number().integer().min(1).optional(),
         limit: Joi.number().integer().min(1).max(100).optional(),
-        include: Joi.string().valid('documents').optional()
+        include: Joi.string().valid('documents').optional(),
+        search: Joi.string().trim().optional()
     }),
 
     createPerson: Joi.object({
