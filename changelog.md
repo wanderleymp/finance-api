@@ -15,6 +15,21 @@
 - Configurado `.gitignore` para ignorar arquivos sensíveis
 - Criado `README.md` com instruções de instalação e uso
 
+## [1.4.0] - 2024-12-14
+### Adicionado
+- Tabela `person_contacts` para associação de contatos com pessoas
+- Suporte a contatos principais e status de ativação
+- Documentação de colunas na tabela `person_contacts`
+
+### Modificado
+- Atualização do esquema de banco de dados para versão 1.0.0.9
+- Migração automática para criação da tabela `person_contacts`
+
+### Detalhes Técnicos
+- Criação de tabela de associação com chaves estrangeiras
+- Implementação de índice único para associação pessoa-contato
+- Adição de colunas para controle de status e principal
+
 ## [1.3.0] - 2024-12-13
 ### Adicionado
 - Centralização da configuração do banco de dados

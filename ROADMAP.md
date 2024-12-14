@@ -19,12 +19,25 @@
 - [x] Configuração de banco de dados
 - [x] Sistema de migrations
 
+### 1.0.0.6 - Modelagem de Associação de Contatos
+- [x] Criar tabela `person_contacts`
+- [x] Implementar migração automática
+- [x] Adicionar restrições de integridade referencial
+- [x] Documentar estrutura da tabela
+- [x] Atualizar changelog
+- [x] Atualizar README
+
 ## Próximas Versões
 
 ### 1.0.1 - Melhorias e Otimizações
 - [ ] Cache para consultas frequentes
 - [ ] Rate limiting
 - [ ] Compressão de resposta
+
+### 1.0.2 - Desenvolvimento de Serviços de Contatos
+- [ ] Desenvolver serviços para manipulação de `person_contacts`
+- [ ] Criar testes unitários para associação de contatos
+- [ ] Implementar validações de negócio
 
 ### 1.1.0 - Novas Funcionalidades
 - [ ] Sistema de autenticação

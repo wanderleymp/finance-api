@@ -111,6 +111,20 @@ O projeto utiliza uma configuração centralizada para conexões com banco de da
      document_value: VARCHAR(50)
      ```
 
+   c. **Person Contacts**
+   - Associação entre pessoas e contatos
+   - Campos principais:
+     ```sql
+     person_contact_id: SERIAL PRIMARY KEY
+     person_id: INTEGER (FK -> persons)
+     contact_id: INTEGER (FK -> contacts)
+     is_main: BOOLEAN
+     active: BOOLEAN
+     description: TEXT
+     created_at: TIMESTAMP
+     updated_at: TIMESTAMP
+     ```
+
 6. **Versionamento do Banco**
    - Controle via tabela `migrations`
    - Versão atual: 1.0.0.5

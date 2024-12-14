@@ -159,6 +159,21 @@ class DatabaseMigrator {
 
                         pendingMigrations.push(file);
                     } else {
+                        const expectedStructure = this.getExpectedStructure(file);
+                        if (expectedStructure) {
+                            const isStructureCorrect = await this.checkTableStructure(
+                                expectedStructure.tableName,
+                                expectedStructure.columns,
+                                expectedStructure.extraChecks
+                            );
+
+                            if (isStructureCorrect) {
+                                console.log(`✅ Tabela ${expectedStructure.tableName} já existe com estrutura correta. Registrando migração.`);
+                                await this.registerMigration(file, `Estrutura verificada e registrada: ${expectedStructure.tableName}`);
+                                continue;
+                            }
+                        }
+
                         pendingMigrations.push(file);
                     }
                 }
@@ -243,9 +258,8 @@ class DatabaseMigrator {
     }
 
     getExpectedStructure(migrationFile) {
-        // Mapeia cada arquivo de migração para sua estrutura esperada
-        const structureMap = {
-            '20241214_create_person_contacts.sql': {
+        const expectedStructures = {
+            'person_contacts': {
                 tableName: 'person_contacts',
                 columns: [
                     { name: 'id', type: 'uuid' },
@@ -256,7 +270,7 @@ class DatabaseMigrator {
                     { name: 'updated_at', type: 'timestamp without time zone' }
                 ]
             },
-            '20241214_adjust_person_documents.sql': {
+            'person_documents': {
                 tableName: 'person_documents',
                 columns: [
                     { name: 'id', type: 'uuid' },
@@ -301,10 +315,25 @@ class DatabaseMigrator {
                         return false;
                     }
                 }
+            },
+            'person_contacts': {
+                tableName: 'person_contacts',
+                columns: [
+                    { name: 'person_contact_id', type: 'integer' },
+                    { name: 'person_id', type: 'integer' },
+                    { name: 'contact_id', type: 'integer' },
+                    { name: 'is_main', type: 'boolean' },
+                    { name: 'active', type: 'boolean' },
+                    { name: 'description', type: 'text' },
+                    { name: 'created_at', type: 'timestamp with time zone' },
+                    { name: 'updated_at', type: 'timestamp with time zone' }
+                ]
             }
         };
 
-        return structureMap[migrationFile] || null;
+        const fileName = path.basename(migrationFile);
+        const tableName = fileName.replace('.sql', '').split('_').slice(1).join('_');
+        return expectedStructures[tableName] || null;
     }
 
     async updateSystemVersion() {
