@@ -173,6 +173,110 @@ O projeto utiliza uma configuração centralizada para conexões com banco de da
     }
     ```
 
+## Endpoints de Licenças
+
+### Regras de Negócio
+- Apenas uma licença ativa pode existir por pessoa
+- Uma nova licença só pode ser criada se não houver licença ativa para a pessoa
+
+### Rotas de Licenças
+
+#### Criar Licença
+- **Método**: POST
+- **Endpoint**: `/licenses/`
+- **Corpo da Requisição**:
+```json
+{
+  "person_id": 1,
+  "license_name": "Nome da Licença",
+  "start_date": "2024-12-14",
+  "status": "Ativa",
+  "timezone": "America/Sao_Paulo",
+  "active": true,
+  "end_date": null (opcional)
+}
+```
+- **Validações**:
+  - `person_id` é obrigatório
+  - `license_name` é obrigatório
+  - `start_date` é obrigatório
+  - `status` deve ser um dos valores: 'Ativa', 'Inativa', 'Suspensa', 'Cancelada'
+  - Não permite múltiplas licenças ativas para a mesma pessoa
+
+#### Listar Licenças
+- **Método**: GET
+- **Endpoint**: `/licenses/`
+- **Parâmetros de Query**:
+  - `page`: Número da página (padrão: 1)
+  - `limit`: Quantidade de registros por página (padrão: 10)
+  - `filters`: Filtros adicionais (opcional)
+
+#### Buscar Licença por ID
+- **Método**: GET
+- **Endpoint**: `/licenses/:id`
+
+#### Atualizar Licença
+- **Método**: PUT
+- **Endpoint**: `/licenses/:id`
+- **Corpo da Requisição**: Mesmo formato da criação
+- **Validações**: Mesmas da criação
+
+#### Deletar Licença
+- **Método**: DELETE
+- **Endpoint**: `/licenses/:id`
+- **Comportamento**: Marca a licença como inativa
+
+### Códigos de Erro Comuns
+- `400 Bad Request`: Dados inválidos ou violação de regra de negócio
+- `404 Not Found`: Licença não encontrada
+- `500 Internal Server Error`: Erro no servidor
+
+### Exemplo de Fluxo
+1. Verificar se pessoa tem licença ativa
+2. Se não tiver, criar nova licença
+3. Ao criar nova licença, a licença anterior é automaticamente marcada como inativa
+
+## Endpoints de Associação Pessoa-Licença
+
+#### Criar Associação Pessoa-Licença
+- **Método:** `POST /person-licenses`
+- **Autenticação:** Necessária
+- **Corpo da Requisição:**
+  ```json
+  {
+    "person_id": 1,
+    "license_id": 2
+  }
+  ```
+- **Respostas:**
+  - `201`: Associação criada com sucesso
+  - `400`: Dados inválidos ou associação já existente
+  - `404`: Pessoa ou licença não encontrada
+
+#### Listar Licenças de uma Pessoa
+- **Método:** `GET /person-licenses/person/:personId`
+- **Autenticação:** Necessária
+- **Parâmetros de Consulta:** `page`, `limit`
+- **Respostas:**
+  - `200`: Lista de licenças
+  - `400`: ID de pessoa inválido
+
+#### Listar Pessoas de uma Licença
+- **Método:** `GET /person-licenses/license/:licenseId`
+- **Autenticação:** Necessária
+- **Parâmetros de Consulta:** `page`, `limit`
+- **Respostas:**
+  - `200`: Lista de pessoas
+  - `400`: ID de licença inválido
+
+#### Remover Associação Pessoa-Licença
+- **Método:** `DELETE /person-licenses/:personId/:licenseId`
+- **Autenticação:** Necessária
+- **Respostas:**
+  - `204`: Associação removida com sucesso
+  - `400`: IDs inválidos
+  - `404`: Associação não encontrada
+
 ## Validação de Requisições
 
 A API utiliza middleware de validação baseado em Joi para garantir a integridade dos dados recebidos. Cada rota possui schemas específicos para validação de parâmetros, body e query.

@@ -56,3 +56,27 @@
 - Implementação inicial do projeto
 - Estrutura base de arquivos
 - Configuração do ambiente de desenvolvimento
+
+## [Unreleased]
+
+### Added
+- Implementação inicial do módulo de Licenças
+- Criação de endpoints para gerenciamento de licenças
+- Regras de negócio para criação e gerenciamento de licenças
+  - Restrição de uma licença ativa por pessoa
+  - Validações de dados de licença (nome, datas, status)
+- Implementação completa do módulo de associação pessoa-licença
+- Repositório `personLicenseRepository` com métodos CRUD
+- Serviço `personLicenseService` com validações de negócio
+- Controlador `personLicenseController` para gerenciamento de rotas
+- Rotas para criação, listagem e remoção de associações pessoa-licença
+- Validações de integridade para associações pessoa-licença
+
+### Changed
+- Adicionada lógica de validação no serviço de licenças
+- Implementado tratamento de erros específicos para criação de licenças
+- Adicionadas novas rotas em `/person-licenses` para gerenciamento de associações
+
+### Pending
+- Refinamento do endpoint de deleção de licenças
+- Testes completos de todos os cenários de criação e atualização de licenças
