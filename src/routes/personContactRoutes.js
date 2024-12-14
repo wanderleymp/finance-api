@@ -9,10 +9,16 @@ const router = express.Router();
 router.get('/', personContactController.index);
 
 // Obter contato por ID
-router.get('/:id', validateRequest(personContactSchema.getContactById, 'params'), personContactController.show);
+router.get('/:id', 
+    validateRequest(personContactSchema.getContactById, 'params'), 
+    personContactController.show
+);
 
 // Criar novo contato
-router.post('/', validateRequest(personContactSchema.createContact, 'body'), personContactController.store);
+router.post('/', 
+    validateRequest(personContactSchema.createContact, 'body'), 
+    personContactController.store
+);
 
 // Atualizar contato
 router.put('/:id', 
@@ -22,18 +28,9 @@ router.put('/:id',
 );
 
 // Excluir contato
-router.delete('/:id', validateRequest(personContactSchema.getContactById, 'params'), personContactController.delete);
-
-// Alternar status ativo/inativo
-router.patch('/:id/toggle-active', 
+router.delete('/:id', 
     validateRequest(personContactSchema.getContactById, 'params'), 
-    personContactController.toggleActive
-);
-
-// Definir contato como principal
-router.patch('/:id/set-main', 
-    validateRequest(personContactSchema.getContactById, 'params'), 
-    personContactController.setMain
+    personContactController.delete
 );
 
 module.exports = router;

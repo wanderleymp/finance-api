@@ -20,15 +20,38 @@ app.use(httpLogger);
 app.use(bodyParser.json());
 app.use(bodyParser.urlencoded({ extended: true }));
 
+// Middleware para log de requisições
+app.use((req, res, next) => {
+  logger.info('Detalhes da requisição', {
+    method: req.method,
+    path: req.path,
+    headers: req.headers,
+    query: req.query,
+    body: req.body,
+    params: req.params
+  });
+  next();
+});
+
+// Middleware para garantir req.query
+app.use((req, res, next) => {
+  if (!req.query) {
+    req.query = {};
+  }
+  next();
+});
+
 // Importar rotas
 const roadmapRoutes = require('./routes/roadmapRoutes');
 const personRoutes = require('./routes/personRoutes');
 const personDocumentRoutes = require('./routes/personDocumentRoutes');
 const contactRoutes = require('./routes/contactRoutes');
+const personContactRoutes = require('./routes/personContactRoutes');
 app.use('/roadmap/', roadmapRoutes);
 app.use('/persons/', personRoutes);
 app.use('/person-documents/', personDocumentRoutes);
 app.use('/contacts/', contactRoutes);
+app.use('/person-contacts/', personContactRoutes);
 
 // Rota inicial
 app.get('/', (req, res) => {

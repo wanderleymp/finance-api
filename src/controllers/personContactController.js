@@ -5,7 +5,10 @@ const { logger } = require('../middlewares/logger');
 class PersonContactController {
     async index(req, res) {
         try {
-            logger.info('Iniciando listagem de contatos');
+            logger.info('Iniciando listagem de contatos', {
+                query: req.query
+            });
+            
             const { page, limit, ...filters } = req.query;
             const result = await personContactService.listContacts(page, limit, filters);
             
@@ -61,26 +64,6 @@ class PersonContactController {
             const { id } = req.params;
             await personContactService.deleteContact(id);
             handleResponse(res, 204);
-        } catch (error) {
-            handleError(res, error);
-        }
-    }
-
-    async toggleActive(req, res) {
-        try {
-            const { id } = req.params;
-            const contact = await personContactService.toggleActive(id);
-            handleResponse(res, 200, { data: contact });
-        } catch (error) {
-            handleError(res, error);
-        }
-    }
-
-    async setMain(req, res) {
-        try {
-            const { id } = req.params;
-            const contact = await personContactService.setMain(id);
-            handleResponse(res, 200, { data: contact });
         } catch (error) {
             handleError(res, error);
         }

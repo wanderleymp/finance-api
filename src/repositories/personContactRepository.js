@@ -11,82 +11,81 @@ class PersonContactRepository {
         try {
             const { limit: validLimit, offset } = PaginationHelper.getPaginationParams(page, limit);
             
-            let query = 'SELECT pc.*, p.full_name as person_name FROM person_contacts pc ' +
-                       'LEFT JOIN persons p ON p.person_id = pc.person_id WHERE 1=1';
-            const params = [];
+            let query = `
+                SELECT 
+                    pc.person_contact_id as id,
+                    pc.person_id,
+                    pc.contact_id,
+                    p.full_name as person_name,
+                    c.contact_type,
+                    c.contact_value
+                FROM person_contacts pc
+                JOIN persons p ON p.person_id = pc.person_id
+                JOIN contacts c ON c.contact_id = pc.contact_id
+                WHERE 1=1
+            `;
+            const values = [];
             let paramCount = 1;
 
             if (filters.person_id) {
                 query += ` AND pc.person_id = $${paramCount}`;
-                params.push(filters.person_id);
+                values.push(filters.person_id);
                 paramCount++;
             }
+
             if (filters.contact_type) {
-                query += ` AND pc.contact_type = $${paramCount}`;
-                params.push(filters.contact_type);
-                paramCount++;
-            }
-            if (filters.active !== undefined) {
-                query += ` AND pc.active = $${paramCount}`;
-                params.push(filters.active);
-                paramCount++;
-            }
-            if (filters.is_main !== undefined) {
-                query += ` AND pc.is_main = $${paramCount}`;
-                params.push(filters.is_main);
-                paramCount++;
-            }
-            if (filters.search) {
-                query += ` AND (pc.contact_value ILIKE $${paramCount} OR pc.description ILIKE $${paramCount})`;
-                params.push(`%${filters.search}%`);
+                query += ` AND c.contact_type = $${paramCount}`;
+                values.push(filters.contact_type);
                 paramCount++;
             }
 
-            const countQuery = query.replace('SELECT pc.*, p.full_name as person_name', 'SELECT COUNT(*)');
-            query += ' ORDER BY pc.created_at DESC LIMIT $' + paramCount + ' OFFSET $' + (paramCount + 1);
-            params.push(validLimit, offset);
+            // Contar total de registros
+            const countQuery = query.replace(/SELECT.*FROM/, 'SELECT COUNT(*) as total FROM');
+            const countResult = await this.pool.query(countQuery, values);
+            const total = parseInt(countResult.rows[0].total);
 
-            logger.info('Executando consulta findAll paginada em person_contacts', { 
-                query,
-                params,
-                page,
-                limit: validLimit,
-                offset
-            });
+            // Adicionar paginação
+            query += ` ORDER BY pc.person_contact_id DESC LIMIT $${paramCount} OFFSET $${paramCount + 1}`;
+            values.push(validLimit, offset);
 
-            const [dataResult, countResult] = await Promise.all([
-                systemDatabase.query(query, params),
-                systemDatabase.query(countQuery, params.slice(0, -2))
-            ]);
+            const result = await this.pool.query(query, values);
 
             return {
-                data: dataResult.rows,
-                total: parseInt(countResult.rows[0].count)
+                data: result.rows,
+                total
             };
         } catch (error) {
-            logger.error('Erro ao buscar contatos', { 
-                errorMessage: error.message,
-                errorStack: error.stack,
-                errorCode: error.code,
-                errorName: error.name,
-                query: 'findAll'
+            logger.error('Erro ao buscar contatos de pessoas', {
+                error: error.message,
+                filters,
+                page,
+                limit
             });
             throw error;
         }
     }
 
-    async findById(contactId) {
+    async findById(id) {
         try {
-            const query = 'SELECT pc.*, p.full_name as person_name FROM person_contacts pc ' +
-                         'LEFT JOIN persons p ON p.person_id = pc.person_id ' +
-                         'WHERE pc.contact_id = $1';
-            const { rows } = await systemDatabase.query(query, [contactId]);
-            return rows[0];
+            const query = `
+                SELECT 
+                    pc.person_contact_id as id,
+                    pc.person_id,
+                    pc.contact_id,
+                    p.full_name as person_name,
+                    c.contact_type,
+                    c.contact_value
+                FROM person_contacts pc
+                JOIN persons p ON p.person_id = pc.person_id
+                JOIN contacts c ON c.contact_id = pc.contact_id
+                WHERE pc.person_contact_id = $1
+            `;
+            const result = await this.pool.query(query, [id]);
+            return result.rows[0];
         } catch (error) {
-            logger.error('Erro ao buscar contato por ID', { 
-                errorMessage: error.message,
-                errorStack: error.stack,
-                contactId
+            logger.error('Erro ao buscar contato de pessoa por ID', {
+                error: error.message,
+                id
             });
             throw error;
         }
@@ -96,75 +95,63 @@ class PersonContactRepository {
         try {
             const query = `
                 INSERT INTO person_contacts (
-                    person_id, contact_type, contact_value, description, is_main, active
-                ) VALUES ($1, $2, $3, $4, $5, $6)
-                RETURNING *`;
+                    person_id,
+                    contact_id
+                ) VALUES ($1, $2)
+                RETURNING *
+            `;
             
-            const params = [
+            const values = [
                 data.person_id,
-                data.contact_type,
-                data.contact_value,
-                data.description,
-                data.is_main || false,
-                data.active !== undefined ? data.active : true
+                data.contact_id
             ];
 
-            const { rows } = await systemDatabase.query(query, params);
-            return rows[0];
+            const result = await this.pool.query(query, values);
+            return result.rows[0];
         } catch (error) {
-            logger.error('Erro ao criar contato', { 
-                errorMessage: error.message,
-                errorStack: error.stack,
+            logger.error('Erro ao criar contato de pessoa', {
+                error: error.message,
                 data
             });
             throw error;
         }
     }
 
-    async update(contactId, data) {
+    async update(id, data) {
         try {
-            const setClauses = [];
-            const params = [];
-            let paramCount = 1;
-
-            for (const [key, value] of Object.entries(data)) {
-                if (value !== undefined) {
-                    setClauses.push(`${key} = $${paramCount}`);
-                    params.push(value);
-                    paramCount++;
-                }
-            }
-
-            params.push(contactId);
             const query = `
-                UPDATE person_contacts 
-                SET ${setClauses.join(', ')}, updated_at = NOW()
-                WHERE contact_id = $${paramCount}
-                RETURNING *`;
+                UPDATE person_contacts
+                SET 
+                    updated_at = NOW()
+                WHERE person_contact_id = $1
+                RETURNING *
+            `;
+            
+            const values = [
+                id
+            ];
 
-            const { rows } = await systemDatabase.query(query, params);
-            return rows[0];
+            const result = await this.pool.query(query, values);
+            return result.rows[0];
         } catch (error) {
-            logger.error('Erro ao atualizar contato', { 
-                errorMessage: error.message,
-                errorStack: error.stack,
-                contactId,
+            logger.error('Erro ao atualizar contato de pessoa', {
+                error: error.message,
+                id,
                 data
             });
             throw error;
         }
     }
 
-    async delete(contactId) {
+    async delete(id) {
         try {
-            const query = 'DELETE FROM person_contacts WHERE contact_id = $1 RETURNING *';
-            const { rows } = await systemDatabase.query(query, [contactId]);
-            return rows[0];
+            const query = 'DELETE FROM person_contacts WHERE person_contact_id = $1 RETURNING *';
+            const result = await this.pool.query(query, [id]);
+            return result.rows[0];
         } catch (error) {
-            logger.error('Erro ao excluir contato', { 
-                errorMessage: error.message,
-                errorStack: error.stack,
-                contactId
+            logger.error('Erro ao excluir contato de pessoa', {
+                error: error.message,
+                id
             });
             throw error;
         }
@@ -174,22 +161,20 @@ class PersonContactRepository {
         try {
             let query = `
                 UPDATE person_contacts 
-                SET is_main = false, updated_at = NOW()
+                SET updated_at = CURRENT_TIMESTAMP
                 WHERE person_id = $1 
-                AND contact_type = $2 
-                AND is_main = true`;
+                AND contact_type = $2`;
             const params = [personId, contactType];
 
             if (excludeId) {
-                query += ' AND contact_id != $3';
+                query += ' AND id != $3';
                 params.push(excludeId);
             }
 
-            await systemDatabase.query(query, params);
+            await this.pool.query(query, params);
         } catch (error) {
             logger.error('Erro ao remover flag de contato principal', { 
-                errorMessage: error.message,
-                errorStack: error.stack,
+                error: error.message,
                 personId,
                 contactType,
                 excludeId
