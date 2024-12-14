@@ -130,6 +130,28 @@ O projeto utiliza uma configuração centralizada para conexões com banco de da
    - Versão atual: 1.0.0.5
    - Scripts de migração em `src/migrations/system/`
 
+## Endpoints
+
+### Consulta de CEP
+- **GET** `/addresses/cep/:cep`
+  - Consulta endereço através do CEP utilizando a API ViaCEP
+  - Parâmetros:
+    - `cep`: CEP no formato 12345-678 ou 12345678
+  - Retorno:
+    ```json
+    {
+      "data": {
+        "street": "Nome da Rua",
+        "complement": "Complemento",
+        "neighborhood": "Bairro",
+        "city": "Cidade",
+        "state": "UF",
+        "postal_code": "12345678",
+        "ibge": "1234567"
+      }
+    }
+    ```
+
 ## Testes
 ```bash
 npm test

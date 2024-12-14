@@ -27,6 +27,14 @@
 - [x] Atualizar changelog
 - [x] Atualizar README
 
+### 1.0.0.7 - Serviço de Consulta de CEP
+- [x] Implementar integração com ViaCEP
+- [x] Criar rota de consulta de CEP
+- [x] Adicionar validação de formato
+- [x] Implementar tratamento de erros
+- [x] Documentar novo endpoint
+- [x] Atualizar changelog
+
 ## Próximas Versões
 
 ### 1.0.1 - Melhorias e Otimizações

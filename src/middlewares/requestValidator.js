@@ -7,11 +7,13 @@ function validateRequest(schema, property) {
 
         logger.info('Validando request', { 
             property, 
-            schema: schema.describe(),
             reqProperty: propertyToValidate 
         });
 
-        const { error } = schema.validate(propertyToValidate);
+        // Usar o schema correto (params do schema)
+        const schemaToValidate = schema[property] || schema;
+
+        const { error } = schemaToValidate.validate(propertyToValidate);
         
         if (error) {
             logger.error('Erro de validação', { 

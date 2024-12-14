@@ -48,6 +48,7 @@ const personDocumentRoutes = require('./routes/personDocumentRoutes');
 const contactRoutes = require('./routes/contactRoutes');
 const personContactRoutes = require('./routes/personContactRoutes');
 const personAddressRoutes = require('./routes/personAddressRoutes');
+const addressRoutes = require('./routes/addressRoutes');
 
 app.use('/roadmap/', roadmapRoutes);
 app.use('/persons/', personRoutes);
@@ -55,6 +56,7 @@ app.use('/person-documents/', personDocumentRoutes);
 app.use('/contacts/', contactRoutes);
 app.use('/person-contacts/', personContactRoutes);
 app.use('/person-addresses/', personAddressRoutes);
+app.use('/addresses/', addressRoutes);
 
 // Rota inicial
 app.get('/', (req, res) => {

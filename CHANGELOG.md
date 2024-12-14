@@ -1,5 +1,16 @@
 # Changelog - Finance API
 
+## [1.0.0.6] - 2024-12-14
+
+### Adicionado
+- Serviço de consulta de CEP (ViaCEP):
+  - Nova rota `GET /addresses/cep/:cep`
+  - Validação de formato de CEP
+  - Integração com API externa ViaCEP
+  - Mapeamento de campos para padrão da API
+  - Logs e tratamento de erros
+  - Instalação da biblioteca axios
+
 ## [1.0.0.5] - 2024-12-14
 
 ### Alterado
