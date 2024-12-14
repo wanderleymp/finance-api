@@ -3,6 +3,7 @@ const path = require('path');
 const { Pool } = require('pg');
 const { isCompatibleVersion } = require('../utils/version');
 const { setupDatabase, createDatabaseBackup } = require('./setup');
+const { requiredDbVersion } = require('../config/version');
 
 class DatabaseMigrator {
     constructor(config, requiredDbVersion, appVersion) {
@@ -90,103 +91,20 @@ class DatabaseMigrator {
                     [file, this.config.database]
                 );
 
-                // Se a migração não foi registrada, verifica a estrutura da tabela
+                // Se a migração não foi registrada, adiciona à lista de pendentes
                 if (parseInt(migrationResult.rows[0].count) === 0) {
-                    // Se for uma migração para person_contacts, verifica a estrutura
-                    if (file.includes('person_contacts')) {
-                        const tableExists = await this.client.query(`
-                            SELECT EXISTS (
-                                SELECT FROM information_schema.tables 
-                                WHERE table_schema = 'public' 
-                                AND table_name = 'person_contacts'
-                            );
-                        `);
-
-                        if (tableExists.rows[0].exists) {
-                            // Verifica se a estrutura está correta
-                            const columnsResult = await this.client.query(`
-                                SELECT column_name, data_type 
-                                FROM information_schema.columns 
-                                WHERE table_schema = 'public' 
-                                AND table_name = 'person_contacts'
-                            `);
-
-                            const columns = columnsResult.rows.map(row => row.column_name);
-                            const requiredColumns = ['id', 'person_id', 'contact_type', 'contact_value', 'created_at', 'updated_at'];
-                            const hasAllColumns = requiredColumns.every(col => columns.includes(col));
-
-                            if (!hasAllColumns) {
-                                pendingMigrations.push(file);
-                                console.log(`⚠️ Tabela person_contacts existe mas estrutura está incompleta. Adicionando à lista de migrações pendentes.`);
-                            } else {
-                                // Se a tabela existe e está correta, registra a migração como executada
-                                await this.client.query(
-                                    `INSERT INTO migrations 
-                                     (migration_name, db_version, database_name, description)
-                                     VALUES ($1, $2, $3, $4)`,
-                                    [file, this.requiredDbVersion, this.config.database, `Migração: ${file} (registrada após verificação)`]
-                                );
-                                console.log(`✅ Tabela person_contacts já existe com estrutura correta. Registrando migração.`);
-                            }
-                        } else {
-                            pendingMigrations.push(file);
-                        }
-                    } else if (file.includes('person_documents')) {
-                        const tableExists = await this.client.query(`
-                            SELECT EXISTS (
-                                SELECT FROM information_schema.tables 
-                                WHERE table_schema = 'public' 
-                                AND table_name = 'person_documents'
-                            );
-                        `);
-
-                        if (tableExists.rows[0].exists) {
-                            const expectedStructure = this.getExpectedStructure(file);
-                            if (expectedStructure) {
-                                const isStructureCorrect = await this.checkTableStructure(
-                                    expectedStructure.tableName,
-                                    expectedStructure.columns,
-                                    expectedStructure.extraChecks
-                                );
-
-                                if (isStructureCorrect) {
-                                    console.log(`✅ Tabela person_documents já existe com estrutura correta. Registrando migração.`);
-                                    await this.registerMigration(file, `Estrutura verificada e registrada: ${expectedStructure.tableName}`);
-                                    return;
-                                }
-                            }
-                        }
-
-                        pendingMigrations.push(file);
-                    } else {
-                        const expectedStructure = this.getExpectedStructure(file);
-                        if (expectedStructure) {
-                            const isStructureCorrect = await this.checkTableStructure(
-                                expectedStructure.tableName,
-                                expectedStructure.columns,
-                                expectedStructure.extraChecks
-                            );
-
-                            if (isStructureCorrect) {
-                                console.log(`✅ Tabela ${expectedStructure.tableName} já existe com estrutura correta. Registrando migração.`);
-                                await this.registerMigration(file, `Estrutura verificada e registrada: ${expectedStructure.tableName}`);
-                                continue;
-                            }
-                        }
-
-                        pendingMigrations.push(file);
-                    }
+                    console.log(`⚠️ Migração ${file} não registrada. Adicionando à lista de migrações pendentes.`);
+                    pendingMigrations.push(file);
+                } else {
+                    console.log(`✅ Migração ${file} já registrada.`);
                 }
             } catch (error) {
                 console.log(`⚠️ Erro ao verificar migração ${file}:`, error.message);
-                // Se a tabela não existe, considera todas as migrações como pendentes
-                if (error.code === '42P01') {
-                    return files;
-                }
-                throw error;
+                // Se houver erro, considera a migração como pendente
+                pendingMigrations.push(file);
             }
         }
-        
+
         return pendingMigrations;
     }
 
@@ -430,9 +348,26 @@ class DatabaseMigrator {
             
             if (fs.existsSync(dirPath)) {
                 const files = fs.readdirSync(dirPath)
-                    .filter(file => file.endsWith('.sql') && !file.endsWith('_down.sql'))
+                    .filter(file => {
+                        // Verifica se é um arquivo SQL e não é um arquivo de rollback
+                        if (!file.endsWith('.sql') || file.endsWith('_down.sql')) {
+                            return false;
+                        }
+
+                        // Lê o conteúdo do arquivo para verificar a versão
+                        const content = fs.readFileSync(path.join(dirPath, file), 'utf8');
+                        const versionMatch = content.match(/-- Versão: ([\d.]+)/);
+                        if (!versionMatch) {
+                            console.log(`    ⚠️ Arquivo sem versão: ${file}`);
+                            return false;
+                        }
+
+                        const fileVersion = versionMatch[1];
+                        console.log(`    📄 Arquivo ${file} - Versão ${fileVersion}`);
+                        return fileVersion === this.requiredDbVersion;
+                    })
                     .sort();
-                console.log(`    📄 Encontradas ${files.length} migrações`);
+                console.log(`    📄 Encontradas ${files.length} migrações para versão ${this.requiredDbVersion}`);
                 allMigrations = [...allMigrations, ...files];
             } else {
                 console.log(`    ⚠️ Diretório não encontrado: ${dirPath}`);
@@ -450,7 +385,7 @@ class DatabaseMigrator {
     }
 
     static async runMigrations(config) {
-        const migrator = new DatabaseMigrator(config, '1.0.0');
+        const migrator = new DatabaseMigrator(config, requiredDbVersion, '1.0.0');
         await migrator.migrate();
     }
 }
@@ -464,7 +399,7 @@ async function runMigrations(config) {
             throw new Error('Configuração de banco inválida: pool não encontrado');
         }
 
-        const migrator = new DatabaseMigrator(config, '1.0.0');
+        const migrator = new DatabaseMigrator(config, requiredDbVersion, requiredDbVersion);
         await migrator.migrate();
     } catch (error) {
         console.error('❌ Erro na migração:', error);

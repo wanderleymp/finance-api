@@ -5,12 +5,22 @@ function handleResponse(res, statusCode = 200, data) {
 }
 
 function handleError(res, error) {
-    logger.error('Erro na requisição', { error: error.message });
+    logger.error('Erro na requisição', { 
+        errorName: error.name,
+        errorMessage: error.message,
+        errorStack: error.stack,
+        errorCode: error.code,
+        errorStatusCode: error.statusCode
+    });
     
     const statusCode = error.statusCode || 500;
     res.status(statusCode).json({
         status: 'error',
-        message: error.message || 'Erro interno do servidor'
+        message: error.message || 'Erro interno do servidor',
+        details: {
+            name: error.name,
+            code: error.code
+        }
     });
 }
 

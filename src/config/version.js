@@ -1,6 +1,6 @@
 module.exports = {
   appVersion: '1.0.0.1',
-  requiredDbVersion: '1.0.0.1',
+  requiredDbVersion: '1.0.0.10',
   
   // Função para comparar versões
   isCompatibleVersion(currentVersion, requiredVersion) {
