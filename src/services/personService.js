@@ -1,6 +1,7 @@
 const personRepository = require('../repositories/personRepository');
 const personContactRepository = require('../repositories/personContactRepository');
 const personDocumentRepository = require('../repositories/personDocumentRepository');
+const personAddressRepository = require('../repositories/personAddressRepository');
 const { ValidationError } = require('../utils/errors');
 const PaginationHelper = require('../utils/paginationHelper');
 
@@ -9,20 +10,27 @@ class PersonService {
         const { page: validPage, limit: validLimit } = PaginationHelper.validateParams(page, limit);
         const { data, total } = await personRepository.findAll(validPage, validLimit, search);
 
-        if (include.includes('documents')) {
-            const personsWithDocuments = await Promise.all(
-                data.map(async (person) => {
-                    const documents = await personDocumentRepository.findByPersonId(person.person_id);
-                    return {
-                        ...person,
-                        documents
-                    };
-                })
-            );
-            return PaginationHelper.formatResponse(personsWithDocuments, total, validPage, validLimit);
-        }
+        const personsWithData = await Promise.all(
+            data.map(async (person) => {
+                const enrichedPerson = { ...person };
 
-        return PaginationHelper.formatResponse(data, total, validPage, validLimit);
+                if (include.includes('documents')) {
+                    enrichedPerson.documents = await personDocumentRepository.findByPersonId(person.person_id);
+                }
+                
+                if (include.includes('contacts')) {
+                    enrichedPerson.contacts = await personContactRepository.findByPersonId(person.person_id);
+                }
+
+                if (include.includes('addresses')) {
+                    enrichedPerson.addresses = await personAddressRepository.findByPersonId(person.person_id);
+                }
+
+                return enrichedPerson;
+            })
+        );
+
+        return PaginationHelper.formatResponse(personsWithData, total, validPage, validLimit);
     }
 
     async getPerson(personId) {
@@ -32,11 +40,13 @@ class PersonService {
         }
         const documents = await personDocumentRepository.findByPersonId(personId);
         const contacts = await personContactRepository.findByPersonId(personId);
+        const addresses = await personAddressRepository.findByPersonId(personId);
 
         return {
             ...person,
             documents,
-            contacts
+            contacts,
+            addresses
         };
     }
 
@@ -85,10 +95,12 @@ class PersonService {
             data.map(async (person) => {
                 const documents = await personDocumentRepository.findByPersonId(person.person_id);
                 const contacts = await personContactRepository.findByPersonId(person.person_id);
+                const addresses = await personAddressRepository.findByPersonId(person.person_id);
                 return {
                     ...person,
                     documents,
-                    contacts
+                    contacts,
+                    addresses
                 };
             })
         );
