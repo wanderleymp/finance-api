@@ -75,7 +75,17 @@ const personSchema = {
             .messages({
                 'string.max': 'Nome fantasia deve ter no máximo 255 caracteres'
             })
-    }).min(1)
+    }).min(1),
+
+    findByCnpj: Joi.object({
+        cnpj: Joi.alternatives().try(
+            Joi.string().pattern(/^\d{2}\.\d{3}\.\d{3}\/\d{4}-\d{2}$/),
+            Joi.string().pattern(/^\d{14}$/)
+        ).required().messages({
+            'alternatives.match': 'CNPJ inválido. Use o formato: 00.000.000/0001-00 ou 00000000000000',
+            'any.required': 'CNPJ é obrigatório'
+        })
+    })
 };
 
 module.exports = personSchema;

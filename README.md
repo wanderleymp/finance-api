@@ -146,6 +146,11 @@ O projeto utiliza uma configuração centralizada para conexões com banco de da
   - Exemplo: `GET /addresses/cep/01310930`
   - Retorna: logradouro, complemento, bairro, cidade, estado, código postal e código IBGE
 
+#### Pessoas
+- `GET /persons/cnpj/:cnpj` - Consulta detalhes de empresa por CNPJ
+  - Exemplo: `GET /persons/cnpj/00.000.000/0001-00`
+  - Retorna: razão social, nome fantasia, endereço, telefone, email e situação cadastral
+
 ## Endpoints
 
 ### Consulta de CEP

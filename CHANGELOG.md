@@ -1,5 +1,16 @@
 # Changelog - Finance API
 
+## [1.0.0.8] - 2024-12-14
+
+### Adicionado
+- Serviço de consulta de CNPJ
+  - Nova rota `GET /persons/cnpj/:cnpj`
+  - Integração com API Brasil API
+  - Validação de formato de CNPJ
+  - Mapeamento de campos para padrão da API
+  - Logs e tratamento de erros
+  - Instalação da biblioteca cnpj-validator
+
 ## [1.0.0.7] - 2024-12-14
 
 ### Corrigido

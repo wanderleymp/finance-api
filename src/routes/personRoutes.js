@@ -10,6 +10,14 @@ router.get('/all', validateRequest(personSchema.listPersons, 'query'), personCon
 router.get('/:id', validateRequest(personSchema.getPersonById, 'params'), personController.show);
 router.get('/:id/documents', validateRequest(personSchema.getPersonById, 'params'), personController.documents);
 router.get('/:id/contacts', validateRequest(personSchema.getPersonById, 'params'), personController.contacts);
+router.get('/cnpj/:cnpj', 
+    (req, res, next) => {
+        req.params = { cnpj: req.params.cnpj };
+        next();
+    },
+    validateRequest(personSchema.findByCnpj, 'params'), 
+    personController.findByCnpj
+);
 router.post('/', validateRequest(personSchema.createPerson, 'body'), personController.store);
 router.put('/:id', 
     validateRequest(personSchema.getPersonById, 'params'),

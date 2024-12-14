@@ -1,4 +1,5 @@
 const personService = require('../services/personService');
+const cnpjService = require('../services/cnpjService');
 const { handleResponse, handleError } = require('../utils/responseHandler');
 const { logger } = require('../middlewares/logger');
 
@@ -112,6 +113,40 @@ class PersonController {
             const contacts = await personService.getPersonContacts(id);
             handleResponse(res, 200, { data: contacts });
         } catch (error) {
+            handleError(res, error);
+        }
+    }
+
+    // Método para consultar CNPJ
+    async findByCnpj(req, res) {
+        try {
+            logger.info('🔍 CONTROLLER: Iniciando consulta de CNPJ', { 
+                reqParams: JSON.stringify(req.params),
+                reqBody: JSON.stringify(req.body),
+                reqQuery: JSON.stringify(req.query)
+            });
+
+            const { cnpj } = req.params;
+            
+            logger.info('🔬 CONTROLLER: Extraindo CNPJ', { 
+                cnpj,
+                cnpjType: typeof cnpj
+            });
+            
+            const companyData = await cnpjService.findByCnpj(cnpj);
+            
+            logger.info('✅ CONTROLLER: Consulta de CNPJ concluída', { 
+                cnpj,
+                companyData: JSON.stringify(companyData)
+            });
+            
+            handleResponse(res, 200, { data: companyData });
+        } catch (error) {
+            logger.error('❌ CONTROLLER: Erro na consulta de CNPJ', {
+                errorMessage: error.message,
+                errorStack: error.stack,
+                reqParams: JSON.stringify(req.params)
+            });
             handleError(res, error);
         }
     }
