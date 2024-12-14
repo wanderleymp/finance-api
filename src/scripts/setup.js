@@ -19,11 +19,10 @@ async function createDatabaseBackup(client, backupPath, database) {
             WHERE schemaname = 'public'
         `);
         
-        console.log(`📊 Encontradas ${tables.rows.length} tabelas para backup`);
+        console.log(`📊 Gerando backup de ${tables.rows.length} tabelas...`);
         
         let backupContent = '';
         for (const table of tables.rows) {
-            console.log(`  ↳ Fazendo backup da tabela: ${table.tablename}`);
             const result = await client.query(`SELECT * FROM ${table.tablename}`);
             if (result.rows.length > 0) {
                 backupContent += `-- Backup da tabela ${table.tablename}\n`;
@@ -99,11 +98,17 @@ async function setupDatabase(client) {
                 CREATE INDEX idx_system_config_key ON system_config(config_key);
             `);
             console.log('✅ Tabela system_config criada com sucesso');
+            
+            // Insere versão inicial do banco
+            await client.query(`
+                INSERT INTO system_config (config_key, config_value, description)
+                VALUES ('db_version', '1.0.0', 'Versão inicial do banco de dados')
+            `);
         }
-        
+
         console.log('✅ Setup do banco concluído com sucesso');
     } catch (error) {
-        console.error('❌ Erro durante setup do banco:', error);
+        console.error('❌ Erro durante setup:', error);
         throw error;
     }
 }
