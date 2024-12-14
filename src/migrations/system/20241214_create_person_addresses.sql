@@ -64,6 +64,6 @@ VALUES (
     '20241214_create_person_addresses.sql', 
     '1.0.1.0', 
     CURRENT_TIMESTAMP, 
-    'finance_api',
+    current_database(),
     'Criação da tabela de endereços de pessoas'
 );

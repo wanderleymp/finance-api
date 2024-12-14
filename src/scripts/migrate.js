@@ -79,24 +79,39 @@ class DatabaseMigrator {
 
     async getPendingMigrations(files) {
         const pendingMigrations = [];
+        const currentVersion = await this.getCurrentVersion();
         
         for (const file of files) {
             try {
-                // Verifica se a migração já foi executada
-                const migrationResult = await this.client.query(
-                    `SELECT COUNT(*) as count 
-                     FROM migrations 
-                     WHERE migration_name = $1 
-                     AND database_name = $2`,
-                    [file, this.config.database]
-                );
+                // Extrai a versão do nome do arquivo
+                const versionMatch = file.match(/(\d{8})_\w+\.sql/);
+                if (!versionMatch) {
+                    console.log(`    ⚠️ Arquivo sem versão: ${file}`);
+                    continue;
+                }
 
-                // Se a migração não foi registrada, adiciona à lista de pendentes
-                if (parseInt(migrationResult.rows[0].count) === 0) {
-                    console.log(`⚠️ Migração ${file} não registrada. Adicionando à lista de migrações pendentes.`);
+                // Verifica se a migração já foi registrada
+                const migrationResult = await this.client.query(`
+                    SELECT COUNT(*) as count, MAX(applied_at) as last_applied 
+                    FROM migrations 
+                    WHERE migration_name = $1 
+                    AND database_name = $2
+                `, [file, this.config.database]);
+
+                const migrationCount = parseInt(migrationResult.rows[0].count);
+                const lastApplied = migrationResult.rows[0].last_applied;
+
+                // Adiciona à lista de migrações pendentes se:
+                // 1. Nenhuma migração foi registrada, ou
+                // 2. A migração foi registrada há mais de 1 minuto (para evitar duplicatas rápidas)
+                const oneMinuteAgo = new Date(Date.now() - 60000);
+                const isOldMigration = lastApplied && new Date(lastApplied) < oneMinuteAgo;
+
+                if (migrationCount === 0 || isOldMigration) {
+                    console.log(`⚠️ Migração ${file} precisa ser aplicada. Contagem: ${migrationCount}, Última aplicação: ${lastApplied}`);
                     pendingMigrations.push(file);
                 } else {
-                    console.log(`✅ Migração ${file} já registrada.`);
+                    console.log(`✅ Migração ${file} já registrada recentemente.`);
                 }
             } catch (error) {
                 console.log(`⚠️ Erro ao verificar migração ${file}:`, error.message);
@@ -134,28 +149,50 @@ class DatabaseMigrator {
 
     async executeMigration(file, migrationContent) {
         try {
-            // Verifica se a estrutura já está como desejada
-            const isStructureOk = await this.checkTableStructure(file);
+            console.log(`🔄 Executando migração: ${file}`);
             
-            if (isStructureOk) {
-                console.log(`✅ Estrutura já está correta para ${file}, apenas registrando migração`);
-                await this.registerMigration(file, 'Estrutura já estava correta');
+            // Verifica se a migração já foi aplicada recentemente
+            const recentMigrationCheck = await this.client.query(`
+                SELECT COUNT(*) as count 
+                FROM migrations 
+                WHERE migration_name = $1 
+                AND database_name = $2 
+                AND applied_at > NOW() - INTERVAL '1 minute'
+            `, [file, this.config.database]);
+
+            if (parseInt(recentMigrationCheck.rows[0].count) > 0) {
+                console.log(`⚠️ Migração ${file} já aplicada recentemente. Pulando.`);
                 return;
             }
 
-            // Se não estiver ok, executa a migração
-            console.log(`🔄 Executando migração: ${file}`);
+            // Inicia transação
             await this.client.query('BEGIN');
+
             try {
+                // Executa o script de migração
                 await this.client.query(migrationContent);
+
+                // Registra a migração
                 await this.registerMigration(file, 'Migração executada com sucesso');
+
+                // Commita a transação
                 await this.client.query('COMMIT');
-            } catch (error) {
+                console.log(`✅ Migração ${file} concluída com sucesso`);
+            } catch (executionError) {
+                // Rollback em caso de erro
                 await this.client.query('ROLLBACK');
-                throw error;
+                
+                // Verifica se o erro é de migração já aplicada
+                if (executionError.code === 'P0001') {
+                    console.log(`⚠️ Migração ${file} já foi aplicada. Pulando.`);
+                    return;
+                }
+
+                console.error(`❌ Erro ao executar migração ${file}:`, executionError);
+                throw executionError;
             }
         } catch (error) {
-            console.error(`❌ Erro ao executar migração ${file}:`, error);
+            console.error(`❌ Erro no processo de migração ${file}:`, error);
             throw error;
         }
     }
@@ -177,16 +214,40 @@ class DatabaseMigrator {
 
     getExpectedStructure(migrationFile) {
         const expectedStructures = {
-            'person_contacts': {
-                tableName: 'person_contacts',
+            'licenses': {
+                tableName: 'licenses',
                 columns: [
-                    { name: 'id', type: 'uuid' },
-                    { name: 'person_id', type: 'uuid' },
-                    { name: 'contact_type', type: 'character varying' },
-                    { name: 'contact_value', type: 'character varying' },
-                    { name: 'created_at', type: 'timestamp without time zone' },
-                    { name: 'updated_at', type: 'timestamp without time zone' }
-                ]
+                    { name: 'license_id', type: 'integer' },
+                    { name: 'person_id', type: 'integer' },
+                    { name: 'license_name', type: 'character varying' },
+                    { name: 'start_date', type: 'date' },
+                    { name: 'end_date', type: 'date' },
+                    { name: 'status', type: 'USER-DEFINED' },
+                    { name: 'timezone', type: 'character varying' },
+                    { name: 'active', type: 'boolean' },
+                    { name: 'created_at', type: 'timestamp with time zone' },
+                    { name: 'updated_at', type: 'timestamp with time zone' }
+                ],
+                async extraChecks(client) {
+                    try {
+                        // Verifica se o ENUM existe e tem os valores corretos
+                        const enumResult = await client.query(`
+                            SELECT e.enumlabel
+                            FROM pg_type t 
+                            JOIN pg_enum e ON t.oid = e.enumtypid  
+                            WHERE t.typname = 'license_status_enum'
+                            ORDER BY e.enumsortorder;
+                        `);
+                        
+                        const expectedEnumValues = ['Ativa', 'Inativa', 'Suspensa', 'Cancelada'];
+                        const currentEnumValues = enumResult.rows.map(row => row.enumlabel);
+                        
+                        return expectedEnumValues.every(val => currentEnumValues.includes(val));
+                    } catch (error) {
+                        console.error('Erro na verificação extra:', error);
+                        return false;
+                    }
+                }
             },
             'person_documents': {
                 tableName: 'person_documents',
@@ -336,35 +397,31 @@ class DatabaseMigrator {
     }
 
     getMigrationFiles() {
-        const migrationsPath = path.join(__dirname, '..', 'migrations');
-        console.log(`📂 Buscando migrações em: ${migrationsPath}`);
-        
-        const directories = ['system'];
         let allMigrations = [];
-        
-        for (const dir of directories) {
-            const dirPath = path.join(migrationsPath, dir);
-            console.log(`  ↳ Verificando diretório: ${dir}`);
-            
+        const migrationDirs = [
+            path.join(__dirname, '..', 'migrations', 'system')
+        ];
+
+        for (const dirPath of migrationDirs) {
             if (fs.existsSync(dirPath)) {
                 const files = fs.readdirSync(dirPath)
+                    .filter(file => file.endsWith('.sql'))
                     .filter(file => {
-                        // Verifica se é um arquivo SQL e não é um arquivo de rollback
-                        if (!file.endsWith('.sql') || file.endsWith('_down.sql')) {
-                            return false;
-                        }
-
-                        // Lê o conteúdo do arquivo para verificar a versão
-                        const content = fs.readFileSync(path.join(dirPath, file), 'utf8');
-                        const versionMatch = content.match(/-- Versão: ([\d.]+)/);
+                        const versionMatch = file.match(/(\d{8})_\w+\.sql/);
                         if (!versionMatch) {
                             console.log(`    ⚠️ Arquivo sem versão: ${file}`);
                             return false;
                         }
 
                         const fileVersion = versionMatch[1];
-                        console.log(`    📄 Arquivo ${file} - Versão ${fileVersion}`);
-                        return fileVersion === this.requiredDbVersion;
+                        // Permite migrações com data igual ou superior à versão atual
+                        const isValidVersion = parseInt(fileVersion) >= parseInt(this.requiredDbVersion.replace(/\./g, ''));
+                        
+                        if (isValidVersion) {
+                            console.log(`    📄 Arquivo ${file} - Versão ${fileVersion}`);
+                        }
+                        
+                        return isValidVersion;
                     })
                     .sort();
                 console.log(`    📄 Encontradas ${files.length} migrações para versão ${this.requiredDbVersion}`);
