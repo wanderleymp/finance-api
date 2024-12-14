@@ -90,7 +90,7 @@ class PersonService {
         const { page: validPage, limit: validLimit } = PaginationHelper.validateParams(page, limit);
         const { data, total } = await personRepository.findAll(validPage, validLimit, search);
 
-        // Buscar documentos e contatos para todas as pessoas
+        // Buscar documentos, contatos e endereços para todas as pessoas
         const personsWithRelations = await Promise.all(
             data.map(async (person) => {
                 const documents = await personDocumentRepository.findByPersonId(person.person_id);
