@@ -1,4 +1,6 @@
 const personRepository = require('../repositories/personRepository');
+const personContactRepository = require('../repositories/personContactRepository');
+const personDocumentRepository = require('../repositories/personDocumentRepository');
 const { ValidationError } = require('../utils/errors');
 const PaginationHelper = require('../utils/paginationHelper');
 
@@ -15,6 +17,25 @@ class PersonService {
             throw new ValidationError('Pessoa não encontrada', 404);
         }
         return person;
+    }
+
+    async getPersonWithDetails(personId) {
+        // Busca a pessoa
+        const person = await this.getPerson(personId);
+
+        // Busca documentos
+        const documents = await personDocumentRepository.findByPersonId(personId);
+
+        return {
+            ...person,
+            documents
+        };
+    }
+
+    async getPersonDocuments(personId) {
+        // Verifica se a pessoa existe
+        await this.getPerson(personId);
+        return await personDocumentRepository.findByPersonId(personId);
     }
 
     async createPerson(personData) {

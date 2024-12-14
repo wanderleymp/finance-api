@@ -7,6 +7,8 @@ const router = express.Router();
 
 router.get('/', personController.index);
 router.get('/:id', validateRequest(personSchema.getPersonById, 'params'), personController.show);
+router.get('/:id/details', validateRequest(personSchema.getPersonById, 'params'), personController.showWithDetails);
+router.get('/:id/documents', validateRequest(personSchema.getPersonById, 'params'), personController.documents);
 router.post('/', validateRequest(personSchema.createPerson, 'body'), personController.store);
 router.put('/:id', 
     validateRequest(personSchema.getPersonById, 'params'),

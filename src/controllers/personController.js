@@ -35,6 +35,26 @@ class PersonController {
         }
     }
 
+    async showWithDetails(req, res) {
+        try {
+            const { id } = req.params;
+            const person = await personService.getPersonWithDetails(id);
+            handleResponse(res, 200, { data: person });
+        } catch (error) {
+            handleError(res, error);
+        }
+    }
+
+    async documents(req, res) {
+        try {
+            const { id } = req.params;
+            const documents = await personService.getPersonDocuments(id);
+            handleResponse(res, 200, { data: documents });
+        } catch (error) {
+            handleError(res, error);
+        }
+    }
+
     async store(req, res) {
         try {
             const personData = req.body;
