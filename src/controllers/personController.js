@@ -105,6 +105,16 @@ class PersonController {
             handleError(res, error);
         }
     }
+
+    async contacts(req, res) {
+        try {
+            const { id } = req.params;
+            const contacts = await personService.getPersonContacts(id);
+            handleResponse(res, 200, { data: contacts });
+        } catch (error) {
+            handleError(res, error);
+        }
+    }
 }
 
 module.exports = new PersonController();

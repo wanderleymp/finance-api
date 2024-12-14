@@ -9,6 +9,7 @@ router.get('/', validateRequest(personSchema.listPersons, 'query'), personContro
 router.get('/all', validateRequest(personSchema.listPersons, 'query'), personController.indexWithRelations);
 router.get('/:id', validateRequest(personSchema.getPersonById, 'params'), personController.show);
 router.get('/:id/documents', validateRequest(personSchema.getPersonById, 'params'), personController.documents);
+router.get('/:id/contacts', validateRequest(personSchema.getPersonById, 'params'), personController.contacts);
 router.post('/', validateRequest(personSchema.createPerson, 'body'), personController.store);
 router.put('/:id', 
     validateRequest(personSchema.getPersonById, 'params'),

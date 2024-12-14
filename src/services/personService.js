@@ -56,6 +56,12 @@ class PersonService {
         return await personDocumentRepository.findByPersonId(personId);
     }
 
+    async getPersonContacts(personId) {
+        // Verifica se a pessoa existe
+        await this.getPerson(personId);
+        return await personContactRepository.findByPersonId(personId);
+    }
+
     async createPerson(personData) {
         // Formatar full_name e fantasy_name antes de validar
         personData.full_name = this.formatName(personData.full_name);
