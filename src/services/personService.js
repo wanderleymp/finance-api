@@ -30,19 +30,13 @@ class PersonService {
         if (!person) {
             throw new ValidationError('Pessoa não encontrada', 404);
         }
-        return person;
-    }
-
-    async getPersonWithDetails(personId) {
-        // Busca a pessoa
-        const person = await this.getPerson(personId);
-
-        // Busca documentos
         const documents = await personDocumentRepository.findByPersonId(personId);
+        const contacts = await personContactRepository.findByPersonId(personId);
 
         return {
             ...person,
-            documents
+            documents,
+            contacts
         };
     }
 
@@ -86,13 +80,15 @@ class PersonService {
         const { page: validPage, limit: validLimit } = PaginationHelper.validateParams(page, limit);
         const { data, total } = await personRepository.findAll(validPage, validLimit, search);
 
-        // Buscar documentos para todas as pessoas
+        // Buscar documentos e contatos para todas as pessoas
         const personsWithRelations = await Promise.all(
             data.map(async (person) => {
                 const documents = await personDocumentRepository.findByPersonId(person.person_id);
+                const contacts = await personContactRepository.findByPersonId(person.person_id);
                 return {
                     ...person,
-                    documents
+                    documents,
+                    contacts
                 };
             })
         );

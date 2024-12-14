@@ -91,6 +91,31 @@ class PersonContactRepository {
         }
     }
 
+    async findByPersonId(personId) {
+        try {
+            const query = `
+                SELECT 
+                    pc.person_contact_id as id,
+                    pc.person_id,
+                    pc.contact_id,
+                    c.contact_type,
+                    c.contact_value
+                FROM person_contacts pc
+                JOIN contacts c ON c.contact_id = pc.contact_id
+                WHERE pc.person_id = $1
+                ORDER BY pc.person_contact_id
+            `;
+            const result = await this.pool.query(query, [personId]);
+            return result.rows;
+        } catch (error) {
+            logger.error('Erro ao buscar contatos da pessoa', {
+                error: error.message,
+                personId
+            });
+            throw error;
+        }
+    }
+
     async create(data) {
         try {
             const query = `
