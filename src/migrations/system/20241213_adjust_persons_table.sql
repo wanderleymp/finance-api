@@ -38,33 +38,42 @@ CREATE TABLE IF NOT EXISTS public.persons (
 
 -- Remover colunas antigas se existirem e adicionar nova coluna
 DO $$
+DECLARE 
+    v_column_exists BOOLEAN;
 BEGIN
     -- Verificar e dropar colunas específicas
-    IF EXISTS (
+    SELECT EXISTS (
         SELECT 1 
         FROM information_schema.columns 
         WHERE table_name = 'persons' 
         AND column_name = 'person_type_id'
-    ) THEN
+    ) INTO v_column_exists;
+
+    IF v_column_exists THEN
         EXECUTE 'ALTER TABLE public.persons DROP COLUMN person_type_id';
     END IF;
 
-    IF EXISTS (
+    -- Verificar e dropar colunas específicas
+    SELECT EXISTS (
         SELECT 1 
         FROM information_schema.columns 
         WHERE table_name = 'persons' 
         AND column_name = 'social_capital'
-    ) THEN
+    ) INTO v_column_exists;
+
+    IF v_column_exists THEN
         EXECUTE 'ALTER TABLE public.persons DROP COLUMN social_capital';
     END IF;
 
     -- Adicionar coluna person_type se não existir
-    IF NOT EXISTS (
+    SELECT EXISTS (
         SELECT 1 
         FROM information_schema.columns 
         WHERE table_name = 'persons' 
         AND column_name = 'person_type'
-    ) THEN
+    ) INTO v_column_exists;
+
+    IF NOT v_column_exists THEN
         EXECUTE 'ALTER TABLE public.persons ADD COLUMN person_type person_type_enum DEFAULT ''PJ''::person_type_enum';
     END IF;
 EXCEPTION 

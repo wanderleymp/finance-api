@@ -9,7 +9,7 @@ const path = require('path');
  */
 async function createDatabaseBackup(client, backupPath, database) {
     try {
-        console.log('📦 Iniciando backup do banco de dados...');
+        console.log(' Iniciando backup do banco de dados...');
         const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
         const backupFile = path.join(backupPath, `${database}_${timestamp}.sql`);
         
@@ -19,7 +19,7 @@ async function createDatabaseBackup(client, backupPath, database) {
             WHERE schemaname = 'public'
         `);
         
-        console.log(`📊 Gerando backup de ${tables.rows.length} tabelas...`);
+        console.log(` Gerando backup de ${tables.rows.length} tabelas...`);
         
         let backupContent = '';
         for (const table of tables.rows) {
@@ -35,10 +35,10 @@ async function createDatabaseBackup(client, backupPath, database) {
         }
         
         fs.writeFileSync(backupFile, backupContent);
-        console.log(`✅ Backup concluído: ${backupFile}`);
+        console.log(` Backup concluído: ${backupFile}`);
         return backupFile;
     } catch (error) {
-        console.error('❌ Erro durante backup:', error);
+        console.error(' Erro durante backup:', error);
         throw error;
     }
 }
@@ -49,66 +49,82 @@ async function createDatabaseBackup(client, backupPath, database) {
  */
 async function setupDatabase(client) {
     try {
-        console.log('🔧 Verificando tabelas do sistema...');
+        console.log(' Verificando tabelas do sistema...');
         
-        // Verifica e cria tabela migrations se não existir
-        const hasMigrations = await client.query(`
+        const result = await client.query(`
             SELECT EXISTS (
-                SELECT FROM information_schema.tables 
-                WHERE table_schema = 'public' 
-                AND table_name = 'migrations'
+                SELECT FROM information_schema.schemata 
+                WHERE schema_name = 'system'
             );
         `);
-        
-        if (!hasMigrations.rows[0].exists) {
-            console.log('📝 Criando tabela migrations...');
-            await client.query(`
-                CREATE TABLE migrations (
-                    id SERIAL PRIMARY KEY,
-                    migration_name VARCHAR(255) NOT NULL,
-                    db_version VARCHAR(50) NOT NULL,
-                    database_name VARCHAR(100) NOT NULL,
-                    description TEXT,
-                    executed_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-                );
-                CREATE INDEX idx_migrations_name ON migrations(migration_name);
-            `);
-            console.log('✅ Tabela migrations criada com sucesso');
+
+        if (!result.rows[0].exists) {
+            console.log(' Criando schema system...');
+            await client.query('CREATE SCHEMA system');
         }
 
-        // Verifica e cria tabela system_config se não existir
-        const hasSystemConfig = await client.query(`
+        // Verifica se a tabela system_config existe
+        const systemConfigResult = await client.query(`
             SELECT EXISTS (
                 SELECT FROM information_schema.tables 
-                WHERE table_schema = 'public' 
+                WHERE table_schema = 'system' 
                 AND table_name = 'system_config'
             );
         `);
-        
-        if (!hasSystemConfig.rows[0].exists) {
-            console.log('⚙️ Criando tabela system_config...');
+
+        if (!systemConfigResult.rows[0].exists) {
+            console.log(' Criando tabela system_config...');
             await client.query(`
-                CREATE TABLE system_config (
+                CREATE TABLE system.system_config (
                     id SERIAL PRIMARY KEY,
-                    config_key VARCHAR(100) UNIQUE NOT NULL,
+                    config_key VARCHAR(255) NOT NULL UNIQUE,
                     config_value TEXT,
-                    description TEXT,
-                    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                    description TEXT DEFAULT '',
+                    created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+                    updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
                 );
-                CREATE INDEX idx_system_config_key ON system_config(config_key);
+
+                CREATE INDEX idx_system_config_key ON system.system_config(config_key);
             `);
-            console.log('✅ Tabela system_config criada com sucesso');
-            
-            // Insere versão inicial do banco
+
+            console.log(' Tabela system_config criada com sucesso');
+
+            // Insere configurações iniciais
             await client.query(`
-                INSERT INTO system_config (config_key, config_value, description)
-                VALUES ('db_version', '1.0.0', 'Versão inicial do banco de dados')
+                INSERT INTO system.system_config (config_key, config_value, description)
+                VALUES 
+                ('db_version', '1.0.0.1', 'Versão inicial do banco de dados')
             `);
         }
 
-        console.log('✅ Setup do banco concluído com sucesso');
+        // Verifica se a tabela migrations existe
+        const migrationsResult = await client.query(`
+            SELECT EXISTS (
+                SELECT FROM information_schema.tables 
+                WHERE table_schema = 'system' 
+                AND table_name = 'migrations'
+            );
+        `);
+
+        if (!migrationsResult.rows[0].exists) {
+            console.log(' Criando tabela migrations...');
+            await client.query(`
+                CREATE TABLE system.migrations (
+                    id SERIAL PRIMARY KEY,
+                    migration_name VARCHAR(255) NOT NULL,
+                    applied_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+                    db_version VARCHAR(50) NOT NULL,
+                    database_name VARCHAR(100) NOT NULL,
+                    description TEXT DEFAULT ''
+                );
+            `);
+
+            console.log(' Tabela migrations criada com sucesso');
+        }
+
+        console.log(' Setup do banco concluído com sucesso');
     } catch (error) {
-        console.error('❌ Erro durante setup:', error);
+        console.error(' Erro durante setup:', error);
         throw error;
     }
 }

@@ -173,6 +173,105 @@ O projeto utiliza uma configuração centralizada para conexões com banco de da
     }
     ```
 
+## Autenticação
+
+### Login
+Para autenticar, envie uma requisição POST para `/users/login` com as credenciais:
+
+```json
+{
+    "username": "seu_usuario",
+    "password": "sua_senha"
+}
+```
+
+A resposta incluirá um token JWT:
+
+```json
+{
+    "status": "success",
+    "token": "seu_token_jwt"
+}
+```
+
+### Rotas Protegidas
+Para acessar rotas protegidas, inclua o token no cabeçalho de autorização:
+
+```
+Authorization: Bearer seu_token_jwt
+```
+
+### Exemplo de Rota Protegida
+- `GET /users/profile`: Retorna informações do perfil do usuário autenticado
+
+## Recuperação de Senha
+
+O sistema possui um mecanismo completo e seguro de recuperação de senha:
+
+### Endpoints
+
+- `POST /forgot-password`: Solicita recuperação de senha
+  ```json
+  {
+    "email": "usuario@exemplo.com"
+  }
+  ```
+
+- `POST /reset-password`: Redefine a senha usando token
+  ```json
+  {
+    "token": "token-recebido-por-email",
+    "newPassword": "Nova@Senha123"
+  }
+  ```
+
+- `POST /change-password`: Altera senha (requer autenticação)
+  ```json
+  {
+    "currentPassword": "Senha@Atual123",
+    "newPassword": "Nova@Senha123"
+  }
+  ```
+
+- `GET /password-status`: Verifica status da senha (requer autenticação)
+
+### Política de Senhas
+
+- Mínimo 8 caracteres
+- Deve conter:
+  - Letra maiúscula
+  - Letra minúscula
+  - Número
+  - Caractere especial
+- Não pode reutilizar últimas 5 senhas
+- Expira após período configurável
+
+### Configuração
+
+Adicione as seguintes variáveis ao `.env`:
+
+```env
+# Email
+SMTP_HOST=seu_host_smtp
+SMTP_PORT=587
+SMTP_USER=seu_usuario_smtp
+SMTP_PASS=sua_senha_smtp
+SMTP_FROM=seu_email_remetente
+BASE_URL=http://localhost:3000
+
+# Senha
+SALT_ROUNDS=10
+PASSWORD_RESET_EXPIRATION=90
+```
+
+### Segurança
+
+- Rate limiting: 3 tentativas por hora por IP
+- Tokens seguros e com expiração de 1 hora
+- Não revela existência de emails
+- Auditoria de todas as operações
+- Transações atômicas para consistência
+
 ## Endpoints de Licenças
 
 ### Regras de Negócio

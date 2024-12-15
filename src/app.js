@@ -7,6 +7,7 @@ const contactRoutes = require('./routes/contactRoutes');
 const personContactRoutes = require('./routes/personContactRoutes');
 const personAddressRoutes = require('./routes/personAddressRoutes');
 const licenseRoutes = require('./routes/licenseRoutes');
+const userRoutes = require('./routes/userRoutes');
 
 const app = express();
 
@@ -32,6 +33,7 @@ app.use('/contacts', contactRoutes);
 app.use('/person-contacts', personContactRoutes);
 app.use('/person-addresses', personAddressRoutes);
 app.use('/licenses', licenseRoutes);
+app.use('/users', userRoutes);
 
 // Tratamento de erros global
 app.use((err, req, res, next) => {

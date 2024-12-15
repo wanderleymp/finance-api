@@ -1,5 +1,4 @@
 const express = require('express');
-const bodyParser = require('body-parser');
 const cors = require('cors');
 const dotenv = require('dotenv');
 const { httpLogger, logger } = require('./middlewares/logger');
@@ -14,11 +13,19 @@ const PORT = process.env.PORT || 3000;
 // Carregar variáveis de ambiente
 dotenv.config();
 
+// Middleware para parsear JSON
+app.use(express.json());
+app.use(express.urlencoded({ extended: true }));
+
+// Configuração de CORS
+app.use(cors({
+  origin: ['http://localhost:3000', 'http://188.245.215.208:3000', '*'],
+  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
+  allowedHeaders: ['Content-Type', 'Authorization']
+}));
+
 // Middleware global
-app.use(cors());
 app.use(httpLogger);
-app.use(bodyParser.json());
-app.use(bodyParser.urlencoded({ extended: true }));
 
 // Middleware para log de requisições
 app.use((req, res, next) => {
@@ -51,6 +58,8 @@ const personAddressRoutes = require('./routes/personAddressRoutes');
 const addressRoutes = require('./routes/addressRoutes');
 const licenseRoutes = require('./routes/licenseRoutes');
 const personLicenseRoutes = require('./routes/personLicenseRoutes');
+const systemConfigRoutes = require('./routes/systemConfigRoutes');
+const userRoutes = require('./routes/userRoutes');
 
 app.use('/roadmap', roadmapRoutes);
 app.use('/persons', personRoutes);
@@ -61,6 +70,8 @@ app.use('/person-addresses', personAddressRoutes);
 app.use('/addresses', addressRoutes);
 app.use('/licenses', licenseRoutes);
 app.use('/person-licenses', personLicenseRoutes);
+app.use('/api/system', systemConfigRoutes(systemDatabase.pool));
+app.use('/users', userRoutes);
 
 // Rota inicial
 app.get('/', (req, res) => {
@@ -156,16 +167,8 @@ async function testDatabaseConnection() {
 // Função de inicialização
 async function startServer() {
   try {
-    // Executar migrações do banco
-    const config = {
-      database: 'system',
-      pool: systemDatabase.pool,
-      migrationsPath: './src/migrations/system'
-    };
-
-    console.log('Iniciando migrações com config:', config);
-    await runMigrations(config);
-
+    // Remover execução de migrações
+    
     // Iniciar servidor Express
     app.listen(PORT, () => {
       logger.info(`Servidor rodando na porta ${PORT}`);

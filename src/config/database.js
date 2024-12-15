@@ -76,10 +76,8 @@ const createDatabaseConnection = (databaseUrl, name) => {
 };
 
 // Exportar instâncias únicas das conexões
-const devDatabase = createDatabaseConnection(process.env.DEV_DATABASE_URL, 'dev_history');
 const systemDatabase = createDatabaseConnection(process.env.SYSTEM_DATABASE_URL, 'AgileDB');
 
 module.exports = {
-  devDatabase,
   systemDatabase
 };

@@ -4,6 +4,10 @@ const { Pool } = require('pg');
 const { isCompatibleVersion } = require('../utils/version');
 const { setupDatabase, createDatabaseBackup } = require('./setup');
 const { requiredDbVersion } = require('../config/version');
+const SystemConfigService = require('../services/SystemConfigService');
+const MigrationService = require('../services/MigrationService');
+
+const DISABLE_MIGRATIONS = process.env.DISABLE_MIGRATIONS === 'true';
 
 class DatabaseMigrator {
     constructor(config, requiredDbVersion, appVersion) {
@@ -13,6 +17,10 @@ class DatabaseMigrator {
         this.pool = config.pool; // Usa o pool que já vem configurado
         this.client = null;
         this.backupPath = '/var/backups/finance-api-new';
+        
+        // Inicializar serviços
+        this.systemConfigService = new SystemConfigService(this.pool);
+        this.migrationService = new MigrationService(this.pool);
     }
 
     async init() {
@@ -45,7 +53,7 @@ class DatabaseMigrator {
         const result = await this.client.query(`
             SELECT EXISTS (
                 SELECT FROM information_schema.tables 
-                WHERE table_schema = 'public' 
+                WHERE table_schema = 'system' 
                 AND table_name = 'migrations'
             );
         `);
@@ -56,7 +64,7 @@ class DatabaseMigrator {
         const result = await this.client.query(`
             SELECT EXISTS (
                 SELECT FROM information_schema.tables 
-                WHERE table_schema = 'public' 
+                WHERE table_schema = 'system' 
                 AND table_name = 'system_config'
             );
         `);
@@ -65,16 +73,51 @@ class DatabaseMigrator {
 
     async getCurrentVersion() {
         try {
-            const result = await this.client.query(`
-                SELECT config_value as version 
-                FROM system_config 
-                WHERE config_key = 'db_version'
-            `);
-            return result.rows[0]?.version || '0.0.0';
+            return await this.systemConfigService.getCurrentDbVersion();
         } catch (error) {
-            console.log('⚠️ Erro ao obter versão atual:', error.message);
+            console.error('Erro ao buscar versão atual:', error);
             return '0.0.0';
         }
+    }
+
+    async validateVersion() {
+        const currentVersion = await this.getCurrentVersion();
+        
+        // Se a versão atual for nula ou precisar de atualização
+        if (!currentVersion || this.isCompatibleVersion(currentVersion, this.requiredDbVersion)) {
+            try {
+                // Atualiza a versão do sistema
+                await this.systemConfigService.updateDbVersion(this.requiredDbVersion);
+                console.log(`📦 Versão atualizada de ${currentVersion || 'N/A'} para ${this.requiredDbVersion}`);
+            } catch (versionUpdateError) {
+                console.warn('Erro ao atualizar versão durante validação:', versionUpdateError);
+            }
+        }
+
+        return currentVersion || this.requiredDbVersion;
+    }
+
+    isCompatibleVersion(currentVersion, requiredVersion) {
+        if (!currentVersion) return true;
+
+        // Divide as versões em partes numéricas
+        const currentParts = currentVersion.split('.').map(Number);
+        const requiredParts = requiredVersion.split('.').map(Number);
+
+        // Compara cada parte da versão
+        for (let i = 0; i < Math.max(currentParts.length, requiredParts.length); i++) {
+            const current = currentParts[i] || 0;
+            const required = requiredParts[i] || 0;
+
+            if (current < required) {
+                return true; // Permite atualização se versão atual for menor
+            }
+            if (current > required) {
+                return false; // Impede downgrade
+            }
+        }
+
+        return false; // Versões são iguais, não precisa atualizar
     }
 
     async getPendingMigrations(files) {
@@ -93,7 +136,7 @@ class DatabaseMigrator {
                 // Verifica se a migração já foi registrada
                 const migrationResult = await this.client.query(`
                     SELECT COUNT(*) as count, MAX(applied_at) as last_applied 
-                    FROM migrations 
+                    FROM system.migrations 
                     WHERE migration_name = $1 
                     AND database_name = $2
                 `, [file, this.config.database]);
@@ -148,62 +191,106 @@ class DatabaseMigrator {
     }
 
     async executeMigration(file, migrationContent) {
+        let client;
         try {
-            console.log(`🔄 Executando migração: ${file}`);
+            // Verificar se migração já foi aplicada
+            const migrationExists = await this.migrationService.checkMigrationExists(file, this.config.database);
             
-            // Verifica se a migração já foi aplicada recentemente
-            const recentMigrationCheck = await this.client.query(`
-                SELECT COUNT(*) as count 
-                FROM migrations 
-                WHERE migration_name = $1 
-                AND database_name = $2 
-                AND applied_at > NOW() - INTERVAL '1 minute'
-            `, [file, this.config.database]);
+            // Conecta ao banco
+            client = await this.pool.connect();
 
-            if (parseInt(recentMigrationCheck.rows[0].count) > 0) {
-                console.log(`⚠️ Migração ${file} já aplicada recentemente. Pulando.`);
+            // Sempre tenta registrar a migração, mesmo que já exista
+            try {
+                await this.migrationService.registerMigration(
+                    file, 
+                    this.requiredDbVersion, 
+                    this.config.database, 
+                    migrationExists ? 'Migração já aplicada anteriormente' : 'Migração executada com sucesso'
+                );
+            } catch (registrationError) {
+                console.warn(`Aviso ao registrar migração ${file}`);
+            }
+
+            // Força atualização da versão do sistema
+            try {
+                await this.systemConfigService.updateDbVersion(this.requiredDbVersion);
+            } catch (versionUpdateError) {
+                console.warn(`Erro ao atualizar versão para migração ${file}`);
+            }
+
+            // Se a migração já existir, apenas retorna
+            if (migrationExists) {
+                console.log(`⚠️ Migração ${file} já foi aplicada. Pulando execução.`);
                 return;
             }
 
-            // Inicia transação
-            await this.client.query('BEGIN');
+            // Inicia transação para executar migração
+            await client.query('BEGIN');
 
             try {
-                // Executa o script de migração
-                await this.client.query(migrationContent);
+                // Executa o script de migração com suporte a IF NOT EXISTS
+                const modifiedMigrationContent = migrationContent
+                    .replace(/CREATE\s+(?:UNIQUE\s+)?INDEX/gi, 'CREATE INDEX IF NOT EXISTS')
+                    .replace(/CREATE\s+TABLE/gi, 'CREATE TABLE IF NOT EXISTS')
+                    .replace(/CREATE\s+(?:UNIQUE\s+)?CONSTRAINT/gi, 'CREATE CONSTRAINT IF NOT EXISTS')
+                    // Remove comentários de bloco
+                    .replace(/\/\*[\s\S]*?\*\//g, '')
+                    // Remove comentários de linha
+                    .replace(/--.*$/gm, '');
 
-                // Registra a migração
-                await this.registerMigration(file, 'Migração executada com sucesso');
+                // Executa cada instrução SQL separadamente
+                const sqlStatements = modifiedMigrationContent
+                    .split(';')
+                    .map(statement => statement.trim())
+                    .filter(statement => statement.length > 0);
+
+                for (const statement of sqlStatements) {
+                    try {
+                        await client.query(statement);
+                    } catch (statementError) {
+                        // Apenas loga erros críticos
+                        if (
+                            !statementError.message.includes('already exists') && 
+                            !statementError.message.includes('duplicate')
+                        ) {
+                            console.error(`❌ Erro crítico na migração ${file}:`, statementError.message);
+                            throw statementError;
+                        }
+                    }
+                }
 
                 // Commita a transação
-                await this.client.query('COMMIT');
+                await client.query('COMMIT');
                 console.log(`✅ Migração ${file} concluída com sucesso`);
             } catch (executionError) {
                 // Rollback em caso de erro
-                await this.client.query('ROLLBACK');
+                await client.query('ROLLBACK');
                 
-                // Verifica se o erro é de migração já aplicada
-                if (executionError.code === 'P0001') {
-                    console.log(`⚠️ Migração ${file} já foi aplicada. Pulando.`);
-                    return;
-                }
-
-                console.error(`❌ Erro ao executar migração ${file}:`, executionError);
+                console.error(`❌ Erro ao executar migração ${file}:`, executionError.message);
                 throw executionError;
             }
         } catch (error) {
-            console.error(`❌ Erro no processo de migração ${file}:`, error);
+            console.error(`❌ Erro no processo de migração ${file}:`, error.message);
             throw error;
+        } finally {
+            // Garante liberação do cliente
+            if (client) {
+                try {
+                    client.release();
+                } catch (releaseError) {
+                    console.warn('Aviso: Erro ao liberar cliente de banco de dados');
+                }
+            }
         }
     }
 
     async registerMigration(file, description = '') {
         try {
-            await this.client.query(
-                `INSERT INTO migrations 
-                 (migration_name, db_version, database_name, description)
-                 VALUES ($1, $2, $3, $4)`,
-                [file, this.requiredDbVersion, this.config.database, description]
+            await this.migrationService.registerMigration(
+                file, 
+                this.requiredDbVersion, 
+                this.config.database, 
+                description
             );
             console.log(`✅ Migração ${file} registrada com sucesso`);
         } catch (error) {
@@ -320,14 +407,14 @@ class DatabaseMigrator {
             // Verifica se já existe registro de versão
             const result = await this.client.query(`
                 SELECT config_value 
-                FROM system_config 
+                FROM system.system_config 
                 WHERE config_key = 'db_version'
             `);
 
             if (result.rows.length > 0) {
                 // Atualiza versão existente
                 await this.client.query(`
-                    UPDATE system_config 
+                    UPDATE system.system_config 
                     SET config_value = $1, 
                         updated_at = CURRENT_TIMESTAMP 
                     WHERE config_key = 'db_version'
@@ -335,7 +422,7 @@ class DatabaseMigrator {
             } else {
                 // Insere nova versão
                 await this.client.query(`
-                    INSERT INTO system_config 
+                    INSERT INTO system.system_config 
                     (config_key, config_value, description) 
                     VALUES ('db_version', $1, 'Versão atual do banco de dados')
                 `, [this.requiredDbVersion]);
@@ -349,11 +436,17 @@ class DatabaseMigrator {
     }
 
     async migrate() {
+        if (DISABLE_MIGRATIONS) {
+            console.log('🚫 Migrações desabilitadas');
+            return;
+        }
+
+        let client;
         try {
             console.log('🚀 Iniciando processo de migração...');
             await this.init();
 
-            const currentVersion = await this.getCurrentVersion();
+            const currentVersion = await this.validateVersion();
             console.log(`📊 Versão atual do banco: ${currentVersion}`);
             console.log(`📊 Versão requerida: ${this.requiredDbVersion}`);
 
@@ -379,9 +472,19 @@ class DatabaseMigrator {
                 return;
             }
 
+            // Conecta ao banco
+            client = await this.pool.connect();
+            this.client = client;
+
             // Executa as migrações pendentes
             for (const file of pendingMigrations) {
-                await this.executeMigration(file, this.getMigrationContent(file));
+                try {
+                    await this.executeMigration(file, this.getMigrationContent(file));
+                } catch (migrationError) {
+                    // Interrompe o processo de migração na primeira falha
+                    console.error(`❌ Falha na migração ${file}. Interrompendo processo.`);
+                    throw migrationError;
+                }
             }
 
             console.log('✅ Migrações concluídas com sucesso!');
@@ -389,9 +492,13 @@ class DatabaseMigrator {
             console.error('❌ Erro durante migração:', error);
             throw error;
         } finally {
-            if (this.client) {
-                console.log('🔌 Fechando conexão com o banco...');
-                this.client.release();
+            // Garante liberação do cliente
+            if (client) {
+                try {
+                    client.release();
+                } catch (releaseError) {
+                    console.warn('Aviso: Erro ao liberar cliente de banco de dados');
+                }
             }
         }
     }

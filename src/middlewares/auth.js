@@ -1,6 +1,25 @@
 const JwtService = require('../config/jwt');
 
 const authMiddleware = (req, res, next) => {
+  // Rotas públicas que não requerem autenticação
+  const publicRoutes = [
+    { path: '/users/login', method: 'POST' },
+    { path: '/users/register', method: 'POST' },
+    { path: /^\/users\/\d+\/password$/, method: 'PATCH' }
+  ];
+
+  // Verificar se a rota atual é pública
+  const isPublicRoute = publicRoutes.some(route => {
+    if (typeof route.path === 'string') {
+      return route.path === req.path && route.method === req.method;
+    }
+    return route.path.test(req.path) && route.method === req.method;
+  });
+
+  if (isPublicRoute) {
+    return next();
+  }
+
   const authHeader = req.headers.authorization;
 
   if (!authHeader) {

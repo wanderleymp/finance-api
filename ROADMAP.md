@@ -53,6 +53,40 @@
 - [ ] Implementar rate limiting para rotas de consulta
 - [ ] Adicionar métricas de performance para consultas externas
 
+## Autenticação e Segurança
+
+### Concluído
+- [x] Implementação de autenticação JWT
+- [x] Middleware de proteção de rotas
+- [x] Geração de tokens seguros
+- [x] Hash de senhas com bcrypt
+- [x] Rota protegida de exemplo
+
+### Próximos Passos
+- [ ] Implementar refresh tokens
+- [ ] Adicionar rate limiting para rotas de autenticação
+- [ ] Criar mecanismo de bloqueio de conta após múltiplas tentativas de login
+- [ ] Implementar recuperação de senha
+- [ ] Adicionar autenticação de dois fatores (2FA)
+- [ ] Implementar validação de complexidade de senha
+
+## Pendências de Segurança
+
+### Validação de Complexidade de Senha
+- **Status**: Temporariamente desabilitado
+- **Descrição**: Implementar validação robusta de complexidade de senha
+- **Requisitos**:
+  - [ ] Definir critérios de complexidade (comprimento mínimo, caracteres especiais, etc.)
+  - [ ] Atualizar schema de validação no Joi
+  - [ ] Adicionar testes unitários para novos critérios
+  - [ ] Documentar novos requisitos de senha para usuários
+
+### Próximos Passos
+1. Discutir requisitos específicos de complexidade de senha com a equipe
+2. Definir política de segurança de senhas
+3. Implementar validação atualizada
+4. Atualizar documentação do sistema
+
 ## Histórico de Implementações
 
 ### Dezembro 2024
@@ -73,7 +107,7 @@
 - [ ] Implementar validações de negócio
 
 ### 1.1.0 - Novas Funcionalidades
-- [ ] Sistema de autenticação
+- [x] Sistema de autenticação
 - [ ] Gestão de permissões
 - [ ] Logs de auditoria
 

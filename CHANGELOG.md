@@ -1,5 +1,35 @@
 # Changelog - Finance API
 
+## [1.2.0] - 2024-12-15
+
+### Added
+- Sistema completo de recuperação de senha
+  - Endpoint `/forgot-password` para solicitar recuperação
+  - Endpoint `/reset-password` para redefinir senha com token
+  - Endpoint `/change-password` para alterar senha (autenticado)
+  - Endpoint `/password-status` para verificar status da senha
+- Novas tabelas no banco de dados:
+  - `password_reset_tokens` para gerenciar tokens de recuperação
+  - `password_history` para histórico de senhas
+- Campos adicionais na tabela `users`:
+  - `password_changed_at`
+  - `password_expires_at`
+  - `require_password_change`
+- Middlewares de segurança:
+  - Rate limiting para tentativas de recuperação de senha
+  - Validação de complexidade de senha
+- Sistema de envio de emails para recuperação de senha
+- Auditoria de alterações de senha
+- Política de histórico de senhas (últimas 5)
+
+### Security
+- Implementação de rate limiting para prevenção de força bruta
+- Tokens criptograficamente seguros para recuperação
+- Hashing seguro de senhas com bcrypt
+- Não revelação de existência de emails no sistema
+- Expiração configurável de senhas
+- Validação de complexidade de senha
+
 ## [1.0.0.8] - 2024-12-14
 
 ### Adicionado
@@ -71,11 +101,20 @@
 - Controlador `personLicenseController` para gerenciamento de rotas
 - Rotas para criação, listagem e remoção de associações pessoa-licença
 - Validações de integridade para associações pessoa-licença
+- Implementação de autenticação JWT com middleware
+- Geração de tokens JWT no login
+- Rota protegida de exemplo `/users/profile`
+- Suporte a bcrypt para hash de senhas
 
 ### Changed
 - Adicionada lógica de validação no serviço de licenças
 - Implementado tratamento de erros específicos para criação de licenças
 - Adicionadas novas rotas em `/person-licenses` para gerenciamento de associações
+- Atualização do processo de autenticação para usar JWT
+- Melhoria na segurança de geração e validação de tokens
+
+### Security
+- Adicionado middleware de autenticação para proteger rotas sensíveis
 
 ### Pending
 - Refinamento do endpoint de deleção de licenças
