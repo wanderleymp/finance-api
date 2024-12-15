@@ -63,5 +63,10 @@ module.exports = {
     // Esquema para deleção de usuário
     delete: Joi.object({
         id: Joi.number().integer().required()
-    })
+    }),
+
+    // Esquema para refresh token
+    refreshToken: Joi.object({
+        // Removido, pois a validação será feita no middleware de autorização
+    }),
 };

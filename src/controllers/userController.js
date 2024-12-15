@@ -582,6 +582,78 @@ class UserController {
             });
         }
     }
+
+    async refreshToken(req, res) {
+        try {
+            const refreshToken = req.headers.authorization?.replace('Bearer ', '');
+
+            if (!refreshToken) {
+                return res.status(401).json({
+                    error: 'Token não fornecido',
+                    message: 'É necessário fornecer um refresh token no cabeçalho Authorization'
+                });
+            }
+
+            // Verificar e decodificar o refresh token
+            const decoded = jwt.verify(refreshToken, process.env.JWT_SECRET);
+
+            // Buscar usuário pelo ID do token
+            const user = await UserService.getUserById(decoded.user_id);
+
+            if (!user) {
+                return res.status(401).json({
+                    error: 'Usuário não encontrado',
+                    message: 'Usuário associado ao token não existe'
+                });
+            }
+
+            // Gerar novos tokens
+            const newAccessToken = JwtMiddleware.generateToken({
+                user_id: user.user_id,
+                username: user.username,
+                profile_id: user.profile_id
+            });
+
+            const newRefreshToken = jwt.sign(
+                { user_id: user.user_id },
+                process.env.JWT_SECRET,
+                { expiresIn: process.env.REFRESH_TOKEN_EXPIRATION }
+            );
+
+            // Atualizar refresh token no banco
+            await UserService.updateUser(user.user_id, { 
+                refresh_token: newRefreshToken 
+            });
+
+            res.json({
+                accessToken: newAccessToken
+            });
+        } catch (error) {
+            if (error.name === 'JsonWebTokenError') {
+                return res.status(401).json({
+                    error: 'Token inválido',
+                    message: 'O refresh token fornecido é inválido'
+                });
+            }
+
+            if (error.name === 'TokenExpiredError') {
+                return res.status(401).json({
+                    error: 'Token expirado',
+                    message: 'O refresh token expirou'
+                });
+            }
+
+            logger.error('CONTROLLER: Erro no refresh de token', { 
+                error: error.message,
+                stack: error.stack 
+            });
+
+            res.status(500).json({
+                error: 'Erro interno',
+                message: 'Erro ao processar refresh token'
+            });
+        }
+    }
 }
 
 module.exports = new UserController();

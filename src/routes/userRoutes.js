@@ -26,6 +26,11 @@ router.post('/login',
     UserController.login
 );
 
+router.post('/refresh', 
+    validateRequest(userSchema.refreshToken), 
+    UserController.refreshToken
+);
+
 // Rotas públicas de recuperação de senha
 router.post('/forgot-password',
     passwordResetLimiter,
