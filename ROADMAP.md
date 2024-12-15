@@ -42,6 +42,13 @@
 - [x] Testar rotas com e sem autenticação
 - [ ] Documentar novos requisitos de autenticação
 
+## Versão 1.0.0.7
+
+- [ ] Implementar filtro automático de licenças em todas as consultas
+  - Criar middleware para filtrar registros baseado nas licenças do usuário
+  - Modificar repositórios para aplicar filtro de licenças
+  - Detalhes completos em `ROADMAP_LICENSE_FILTER.md`
+
 ## Próximas Melhorias
 
 ### Infraestrutura e Qualidade

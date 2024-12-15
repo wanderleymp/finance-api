@@ -22,6 +22,11 @@ router.get('/cnpj/:cnpj',
     personController.findByCnpj
 );
 router.post('/', validateRequest(personSchema.createPerson, 'body'), personController.store);
+router.post('/cnpj/:cnpj', 
+    validateRequest(personSchema.createPersonByCnpj, 'params'),
+    validateRequest(personSchema.createPersonByCnpj, 'body'), 
+    personController.createPersonByCnpj
+);
 router.put('/:id', 
     validateRequest(personSchema.getPersonById, 'params'),
     validateRequest(personSchema.updatePerson, 'body'), 

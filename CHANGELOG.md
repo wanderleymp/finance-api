@@ -124,6 +124,9 @@
 - Adicionadas novas rotas em `/person-licenses` para gerenciamento de associações
 - Atualização do processo de autenticação para usar JWT
 - Melhoria na segurança de geração e validação de tokens
+- Refactored route management to centralize all routes in `routes/index.js`
+- Removed route definitions from `app.js`
+- Improved route organization and maintainability
 
 ### Security
 - Adicionado middleware de autenticação para proteger rotas sensíveis

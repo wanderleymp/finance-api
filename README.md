@@ -130,6 +130,34 @@ O projeto utiliza uma configuração centralizada para conexões com banco de da
    - Versão atual: 1.0.0.5
    - Scripts de migração em `src/migrations/system/`
 
+## Estrutura de Rotas
+
+### Princípios de Roteamento
+
+- **Centralização**: Todas as rotas são definidas em `src/routes/index.js`
+- **Modularidade**: Rotas específicas são importadas e agrupadas no roteador principal
+- **Separação de Responsabilidades**: `app.js` foca em configuração do servidor, não em definição de rotas
+
+### Boas Práticas
+
+- Cada módulo de rotas (`personRoutes.js`, `personCnpjRoutes.js`) define suas próprias rotas
+- O arquivo `routes/index.js` consolida todas as rotas da aplicação
+- Evitar definição de rotas diretamente no `app.js`
+
+### Exemplo de Roteamento
+
+```javascript
+// routes/index.js
+router.use('/persons', personRoutes);
+router.use('/persons/cnpjs', personCnpjRoutes);
+```
+
+### Benefícios
+
+- Código mais organizado e legível
+- Facilita manutenção e extensão de rotas
+- Melhora a separação de responsabilidades
+
 ## Funcionalidades
 
 - Gerenciamento de pessoas

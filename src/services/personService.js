@@ -1,3 +1,5 @@
+const logger = require('../middlewares/logger').logger;
+const { systemDatabase } = require('../config/database');
 const personRepository = require('../repositories/personRepository');
 const personContactRepository = require('../repositories/personContactRepository');
 const personDocumentRepository = require('../repositories/personDocumentRepository');
@@ -138,6 +140,94 @@ class PersonService {
             .split(' ')
             .map(word => word.charAt(0).toUpperCase() + word.slice(1))
             .join(' ');
+    }
+
+    async createOrUpdatePersonByCnpj(personData) {
+        try {
+            logger.info('🔄 Person Service: Iniciando criação/atualização por CNPJ', { 
+                personData: JSON.stringify(personData) 
+            });
+
+            // 1. Extrair CNPJ dos documentos
+            const cnpjDocument = personData.documents.find(
+                doc => doc.document_type === 'CNPJ'
+            );
+
+            if (!cnpjDocument) {
+                throw new ValidationError('CNPJ não encontrado nos documentos');
+            }
+
+            // 2. Verificar se pessoa já existe pelo CNPJ
+            const existingPerson = await this.findPersonByCnpj(cnpjDocument.document_value);
+
+            // 3. Definir estratégia de persistência
+            let person;
+            if (existingPerson) {
+                // Atualizar pessoa existente
+                person = await this.updatePerson(existingPerson.person_id, personData);
+                logger.info('🔧 Person Service: Pessoa atualizada', { personId: person.person_id });
+            } else {
+                // Criar nova pessoa
+                person = await this.createPerson(personData);
+                logger.info('🆕 Person Service: Nova pessoa criada', { personId: person.person_id });
+            }
+
+            // 4. Persistir documentos
+            if (personData.documents) {
+                await this.savePersonDocuments(person.person_id, personData.documents);
+            }
+
+            return person;
+
+        } catch (error) {
+            logger.error('❌ Person Service: Erro em criação/atualização por CNPJ', {
+                errorMessage: error.message,
+                errorStack: error.stack
+            });
+            throw error;
+        }
+    }
+
+    async findPersonByCnpj(cnpj) {
+        try {
+            const query = `
+                SELECT p.* 
+                FROM persons p
+                JOIN person_documents pd ON p.person_id = pd.person_id
+                WHERE pd.document_type = 'CNPJ' 
+                AND pd.document_value = $1
+            `;
+            
+            const { rows } = await systemDatabase.query(query, [cnpj]);
+            
+            return rows.length > 0 ? rows[0] : null;
+        } catch (error) {
+            logger.error('Erro ao buscar pessoa por CNPJ', {
+                cnpj,
+                errorMessage: error.message,
+                errorStack: error.stack
+            });
+            throw error;
+        }
+    }
+
+    async savePersonDocuments(personId, documents) {
+        try {
+            for (const doc of documents) {
+                await personDocumentRepository.create({
+                    person_id: personId,
+                    document_type: doc.document_type,
+                    document_value: doc.document_value
+                });
+            }
+        } catch (error) {
+            logger.error('Erro ao salvar documentos da pessoa', { 
+                error: error.message,
+                personId,
+                documents 
+            });
+            throw error;
+        }
     }
 }
 

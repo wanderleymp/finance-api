@@ -1,4 +1,5 @@
 const Joi = require('joi');
+const { cleanDocument, isValidCNPJ } = require('../utils/documentUtils');
 
 const personTypes = ['PF', 'PJ', 'PR', 'OT'];
 
@@ -47,6 +48,55 @@ const personSchema = {
             })
     }),
 
+    createPersonByCnpj: Joi.object({
+        cnpj: Joi.string()
+            .trim()
+            .custom((value, helpers) => {
+                const cleanedCnpj = cleanDocument(value);
+                
+                if (!isValidCNPJ(cleanedCnpj)) {
+                    return helpers.error('any.invalid');
+                }
+                
+                return cleanedCnpj;
+            })
+            .required()
+            .messages({
+                'any.invalid': 'CNPJ inválido',
+                'any.required': 'CNPJ é obrigatório'
+            }),
+        full_name: Joi.string()
+            .trim()
+            .min(3)
+            .max(255)
+            .required()
+            .messages({
+                'string.min': 'Nome completo deve ter no mínimo 3 caracteres',
+                'string.max': 'Nome completo deve ter no máximo 255 caracteres',
+                'any.required': 'Nome completo é obrigatório'
+            }),
+        birth_date: Joi.date()
+            .iso()
+            .optional()
+            .messages({
+                'date.format': 'Data de nascimento deve estar no formato ISO'
+            }),
+        person_type: Joi.string()
+            .valid(...personTypes)
+            .optional()
+            .default('PJ')
+            .messages({
+                'any.only': 'Tipo de pessoa inválido. Valores permitidos: PF, PJ, PR, OT'
+            }),
+        fantasy_name: Joi.string()
+            .trim()
+            .max(255)
+            .optional()
+            .messages({
+                'string.max': 'Nome fantasia deve ter no máximo 255 caracteres'
+            })
+    }),
+
     updatePerson: Joi.object({
         full_name: Joi.string()
             .trim()
@@ -78,13 +128,22 @@ const personSchema = {
     }).min(1),
 
     findByCnpj: Joi.object({
-        cnpj: Joi.alternatives().try(
-            Joi.string().pattern(/^\d{2}\.\d{3}\.\d{3}\/\d{4}-\d{2}$/),
-            Joi.string().pattern(/^\d{14}$/)
-        ).required().messages({
-            'alternatives.match': 'CNPJ inválido. Use o formato: 00.000.000/0001-00 ou 00000000000000',
-            'any.required': 'CNPJ é obrigatório'
-        })
+        cnpj: Joi.string()
+            .trim()
+            .custom((value, helpers) => {
+                const cleanedCnpj = cleanDocument(value);
+                
+                if (!isValidCNPJ(cleanedCnpj)) {
+                    return helpers.error('any.invalid');
+                }
+                
+                return cleanedCnpj;
+            })
+            .required()
+            .messages({
+                'any.invalid': 'CNPJ inválido',
+                'any.required': 'CNPJ é obrigatório'
+            })
     })
 };
 

@@ -120,7 +120,7 @@ class PersonController {
     // Método para consultar CNPJ
     async findByCnpj(req, res) {
         try {
-            logger.info('🔍 CONTROLLER: Iniciando consulta de CNPJ', { 
+            logger.info(' CONTROLLER: Iniciando consulta de CNPJ', { 
                 reqParams: JSON.stringify(req.params),
                 reqBody: JSON.stringify(req.body),
                 reqQuery: JSON.stringify(req.query)
@@ -128,24 +128,96 @@ class PersonController {
 
             const { cnpj } = req.params;
             
-            logger.info('🔬 CONTROLLER: Extraindo CNPJ', { 
+            logger.info(' CONTROLLER: Extraindo CNPJ', { 
                 cnpj,
                 cnpjType: typeof cnpj
             });
             
             const companyData = await cnpjService.findByCnpj(cnpj);
             
-            logger.info('✅ CONTROLLER: Consulta de CNPJ concluída', { 
+            logger.info(' CONTROLLER: Consulta de CNPJ concluída', { 
                 cnpj,
                 companyData: JSON.stringify(companyData)
             });
             
             handleResponse(res, 200, { data: companyData });
         } catch (error) {
-            logger.error('❌ CONTROLLER: Erro na consulta de CNPJ', {
+            logger.error(' CONTROLLER: Erro na consulta de CNPJ', {
                 errorMessage: error.message,
                 errorStack: error.stack,
                 reqParams: JSON.stringify(req.params)
+            });
+            handleError(res, error);
+        }
+    }
+
+    async createPersonByCnpj(req, res) {
+        try {
+            logger.info('Iniciando criação/atualização de pessoa por CNPJ', { 
+                reqParams: JSON.stringify(req.params),
+                reqBody: JSON.stringify(req.body)
+            });
+
+            const { cnpj } = req.params;
+            const additionalData = req.body || {};
+
+            // Consulta dados da empresa
+            const companyData = await cnpjService.findByCnpj(cnpj);
+            
+            // Preparar dados para persistência
+            const personData = {
+                full_name: companyData.razao_social,
+                fantasy_name: companyData.nome_fantasia,
+                person_type: 'PJ',
+                documents: [{
+                    document_type: 'CNPJ',
+                    document_value: cnpj
+                }],
+                additional_data: {
+                    ...companyData,
+                    ...additionalData.additional_data
+                },
+                ...additionalData
+            };
+
+            // Verificar se já existe pessoa com esse CNPJ
+            const existingPerson = await personService.findPersonByCnpj(cnpj);
+
+            let resultPerson;
+            if (existingPerson) {
+                // Atualizar pessoa existente
+                logger.info('Pessoa com CNPJ já existe, atualizando', { 
+                    personId: existingPerson.person_id 
+                });
+
+                resultPerson = await personService.updatePerson(existingPerson.person_id, personData);
+                
+                logger.info('Pessoa atualizada por CNPJ com sucesso', { 
+                    personId: resultPerson.person_id 
+                });
+
+                handleResponse(res, 200, { 
+                    data: resultPerson,
+                    message: 'Pessoa atualizada com sucesso' 
+                });
+            } else {
+                // Criar nova pessoa
+                resultPerson = await personService.createPerson(personData);
+
+                logger.info('Pessoa criada por CNPJ com sucesso', { 
+                    personId: resultPerson.person_id 
+                });
+
+                handleResponse(res, 201, { 
+                    data: resultPerson,
+                    message: 'Pessoa criada com sucesso' 
+                });
+            }
+
+        } catch (error) {
+            logger.error('Erro na criação/atualização de pessoa por CNPJ', {
+                errorMessage: error.message,
+                errorStack: error.stack
             });
             handleError(res, error);
         }
