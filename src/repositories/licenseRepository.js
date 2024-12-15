@@ -37,7 +37,6 @@ class LicenseRepository {
                     l.end_date,
                     l.status,
                     l.timezone,
-                    l.active,
                     p.full_name
                 FROM licenses l
                 LEFT JOIN persons p ON p.person_id = l.person_id
@@ -58,12 +57,6 @@ class LicenseRepository {
             if (filters.status) {
                 query += ` AND l.status = $${paramCount}`;
                 params.push(filters.status);
-                paramCount++;
-            }
-
-            if (filters.active !== undefined) {
-                query += ` AND l.active = $${paramCount}`;
-                params.push(filters.active);
                 paramCount++;
             }
 
@@ -128,7 +121,6 @@ class LicenseRepository {
                     l.end_date,
                     l.status,
                     l.timezone,
-                    l.active,
                     p.full_name
                 FROM licenses l
                 LEFT JOIN persons p ON p.person_id = l.person_id
@@ -150,7 +142,7 @@ class LicenseRepository {
                 errorName: error.name,
                 errorCode: error.code
             });
-            throw new DatabaseError('Erro ao buscar licença');
+            throw new DatabaseError('Erro ao buscar licença por ID');
         }
     }
 
@@ -167,7 +159,6 @@ class LicenseRepository {
                     l.end_date,
                     l.status,
                     l.timezone,
-                    l.active,
                     p.full_name
                 FROM licenses l
                 LEFT JOIN persons p ON p.person_id = l.person_id
@@ -202,9 +193,8 @@ class LicenseRepository {
                     start_date, 
                     end_date, 
                     status, 
-                    timezone,
-                    active
-                ) VALUES ($1, $2, $3, $4, $5, $6, $7)
+                    timezone
+                ) VALUES ($1, $2, $3, $4, $5, $6)
                 RETURNING *
             `;
             const values = [
@@ -213,8 +203,7 @@ class LicenseRepository {
                 data.start_date,
                 data.end_date || null,
                 data.status,
-                data.timezone,
-                data.active !== undefined ? data.active : true
+                data.timezone
             ];
 
             const result = await this.pool.query(query, values);
@@ -235,9 +224,8 @@ class LicenseRepository {
                     end_date = COALESCE($3, end_date),
                     status = COALESCE($4, status),
                     timezone = COALESCE($5, timezone),
-                    active = COALESCE($6, active),
                     updated_at = CURRENT_TIMESTAMP
-                WHERE license_id = $7
+                WHERE license_id = $6
                 RETURNING *
             `;
             const values = [
@@ -246,7 +234,6 @@ class LicenseRepository {
                 data.end_date,
                 data.status,
                 data.timezone,
-                data.active,
                 id
             ];
 
@@ -260,8 +247,8 @@ class LicenseRepository {
 
     async delete(id) {
         try {
-            const query = 'UPDATE licenses SET active = false WHERE license_id = $1 RETURNING *';
-            const result = await this.pool.query(query, [id]);
+            const query = 'UPDATE licenses SET status = $1 WHERE license_id = $2 RETURNING *';
+            const result = await this.pool.query(query, ['inactive', id]);
             return result.rows[0];
         } catch (error) {
             logger.error('Erro ao excluir licença', { error, id });

@@ -2,8 +2,11 @@ const express = require('express');
 const personController = require('../controllers/personController');
 const { validateRequest } = require('../middlewares/requestValidator');
 const personSchema = require('../schemas/personSchema');
+const authMiddleware = require('../middlewares/authMiddleware');
 
 const router = express.Router();
+
+router.use(authMiddleware);
 
 router.get('/', validateRequest(personSchema.listPersons, 'query'), personController.index);
 router.get('/all', validateRequest(personSchema.listPersons, 'query'), personController.indexWithRelations);

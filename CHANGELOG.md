@@ -53,6 +53,18 @@
 - Tratamento de erros no middleware de validação
 - Logs de validação de requisições
 
+## [1.0.0.6] - 2024-12-15
+### Segurança
+- ✅ Adicionado middleware de autenticação para rotas de persons
+- ✅ Adicionado middleware de autenticação para rotas de person contacts
+- ✅ Validação de proteção de endpoints
+- ✅ Testes de autenticação concluídos
+
+### Modificações
+- Rotas de persons agora requerem token JWT
+- Rotas de person contacts agora requerem token JWT
+- Removida permissão de acesso sem autenticação para rotas sensíveis
+
 ## [1.0.0.6] - 2024-12-14
 
 ### Adicionado

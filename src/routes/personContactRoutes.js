@@ -2,8 +2,12 @@ const express = require('express');
 const personContactController = require('../controllers/personContactController');
 const { validateRequest } = require('../middlewares/requestValidator');
 const personContactSchema = require('../schemas/personContactSchema');
+const authMiddleware = require('../middlewares/authMiddleware');
 
 const router = express.Router();
+
+// Adicionar middleware de autenticação para todas as rotas
+router.use(authMiddleware);
 
 // Listar contatos
 router.get('/', personContactController.index);

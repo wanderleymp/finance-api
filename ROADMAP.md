@@ -35,6 +35,13 @@
 - [x] Documentar novo endpoint
 - [x] Atualizar changelog
 
+### 1.0.0.8 - Autenticação de Rotas
+- [x] Adicionar middleware de autenticação para rotas de persons
+- [x] Adicionar middleware de autenticação para rotas de person contacts
+- [x] Validar proteção de endpoints
+- [x] Testar rotas com e sem autenticação
+- [ ] Documentar novos requisitos de autenticação
+
 ## Próximas Melhorias
 
 ### Infraestrutura e Qualidade

@@ -2,8 +2,12 @@ const express = require('express');
 const personAddressController = require('../controllers/personAddressController');
 const { validateRequest } = require('../middlewares/requestValidator');
 const personAddressSchema = require('../schemas/personAddressSchema');
+const authMiddleware = require('../middlewares/authMiddleware');
 
 const router = express.Router();
+
+// Adicionar middleware de autenticação para todas as rotas
+router.use(authMiddleware);
 
 router.get('/', 
     validateRequest(personAddressSchema.listPersonAddresses, 'query'), 

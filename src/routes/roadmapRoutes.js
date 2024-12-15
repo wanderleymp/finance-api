@@ -7,6 +7,10 @@ const {
   updateTaskDescription,
   updateTask 
 } = require('../controllers/roadmapController');
+const authMiddleware = require('../middlewares/authMiddleware');
+
+// Adicionar middleware de autenticação para todas as rotas
+router.use(authMiddleware);
 
 // GET /roadmap - Listar tarefas
 router.get('/', listTasks);

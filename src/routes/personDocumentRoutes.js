@@ -2,8 +2,12 @@ const express = require('express');
 const personDocumentController = require('../controllers/personDocumentController');
 const { validateRequest } = require('../middlewares/requestValidator');
 const personDocumentSchema = require('../schemas/personDocumentSchema');
+const authMiddleware = require('../middlewares/authMiddleware');
 
 const router = express.Router();
+
+// Adicionar middleware de autenticação para todas as rotas
+router.use(authMiddleware);
 
 // Listar documentos
 router.get('/', personDocumentController.index);

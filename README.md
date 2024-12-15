@@ -175,7 +175,28 @@ O projeto utiliza uma configuração centralizada para conexões com banco de da
 
 ## Autenticação
 
-### Login
+### Requisitos de Token
+- Todas as rotas sensíveis requerem autenticação via token JWT
+- Token deve ser enviado no cabeçalho `Authorization` com o prefixo `Bearer`
+
+### Rotas Protegidas
+- `/persons/*`
+- `/person-contacts/*`
+- `/person-documents/*`
+- `/licenses/*`
+- `/roadmap/*`
+
+### Exemplo de Requisição Autenticada
+```bash
+curl -H "Authorization: Bearer SEU_TOKEN_JWT" http://localhost:3000/persons
+```
+
+### Obtendo Token
+1. Faça login em `/users/login`
+2. Receba o token JWT na resposta
+3. Use o token em requisições subsequentes
+
+## Login
 Para autenticar, envie uma requisição POST para `/users/login` com as credenciais:
 
 ```json

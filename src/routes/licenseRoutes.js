@@ -2,8 +2,12 @@ const express = require('express');
 const licenseController = require('../controllers/licenseController');
 const { validateRequest } = require('../middlewares/requestValidator');
 const licenseSchema = require('../schemas/licenseSchema');
+const authMiddleware = require('../middlewares/authMiddleware');
 
 const router = express.Router();
+
+// Adicionar middleware de autenticação para todas as rotas
+router.use(authMiddleware);
 
 router.get('/', 
     validateRequest(licenseSchema.listLicenses, 'query'), 
