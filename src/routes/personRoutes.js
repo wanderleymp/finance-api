@@ -9,7 +9,6 @@ const router = express.Router();
 router.use(authMiddleware);
 
 router.get('/', validateRequest(personSchema.listPersons, 'query'), personController.index);
-router.get('/all', validateRequest(personSchema.listPersons, 'query'), personController.indexWithRelations);
 router.get('/:id', validateRequest(personSchema.getPersonById, 'params'), personController.show);
 router.get('/:id/documents', validateRequest(personSchema.getPersonById, 'params'), personController.documents);
 router.get('/:id/contacts', validateRequest(personSchema.getPersonById, 'params'), personController.contacts);

@@ -8,7 +8,7 @@ const { ValidationError } = require('../utils/errors');
 const PaginationHelper = require('../utils/paginationHelper');
 
 class PersonService {
-    async listPersons(page, limit, search = '', include = []) {
+    async listPersons(page, limit, search = '') {
         const { page: validPage, limit: validLimit } = PaginationHelper.validateParams(page, limit);
         const { data, total } = await personRepository.findAll(validPage, validLimit, search);
 
@@ -16,17 +16,9 @@ class PersonService {
             data.map(async (person) => {
                 const enrichedPerson = { ...person };
 
-                if (include.includes('documents')) {
-                    enrichedPerson.documents = await personDocumentRepository.findByPersonId(person.person_id);
-                }
-                
-                if (include.includes('contacts')) {
-                    enrichedPerson.contacts = await personContactRepository.findByPersonId(person.person_id);
-                }
-
-                if (include.includes('addresses')) {
-                    enrichedPerson.addresses = await personAddressRepository.findByPersonId(person.person_id);
-                }
+                enrichedPerson.documents = await personDocumentRepository.findByPersonId(person.person_id);
+                enrichedPerson.contacts = await personContactRepository.findByPersonId(person.person_id);
+                enrichedPerson.addresses = await personAddressRepository.findByPersonId(person.person_id);
 
                 return enrichedPerson;
             })

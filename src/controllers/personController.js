@@ -81,32 +81,6 @@ class PersonController {
         }
     }
 
-    async indexWithRelations(req, res) {
-        try {
-            logger.info('Iniciando listagem de pessoas com relacionamentos', {
-                query: req.query
-            });
-            
-            const { page, limit, search } = req.query;
-            const result = await personService.listPersonsWithRelations(page, limit, search);
-            
-            logger.info('Listagem de pessoas com relacionamentos concluída', { 
-                count: result.data.length,
-                currentPage: result.meta.current_page,
-                totalRecords: result.meta.total,
-                searchTerm: search || null
-            });
-            
-            handleResponse(res, 200, result);
-        } catch (error) {
-            logger.error('Erro na listagem de pessoas com relacionamentos', {
-                errorMessage: error.message,
-                errorStack: error.stack
-            });
-            handleError(res, error);
-        }
-    }
-
     async contacts(req, res) {
         try {
             const { id } = req.params;

@@ -19,8 +19,8 @@ app.use(express.urlencoded({ extended: true }));
 
 // Configuração de CORS
 app.use(cors({
-  origin: ['http://localhost:3000', 'http://188.245.215.208:3000', '*'],
-  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
+  origin: process.env.FRONTEND_URL || 'http://localhost:5173',
+  methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS'],
   allowedHeaders: ['Content-Type', 'Authorization']
 }));
 

@@ -38,6 +38,13 @@ const authMiddleware = (req, res, next) => {
         // Adiciona informações do usuário ao request para uso posterior
         req.userId = decoded.user_id;
         req.username = decoded.username;
+        
+        // Adiciona objeto user para compatibilidade
+        req.user = {
+            user_id: decoded.user_id,
+            username: decoded.username,
+            profile_id: decoded.profile_id || null
+        };
 
         next();
     } catch (error) {
