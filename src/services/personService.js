@@ -7,6 +7,7 @@ const personAddressRepository = require('../repositories/personAddressRepository
 const personRelationService = require('./personRelationService');
 const { ValidationError } = require('../utils/errors');
 const PaginationHelper = require('../utils/paginationHelper');
+const PersonUpdateDto = require('../dtos/personUpdateDto');
 
 class PersonService {
     async listPersons(page, limit, search) {
@@ -91,17 +92,28 @@ class PersonService {
     }
 
     async updatePerson(personId, personData) {
-        // Formatar full_name e fantasy_name antes de validar
-        if (personData.full_name) {
-            personData.full_name = this.formatName(personData.full_name);
-        }
-        if (personData.fantasy_name) {
-            personData.fantasy_name = this.formatName(personData.fantasy_name);
-        }
+        try {
+            // Criar DTO e validar dados
+            const updateDto = new PersonUpdateDto(personData);
+            const validatedData = updateDto.validate().toJSON();
 
-        await this.getPerson(personId);
-        this.validatePersonData(personData);
-        return await personRepository.update(personId, personData);
+            // Verificar se há dados para atualizar
+            if (Object.keys(validatedData).length === 0) {
+                throw new ValidationError('Nenhum dado fornecido para atualização');
+            }
+
+            // Atualizar pessoa no repositório
+            const updatedPerson = await personRepository.update(personId, validatedData);
+
+            return updatedPerson;
+        } catch (error) {
+            logger.error('Erro ao atualizar pessoa no serviço', {
+                personId,
+                errorMessage: error.message,
+                errorStack: error.stack
+            });
+            throw error;
+        }
     }
 
     async deletePerson(personId) {

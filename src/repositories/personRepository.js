@@ -128,35 +128,57 @@ class PersonRepository {
             full_name,
             birth_date,
             person_type,
-            fantasy_name
+            fantasy_name,
+            active
         } = personData;
 
+        const client = await systemDatabase.getClient();
+
         try {
+            await client.query('BEGIN');
+
+            // Verificar se a pessoa existe antes de atualizar
+            const existCheckQuery = 'SELECT * FROM persons WHERE person_id = $1';
+            const existCheckResult = await client.query(existCheckQuery, [personId]);
+            
+            if (existCheckResult.rows.length === 0) {
+                throw new ValidationError('Pessoa não encontrada', 404);
+            }
+
             const query = `
                 UPDATE persons 
-                SET full_name = $1, 
-                    birth_date = $2, 
-                    person_type = $3, 
-                    fantasy_name = $4,
+                SET 
+                    full_name = COALESCE($1, full_name), 
+                    birth_date = COALESCE($2, birth_date), 
+                    person_type = COALESCE($3, person_type), 
+                    fantasy_name = COALESCE($4, fantasy_name),
+                    active = COALESCE($5, active),
                     updated_at = NOW()
-                WHERE person_id = $5
+                WHERE person_id = $6
                 RETURNING *
             `;
-            const { rows } = await systemDatabase.query(query, [
+            
+            const { rows } = await client.query(query, [
                 full_name,
                 birth_date,
                 person_type,
                 fantasy_name,
+                active,
                 personId
             ]);
+
+            await client.query('COMMIT');
             return rows[0];
         } catch (error) {
+            await client.query('ROLLBACK');
             logger.error('Erro ao atualizar pessoa', {
                 error: error.message,
                 personId,
                 personData
             });
             throw error;
+        } finally {
+            client.release();
         }
     }
 

@@ -77,6 +77,9 @@ const createDatabaseConnection = (databaseUrl, name) => {
 
 // Exportar instâncias únicas das conexões
 const systemDatabase = createDatabaseConnection(process.env.SYSTEM_DATABASE_URL, 'AgileDB');
+systemDatabase.getClient = async () => {
+  return await systemDatabase.pool.connect();
+};
 
 module.exports = {
   systemDatabase
