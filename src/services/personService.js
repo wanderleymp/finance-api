@@ -4,6 +4,7 @@ const personRepository = require('../repositories/personRepository');
 const personContactRepository = require('../repositories/personContactRepository');
 const personDocumentRepository = require('../repositories/personDocumentRepository');
 const personAddressRepository = require('../repositories/personAddressRepository');
+const personRelationService = require('./personRelationService');
 const { ValidationError } = require('../utils/errors');
 const PaginationHelper = require('../utils/paginationHelper');
 
@@ -22,17 +23,13 @@ class PersonService {
                 throw new Error('Resultado inválido do repositório de pessoas');
             }
 
-            // Busca relacionamentos para cada pessoa
+            // Busca relacionamentos para cada pessoa em lote
             const personsWithRelations = await Promise.all(result.data.map(async (person) => {
-                const documents = await personDocumentRepository.findAll({ person_id: person.person_id });
-                const contacts = await personContactRepository.findAll({ person_id: person.person_id });
-                const addresses = await personAddressRepository.findAll({ person_id: person.person_id });
+                const relations = await personRelationService.findPersonRelations(person.person_id);
 
                 return {
                     ...person,
-                    documents,
-                    contacts,
-                    addresses
+                    ...relations
                 };
             }));
 
@@ -60,30 +57,26 @@ class PersonService {
         if (!data || total === 0) {
             throw new ValidationError('Pessoa não encontrada', 404);
         }
-        const documents = await personDocumentRepository.findByPersonId(personId);
-        const contacts = await personContactRepository.findByPersonId(personId);
-        const addresses = await personAddressRepository.findByPersonId(personId);
+        const relations = await personRelationService.findPersonRelations(personId);
 
         return {
             ...data,
-            documents,
-            contacts,
-            addresses
+            ...relations
         };
     }
 
     async getPersonDocuments(personId) {
         // Verifica se a pessoa existe
         await this.getPerson(personId);
-        const { data, total } = await personDocumentRepository.findByPersonId(personId);
-        return { documents: data, total };
+        const { documents } = await personRelationService.findPersonRelations(personId);
+        return { documents, total: documents.length };
     }
 
     async getPersonContacts(personId) {
         // Verifica se a pessoa existe
         await this.getPerson(personId);
-        const { data, total } = await personContactRepository.findByPersonId(personId);
-        return { contacts: data, total };
+        const { contacts } = await personRelationService.findPersonRelations(personId);
+        return { contacts, total: contacts.length };
     }
 
     async createPerson(personData) {
