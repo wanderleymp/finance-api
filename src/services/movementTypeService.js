@@ -61,6 +61,15 @@ class MovementTypeService {
         try {
             logger.info('Criando novo tipo de movimentação', { movementTypeData });
             
+            // Verificar se já existe um tipo de movimentação com o mesmo nome
+            const existingMovementType = await this.findMovementTypeByName(movementTypeData.type_name);
+            
+            if (existingMovementType) {
+                const error = new Error('Já existe um tipo de movimentação com este nome');
+                error.status = 409;
+                throw error;
+            }
+
             const newMovementType = await movementTypeRepository.create(movementTypeData);
             
             logger.info('Tipo de movimentação criado com sucesso', { 
@@ -73,6 +82,20 @@ class MovementTypeService {
                 errorMessage: error.message,
                 errorStack: error.stack,
                 movementTypeData
+            });
+            throw error;
+        }
+    }
+
+    async findMovementTypeByName(typeName) {
+        try {
+            const query = 'SELECT * FROM movement_types WHERE type_name = $1';
+            const result = await movementTypeRepository.pool.query(query, [typeName]);
+            return result.rows[0];
+        } catch (error) {
+            logger.error('Erro ao buscar tipo de movimentação por nome', {
+                errorMessage: error.message,
+                typeName
             });
             throw error;
         }

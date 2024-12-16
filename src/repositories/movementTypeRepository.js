@@ -19,21 +19,9 @@ class MovementTypeRepository {
             const params = [];
             let paramCount = 1;
 
-            if (filters.name) {
-                query += ` AND name ILIKE $${paramCount}`;
-                params.push(`%${filters.name}%`);
-                paramCount++;
-            }
-
-            if (filters.category) {
-                query += ` AND category = $${paramCount}`;
-                params.push(filters.category);
-                paramCount++;
-            }
-
-            if (filters.active !== undefined) {
-                query += ` AND active = $${paramCount}`;
-                params.push(filters.active);
+            if (filters.type_name) {
+                query += ` AND type_name ILIKE $${paramCount}`;
+                params.push(`%${filters.type_name}%`);
                 paramCount++;
             }
 
@@ -86,21 +74,16 @@ class MovementTypeRepository {
     }
 
     async create(movementTypeData) {
-        const { name, description, category, active = true } = movementTypeData;
+        const { type_name } = movementTypeData;
 
         try {
             const query = `
                 INSERT INTO movement_types 
-                (name, description, category, active) 
-                VALUES ($1, $2, $3, $4) 
+                (type_name) 
+                VALUES ($1) 
                 RETURNING *
             `;
-            const { rows } = await this.pool.query(query, [
-                name,
-                description,
-                category,
-                active
-            ]);
+            const { rows } = await this.pool.query(query, [type_name]);
             return rows[0];
         } catch (error) {
             logger.error('Erro ao criar tipo de movimentação', {
@@ -112,25 +95,17 @@ class MovementTypeRepository {
     }
 
     async update(movementTypeId, movementTypeData) {
-        const { name, description, category, active } = movementTypeData;
+        const { type_name } = movementTypeData;
 
         try {
             const query = `
                 UPDATE movement_types 
-                SET 
-                    name = COALESCE($1, name),
-                    description = COALESCE($2, description),
-                    category = COALESCE($3, category),
-                    active = COALESCE($4, active),
-                    updated_at = NOW()
-                WHERE movement_type_id = $5
+                SET type_name = $1
+                WHERE movement_type_id = $2
                 RETURNING *
             `;
             const { rows } = await this.pool.query(query, [
-                name,
-                description,
-                category,
-                active,
+                type_name,
                 movementTypeId
             ]);
             return rows[0];
