@@ -100,7 +100,7 @@ class PersonService {
         // Verifica se a pessoa existe
         await this.getPerson(personId);
         const { documents } = await personRelationService.findPersonRelations(personId);
-        return { documents, total: documents.length };
+        return documents || [];
     }
 
     async getPersonContacts(personId) {

@@ -23,11 +23,6 @@ class PersonDocumentRepository {
                 return acc;
             }, {});
 
-            console.error(' REPOSITÓRIO DOCUMENTO: Filtros seguros', { 
-                originalFilters: filters,
-                safeFilters 
-            });
-
             // Construir cláusulas WHERE dinamicamente
             const whereConditions = Object.entries(safeFilters)
                 .map(([key, value], index) => `pd.${key} = $${index + 1}`)
@@ -43,25 +38,13 @@ class PersonDocumentRepository {
 
             const queryValues = Object.values(safeFilters);
 
-            console.error(' REPOSITÓRIO DOCUMENTO: Query de busca', { 
-                queryText,
-                queryValues 
-            });
-
             const { rows } = await this.pool.query(queryText, queryValues);
 
-            console.error(' REPOSITÓRIO DOCUMENTO: Resultado', { 
-                rowsCount: rows.length,
-                rows 
-            });
-
-            return {
-                data: rows,
-                total: rows.length
-            };
+            return rows || [];
         } catch (error) {
             logger.error('Erro ao buscar documentos de pessoas', {
                 error: error.message,
+                errorStack: error.stack,
                 filters
             });
             throw error;
