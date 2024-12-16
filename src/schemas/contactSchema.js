@@ -1,6 +1,12 @@
 const Joi = require('joi');
 
-const contactTypes = ['email', 'telefone', 'whatsapp', 'fax', 'outros'];
+const contactTypes = [
+    'email', 
+    'telefone', 
+    'whatsapp', 
+    'fax', 
+    'outros'
+];
 
 const contactSchema = {
     // Schema para listar contatos com paginação
@@ -24,9 +30,8 @@ const contactSchema = {
     createContact: Joi.object({
         contact_type: Joi.string()
             .valid(...contactTypes)
-            .required()
+            .optional()
             .messages({
-                'any.required': 'Tipo de contato é obrigatório',
                 'any.only': `Tipo de contato inválido. Valores permitidos: ${contactTypes.join(', ')}`
             }),
         contact_value: Joi.string()

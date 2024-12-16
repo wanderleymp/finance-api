@@ -15,7 +15,7 @@ module.exports = {
 
     createContact: Joi.object({
         person_id: Joi.number().integer().positive().required(),
-        contact_type: Joi.string().valid(...contactTypes).required(),
+        contact_type: Joi.string().valid(...contactTypes).optional(),
         contact_value: Joi.string().trim().required(),
         active: Joi.boolean().optional().default(true)
     }),

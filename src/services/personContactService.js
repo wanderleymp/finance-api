@@ -121,7 +121,7 @@ class PersonContactService {
     async createPersonContactWithValidation(personId, contactData) {
         try {
             // 1. Validar dados de entrada
-            if (!personId || !contactData.contact_type || !contactData.contact_value) {
+            if (!personId || !contactData.contact_value) {
                 throw new ValidationError('Dados inválidos para criação de contato');
             }
 
@@ -131,13 +131,20 @@ class PersonContactService {
                 throw new ValidationError('Pessoa não encontrada');
             }
 
-            // 3. Buscar contato existente pelo valor e tipo
+            // 3. Identificar tipo de contato se não for fornecido
+            if (!contactData.contact_type) {
+                contactData.contact_type = await contactRepository.identifyContactType(
+                    contactData.contact_value
+                );
+            }
+
+            // 4. Buscar contato existente pelo valor e tipo
             let contact = await contactRepository.findByValue(
                 contactData.contact_value, 
                 contactData.contact_type
             );
             
-            // 4. Criar contato se não existir
+            // 5. Criar contato se não existir
             if (!contact) {
                 contact = await contactRepository.create({
                     contact_type: contactData.contact_type,
@@ -146,10 +153,10 @@ class PersonContactService {
                 });
             }
 
-            // 5. Verificar se já existe contato para esta pessoa
+            // 6. Verificar se já existe contato para esta pessoa
             const existingPersonContacts = await personContactRepository.findByPersonId(personId);
 
-            // 6. Verificar se já existe este contato específico para a pessoa
+            // 7. Verificar se já existe este contato específico para a pessoa
             const duplicateContact = existingPersonContacts.find(
                 pc => pc.contact_type === contactData.contact_type && 
                       pc.contact_value === contactData.contact_value
@@ -161,7 +168,7 @@ class PersonContactService {
                 );
             }
 
-            // 7. Criar vínculo person_contact
+            // 8. Criar vínculo person_contact
             const personContact = await personContactRepository.create({
                 person_id: personId,
                 contact_id: contact.contact_id

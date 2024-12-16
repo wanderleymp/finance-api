@@ -111,20 +111,18 @@ class ContactRepository {
     }
 
     async create(contactData) {
-        const { contact_type, contact_value, description, active } = contactData;
+        const { contact_type, contact_value } = contactData;
 
         try {
             const query = `
                 INSERT INTO contacts 
-                (contact_type, contact_value, description, active) 
-                VALUES ($1, $2, $3, $4) 
+                (contact_type, contact_value) 
+                VALUES ($1, $2) 
                 RETURNING *
             `;
             const { rows } = await systemDatabase.query(query, [
                 contact_type,
-                contact_value,
-                description,
-                active !== undefined ? active : true
+                contact_value
             ]);
             return rows[0];
         } catch (error) {
@@ -180,6 +178,26 @@ class ContactRepository {
             });
             throw error;
         }
+    }
+
+    async identifyContactType(contactValue) {
+        const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+        const phoneRegex = /^\+?[1-9]\d{1,14}$/;
+        const whatsappRegex = /^(\+?55)?\s?(\d{2})\s?9?\d{4}-?\d{4}$/;
+
+        if (emailRegex.test(contactValue)) {
+            return 'email';
+        }
+
+        if (whatsappRegex.test(contactValue)) {
+            return 'whatsapp';
+        }
+
+        if (phoneRegex.test(contactValue)) {
+            return 'telefone';
+        }
+
+        return 'outros';
     }
 }
 
