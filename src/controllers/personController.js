@@ -1,4 +1,5 @@
-const personService = require('../services/personService');
+const PersonService = require('../services/personService');
+const personService = new PersonService();
 const cnpjService = require('../services/cnpjService');
 const { handleResponse, handleError } = require('../utils/responseHandler');
 const { logger } = require('../middlewares/logger');
@@ -169,17 +170,26 @@ class PersonController {
 
     async createPersonByCnpj(req, res) {
         try {
-            logger.info('Iniciando criação/atualização de pessoa por CNPJ', { 
-                reqParams: JSON.stringify(req.params),
-                reqBody: JSON.stringify(req.body)
+            console.error(' CNPJ CONTROLLER: Iniciando criação/atualização', { 
+                params: req.params,
+                body: req.body
             });
 
             const { cnpj } = req.params;
+            console.error(' CNPJ CONTROLLER: CNPJ recebido:', cnpj);
+            console.error(' CNPJ CONTROLLER: Tipo do CNPJ:', typeof cnpj);
+
+            // Remover caracteres não numéricos
+            const cleanCnpj = cnpj.replace(/[^\d]/g, '');
+            console.error(' CNPJ CONTROLLER: CNPJ limpo:', cleanCnpj);
+            console.error(' CNPJ CONTROLLER: Tipo do CNPJ limpo:', typeof cleanCnpj);
+
             const additionalData = req.body || {};
 
             // Consulta dados da empresa
-            const companyData = await cnpjService.findByCnpj(cnpj);
-            
+            const companyData = await cnpjService.findByCnpj(cleanCnpj);
+            console.error(' CNPJ CONTROLLER: Dados da empresa:', companyData);
+        
             // Preparar dados para persistência
             const personData = {
                 full_name: companyData.razao_social,
@@ -187,7 +197,7 @@ class PersonController {
                 person_type: 'PJ',
                 documents: [{
                     document_type: 'CNPJ',
-                    document_value: cnpj
+                    document_value: cleanCnpj
                 }],
                 additional_data: {
                     ...companyData,
@@ -197,20 +207,15 @@ class PersonController {
             };
 
             // Verificar se já existe pessoa com esse CNPJ
-            const existingPerson = await personService.findPersonByCnpj(cnpj);
+            const existingPerson = await personService.findPersonByCnpj(cleanCnpj);
+            console.error(' CNPJ CONTROLLER: Pessoa existente:', existingPerson);
 
             let resultPerson;
             if (existingPerson) {
                 // Atualizar pessoa existente
-                logger.info('Pessoa com CNPJ já existe, atualizando', { 
-                    personId: existingPerson.person_id 
-                });
-
                 resultPerson = await personService.updatePerson(existingPerson.person_id, personData, req);
-                
-                logger.info('Pessoa atualizada por CNPJ com sucesso', { 
-                    personId: resultPerson.person_id 
-                });
+            
+                console.error(' CNPJ CONTROLLER: Pessoa atualizada', resultPerson);
 
                 handleResponse(res, 200, { 
                     data: resultPerson,
@@ -220,9 +225,7 @@ class PersonController {
                 // Criar nova pessoa
                 resultPerson = await personService.createPerson(personData, req);
 
-                logger.info('Pessoa criada por CNPJ com sucesso', { 
-                    personId: resultPerson.person_id 
-                });
+                console.error(' CNPJ CONTROLLER: Pessoa criada', resultPerson);
 
                 handleResponse(res, 201, { 
                     data: resultPerson,
@@ -231,13 +234,33 @@ class PersonController {
             }
 
         } catch (error) {
-            logger.error('Erro na criação/atualização de pessoa por CNPJ', {
-                errorMessage: error.message,
-                errorStack: error.stack
+            console.error(' CNPJ CONTROLLER: Erro', {
+                message: error.message,
+                stack: error.stack
             });
+            handleError(res, error);
+        }
+    }
+
+    async addPersonAddress(req, res) {
+        try {
+            console.error(' CONTROLLER: addPersonAddress - INÍCIO');
+            console.error(' CONTROLLER: params:', req.params);
+            console.error(' CONTROLLER: body:', req.body);
+            
+            const { id: personId } = req.params;
+            const addressData = req.body;
+            
+            console.error(' CONTROLLER: Chamando personService.addPersonAddress');
+            const newAddress = await personService.addPersonAddress(personId, addressData);
+            
+            console.error(' CONTROLLER: Endereço criado com sucesso');
+            handleResponse(res, 201, { data: newAddress });
+        } catch (error) {
+            console.error(' CONTROLLER: Erro no addPersonAddress', error);
             handleError(res, error);
         }
     }
 }
 
-module.exports = new PersonController();
+module.exports = PersonController;

@@ -1,5 +1,5 @@
 const personAddressRepository = require('../repositories/personAddressRepository');
-const personService = require('./personService');
+const personRepository = require('../repositories/personRepository');
 const { ValidationError } = require('../utils/errors');
 const PaginationHelper = require('../utils/paginationHelper');
 
@@ -20,8 +20,16 @@ class PersonAddressService {
     }
 
     async createPersonAddress(addressData) {
-        // Validar se a pessoa existe
-        await personService.getPerson(addressData.person_id);
+        console.error('🚨 ENDEREÇO: Criando endereço', addressData);
+
+        // Validar se a pessoa existe usando o repositório diretamente
+        const { data: pessoa, total } = await personRepository.findById(addressData.person_id);
+        
+        console.error('🚨 ENDEREÇO: Verificando pessoa', { pessoa, total });
+
+        if (!pessoa || total === 0) {
+            throw new ValidationError('Pessoa não encontrada', 404);
+        }
 
         // Validar dados obrigatórios
         this.validateAddressData(addressData);
@@ -35,7 +43,10 @@ class PersonAddressService {
 
         // Se person_id for fornecido, validar se a pessoa existe
         if (addressData.person_id) {
-            await personService.getPerson(addressData.person_id);
+            const { data: pessoa, total } = await personRepository.findById(addressData.person_id);
+            if (!pessoa || total === 0) {
+                throw new ValidationError('Pessoa não encontrada', 404);
+            }
         }
 
         return await personAddressRepository.update(addressId, addressData);
@@ -50,13 +61,14 @@ class PersonAddressService {
 
     validateAddressData(data) {
         const requiredFields = [
-            'person_id', 'street', 'number', 'city', 
-            'state', 'postal_code'
+            'person_id', 'street', 'number', 
+            'neighborhood', 'city', 'state', 
+            'postal_code', 'country'
         ];
 
         for (const field of requiredFields) {
             if (!data[field]) {
-                throw new ValidationError(`O campo ${field} é obrigatório`, 400);
+                throw new ValidationError(`Campo ${field} é obrigatório`);
             }
         }
 

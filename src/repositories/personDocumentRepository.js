@@ -7,44 +7,58 @@ class PersonDocumentRepository {
         this.pool = systemDatabase.pool;
     }
 
-    async findAll(filters = {}, page = 1, limit = 10) {
+    async findAll(filters = {}) {
         try {
-            let query = `
+            // Conversão segura de filtros
+            const safeFilters = Object.entries(filters).reduce((acc, [key, value]) => {
+                // Garantir que valores numéricos sejam números válidos
+                if (key === 'person_id') {
+                    const numValue = Number(value);
+                    if (!isNaN(numValue) && numValue > 0) {
+                        acc[key] = numValue;
+                    }
+                } else {
+                    acc[key] = value;
+                }
+                return acc;
+            }, {});
+
+            console.error(' REPOSITÓRIO DOCUMENTO: Filtros seguros', { 
+                originalFilters: filters,
+                safeFilters 
+            });
+
+            // Construir cláusulas WHERE dinamicamente
+            const whereConditions = Object.entries(safeFilters)
+                .map(([key, value], index) => `pd.${key} = $${index + 1}`)
+                .join(' AND ');
+
+            const queryText = `
                 SELECT pd.*, p.full_name as person_name 
                 FROM person_documents pd
                 LEFT JOIN persons p ON p.person_id = pd.person_id 
-                WHERE 1=1
+                ${whereConditions ? `WHERE ${whereConditions}` : ''}
+                ORDER BY pd.person_document_id DESC
             `;
-            const values = [];
-            let paramCount = 1;
 
-            if (filters.person_id) {
-                query += ` AND pd.person_id = $${paramCount}`;
-                values.push(filters.person_id);
-                paramCount++;
-            }
+            const queryValues = Object.values(safeFilters);
 
-            if (filters.document_type) {
-                query += ` AND pd.document_type = $${paramCount}`;
-                values.push(filters.document_type);
-                paramCount++;
-            }
+            console.error(' REPOSITÓRIO DOCUMENTO: Query de busca', { 
+                queryText,
+                queryValues 
+            });
 
-            if (filters.document_value) {
-                query += ` AND pd.document_value = $${paramCount}`;
-                values.push(filters.document_value);
-                paramCount++;
-            }
+            const { rows } = await this.pool.query(queryText, queryValues);
 
-            query += ` ORDER BY pd.person_document_id DESC`;
+            console.error(' REPOSITÓRIO DOCUMENTO: Resultado', { 
+                rowsCount: rows.length,
+                rows 
+            });
 
-            // Adicionar paginação
-            query += ` LIMIT $${paramCount} OFFSET $${paramCount + 1}`;
-            values.push(limit);
-            values.push((page - 1) * limit);
-
-            const result = await this.pool.query(query, values);
-            return result.rows;
+            return {
+                data: rows,
+                total: rows.length
+            };
         } catch (error) {
             logger.error('Erro ao buscar documentos de pessoas', {
                 error: error.message,

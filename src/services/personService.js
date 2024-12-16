@@ -11,8 +11,28 @@ const PersonUpdateDto = require('../dtos/personUpdateDto');
 const personLicenseRepository = require('../repositories/personLicenseRepository');
 const userLicenseRepository = require('../repositories/userLicenseRepository');
 const cnpjService = require('../services/cnpjService');
+const cepService = require('../services/cepService');
+const personAddressService = require('./personAddressService');
 
 class PersonService {
+    constructor() {
+        console.error('🔍 CONSTRUCTOR: Inicializando PersonService');
+        
+        // Log detalhado de métodos
+        const methodNames = Object.getOwnPropertyNames(Object.getPrototypeOf(this))
+            .filter(prop => typeof this[prop] === 'function' && prop !== 'constructor');
+        
+        console.error('🔍 CONSTRUCTOR: Métodos disponíveis:', methodNames);
+
+        // Bind explícito de TODOS os métodos
+        methodNames.forEach(methodName => {
+            console.error(`🔍 CONSTRUCTOR: Binding método ${methodName}`);
+            this[methodName] = this[methodName].bind(this);
+        });
+
+        console.error('🔍 CONSTRUCTOR: Finalizado');
+    }
+
     async listPersons(page, limit, search) {
         try {
             // Valida e normaliza parâmetros de paginação
@@ -58,6 +78,13 @@ class PersonService {
 
     async getPerson(personId) {
         const { data, total } = await personRepository.findById(personId);
+        
+        logger.info('Detalhes da busca de pessoa', { 
+            personId, 
+            data, 
+            total 
+        });
+
         if (!data || total === 0) {
             throw new ValidationError('Pessoa não encontrada', 404);
         }
@@ -83,12 +110,43 @@ class PersonService {
         return { contacts, total: contacts.length };
     }
 
+    async getPersonAddresses(personId, client = null) {
+        try {
+            const dbClient = client || systemDatabase;
+            const addresses = await personAddressRepository.findAll({ person_id: personId });
+            return addresses.data || [];
+        } catch (error) {
+            console.error('Erro ao buscar endereços da pessoa', {
+                personId,
+                error: error.message,
+                stack: error.stack
+            });
+            return [];
+        }
+    }
+
     async createPerson(personData, req, client = null) {
         try {
-            logger.info(' Criando nova pessoa', { personData });
+            console.error('🚨 CRIANDO PESSOA - INÍCIO COMPLETO', { 
+                personDataRaw: JSON.stringify(personData, null, 2),
+                personDataKeys: Object.keys(personData),
+                personDataTypes: Object.entries(personData).reduce((acc, [key, value]) => {
+                    acc[key] = typeof value;
+                    return acc;
+                }, {}),
+                clientProvided: !!client 
+            });
 
             // Validar dados da pessoa
             const validatedData = await this.validatePersonData(personData);
+
+            console.error('🚨 DADOS VALIDADOS', { 
+                validatedData: JSON.stringify(validatedData, null, 2),
+                validatedDataTypes: Object.entries(validatedData).reduce((acc, [key, value]) => {
+                    acc[key] = typeof value;
+                    return acc;
+                }, {})
+            });
 
             // Formatar nomes
             validatedData.full_name = this.formatName(validatedData.full_name);
@@ -101,18 +159,32 @@ class PersonService {
             const result = await personRepository.create(validatedData, dbClient);
             const personId = result.person_id;
 
+            console.error('🚨 PESSOA CRIADA', { 
+                personId,
+                result: JSON.stringify(result, null, 2)
+            });
+
             // Adicionar documentos, se existirem
             if (personData.documents) {
+                console.error('🚨 SALVANDO DOCUMENTOS', { 
+                    documents: JSON.stringify(personData.documents, null, 2)
+                });
                 await this.savePersonDocuments(personId, personData.documents, dbClient);
             }
 
             // Adicionar contatos, se existirem
             if (personData.contacts) {
+                console.error('🚨 SALVANDO CONTATOS', { 
+                    contacts: JSON.stringify(personData.contacts, null, 2)
+                });
                 await this.addPersonContacts(personId, personData.contacts, dbClient);
             }
 
             // Adicionar endereços, se existirem
             if (personData.addresses) {
+                console.error('🚨 SALVANDO ENDEREÇOS', { 
+                    addresses: JSON.stringify(personData.addresses, null, 2)
+                });
                 await this.addPersonAddresses(personId, personData.addresses, dbClient);
             }
 
@@ -123,62 +195,98 @@ class PersonService {
             const person = await personRepository.findPersonById(personId, dbClient);
             person.licenses = userLicenses;
 
+            console.error('🚨 PESSOA COMPLETA', { 
+                person: JSON.stringify(person, null, 2)
+            });
+
             return person;
 
         } catch (error) {
-            logger.error(' Erro ao criar pessoa', { 
+            console.error('🚨 ERRO AO CRIAR PESSOA', { 
                 errorMessage: error.message,
-                errorStack: error.stack
+                errorStack: error.stack,
+                personData: JSON.stringify(personData, null, 2)
             });
             throw error;
         }
     }
 
-    async updatePerson(personId, personData, req, client = null) {
+    async updatePerson(personId, personData) {
         try {
-            logger.info(' Atualizando pessoa', { personId, personData });
+            logger.info('Iniciando atualização de pessoa', { 
+                personId, 
+                personData: JSON.stringify(personData) 
+            });
 
-            // Validar dados da pessoa
-            const validatedData = await this.validatePersonData(personData);
+            // Preparar dados básicos da pessoa
+            const { 
+                full_name, 
+                fantasy_name, 
+                birth_date, 
+                person_type, 
+                active 
+            } = personData;
 
-            // Formatar nomes
-            validatedData.full_name = this.formatName(validatedData.full_name);
-            validatedData.fantasy_name = this.formatName(validatedData.fantasy_name);
+            logger.info('Dados básicos extraídos', { 
+                full_name, 
+                fantasy_name, 
+                birth_date, 
+                person_type, 
+                active 
+            });
 
-            // Usar o cliente de transação ou o padrão
-            const dbClient = client || systemDatabase;
+            // Atualizar dados básicos da pessoa
+            const updatedPerson = await personRepository.update(personId, {
+                full_name,
+                fantasy_name,
+                birth_date,
+                person_type,
+                active,
+                updated_at: new Date()
+            });
 
-            // Atualizar pessoa no banco de dados
-            await personRepository.updatePerson(personId, validatedData, dbClient);
+            logger.info('Dados básicos da pessoa atualizados', { updatedPerson });
 
-            // Atualizar documentos, se existirem
-            if (personData.documents) {
-                await this.savePersonDocuments(personId, personData.documents, dbClient);
+            // Processa endereços
+            if (personData.addresses && personData.addresses.length > 0) {
+                console.log('🌍 Endereços a serem salvos:', JSON.stringify(personData.addresses, null, 2));
+                logger.info('Preparando para salvar endereços', { 
+                    addressCount: personData.addresses.length,
+                    personId 
+                });
+                
+                const processedAddresses = await this.addPersonAddresses(personId, personData.addresses);
+                
+                console.log('✅ Endereços processados:', JSON.stringify(processedAddresses, null, 2));
+                logger.info('Endereços processados com sucesso', { processedAddresses });
+            } else {
+                logger.info('Nenhum endereço para processar');
             }
 
-            // Atualizar contatos, se existirem
-            if (personData.contacts) {
-                await this.addPersonContacts(personId, personData.contacts, dbClient);
+            // Processar documentos
+            if (personData.documents && personData.documents.length > 0) {
+                const processedDocuments = await this.addPersonDocuments(personId, personData.documents);
+                logger.info('Documentos processados', { processedDocuments });
             }
 
-            // Atualizar endereços, se existirem
-            if (personData.addresses) {
-                await this.addPersonAddresses(personId, personData.addresses, dbClient);
+            // Processar contatos
+            if (personData.contacts && personData.contacts.length > 0) {
+                const processedContacts = await this.addPersonContacts(personId, personData.contacts);
+                logger.info('Contatos processados', { processedContacts });
             }
 
-            // Adicionar licenças do usuário
-            const userLicenses = await this.addPersonLicenses(personId, req, dbClient);
+            // Buscar pessoa atualizada com todos os dados relacionados
+            const updatedPersonWithDetails = await this.findPersonById(personId);
+            logger.info('Pessoa atualizada com detalhes', { updatedPersonWithDetails });
 
-            // Recuperar pessoa completa
-            const person = await personRepository.findPersonById(personId, dbClient);
-            person.licenses = userLicenses;
-
-            return person;
+            return updatedPersonWithDetails;
 
         } catch (error) {
-            logger.error(' Erro ao atualizar pessoa', { 
-                errorMessage: error.message,
-                errorStack: error.stack
+            logger.error('Erro ao atualizar pessoa', { 
+                personId, 
+                personData: JSON.stringify(personData),
+                error: error.message,
+                stack: error.stack 
             });
             throw error;
         }
@@ -245,142 +353,93 @@ class PersonService {
     }
 
     async createOrUpdatePersonByCnpj(cnpj) {
-        const client = await systemDatabase.connect();
-
+        const cnpjService = require('../services/cnpjService');
+        
         try {
-            // Iniciar transação
-            await client.query('BEGIN');
+            logger.info('Iniciando criação/atualização de pessoa por CNPJ', { 
+                reqParams: { cnpj } 
+            });
 
-            logger.info('Processando pessoa por CNPJ', { cnpj });
+            // Validar e limpar o CNPJ
+            const cleanCnpj = await cnpjService.validateCnpj(cnpj);
+            logger.info('CNPJ validado', { cleanCnpj });
+
+            // Buscar dados da empresa na API da Receita
+            const companyData = await cnpjService.findCnpjData(cleanCnpj);
+            logger.info('Dados da empresa obtidos', { companyData });
 
             // Preparar dados da pessoa
-            const originalPersonData = await this.preparePersonData(cnpj);
-
-            logger.error('PREPARANDO DADOS DA PESSOA - INÍCIO', { cnpj });
-
-            logger.error('PREPARANDO DADOS DA PESSOA - DADOS DA EMPRESA', { originalPersonData });
-
-            if (!originalPersonData) {
-                throw new ValidationError('Dados da empresa não encontrados');
-            }
-
-            // Preparar contatos
-            const contacts = [];
-            if (originalPersonData.email) {
-                contacts.push({
-                    contact_type: 'email',
-                    contact_value: originalPersonData.email
-                });
-            }
-            if (originalPersonData.telefone) {
-                contacts.push({
-                    contact_type: 'phone',
-                    contact_value: originalPersonData.telefone.replace(/\D/g, '')
-                });
-            }
-
-            // Preparar endereços
-            const addresses = [{
-                street: originalPersonData.logradouro || '',
-                number: originalPersonData.numero || '',
-                complement: originalPersonData.complemento || '',
-                neighborhood: originalPersonData.bairro || '',
-                city: originalPersonData.municipio || '',
-                state: originalPersonData.uf || '',
-                zip_code: originalPersonData.cep ? originalPersonData.cep.replace(/\D/g, '') : ''
-            }];
-
-            // Mapeamento de campos
             const personData = {
-                full_name: originalPersonData.razao_social,
-                fantasy_name: originalPersonData.fantasia,
-                birth_date: originalPersonData.data_abertura ? new Date(originalPersonData.data_abertura) : null,
+                full_name: companyData.nome,
+                fantasy_name: companyData.fantasia,
                 person_type: 'PJ',
-                contacts,
-                addresses,
-                additional_data: {
-                    cnpj: originalPersonData.cnpj || cnpj,
-                    situation: originalPersonData.situacao || '',
-                    legal_nature: originalPersonData.natureza_juridica || '',
-                    company_size: originalPersonData.porte || '',
-                    social_capital: parseFloat(originalPersonData.capital_social) || 0,
-                    main_activity: originalPersonData.atividade_principal 
-                        ? originalPersonData.atividade_principal[0]?.text || ''
-                        : '',
-                    last_update: originalPersonData.ultima_atualizacao || new Date()
-                }
-            };
-
-            logger.error('PREPARANDO DADOS DA PESSOA - DADOS FINAIS', { personData });
-
-            // Garantir que full_name sempre exista
-            const basePersonData = {
-                full_name: personData.full_name || `Pessoa CNPJ ${cnpj}`,
-                fantasy_name: personData.fantasy_name,
-                person_type: personData.person_type || 'PJ',
-                birth_date: personData.birth_date,
-                additional_data: personData.additional_data || {}
-            };
-
-            logger.error('DADOS PROCESSADOS DA PESSOA', { basePersonData });
-
-            // Log de depuração
-            logger.info('Dados da pessoa processados', { 
-                cnpj, 
-                personData, 
-                fullName: basePersonData.full_name 
-            });
-
-            // Buscar pessoa existente por CNPJ
-            let existingPerson = await this.findPersonByCnpj(cnpj);
-
-            logger.error('PESSOA EXISTENTE', { existingPerson });
-
-            // Se não encontrar por CNPJ, buscar por nome completo usando método de listagem
-            if (!existingPerson) {
-                const searchResult = await personRepository.findAll(1, 1, basePersonData.full_name);
-                existingPerson = searchResult.data[0];
-            }
-
-            let person;
-            const basePersonDataWithDocs = {
-                ...basePersonData,
+                active: true,
                 documents: [{
                     document_type: 'CNPJ',
-                    document_value: cnpj
+                    document_value: cleanCnpj
                 }],
-                addresses: originalPersonData.addresses || [],
-                contacts: originalPersonData.contacts || []
+                contacts: [],
+                addresses: []
             };
 
-            logger.error('BASE PERSON DATA', { basePersonDataWithDocs });
-
-            if (existingPerson) {
-                // Atualizar pessoa existente
-                person = await this.updatePerson(existingPerson.person_id, basePersonDataWithDocs, null, client);
+            // Adicionar endereço se disponível
+            if (companyData.logradouro || companyData.cep) {
+                const address = {
+                    street: companyData.logradouro || '',
+                    number: companyData.numero || '',
+                    complement: companyData.complemento || '',
+                    neighborhood: companyData.bairro || '',
+                    city: companyData.municipio || '',
+                    state: companyData.uf || '',
+                    postal_code: (companyData.cep || '').replace(/\D/g, ''),
+                    country: 'Brasil'
+                };
+                personData.addresses.push(address);
+                console.log('🏠 Endereço preparado:', JSON.stringify(address, null, 2));
             } else {
-                // Criar nova pessoa
-                person = await this.createPerson(basePersonDataWithDocs, null, client);
+                console.log('❌ Nenhum endereço disponível para a empresa');
             }
 
-            // Commit da transação
-            await client.query('COMMIT');
+            // Adicionar contatos se disponíveis
+            if (companyData.email) {
+                personData.contacts.push({
+                    contact_type: 'EMAIL',
+                    contact_value: companyData.email
+                });
+            }
 
-            return person;
+            if (companyData.telefone) {
+                // Remover caracteres não numéricos do telefone
+                const cleanPhone = companyData.telefone.replace(/\D/g, '');
+                if (cleanPhone) {
+                    personData.contacts.push({
+                        contact_type: 'PHONE',
+                        contact_value: cleanPhone
+                    });
+                }
+            }
+
+            // Buscar pessoa existente pelo CNPJ
+            const existingPerson = await this.findPersonByCnpj(cleanCnpj);
+
+            let savedPerson;
+            if (existingPerson) {
+                // Atualizar pessoa existente
+                savedPerson = await this.updatePerson(existingPerson.person_id, personData);
+            } else {
+                // Criar nova pessoa
+                savedPerson = await this.createPerson(personData);
+            }
+
+            return savedPerson;
 
         } catch (error) {
-            // Rollback em caso de erro
-            await client.query('ROLLBACK');
-
-            logger.error('Erro no processamento de pessoa por CNPJ', {
-                errorMessage: error.message,
-                errorStack: error.stack,
-                cnpj
+            logger.error('Erro ao criar/atualizar pessoa por CNPJ', { 
+                cnpj, 
+                error: error.message,
+                stack: error.stack 
             });
             throw error;
-        } finally {
-            // Liberar cliente
-            client.release();
         }
     }
 
@@ -432,8 +491,11 @@ class PersonService {
                 neighborhood: companyData.bairro || '',
                 city: companyData.municipio || '',
                 state: companyData.uf || '',
-                zip_code: companyData.cep ? companyData.cep.replace(/\D/g, '') : ''
+                zip_code: companyData.cep ? companyData.cep.replace(/\D/g, '') : '',
+                country: 'Brasil'
             }];
+
+            logger.error('PREPARANDO DADOS DA PESSOA - ENDEREÇOS PREPARADOS', { addresses });
 
             // Mapeamento de campos
             const personData = {
@@ -471,82 +533,89 @@ class PersonService {
 
     async fetchCompanyData(cnpj) {
         try {
-            logger.info(' Buscando dados externos da empresa', { cnpj });
-            const companyData = await cnpjService.findByCnpj(cnpj);
-            
+            logger.error('PREPARANDO DADOS DA PESSOA - INÍCIO', { cnpj });
+            const companyData = await this.fetchCompanyData(cnpj);
+
+            logger.error('PREPARANDO DADOS DA PESSOA - DADOS DA EMPRESA', { companyData });
+
             if (!companyData) {
-                logger.warn(' Dados da empresa não encontrados, retornando objeto vazio', { cnpj });
-                return {
-                    cnpj: cnpj,
-                    razao_social: `Pessoa CNPJ ${cnpj}`,
-                    nome: `Pessoa CNPJ ${cnpj}`,
-                    fantasia: null,
-                    data_abertura: null,
-                    situacao_cadastral: '',
-                    natureza_juridica: '',
-                    porte: '',
-                    capital_social: 0,
-                    atividade_principal: '',
-                    ultima_atualizacao: new Date(),
-                    contato: { email: '', telefone: '' },
-                    endereco: { 
-                        logradouro: '', 
-                        numero: '', 
-                        complemento: '', 
-                        bairro: '', 
-                        cidade: '', 
-                        estado: '', 
-                        cep: '' 
-                    },
-                    qsa: []
-                };
+                throw new ValidationError('Dados da empresa não encontrados');
             }
-            
-            logger.info(' Dados da empresa encontrados', { 
-                cnpj, 
-                razao_social: companyData.razao_social 
-            });
 
-            // Log detalhado dos dados da empresa
-            logger.error('DEBUG: Dados completos da empresa', { companyData });
+            // Preparar contatos
+            const contacts = [];
+            if (companyData.email) {
+                contacts.push({
+                    contact_type: 'email',
+                    contact_value: companyData.email
+                });
+            }
+            if (companyData.telefone) {
+                contacts.push({
+                    contact_type: 'phone',
+                    contact_value: companyData.telefone.replace(/\D/g, '')
+                });
+            }
 
-            return companyData;
+            // Preparar endereços
+            const addresses = [{
+                street: companyData.logradouro || '',
+                number: companyData.numero || '',
+                complement: companyData.complemento || '',
+                neighborhood: companyData.bairro || '',
+                city: companyData.municipio || '',
+                state: companyData.uf || '',
+                zip_code: companyData.cep ? companyData.cep.replace(/\D/g, '') : '',
+                country: 'Brasil'
+            }];
+
+            logger.error('PREPARANDO DADOS DA PESSOA - ENDEREÇOS PREPARADOS', { addresses });
+
+            // Mapeamento de campos
+            const personData = {
+                full_name: companyData.razao_social,
+                fantasy_name: companyData.fantasia,
+                birth_date: companyData.data_abertura ? new Date(companyData.data_abertura) : null,
+                person_type: 'PJ',
+                contacts,
+                addresses,
+                additional_data: {
+                    cnpj: companyData.cnpj || cnpj,
+                    situation: companyData.situacao || '',
+                    legal_nature: companyData.natureza_juridica || '',
+                    company_size: companyData.porte || '',
+                    social_capital: parseFloat(companyData.capital_social) || 0,
+                    main_activity: companyData.atividade_principal 
+                        ? companyData.atividade_principal[0]?.text || ''
+                        : '',
+                    last_update: companyData.ultima_atualizacao || new Date()
+                }
+            };
+
+            logger.error('PREPARANDO DADOS DA PESSOA - DADOS FINAIS', { personData });
+
+            return personData;
         } catch (error) {
-            logger.warn(' Erro ao buscar dados da empresa, retornando objeto vazio', { 
+            logger.error('Erro ao preparar dados da pessoa', {
                 cnpj,
                 errorMessage: error.message,
                 errorStack: error.stack
             });
-            
-            return {
-                cnpj: cnpj,
-                razao_social: `Pessoa CNPJ ${cnpj}`,
-                nome: `Pessoa CNPJ ${cnpj}`,
-                fantasia: null,
-                data_abertura: null,
-                situacao_cadastral: '',
-                natureza_juridica: '',
-                porte: '',
-                capital_social: 0,
-                atividade_principal: '',
-                ultima_atualizacao: new Date(),
-                contato: { email: '', telefone: '' },
-                endereco: { 
-                    logradouro: '', 
-                    numero: '', 
-                    complemento: '', 
-                    bairro: '', 
-                    cidade: '', 
-                    estado: '', 
-                    cep: '' 
-                },
-                qsa: []
-            };
+            throw error;
         }
     }
 
     async findPersonByCnpj(cnpj) {
         try {
+            // Garantir que o CNPJ seja uma string limpa
+            const cleanCnpj = String(cnpj).replace(/[^\d]/g, '');
+
+            console.error('🔍 FIND PERSON BY CNPJ', { 
+                originalCnpj: cnpj, 
+                cleanCnpj,
+                cleanCnpjType: typeof cleanCnpj 
+            });
+
             const query = `
                 SELECT p.* 
                 FROM persons p
@@ -555,8 +624,13 @@ class PersonService {
                 AND pd.document_value = $1
             `;
             
-            const { rows } = await systemDatabase.query(query, [cnpj]);
+            const { rows } = await systemDatabase.query(query, [cleanCnpj]);
             
+            console.error('🔍 FIND PERSON BY CNPJ RESULT', { 
+                rowsCount: rows.length,
+                rows 
+            });
+
             return rows.length > 0 ? rows[0] : null;
         } catch (error) {
             logger.error('Erro ao buscar pessoa por CNPJ', {
@@ -655,68 +729,210 @@ class PersonService {
         }
     }
 
-    // Método para adicionar documentos
-    async addPersonDocuments(personId, documents, client = null) {
-        const personDocumentRepository = require('../repositories/personDocumentRepository');
-        
+    async addPersonDocuments(personId, documents) {
         try {
-            logger.info(' Adicionando documentos da pessoa', { personId, documents });
-
-            // Usar o cliente de transação ou o padrão
-            const dbClient = client || systemDatabase;
-
-            for (const doc of documents) {
-                // Verificar se o documento já existe para qualquer pessoa
-                const existingDocuments = await personDocumentRepository.findAll({
-                    document_type: doc.document_type,
-                    document_value: doc.document_value
-                }, dbClient);
-
-                if (existingDocuments.length > 0) {
-                    // Se o documento já existe para outra pessoa, lançar erro
-                    throw new ValidationError(`Documento ${doc.document_type} ${doc.document_value} já cadastrado`);
-                }
-
-                // Criar novo documento
-                await personDocumentRepository.createPersonDocument({
-                    person_id: personId,
-                    ...doc
-                }, dbClient);
-            }
-        } catch (error) {
-            logger.error(' Erro ao adicionar documentos da pessoa', { 
+            console.log('🔍 PERSON SERVICE: Adicionando documentos', { 
                 personId, 
                 documents,
-                error: error.message 
+                personIdType: typeof personId 
+            });
+
+            // Validar personId
+            const validPersonId = Number(personId);
+            if (isNaN(validPersonId) || validPersonId <= 0) {
+                throw new Error('Invalid person ID');
+            }
+
+            // Filtrar e validar documentos
+            const validDocuments = documents.filter(doc => 
+                doc.document_type && 
+                doc.document_value && 
+                typeof doc.document_type === 'string' &&
+                typeof doc.document_value === 'string'
+            );
+
+            if (validDocuments.length === 0) {
+                console.warn('🚨 PERSON SERVICE: Nenhum documento válido para adicionar');
+                return [];
+            }
+
+            const addedDocuments = [];
+
+            for (const doc of validDocuments) {
+                try {
+                    const result = await this.personDocumentRepository.create({
+                        person_id: validPersonId,
+                        document_type: doc.document_type,
+                        document_value: doc.document_value
+                    });
+                    addedDocuments.push(result);
+                } catch (docError) {
+                    console.error('🚨 PERSON SERVICE: Erro ao adicionar documento individual', {
+                        personId: validPersonId,
+                        document: doc,
+                        error: docError.message
+                    });
+                }
+            }
+
+            return addedDocuments;
+        } catch (error) {
+            console.error('🚨 PERSON SERVICE: Erro ao adicionar documentos', {
+                personId,
+                documents,
+                error: error.message,
+                stack: error.stack
             });
             throw error;
         }
     }
 
-    // Método para adicionar endereços
     async addPersonAddresses(personId, addresses, client = null) {
         const personAddressRepository = require('../repositories/personAddressRepository');
+        const cepService = require('../services/cepService');
         
-        try {
-            logger.info(' Adicionando endereços da pessoa', { personId, addresses });
+        console.log('🏠 INÍCIO - Processamento de Endereços', { 
+            personId, 
+            addressCount: addresses.length,
+            addressDetails: JSON.stringify(addresses, null, 2)
+        });
 
+        try {
             // Usar o cliente de transação ou o padrão
             const dbClient = client || systemDatabase;
 
+            // Buscar endereços existentes
+            console.log('🔍 Buscando endereços existentes para pessoa');
+            const existingAddresses = await personAddressRepository.findByPersonId(personId);
+            console.log('📋 Endereços existentes:', JSON.stringify(existingAddresses, null, 2));
+
+            // Mapear endereços existentes por identificadores únicos
+            const addressMap = new Map(
+                existingAddresses.map(addr => [
+                    this.generateAddressKey(addr), 
+                    addr
+                ])
+            );
+
+            // Processar cada endereço recebido
             for (const address of addresses) {
-                await personAddressRepository.createPersonAddress({
-                    person_id: personId,
-                    ...address
-                }, dbClient);
+                console.log('🌐 PROCESSANDO ENDEREÇO', { addressInput: address });
+                
+                const addressKey = this.generateAddressKey(address);
+                console.log('🔑 CHAVE DE ENDEREÇO', { addressKey });
+                
+                // Verificar se o endereço já existe
+                const existingAddress = addressMap.get(addressKey);
+                console.log('🏘️ ENDEREÇO EXISTENTE', { existingAddress });
+
+                // Verificar se precisa buscar dados do CEP
+                let addressData = { ...address };
+                if ((!address.ibge || address.ibge.trim() === '') && address.postal_code) {
+                    console.log('🔎 Buscando informações de CEP', { cep: address.postal_code });
+                    try {
+                        const cepInfo = await cepService.findAddressByCep(address.postal_code);
+                        if (cepInfo && cepInfo.ibge) {
+                            addressData.ibge = cepInfo.ibge;
+                            console.log('✅ Informações de CEP encontradas', { cepInfo });
+                        }
+                    } catch (cepError) {
+                        console.warn('❗ Erro ao consultar CEP', { 
+                            cep: address.postal_code,
+                            error: cepError.message 
+                        });
+                    }
+                }
+
+                if (existingAddress) {
+                    // Atualizar endereço existente
+                    console.log('🔄 Atualizando endereço existente', { 
+                        existingAddressId: existingAddress.id,
+                        addressData 
+                    });
+                    const updatedAddress = await personAddressRepository.update(
+                        existingAddress.id, 
+                        {
+                            street: addressData.street,
+                            number: addressData.number,
+                            complement: addressData.complement,
+                            neighborhood: addressData.neighborhood,
+                            city: addressData.city,
+                            state: addressData.state,
+                            postal_code: addressData.postal_code || addressData.zip_code,
+                            country: addressData.country || 'Brasil',
+                            reference: addressData.reference,
+                            ibge: addressData.ibge
+                        }
+                    );
+                    console.log('✅ ENDEREÇO ATUALIZADO', { updatedAddress });
+                    
+                    // Remover da lista de mapeamento para não ser deletado
+                    addressMap.delete(addressKey);
+                } else {
+                    // Criar novo endereço
+                    console.log('➕ Criando novo endereço', { 
+                        personId,
+                        addressData 
+                    });
+                    const newAddress = await personAddressRepository.create({
+                        person_id: personId,
+                        street: addressData.street,
+                        number: addressData.number,
+                        complement: addressData.complement,
+                        neighborhood: addressData.neighborhood,
+                        city: addressData.city,
+                        state: addressData.state,
+                        postal_code: addressData.postal_code || addressData.zip_code,
+                        country: addressData.country || 'Brasil',
+                        reference: addressData.reference,
+                        ibge: addressData.ibge
+                    });
+                    console.log('✅ NOVO ENDEREÇO CRIADO', { newAddress });
+                }
             }
+
+            // Remover endereços que não foram atualizados
+            for (const [, addressToDelete] of addressMap) {
+                const deletedAddress = await personAddressRepository.delete(addressToDelete.id);
+                console.log('❌ ENDEREÇO DELETADO', { deletedAddress });
+            }
+
         } catch (error) {
-            logger.error(' Erro ao adicionar endereços da pessoa', { 
+            console.error('❌ Erro ao processar endereços da pessoa', { 
+                personId, 
+                addresses,
+                error: error.message 
+            });
+            logger.error('Erro ao adicionar endereços', { 
                 personId, 
                 addresses,
                 error: error.message 
             });
             throw error;
         }
+    }
+
+    // Método auxiliar para gerar chave única de endereço
+    generateAddressKey(address) {
+        // Remove espaços e converte para minúsculas para comparação
+        const normalize = (str) => str ? str.trim().toLowerCase() : '';
+
+        const addressKey = [
+            normalize(address.street),
+            normalize(address.number),
+            normalize(address.complement),
+            normalize(address.neighborhood),
+            normalize(address.city),
+            normalize(address.state),
+            normalize(address.postal_code || address.zip_code)
+        ].join('|');
+
+        console.log('🔑 Gerando chave de endereço:', {
+            originalAddress: address,
+            addressKey
+        });
+
+        return addressKey;
     }
 
     // Método para adicionar contatos
@@ -789,6 +1005,143 @@ class PersonService {
             // Não lança erro para não interromper o fluxo de criação/atualização
         }
     }
+
+    async preparePersonData(personData, personId = null) {
+        logger.info('Preparando dados da pessoa', { personData, personId });
+
+        // Extrair dados básicos da pessoa
+        const { 
+            full_name, 
+            fantasy_name, 
+            birth_date, 
+            person_type = 'PF', 
+            active = true 
+        } = personData;
+
+        logger.info('Dados básicos extraídos', { 
+            full_name, 
+            fantasy_name, 
+            birth_date, 
+            person_type, 
+            active 
+        });
+
+        // Preparar objeto de dados da pessoa
+        const personDataToSave = {
+            full_name,
+            fantasy_name,
+            birth_date,
+            person_type,
+            active
+        };
+
+        logger.info('Dados da pessoa para salvar', { personDataToSave });
+
+        // Processar documentos
+        if (personData.documents && personData.documents.length > 0) {
+            const processedDocuments = await this.processPersonDocuments(personData.documents, personId);
+            logger.info('Documentos processados', { processedDocuments });
+        }
+
+        // Processar contatos
+        if (personData.contacts && personData.contacts.length > 0) {
+            const processedContacts = await this.addPersonContacts(personId, personData.contacts);
+            logger.info('Contatos processados', { processedContacts });
+        }
+
+        // Processar endereços
+        if (personData.addresses && personData.addresses.length > 0) {
+            logger.info('Preparando para processar endereços', { 
+                addresses: personData.addresses, 
+                personId 
+            });
+            const processedAddresses = await this.addPersonAddresses(personId, personData.addresses);
+            logger.info('Endereços processados', { processedAddresses });
+        } else {
+            logger.info('Nenhum endereço para processar');
+        }
+
+        return personDataToSave;
+    }
+
+    async addPersonAddress(personId, addressData) {
+        try {
+            console.error('🚨 PERSON SERVICE: Adicionando endereço', { personId, addressData });
+
+            // Validar se a pessoa existe usando o repositório diretamente
+            const { data: pessoa, total } = await personRepository.findById(personId);
+            
+            console.error('🚨 PERSON SERVICE: Verificando pessoa', { pessoa, total });
+
+            if (!pessoa || total === 0) {
+                throw new ValidationError('Pessoa não encontrada', 404);
+            }
+
+            // Adicionar person_id ao addressData
+            const completeAddressData = {
+                ...addressData,
+                person_id: personId
+            };
+
+            // Validar dados obrigatórios do endereço
+            this.validateAddressData(completeAddressData);
+
+            // Chamar o serviço de endereços para criar o endereço
+            return await personAddressService.createPersonAddress(completeAddressData);
+        } catch (error) {
+            console.error('🚨 PERSON SERVICE: Erro ao adicionar endereço', error);
+            throw error;
+        }
+    }
+
+    // Método para validar dados do endereço
+    validateAddressData(data) {
+        const requiredFields = [
+            'street', 'number', 
+            'neighborhood', 'city', 'state', 
+            'postal_code', 'country'
+        ];
+
+        for (const field of requiredFields) {
+            if (!data[field]) {
+                throw new ValidationError(`Campo ${field} é obrigatório para o endereço`);
+            }
+        }
+    }
+
+    async findPersonById(personId, client = null) {
+        try {
+            const dbClient = client || systemDatabase;
+            const person = await personRepository.findPersonById(personId, dbClient);
+
+            if (!person) {
+                throw new ValidationError(`Pessoa com ID ${personId} não encontrada`);
+            }
+
+            // Buscar documentos da pessoa
+            const documents = await this.getPersonDocuments(personId);
+            
+            // Buscar endereços da pessoa
+            const addresses = await this.getPersonAddresses(personId);
+            
+            // Buscar contatos da pessoa
+            const contacts = await this.getPersonContacts(personId);
+
+            return {
+                ...person,
+                documents,
+                addresses,
+                contacts
+            };
+        } catch (error) {
+            console.error('Erro ao buscar pessoa por ID', {
+                personId,
+                error: error.message,
+                stack: error.stack
+            });
+            throw error;
+        }
+    }
 }
 
-module.exports = new PersonService();
+module.exports = PersonService;

@@ -7,6 +7,7 @@ const personAddressRoutes = require('./personAddressRoutes');
 const licenseRoutes = require('./licenseRoutes');
 const userRoutes = require('./userRoutes');
 const personCnpjRoutes = require('./personCnpjRoutes');
+const databaseController = require('../controllers/databaseController');
 
 const router = express.Router();
 
@@ -31,5 +32,9 @@ router.use('/person-contacts', personContactRoutes);
 router.use('/person-addresses', personAddressRoutes);
 router.use('/licenses', licenseRoutes);
 router.use('/users', userRoutes);
+
+// Rotas de debug de banco de dados
+router.get('/db/table-schema/:tableName', databaseController.getTableSchema);
+router.get('/db/table-data/:tableName', databaseController.getTableData);
 
 module.exports = router;

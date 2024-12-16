@@ -82,7 +82,10 @@ class PersonRepository {
         try {
             const query = 'SELECT * FROM persons WHERE person_id = $1';
             const { rows } = await systemDatabase.query(query, [personId]);
-            return rows[0];
+            return {
+                data: rows[0] || null,
+                total: rows.length
+            };
         } catch (error) {
             logger.error('Erro ao buscar pessoa por ID', { 
                 error: error.message,
@@ -123,23 +126,59 @@ class PersonRepository {
         } = personData;
 
         try {
+            console.error(' REPOSITÓRIO: Criando pessoa', {
+                full_name, 
+                birth_date, 
+                person_type, 
+                fantasy_name,
+                personDataFull: JSON.stringify(personData, null, 2)
+            });
+
+            // Conversões explícitas e validações
+            const safePersonData = {
+                full_name: String(full_name || '').trim(),
+                birth_date: birth_date ? new Date(birth_date) : null,
+                person_type: String(person_type || 'PJ').trim(),
+                fantasy_name: String(fantasy_name || '').trim() || null
+            };
+
+            console.error(' REPOSITÓRIO: Dados seguros', {
+                safePersonData: JSON.stringify(safePersonData, null, 2)
+            });
+
             const query = `
                 INSERT INTO persons 
                 (full_name, birth_date, person_type, fantasy_name) 
                 VALUES ($1, $2, $3, $4) 
                 RETURNING *
             `;
+            
+            console.error(' REPOSITÓRIO: Query de criação', { 
+                queryParams: [
+                    safePersonData.full_name, 
+                    safePersonData.birth_date, 
+                    safePersonData.person_type, 
+                    safePersonData.fantasy_name
+                ]
+            });
+
             const { rows } = await systemDatabase.query(query, [
-                full_name, 
-                birth_date, 
-                person_type, 
-                fantasy_name
+                safePersonData.full_name, 
+                safePersonData.birth_date, 
+                safePersonData.person_type, 
+                safePersonData.fantasy_name
             ]);
+
+            console.error(' REPOSITÓRIO: Resultado da criação', { 
+                rows: JSON.stringify(rows, null, 2)
+            });
+
             return rows[0];
         } catch (error) {
-            logger.error('Erro ao criar pessoa', {
+            console.error(' REPOSITÓRIO: Erro ao criar pessoa', {
                 error: error.message,
-                personData
+                errorStack: error.stack,
+                personData: JSON.stringify(personData, null, 2)
             });
             throw error;
         }
