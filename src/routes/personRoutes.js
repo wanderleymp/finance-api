@@ -4,6 +4,7 @@ const personController = new PersonController();
 const { validateRequest } = require('../middlewares/requestValidator');
 const personSchema = require('../schemas/personSchema');
 const personAddressSchema = require('../schemas/personAddressSchema'); // Added this line
+const personContactSchema = require('../schemas/personContactSchema'); // Added this line
 const authMiddleware = require('../middlewares/authMiddleware');
 
 const router = express.Router();
@@ -37,6 +38,10 @@ router.post('/:id/addresses',
         next();
     },
     personController.addPersonAddress);
+router.post('/:id/contacts', 
+    validateRequest(personSchema.getPersonById, 'params'),
+    validateRequest(personContactSchema.createContact, 'body'), 
+    personController.addPersonContact);
 router.put('/:id', 
     validateRequest(personSchema.getPersonById, 'params'),
     validateRequest(personSchema.updatePerson, 'body'), 

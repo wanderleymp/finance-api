@@ -91,6 +91,25 @@ class ContactRepository {
         }
     }
 
+    async findByValue(contactValue, contactType) {
+        try {
+            const query = `
+                SELECT * 
+                FROM contacts 
+                WHERE contact_value = $1 AND contact_type = $2
+            `;
+            const { rows } = await systemDatabase.query(query, [contactValue, contactType]);
+            return rows[0];
+        } catch (error) {
+            logger.error('Erro ao buscar contato por valor', {
+                errorMessage: error.message,
+                contactValue,
+                contactType
+            });
+            throw error;
+        }
+    }
+
     async create(contactData) {
         const { contact_type, contact_value, description, active } = contactData;
 

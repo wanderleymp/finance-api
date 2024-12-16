@@ -1,4 +1,6 @@
 const personContactRepository = require('../repositories/personContactRepository');
+const personRepository = require('../repositories/personRepository');
+const contactRepository = require('../repositories/contactRepository');
 const { ValidationError } = require('../utils/errors');
 const { logger } = require('../middlewares/logger');
 const PaginationHelper = require('../utils/paginationHelper');
@@ -111,6 +113,67 @@ class PersonContactService {
                 errorMessage: error.message,
                 errorStack: error.stack,
                 id
+            });
+            throw error;
+        }
+    }
+
+    async createPersonContactWithValidation(personId, contactData) {
+        try {
+            // 1. Validar dados de entrada
+            if (!personId || !contactData.contact_type || !contactData.contact_value) {
+                throw new ValidationError('Dados inválidos para criação de contato');
+            }
+
+            // 2. Verificar se pessoa existe
+            const person = await personRepository.findById(personId);
+            if (!person) {
+                throw new ValidationError('Pessoa não encontrada');
+            }
+
+            // 3. Buscar contato existente pelo valor e tipo
+            let contact = await contactRepository.findByValue(
+                contactData.contact_value, 
+                contactData.contact_type
+            );
+            
+            // 4. Criar contato se não existir
+            if (!contact) {
+                contact = await contactRepository.create({
+                    contact_type: contactData.contact_type,
+                    contact_value: contactData.contact_value,
+                    active: true
+                });
+            }
+
+            // 5. Verificar se já existe contato para esta pessoa
+            const existingPersonContacts = await personContactRepository.findByPersonId(personId);
+
+            // 6. Verificar se já existe este contato específico para a pessoa
+            const duplicateContact = existingPersonContacts.find(
+                pc => pc.contact_type === contactData.contact_type && 
+                      pc.contact_value === contactData.contact_value
+            );
+
+            if (duplicateContact) {
+                throw new ValidationError(
+                    `Já existe um contato do tipo ${contactData.contact_type} com este valor para esta pessoa`
+                );
+            }
+
+            // 7. Criar vínculo person_contact
+            const personContact = await personContactRepository.create({
+                person_id: personId,
+                contact_id: contact.contact_id
+            });
+
+            return personContact;
+
+        } catch (error) {
+            logger.error('Erro ao adicionar contato à pessoa', {
+                personId,
+                contactData,
+                errorMessage: error.message
             });
             throw error;
         }

@@ -1,6 +1,7 @@
 const PersonService = require('../services/personService');
 const personService = new PersonService();
 const cnpjService = require('../services/cnpjService');
+const personContactService = require('../services/personContactService');
 const { handleResponse, handleError } = require('../utils/responseHandler');
 const { logger } = require('../middlewares/logger');
 
@@ -258,6 +259,31 @@ class PersonController {
             handleResponse(res, 201, { data: newAddress });
         } catch (error) {
             console.error(' CONTROLLER: Erro no addPersonAddress', error);
+            handleError(res, error);
+        }
+    }
+
+    async addPersonContact(req, res) {
+        try {
+            const { id } = req.params;
+            const contactData = req.body;
+
+            const personContact = await personContactService.createPersonContactWithValidation(
+                id, 
+                contactData
+            );
+
+            handleResponse(res, 201, {
+                message: 'Contato adicionado com sucesso',
+                data: personContact
+            });
+        } catch (error) {
+            logger.error('Erro ao adicionar contato à pessoa', {
+                errorMessage: error.message,
+                errorStack: error.stack,
+                personId: req.params.id,
+                contactData: req.body
+            });
             handleError(res, error);
         }
     }
