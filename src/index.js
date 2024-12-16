@@ -67,6 +67,7 @@ const systemConfigRoutes = require('./routes/systemConfigRoutes');
 const userRoutes = require('./routes/userRoutes');
 const movementTypeRoutes = require('./routes/movementTypeRoutes');
 const movementStatusRoutes = require('./routes/movementStatusRoutes');
+const movementRoutes = require('./routes/movementRoutes');
 
 app.use('/roadmap', roadmapRoutes);
 app.use('/persons', personRoutes);
@@ -81,6 +82,7 @@ app.use('/api/system', systemConfigRoutes(systemDatabase.pool));
 app.use('/users', userRoutes);
 app.use('/movement-types', movementTypeRoutes);
 app.use('/movement-status', movementStatusRoutes);
+app.use('/movements', movementRoutes);
 
 // Rota inicial
 app.get('/', (req, res) => {

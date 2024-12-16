@@ -1,5 +1,24 @@
 # Changelog - Finance API
 
+## [1.3.0] - 2024-12-16
+
+### Added
+- CRUD completo para movimentações (`movements`)
+  - Endpoint `GET /movements` para listar movimentações com filtros avançados
+  - Endpoint `GET /movements/:id` para buscar movimentação específica
+  - Endpoint `POST /movements` para criar nova movimentação
+  - Endpoint `PUT /movements/:id` para atualizar movimentação
+  - Endpoint `DELETE /movements/:id` para excluir movimentação
+- Validação de entrada com Joi para todos os endpoints de movimentações
+- Suporte a filtros avançados na listagem de movimentações:
+  - Filtro por pessoa
+  - Filtro por tipo de movimentação
+  - Filtro por status de movimentação
+  - Filtro por licença
+  - Filtro por data de início e fim
+  - Filtro por valor mínimo e máximo
+  - Filtro por template
+
 ## [1.2.0] - 2024-12-15
 
 ### Added

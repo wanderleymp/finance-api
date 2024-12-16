@@ -455,6 +455,51 @@ A API oferece endpoints completos para gerenciamento de status de movimentação
 - Permite definir ordem de exibição (display_order)
 - Filtragem por nome do status
 
+## Movimentações
+- **GET** `/movements`
+  - Lista movimentações com filtros avançados
+  - Parâmetros de query:
+    - `person_id`: ID da pessoa
+    - `movement_type_id`: ID do tipo de movimentação
+    - `movement_status_id`: ID do status de movimentação
+    - `license_id`: ID da licença
+    - `start_date`: Data de início (formato ISO)
+    - `end_date`: Data de fim (formato ISO)
+    - `min_amount`: Valor mínimo
+    - `max_amount`: Valor máximo
+    - `is_template`: Filtro de template (true/false)
+    - `page`: Número da página (padrão: 1)
+    - `limit`: Quantidade de itens por página (padrão: 10)
+
+- **GET** `/movements/:id`
+  - Busca uma movimentação específica por ID
+
+- **POST** `/movements`
+  - Cria uma nova movimentação
+  - **Corpo da Requisição:**
+    ```json
+    {
+      "movement_date": "2024-01-15",
+      "person_id": 1,
+      "total_amount": 500.00,
+      "license_id": 2,
+      "discount": 50.00,
+      "addition": 0.00,
+      "total_items": 2,
+      "description": "Compra de equipamentos",
+      "movement_type_id": 3,
+      "movement_status_id": 1,
+      "is_template": false
+    }
+    ```
+
+- **PUT** `/movements/:id`
+  - Atualiza uma movimentação existente
+  - Corpo da requisição igual ao POST, mas com campos opcionais
+
+- **DELETE** `/movements/:id`
+  - Exclui uma movimentação específica por ID
+
 ## Validação de Requisições
 
 A API utiliza middleware de validação baseado em Joi para garantir a integridade dos dados recebidos. Cada rota possui schemas específicos para validação de parâmetros, body e query.
