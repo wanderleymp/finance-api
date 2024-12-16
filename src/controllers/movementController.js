@@ -6,12 +6,8 @@ class MovementController {
         try {
             const { page, limit, ...filters } = req.query;
 
-            const result = await movementService.findAll(
-                page ? parseInt(page, 10) : 1, 
-                limit ? parseInt(limit, 10) : 10, 
-                filters
-            );
-
+            const result = await movementService.findAll(page, limit, filters);
+            
             res.json(result);
         } catch (error) {
             logger.error('Erro ao listar movimentações', { 

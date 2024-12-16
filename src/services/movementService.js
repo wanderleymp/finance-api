@@ -5,44 +5,51 @@ const movementSchema = require('../schemas/movementSchema');
 const PaginationHelper = require('../utils/paginationHelper');
 
 class MovementService {
-    async findAll(page = 1, limit = 10, filters = {}) {
+    async findAll(page, limit, filters = {}) {
         try {
-            // Valida e normaliza parâmetros de paginação
             const { page: validPage, limit: validLimit } = PaginationHelper.validateParams(page, limit);
 
-            // Valida os filtros de entrada
-            await validateSchema(movementSchema.listMovements, filters);
+            // Validar e normalizar filtros
+            const normalizedFilters = {};
             
-            // Busca movimentações com repositório
-            const result = await movementRepository.findAll(validPage, validLimit, filters);
-            
-            // Verifica se o resultado é válido
-            if (!result || !result.data || result.total === undefined) {
-                logger.error('Resultado inválido do repositório de movimentações', { result });
-                throw new Error('Resultado inválido do repositório de movimentações');
-            }
+            // Mapeamento de filtros permitidos
+            const allowedFilters = [
+                'movement_status_id', 
+                'movement_type_id', 
+                'person_id', 
+                'start_date', 
+                'end_date', 
+                'search', 
+                'order_by'
+            ];
 
-            // Calcula páginas
-            const totalRecords = result.total;
-            const lastPage = Math.ceil(totalRecords / validLimit);
+            allowedFilters.forEach(key => {
+                if (filters[key] !== undefined) {
+                    normalizedFilters[key] = filters[key];
+                }
+            });
+
+            // Buscar movimentações no repositório
+            const result = await movementRepository.findAll(
+                validPage, 
+                validLimit, 
+                normalizedFilters
+            );
 
             return {
-                data: result.data,
-                meta: {
-                    total: totalRecords,
-                    per_page: validLimit,
-                    current_page: validPage,
-                    last_page: lastPage,
-                    from: (validPage - 1) * validLimit + 1,
-                    to: Math.min(validPage * validLimit, totalRecords)
+                movements: result.data,
+                pagination: {
+                    currentPage: validPage,
+                    pageSize: validLimit,
+                    totalRecords: result.total,
+                    totalPages: Math.ceil(result.total / validLimit)
                 }
             };
         } catch (error) {
-            logger.error('Erro ao listar movimentações', { 
-                error: error.message,
-                filters,
-                page,
-                limit
+            logger.error('Erro no serviço de movimentações', { 
+                error: error.message, 
+                stack: error.stack,
+                filters 
             });
             throw error;
         }

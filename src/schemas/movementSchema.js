@@ -4,16 +4,27 @@ module.exports = {
     listMovements: Joi.object({
         page: Joi.number().integer().min(1).optional(),
         limit: Joi.number().integer().min(1).max(100).optional(),
-        person_id: Joi.number().integer().positive().optional(),
-        movement_type_id: Joi.number().integer().positive().optional(),
+        search: Joi.string().trim().optional(),
+        
+        // Filtros de ID
         movement_status_id: Joi.number().integer().positive().optional(),
+        movement_type_id: Joi.number().integer().positive().optional(),
+        person_id: Joi.number().integer().positive().optional(),
         license_id: Joi.number().integer().positive().optional(),
+        
+        // Filtros de data
         start_date: Joi.date().iso().optional(),
         end_date: Joi.date().iso().optional(),
+        
+        // Ordenação dinâmica
+        order_by: Joi.string().pattern(
+            /^(movement_id|movement_date|total_amount|created_at|person_name|movement_type_name|movement_status_name):(ASC|DESC)$/
+        ).optional(),
+        
+        // Filtros de valor
         min_amount: Joi.number().positive().optional(),
         max_amount: Joi.number().positive().optional(),
-        is_template: Joi.boolean().optional(),
-        search: Joi.string().trim().optional()
+        is_template: Joi.boolean().optional()
     }).unknown(false),
 
     getMovementById: Joi.object({
