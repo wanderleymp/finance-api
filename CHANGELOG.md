@@ -30,6 +30,14 @@
 - Expiração configurável de senhas
 - Validação de complexidade de senha
 
+## [1.1.1] - 2024-12-16
+### Adicionado
+- CRUD completo para status de movimentação financeira
+- Rotas RESTful para gerenciamento de status de movimentação
+- Validação de esquema para status de movimentação
+- Suporte a filtros e paginação para status de movimentação
+- Ordenação por display_order nos status de movimentação
+
 ## [1.1.0] - 2024-12-16
 ### Adicionado
 - CRUD completo para tipos de movimentação financeira

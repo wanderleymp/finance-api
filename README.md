@@ -440,6 +440,21 @@ A API oferece endpoints completos para gerenciamento de tipos de movimentação 
 - DESPESA: Gastos e custos
 - INVESTIMENTO: Aplicações financeiras
 
+## Status de Movimentação
+
+A API oferece endpoints completos para gerenciamento de status de movimentação financeira:
+
+- `GET /movement-status`: Listar status de movimentação
+- `GET /movement-status/:id`: Obter status de movimentação específico
+- `POST /movement-status`: Criar novo status de movimentação
+- `PUT /movement-status/:id`: Atualizar status de movimentação
+- `DELETE /movement-status/:id`: Excluir status de movimentação
+
+#### Características
+- Suporta descrição opcional
+- Permite definir ordem de exibição (display_order)
+- Filtragem por nome do status
+
 ## Validação de Requisições
 
 A API utiliza middleware de validação baseado em Joi para garantir a integridade dos dados recebidos. Cada rota possui schemas específicos para validação de parâmetros, body e query.
