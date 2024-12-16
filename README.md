@@ -425,6 +425,21 @@ PASSWORD_RESET_EXPIRATION=90
   - `400`: IDs inválidos
   - `404`: Associação não encontrada
 
+## Tipos de Movimentação
+
+A API oferece endpoints completos para gerenciamento de tipos de movimentação financeira:
+
+- `GET /movement-types`: Listar tipos de movimentação
+- `GET /movement-types/:id`: Obter tipo de movimentação específico
+- `POST /movement-types`: Criar novo tipo de movimentação
+- `PUT /movement-types/:id`: Atualizar tipo de movimentação
+- `DELETE /movement-types/:id`: Excluir tipo de movimentação
+
+#### Categorias Suportadas
+- RECEITA: Rendimentos financeiros
+- DESPESA: Gastos e custos
+- INVESTIMENTO: Aplicações financeiras
+
 ## Validação de Requisições
 
 A API utiliza middleware de validação baseado em Joi para garantir a integridade dos dados recebidos. Cada rota possui schemas específicos para validação de parâmetros, body e query.

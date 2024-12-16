@@ -30,6 +30,14 @@
 - Expiração configurável de senhas
 - Validação de complexidade de senha
 
+## [1.1.0] - 2024-12-16
+### Adicionado
+- CRUD completo para tipos de movimentação financeira
+- Migração de banco de dados para tabela `movement_types`
+- Rotas RESTful para gerenciamento de tipos de movimentação
+- Validação de esquema para tipos de movimentação
+- Suporte a filtros e paginação para tipos de movimentação
+
 ## [1.0.0.8] - 2024-12-14
 
 ### Adicionado
