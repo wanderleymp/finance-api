@@ -9,45 +9,43 @@ class PersonRepository {
 
     async findAll(page = 1, limit = 10, search = '') {
         try {
-            const { limit: validLimit, offset } = PaginationHelper.getPaginationParams(page, limit);
-            
+            const { page: validPage, limit: validLimit } = PaginationHelper.validateParams(page, limit);
+            const offset = (validPage - 1) * validLimit;
+
             let whereClause = '';
-            let queryParams = [];
-            
+            const queryParams = [];
+            let paramCount = 1;
+
             if (search && search.trim()) {
                 whereClause = `
                     WHERE (
-                        LOWER(full_name) LIKE LOWER($1)
-                        OR LOWER(fantasy_name) LIKE LOWER($1)
+                        LOWER(full_name) LIKE LOWER($${paramCount})
+                        OR LOWER(fantasy_name) LIKE LOWER($${paramCount})
                         OR EXISTS (
                             SELECT 1 FROM person_documents pd 
                             WHERE pd.person_id = persons.person_id 
-                            AND LOWER(pd.document_value) LIKE LOWER($1)
+                            AND LOWER(pd.document_value) LIKE LOWER($${paramCount})
                         )
                     )
                 `;
-                queryParams = [`%${search.trim()}%`];
+                queryParams.push(`%${search.trim()}%`);
+                paramCount++;
             }
-            
+
             const countQuery = `
                 SELECT COUNT(*) 
                 FROM persons 
                 ${whereClause}
             `;
 
-            // Executa a query de contagem primeiro
-            const { rows: [{ count }] } = await systemDatabase.query(countQuery, queryParams);
-
-            // Adiciona limit e offset para a query de dados
-            queryParams.push(validLimit, offset);
-            
             const dataQuery = `
                 SELECT * FROM persons 
                 ${whereClause}
                 ORDER BY full_name ASC 
-                LIMIT $${queryParams.length - 1} OFFSET $${queryParams.length}
+                LIMIT $${paramCount} OFFSET $${paramCount + 1}
             `;
-            
+            queryParams.push(validLimit, offset);
+
             logger.info('Executando consulta findAll paginada', { 
                 dataQuery,
                 countQuery,
@@ -56,11 +54,19 @@ class PersonRepository {
                 searchTerm: search || null
             });
             
-            const { rows: data } = await systemDatabase.query(dataQuery, queryParams);
+            const [dataResult, countResult] = await Promise.all([
+                systemDatabase.query(dataQuery, queryParams),
+                systemDatabase.query(countQuery, queryParams.slice(0, -2))
+            ]);
+
+            const data = dataResult.rows;
+            const total = parseInt(countResult.rows[0].count);
+
+            console.log('Resultado findAll:', { data, total });
             
             return {
                 data,
-                total: parseInt(count)
+                total
             };
         } catch (error) {
             logger.error('Erro ao executar findAll', {

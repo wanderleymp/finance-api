@@ -9,8 +9,6 @@ class PersonContactRepository {
 
     async findAll(filters = {}, page = 1, limit = 10) {
         try {
-            const { limit: validLimit, offset } = PaginationHelper.getPaginationParams(page, limit);
-            
             let query = `
                 SELECT 
                     pc.person_contact_id as id,
@@ -39,27 +37,14 @@ class PersonContactRepository {
                 paramCount++;
             }
 
-            // Contar total de registros
-            const countQuery = query.replace(/SELECT.*FROM/, 'SELECT COUNT(*) as total FROM');
-            const countResult = await this.pool.query(countQuery, values);
-            const total = parseInt(countResult.rows[0].total);
-
-            // Adicionar paginação
-            query += ` ORDER BY pc.person_contact_id DESC LIMIT $${paramCount} OFFSET $${paramCount + 1}`;
-            values.push(validLimit, offset);
+            query += ` ORDER BY pc.person_contact_id DESC`;
 
             const result = await this.pool.query(query, values);
-
-            return {
-                data: result.rows,
-                total
-            };
+            return result.rows;
         } catch (error) {
             logger.error('Erro ao buscar contatos de pessoas', {
                 error: error.message,
-                filters,
-                page,
-                limit
+                filters
             });
             throw error;
         }

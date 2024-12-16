@@ -8,28 +8,56 @@ const { ValidationError } = require('../utils/errors');
 const PaginationHelper = require('../utils/paginationHelper');
 
 class PersonService {
-    async listPersons(page, limit, search = '') {
-        const { page: validPage, limit: validLimit } = PaginationHelper.validateParams(page, limit);
-        const { data, total } = await personRepository.findAll(validPage, validLimit, search);
+    async listPersons(page, limit, search) {
+        try {
+            // Valida e normaliza parâmetros de paginação
+            const { page: validPage, limit: validLimit } = PaginationHelper.validateParams(page, limit);
 
-        const personsWithData = await Promise.all(
-            data.map(async (person) => {
-                const enrichedPerson = { ...person };
+            // Busca pessoas com repositório
+            const result = await personRepository.findAll(validPage, validLimit, search);
+            console.log('Resultado do personRepository:', JSON.stringify(result, null, 2));
 
-                enrichedPerson.documents = await personDocumentRepository.findByPersonId(person.person_id);
-                enrichedPerson.contacts = await personContactRepository.findByPersonId(person.person_id);
-                enrichedPerson.addresses = await personAddressRepository.findByPersonId(person.person_id);
+            if (!result || !result.data || result.total === undefined) {
+                console.error('Resultado inválido do repositório:', result);
+                throw new Error('Resultado inválido do repositório de pessoas');
+            }
 
-                return enrichedPerson;
-            })
-        );
+            // Busca relacionamentos para cada pessoa
+            const personsWithRelations = await Promise.all(result.data.map(async (person) => {
+                const documents = await personDocumentRepository.findAll({ person_id: person.person_id });
+                const contacts = await personContactRepository.findAll({ person_id: person.person_id });
+                const addresses = await personAddressRepository.findAll({ person_id: person.person_id });
 
-        return PaginationHelper.formatResponse(personsWithData, total, validPage, validLimit);
+                return {
+                    ...person,
+                    documents,
+                    contacts,
+                    addresses
+                };
+            }));
+
+            // Usa o PaginationHelper para formatar a resposta
+            return PaginationHelper.formatResponse(
+                personsWithRelations, 
+                result.total, 
+                validPage, 
+                validLimit
+            );
+        } catch (error) {
+            logger.error('Erro ao listar pessoas', { 
+                error: error.message, 
+                stack: error.stack,
+                page,
+                limit,
+                search 
+            });
+            throw error;
+        }
     }
 
     async getPerson(personId) {
-        const person = await personRepository.findById(personId);
-        if (!person) {
+        const { data, total } = await personRepository.findById(personId);
+        if (!data || total === 0) {
             throw new ValidationError('Pessoa não encontrada', 404);
         }
         const documents = await personDocumentRepository.findByPersonId(personId);
@@ -37,7 +65,7 @@ class PersonService {
         const addresses = await personAddressRepository.findByPersonId(personId);
 
         return {
-            ...person,
+            ...data,
             documents,
             contacts,
             addresses
@@ -47,13 +75,15 @@ class PersonService {
     async getPersonDocuments(personId) {
         // Verifica se a pessoa existe
         await this.getPerson(personId);
-        return await personDocumentRepository.findByPersonId(personId);
+        const { data, total } = await personDocumentRepository.findByPersonId(personId);
+        return { documents: data, total };
     }
 
     async getPersonContacts(personId) {
         // Verifica se a pessoa existe
         await this.getPerson(personId);
-        return await personContactRepository.findByPersonId(personId);
+        const { data, total } = await personContactRepository.findByPersonId(personId);
+        return { contacts: data, total };
     }
 
     async createPerson(personData) {

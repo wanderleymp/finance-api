@@ -9,61 +9,35 @@ class PersonDocumentRepository {
 
     async findAll(filters = {}, page = 1, limit = 10) {
         try {
-            const { limit: validLimit, offset } = PaginationHelper.getPaginationParams(page, limit);
-            
             let query = `
                 SELECT pd.*, p.full_name as person_name 
                 FROM person_documents pd
                 LEFT JOIN persons p ON p.person_id = pd.person_id 
                 WHERE 1=1
             `;
-            const params = [];
+            const values = [];
             let paramCount = 1;
 
             if (filters.person_id) {
                 query += ` AND pd.person_id = $${paramCount}`;
-                params.push(filters.person_id);
+                values.push(filters.person_id);
                 paramCount++;
             }
+
             if (filters.document_type) {
                 query += ` AND pd.document_type = $${paramCount}`;
-                params.push(filters.document_type);
-                paramCount++;
-            }
-            if (filters.search) {
-                query += ` AND pd.document_value ILIKE $${paramCount}`;
-                params.push(`%${filters.search}%`);
+                values.push(filters.document_type);
                 paramCount++;
             }
 
-            const countQuery = query.replace('pd.*, p.full_name as person_name', 'COUNT(*)');
-            query += ` ORDER BY pd.person_document_id DESC LIMIT $${paramCount} OFFSET $${paramCount + 1}`;
-            params.push(validLimit, offset);
+            query += ` ORDER BY pd.person_document_id DESC`;
 
-            logger.info('Executando consulta findAll paginada em person_documents', { 
-                query,
-                params,
-                page,
-                limit: validLimit,
-                offset
-            });
-
-            const [dataResult, countResult] = await Promise.all([
-                systemDatabase.query(query, params),
-                systemDatabase.query(countQuery, params.slice(0, -2))
-            ]);
-
-            return {
-                data: dataResult.rows,
-                total: parseInt(countResult.rows[0].count)
-            };
+            const result = await this.pool.query(query, values);
+            return result.rows;
         } catch (error) {
-            logger.error('Erro ao buscar documentos', { 
-                errorMessage: error.message,
-                errorStack: error.stack,
-                errorCode: error.code,
-                errorName: error.name,
-                query: 'findAll'
+            logger.error('Erro ao buscar documentos de pessoas', {
+                error: error.message,
+                filters
             });
             throw error;
         }
