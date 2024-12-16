@@ -26,16 +26,13 @@ class ContactRepository {
             }
 
             if (filters.contact_value) {
-                query += ` AND contact_value = $${paramCount}`;
-                params.push(filters.contact_value);
+                query += ` AND contact_value ILIKE $${paramCount}`;
+                params.push(`%${filters.contact_value}%`);
                 paramCount++;
             }
 
             if (filters.search) {
-                query += ` AND (
-                    contact_value ILIKE $${paramCount}
-                    OR description ILIKE $${paramCount}
-                )`;
+                query += ` AND contact_value ILIKE $${paramCount}`;
                 params.push(`%${filters.search}%`);
                 paramCount++;
             }
