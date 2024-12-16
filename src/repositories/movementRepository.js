@@ -27,9 +27,13 @@ class MovementRepository {
                     m.movement_type_id, 
                     m.movement_status_id, 
                     m.is_template,
-                    p.full_name
+                    p.full_name as person_name,
+                    mt.type_name as movement_type_name,
+                    ms.status_name as movement_status_name
                 FROM movements m
                 LEFT JOIN persons p ON m.person_id = p.person_id
+                LEFT JOIN movement_types mt ON m.movement_type_id = mt.movement_type_id
+                LEFT JOIN movement_statuses ms ON m.movement_status_id = ms.movement_status_id
                 WHERE 1=1
             `;
 
@@ -43,9 +47,18 @@ class MovementRepository {
                     baseQuery += ` AND (
                         p.full_name ILIKE $${paramCount} OR 
                         m.description ILIKE $${paramCount} OR 
-                        CAST(m.movement_id AS TEXT) ILIKE $${paramCount} OR 
-                        p.full_name ILIKE $${paramCount}
+                        CAST(m.movement_id AS TEXT) ILIKE $${paramCount} OR
+                        mt.type_name ILIKE $${paramCount} OR
+                        ms.status_name ILIKE $${paramCount}
                     )`;
+                    queryParams.push(`%${filters[key]}%`);
+                    paramCount++;
+                } else if (key === 'movement_type_name') {
+                    baseQuery += ` AND mt.type_name ILIKE $${paramCount}`;
+                    queryParams.push(`%${filters[key]}%`);
+                    paramCount++;
+                } else if (key === 'movement_status_name') {
+                    baseQuery += ` AND ms.status_name ILIKE $${paramCount}`;
                     queryParams.push(`%${filters[key]}%`);
                     paramCount++;
                 } else if (key !== 'page' && key !== 'limit') {
@@ -100,9 +113,13 @@ class MovementRepository {
             const query = `
                 SELECT 
                     m.*,
-                    p.full_name
+                    p.full_name as person_name,
+                    mt.type_name as movement_type_name,
+                    ms.status_name as movement_status_name
                 FROM movements m
                 LEFT JOIN persons p ON m.person_id = p.person_id
+                LEFT JOIN movement_types mt ON m.movement_type_id = mt.movement_type_id
+                LEFT JOIN movement_statuses ms ON m.movement_status_id = ms.movement_status_id
                 WHERE m.movement_id = $1
             `;
             const { rows } = await this.pool.query(query, [movementId]);
