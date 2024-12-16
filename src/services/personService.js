@@ -90,6 +90,10 @@ class PersonService {
             // Validar dados da pessoa
             const validatedData = await this.validatePersonData(personData);
 
+            // Formatar nomes
+            validatedData.full_name = this.formatName(validatedData.full_name);
+            validatedData.fantasy_name = this.formatName(validatedData.fantasy_name);
+
             // Usar o cliente de transação ou o padrão
             const dbClient = client || systemDatabase;
 
@@ -136,6 +140,10 @@ class PersonService {
 
             // Validar dados da pessoa
             const validatedData = await this.validatePersonData(personData);
+
+            // Formatar nomes
+            validatedData.full_name = this.formatName(validatedData.full_name);
+            validatedData.fantasy_name = this.formatName(validatedData.fantasy_name);
 
             // Usar o cliente de transação ou o padrão
             const dbClient = client || systemDatabase;
