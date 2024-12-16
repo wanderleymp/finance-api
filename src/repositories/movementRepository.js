@@ -12,111 +12,84 @@ class MovementRepository {
             const { page: validPage, limit: validLimit } = PaginationHelper.validateParams(page, limit);
             const offset = (validPage - 1) * validLimit;
 
-            let whereClause = 'WHERE 1=1';
+            let baseQuery = `
+                SELECT 
+                    m.movement_id, 
+                    m.movement_date, 
+                    m.person_id, 
+                    m.total_amount, 
+                    m.license_id, 
+                    m.created_at, 
+                    m.discount, 
+                    m.addition, 
+                    m.total_items, 
+                    m.description, 
+                    m.movement_type_id, 
+                    m.movement_status_id, 
+                    m.is_template,
+                    p.full_name
+                FROM movements m
+                LEFT JOIN persons p ON m.person_id = p.person_id
+                WHERE 1=1
+            `;
+
             const queryParams = [];
             let paramCount = 1;
 
             // Adicionar filtros dinâmicos
-            if (filters.person_id) {
-                whereClause += ` AND m.person_id = $${paramCount}`;
-                queryParams.push(filters.person_id);
-                paramCount++;
-            }
-
-            if (filters.movement_type_id) {
-                whereClause += ` AND m.movement_type_id = $${paramCount}`;
-                queryParams.push(filters.movement_type_id);
-                paramCount++;
-            }
-
-            if (filters.movement_status_id) {
-                whereClause += ` AND m.movement_status_id = $${paramCount}`;
-                queryParams.push(filters.movement_status_id);
-                paramCount++;
-            }
-
-            if (filters.license_id) {
-                whereClause += ` AND m.license_id = $${paramCount}`;
-                queryParams.push(filters.license_id);
-                paramCount++;
-            }
-
-            if (filters.start_date) {
-                whereClause += ` AND m.movement_date >= $${paramCount}`;
-                queryParams.push(filters.start_date);
-                paramCount++;
-            }
-
-            if (filters.end_date) {
-                whereClause += ` AND m.movement_date <= $${paramCount}`;
-                queryParams.push(filters.end_date);
-                paramCount++;
-            }
-
-            if (filters.min_amount) {
-                whereClause += ` AND m.total_amount >= $${paramCount}`;
-                queryParams.push(filters.min_amount);
-                paramCount++;
-            }
-
-            if (filters.max_amount) {
-                whereClause += ` AND m.total_amount <= $${paramCount}`;
-                queryParams.push(filters.max_amount);
-                paramCount++;
-            }
-
-            if (filters.is_template !== undefined) {
-                whereClause += ` AND m.is_template = $${paramCount}`;
-                queryParams.push(filters.is_template);
-                paramCount++;
-            }
-
-            const countQuery = `
-                SELECT COUNT(*) 
-                FROM movements m
-                LEFT JOIN persons p ON m.person_id = p.person_id
-                LEFT JOIN movement_types mt ON m.movement_type_id = mt.movement_type_id
-                LEFT JOIN movement_statuses ms ON m.movement_status_id = ms.movement_status_id
-                ${whereClause}
-            `;
-
-            const dataQuery = `
-                SELECT 
-                    m.*,
-                    p.full_name as person_name,
-                    mt.type_name as movement_type_name,
-                    ms.status_name as movement_status_name
-                FROM movements m
-                LEFT JOIN persons p ON m.person_id = p.person_id
-                LEFT JOIN movement_types mt ON m.movement_type_id = mt.movement_type_id
-                LEFT JOIN movement_statuses ms ON m.movement_status_id = ms.movement_status_id
-                ${whereClause}
-                ORDER BY m.movement_date DESC, m.movement_id DESC 
-                LIMIT $${paramCount} OFFSET $${paramCount + 1}
-            `;
-            queryParams.push(validLimit, offset);
-
-            logger.info('Executando consulta findAll paginada em movements', { 
-                dataQuery,
-                countQuery,
-                params: queryParams,
-                filters
+            Object.keys(filters).forEach(key => {
+                if (key === 'search') {
+                    // Busca em múltiplos campos
+                    baseQuery += ` AND (
+                        p.full_name ILIKE $${paramCount} OR 
+                        m.description ILIKE $${paramCount} OR 
+                        CAST(m.movement_id AS TEXT) ILIKE $${paramCount} OR 
+                        p.full_name ILIKE $${paramCount}
+                    )`;
+                    queryParams.push(`%${filters[key]}%`);
+                    paramCount++;
+                } else if (key !== 'page' && key !== 'limit') {
+                    if (filters[key] !== undefined && filters[key] !== null) {
+                        // Tratamento especial para campos de data e valor
+                        if (key === 'start_date') {
+                            baseQuery += ` AND m.movement_date >= $${paramCount}`;
+                        } else if (key === 'end_date') {
+                            baseQuery += ` AND m.movement_date <= $${paramCount}`;
+                        } else if (key === 'min_amount') {
+                            baseQuery += ` AND m.total_amount >= $${paramCount}`;
+                        } else if (key === 'max_amount') {
+                            baseQuery += ` AND m.total_amount <= $${paramCount}`;
+                        } else {
+                            baseQuery += ` AND m.${key} = $${paramCount}`;
+                        }
+                        queryParams.push(filters[key]);
+                        paramCount++;
+                    }
+                }
             });
 
-            const [dataResult, countResult] = await Promise.all([
-                this.pool.query(dataQuery, queryParams),
-                this.pool.query(countQuery, queryParams.slice(0, -2))
-            ]);
+            // Contar total de registros antes da paginação
+            const countQuery = `SELECT COUNT(*) as total FROM (${baseQuery}) AS filtered_movements`;
+            const countResult = await this.pool.query(countQuery, queryParams);
+            const totalRecords = parseInt(countResult.rows[0].total, 10);
+
+            // Adicionar ordenação padrão e paginação
+            baseQuery += ` ORDER BY m.created_at DESC LIMIT $${paramCount} OFFSET $${paramCount + 1}`;
+            queryParams.push(validLimit, offset);
+
+            // Executar query principal
+            const result = await this.pool.query(baseQuery, queryParams);
 
             return {
-                data: dataResult.rows,
-                total: parseInt(countResult.rows[0].count)
+                data: result.rows,
+                total: totalRecords
             };
         } catch (error) {
             logger.error('Erro ao buscar movimentações', { 
-                errorMessage: error.message,
-                errorStack: error.stack,
-                filters
+                error: error.message,
+                filters,
+                page,
+                limit
             });
             throw error;
         }
@@ -127,13 +100,9 @@ class MovementRepository {
             const query = `
                 SELECT 
                     m.*,
-                    p.full_name as person_name,
-                    mt.type_name as movement_type_name,
-                    ms.status_name as movement_status_name
+                    p.full_name
                 FROM movements m
                 LEFT JOIN persons p ON m.person_id = p.person_id
-                LEFT JOIN movement_types mt ON m.movement_type_id = mt.movement_type_id
-                LEFT JOIN movement_statuses ms ON m.movement_status_id = ms.movement_status_id
                 WHERE m.movement_id = $1
             `;
             const { rows } = await this.pool.query(query, [movementId]);

@@ -27,7 +27,10 @@ class MovementService {
             const lastPage = Math.ceil(totalRecords / validLimit);
 
             return {
-                data: result.data,
+                data: result.data.map(item => {
+                    const { person_name, ...rest } = item;
+                    return rest;
+                }),
                 meta: {
                     total: totalRecords,
                     per_page: validLimit,

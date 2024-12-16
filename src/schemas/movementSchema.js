@@ -2,6 +2,8 @@ const Joi = require('joi');
 
 module.exports = {
     listMovements: Joi.object({
+        page: Joi.number().integer().min(1).optional(),
+        limit: Joi.number().integer().min(1).max(100).optional(),
         person_id: Joi.number().integer().positive().optional(),
         movement_type_id: Joi.number().integer().positive().optional(),
         movement_status_id: Joi.number().integer().positive().optional(),
@@ -10,7 +12,8 @@ module.exports = {
         end_date: Joi.date().iso().optional(),
         min_amount: Joi.number().positive().optional(),
         max_amount: Joi.number().positive().optional(),
-        is_template: Joi.boolean().optional()
+        is_template: Joi.boolean().optional(),
+        search: Joi.string().trim().optional()
     }).unknown(false),
 
     getMovementById: Joi.object({
