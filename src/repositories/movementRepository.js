@@ -95,12 +95,12 @@ class MovementRepository {
                 SELECT 
                     m.*,
                     p.full_name as person_name,
-                    COALESCE(ms.status_name, 'Sem Status') as movement_status_name,
-                    COALESCE(mt.type_name, 'Sem Tipo') as movement_type_name
+                    COALESCE(mt.type_name, 'Sem Tipo') as movement_type_name,
+                    COALESCE(ms.status_name, 'Sem Status') as movement_status_name
                 FROM movements m
                 LEFT JOIN persons p ON m.person_id = p.person_id
-                LEFT JOIN movement_statuses ms ON m.movement_status_id = ms.movement_status_id
                 LEFT JOIN movement_types mt ON m.movement_type_id = mt.movement_type_id
+                LEFT JOIN movement_statuses ms ON m.movement_status_id = ms.movement_status_id
                 ${whereClause}
                 ${orderClause}
                 LIMIT $${paramCount} OFFSET $${paramCount + 1}
@@ -139,8 +139,8 @@ class MovementRepository {
                 SELECT 
                     m.*,
                     p.full_name as person_name,
-                    mt.name as movement_type_name,
-                    ms.name as movement_status_name
+                    mt.type_name as movement_type_name,
+                    ms.status_name as movement_status_name
                 FROM movements m
                 LEFT JOIN persons p ON m.person_id = p.person_id
                 LEFT JOIN movement_types mt ON m.movement_type_id = mt.movement_type_id
