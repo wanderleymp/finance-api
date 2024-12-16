@@ -92,12 +92,34 @@ class PersonRepository {
         }
     }
 
+    async findPersonById(personId, client = null) {
+        try {
+            const dbClient = client || systemDatabase;
+            const query = `
+                SELECT p.*, 
+                    (SELECT json_agg(pd.*) FROM person_documents pd WHERE pd.person_id = p.person_id) as documents,
+                    (SELECT json_agg(pc.*) FROM person_contacts pc WHERE pc.person_id = p.person_id) as contacts,
+                    (SELECT json_agg(pa.*) FROM person_addresses pa WHERE pa.person_id = p.person_id) as addresses
+                FROM persons p
+                WHERE p.person_id = $1
+            `;
+            const { rows } = await dbClient.query(query, [personId]);
+            return rows[0];
+        } catch (error) {
+            logger.error('Erro ao buscar pessoa por ID com relacionamentos', { 
+                error: error.message,
+                personId
+            });
+            throw error;
+        }
+    }
+
     async create(personData) {
         const { 
             full_name, 
-            birth_date, 
+            birth_date = null, 
             person_type = 'PJ', 
-            fantasy_name 
+            fantasy_name = null 
         } = personData;
 
         try {
@@ -179,6 +201,51 @@ class PersonRepository {
             throw error;
         } finally {
             client.release();
+        }
+    }
+
+    async updatePerson(personId, personData, client = null) {
+        try {
+            const dbClient = client || systemDatabase;
+
+            const {
+                full_name,
+                birth_date,
+                person_type,
+                fantasy_name,
+                active
+            } = personData;
+
+            const query = `
+                UPDATE persons 
+                SET 
+                    full_name = COALESCE($1, full_name), 
+                    birth_date = COALESCE($2, birth_date), 
+                    person_type = COALESCE($3, person_type), 
+                    fantasy_name = COALESCE($4, fantasy_name),
+                    active = COALESCE($5, active),
+                    updated_at = NOW()
+                WHERE person_id = $6
+                RETURNING *
+            `;
+            
+            const { rows } = await dbClient.query(query, [
+                full_name,
+                birth_date,
+                person_type,
+                fantasy_name,
+                active,
+                personId
+            ]);
+
+            return rows[0];
+        } catch (error) {
+            logger.error('Erro ao atualizar pessoa', {
+                error: error.message,
+                personId,
+                personData
+            });
+            throw error;
         }
     }
 

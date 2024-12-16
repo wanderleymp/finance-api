@@ -30,7 +30,18 @@ class PersonDocumentRepository {
                 paramCount++;
             }
 
+            if (filters.document_value) {
+                query += ` AND pd.document_value = $${paramCount}`;
+                values.push(filters.document_value);
+                paramCount++;
+            }
+
             query += ` ORDER BY pd.person_document_id DESC`;
+
+            // Adicionar paginação
+            query += ` LIMIT $${paramCount} OFFSET $${paramCount + 1}`;
+            values.push(limit);
+            values.push((page - 1) * limit);
 
             const result = await this.pool.query(query, values);
             return result.rows;
@@ -136,6 +147,21 @@ class PersonDocumentRepository {
             return rows;
         } catch (error) {
             logger.error('Erro ao buscar documentos por pessoa', {
+                error: error.message,
+                personId
+            });
+            throw error;
+        }
+    }
+
+    async removePersonDocuments(personId, client = null) {
+        try {
+            const dbClient = client || systemDatabase;
+            const query = 'DELETE FROM person_documents WHERE person_id = $1';
+            await dbClient.query(query, [personId]);
+            return true;
+        } catch (error) {
+            logger.error('Erro ao remover documentos da pessoa', {
                 error: error.message,
                 personId
             });

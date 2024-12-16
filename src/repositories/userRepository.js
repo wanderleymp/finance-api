@@ -253,6 +253,41 @@ class UserRepository {
             throw error;
         }
     }
+
+    async getUserLicenses(userId) {
+        try {
+            const query = `
+                SELECT 
+                    pl.license_id,
+                    l.license_name,
+                    l.start_date,
+                    l.end_date,
+                    l.status,
+                    l.active
+                FROM person_license pl
+                JOIN licenses l ON pl.license_id = l.license_id
+                WHERE pl.person_id = (
+                    SELECT person_id 
+                    FROM users 
+                    WHERE user_id = $1
+                )
+            `;
+
+            const result = await this.pool.query(query, [userId]);
+
+            return {
+                total: result.rows.length,
+                data: result.rows
+            };
+        } catch (error) {
+            logger.error('Erro ao buscar licenças do usuário', { 
+                userId,
+                error: error.message,
+                errorCode: error.code 
+            });
+            throw new DatabaseError('Erro ao buscar licenças do usuário');
+        }
+    }
 }
 
 module.exports = new UserRepository();

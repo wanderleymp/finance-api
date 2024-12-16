@@ -10,6 +10,17 @@ class PersonLicenseRepository {
 
     async create(data) {
         try {
+            // Verificar se a associação já existe antes de criar
+            const licenseExists = await this.checkLicenseExists(data.person_id, data.license_id);
+            
+            if (licenseExists) {
+                logger.warn('REPOSITORY: Tentativa de criar associação pessoa-licença duplicada', { 
+                    personId: data.person_id, 
+                    licenseId: data.license_id 
+                });
+                throw new DatabaseError('Associação pessoa-licença já existe');
+            }
+
             const query = `
                 INSERT INTO person_license (
                     person_id, 
@@ -31,6 +42,11 @@ class PersonLicenseRepository {
 
             return result.rows[0];
         } catch (error) {
+            // Se já for um erro de associação existente, relanças o mesmo
+            if (error.message === 'Associação pessoa-licença já existe') {
+                throw error;
+            }
+
             logger.error('REPOSITORY: Erro ao criar pessoa-licença', { 
                 error: error.message, 
                 data,
@@ -38,11 +54,37 @@ class PersonLicenseRepository {
                 errorDetail: error.detail
             });
 
-            if (error.code === '23505') {
-                throw new DatabaseError('Associação pessoa-licença já existe');
-            }
-
             throw new DatabaseError('Erro ao criar associação pessoa-licença');
+        }
+    }
+
+    async checkLicenseExists(personId, licenseId) {
+        try {
+            const query = `
+                SELECT EXISTS(
+                    SELECT 1 
+                    FROM person_license 
+                    WHERE person_id = $1 AND license_id = $2
+                ) as license_exists
+            `;
+
+            const result = await this.pool.query(query, [personId, licenseId]);
+            
+            logger.info('REPOSITORY: Verificação de existência de licença', { 
+                personId, 
+                licenseId, 
+                exists: result.rows[0].license_exists 
+            });
+
+            return result.rows[0].license_exists;
+        } catch (error) {
+            logger.error('REPOSITORY: Erro ao verificar existência de licença', { 
+                error: error.message, 
+                personId, 
+                licenseId,
+                errorCode: error.code 
+            });
+            throw new DatabaseError('Erro ao verificar existência de licença');
         }
     }
 

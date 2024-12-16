@@ -53,10 +53,31 @@ class PersonController {
     async store(req, res) {
         try {
             const personData = req.body;
-            const newPerson = await personService.createPerson(personData);
-            handleResponse(res, 201, { data: newPerson });
+
+            const person = await personService.createPerson(personData, req);
+
+            res.status(201).json({
+                status: 'success',
+                message: 'Pessoa criada com sucesso',
+                data: person
+            });
         } catch (error) {
-            handleError(res, error);
+            logger.error('Erro no controlador ao criar pessoa', {
+                errorMessage: error.message,
+                errorStack: error.stack
+            });
+
+            if (error.name === 'ValidationError') {
+                return res.status(400).json({
+                    status: 'error',
+                    message: error.message
+                });
+            }
+
+            res.status(500).json({
+                status: 'error',
+                message: 'Erro interno ao criar pessoa'
+            });
         }
     }
 
@@ -64,10 +85,31 @@ class PersonController {
         try {
             const { id } = req.params;
             const personData = req.body;
-            const updatedPerson = await personService.updatePerson(id, personData);
-            handleResponse(res, 200, { data: updatedPerson });
+
+            const person = await personService.updatePerson(id, personData, req);
+
+            res.status(200).json({
+                status: 'success',
+                message: 'Pessoa atualizada com sucesso',
+                data: person
+            });
         } catch (error) {
-            handleError(res, error);
+            logger.error('Erro no controlador ao atualizar pessoa', {
+                errorMessage: error.message,
+                errorStack: error.stack
+            });
+
+            if (error.name === 'ValidationError') {
+                return res.status(400).json({
+                    status: 'error',
+                    message: error.message
+                });
+            }
+
+            res.status(500).json({
+                status: 'error',
+                message: 'Erro interno ao atualizar pessoa'
+            });
         }
     }
 
@@ -164,7 +206,7 @@ class PersonController {
                     personId: existingPerson.person_id 
                 });
 
-                resultPerson = await personService.updatePerson(existingPerson.person_id, personData);
+                resultPerson = await personService.updatePerson(existingPerson.person_id, personData, req);
                 
                 logger.info('Pessoa atualizada por CNPJ com sucesso', { 
                     personId: resultPerson.person_id 
@@ -176,7 +218,7 @@ class PersonController {
                 });
             } else {
                 // Criar nova pessoa
-                resultPerson = await personService.createPerson(personData);
+                resultPerson = await personService.createPerson(personData, req);
 
                 logger.info('Pessoa criada por CNPJ com sucesso', { 
                     personId: resultPerson.person_id 
