@@ -13,16 +13,20 @@ class MovementsService {
 
             const query = `
                 INSERT INTO movements 
-                (movement_type_id, description, value, date) 
-                VALUES ($1, $2, $3, $4) 
+                (movement_type_id, description, total_amount, movement_date, person_id, license_id, total_items, movement_status_id) 
+                VALUES ($1, $2, $3, $4, $5, $6, $7, $8) 
                 RETURNING *
             `;
 
             const values = [
                 movementData.movement_type_id,
                 movementData.description || null,
-                movementData.value || 0,
-                movementData.date || new Date()
+                movementData.total_amount || 0,
+                movementData.movement_date || new Date(),
+                movementData.person_id,
+                movementData.license_id,
+                movementData.total_items || 0,
+                movementData.movement_status_id
             ];
 
             const result = await this.pool.query(query, values);
