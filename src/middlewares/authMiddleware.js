@@ -2,6 +2,19 @@ const jwt = require('jsonwebtoken');
 const { logger } = require('./logger');
 
 const authMiddleware = (req, res, next) => {
+    logger.info('Middleware de autenticação chamado', {
+        path: req.path,
+        method: req.method,
+        headers: req.headers
+    });
+
+    console.log('Middleware de autenticação chamado', {
+        path: req.path,
+        method: req.method,
+        headers: req.headers,
+        authorization: req.headers.authorization
+    });
+
     const authHeader = req.headers.authorization;
 
     if (!authHeader) {

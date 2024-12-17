@@ -152,6 +152,11 @@
 - Geração de tokens JWT no login
 - Rota protegida de exemplo `/users/profile`
 - Suporte a bcrypt para hash de senhas
+- Recurso de Items completamente implementado
+- Suporte a filtros avançados para items
+- Validações de negócio para criação e atualização de items
+- Testes abrangentes para repositório e serviço de items
+- Documentação detalhada do recurso de items
 
 ### Changed
 - Adicionada lógica de validação no serviço de licenças
@@ -162,6 +167,14 @@
 - Refactored route management to centralize all routes in `routes/index.js`
 - Removed route definitions from `app.js`
 - Improved route organization and maintainability
+- Padronização da implementação do recurso de items
+- Melhoria nos logs e tratamento de erros
+- Implementação de validações mais robustas
+
+### Improved
+- Performance de consultas de items
+- Tratamento de erros no recurso de items
+- Consistência de código entre diferentes recursos
 
 ### Security
 - Adicionado middleware de autenticação para proteger rotas sensíveis

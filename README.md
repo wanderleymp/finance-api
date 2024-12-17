@@ -425,6 +425,45 @@ PASSWORD_RESET_EXPIRATION=90
   - `400`: IDs inválidos
   - `404`: Associação não encontrada
 
+## Recursos
+
+### Items
+O recurso de Items permite o gerenciamento completo de itens no sistema.
+
+#### Principais Funcionalidades
+- Criação de novos items
+- Listagem com filtros avançados
+- Atualização de informações
+- Exclusão de items
+
+#### Endpoints Disponíveis
+- `GET /items`: Listar items
+- `GET /items/:id`: Detalhes de um item
+- `POST /items`: Criar novo item
+- `PUT /items/:id`: Atualizar item
+- `DELETE /items/:id`: Excluir item
+
+#### Exemplos de Uso
+```javascript
+// Criar um novo item
+const newItem = await itemsClient.createItem({
+    name: 'Notebook Gamer',
+    category: 'Eletrônicos',
+    price: 5999.99,
+    stock_quantity: 10
+});
+
+// Listar items com filtros
+const items = await itemsClient.listItems({
+    category: 'Eletrônicos',
+    min_price: 1000,
+    max_price: 6000
+});
+```
+
+#### Documentação Detalhada
+Consulte [ITEMS_RESOURCE.md](docs/ITEMS_RESOURCE.md) para informações completas.
+
 ## Tipos de Movimentação
 
 A API oferece endpoints completos para gerenciamento de tipos de movimentação financeira:

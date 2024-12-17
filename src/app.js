@@ -1,13 +1,21 @@
 const express = require('express');
 const cors = require('cors');
 const { logger } = require('./middlewares/logger');
-const routes = require('./routes');
 
 const app = express();
 
 // Middlewares
-app.use(cors());
+const corsOptions = {
+    origin: process.env.FRONTEND_URL || '*', 
+    methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'], 
+    allowedHeaders: ['Content-Type', 'Authorization', '*'], 
+    credentials: true 
+};
+
+// Configurações básicas
+app.use(cors(corsOptions));
 app.use(express.json());
+app.use(express.urlencoded({ extended: true }));
 
 // Logging middleware para todas as requisições
 app.use((req, res, next) => {
@@ -19,9 +27,6 @@ app.use((req, res, next) => {
     });
     next();
 });
-
-// Rotas centralizadas
-app.use('/', routes);
 
 // Tratamento de erros global
 app.use((err, req, res, next) => {
