@@ -1,6 +1,7 @@
 const express = require('express');
 const cors = require('cors');
 const { logger } = require('./middlewares/logger');
+const salesRoutes = require('./routes/salesRoutes');
 
 const app = express();
 
@@ -40,6 +41,9 @@ app.use((err, req, res, next) => {
         message: 'Erro interno do servidor'
     });
 });
+
+// Rotas da aplicação
+app.use('/sales', salesRoutes);
 
 // Rota 404 para endpoints não encontrados
 app.use((req, res) => {
