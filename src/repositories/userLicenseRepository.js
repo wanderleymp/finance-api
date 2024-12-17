@@ -1,5 +1,5 @@
 const { systemDatabase } = require('../config/database');
-const { DatabaseError } = require('../utils/errors');
+const { DatabaseError, ValidationError } = require('../utils/errors');
 const { logger } = require('../middlewares/logger');
 const PaginationHelper = require('../utils/paginationHelper');
 
@@ -53,8 +53,30 @@ class UserLicenseRepository {
 
     async findByUser(userId, options = {}) {
         try {
+            console.log('REPOSITORY: Iniciando busca de licenças', { 
+                userId, 
+                options,
+                userIdType: typeof userId,
+                userIdValue: userId
+            });
+
+            // Validação de entrada
+            if (!userId || isNaN(parseInt(userId))) {
+                console.error('REPOSITORY: ID de usuário inválido', { 
+                    userId, 
+                    userIdType: typeof userId 
+                });
+                throw new ValidationError('ID de usuário inválido');
+            }
+
             const { page = 1, limit = 10 } = options;
             const offset = (page - 1) * limit;
+
+            console.log('REPOSITORY: Parâmetros de paginação', { 
+                page, 
+                limit, 
+                offset 
+            });
 
             const countQuery = `
                 SELECT COUNT(*) as total 
@@ -72,18 +94,39 @@ class UserLicenseRepository {
                     l.start_date,
                     l.end_date,
                     l.status,
-                    l.timezone,
-                    l.active
+                    l.timezone
                 FROM user_license ul
                 JOIN licenses l ON ul.license_id = l.license_id
                 WHERE ul.user_id = $1
                 LIMIT $2 OFFSET $3
             `;
 
-            const countResult = await this.pool.query(countQuery, [userId]);
+            console.log('REPOSITORY: Executando query de contagem', { 
+                countQuery, 
+                userId: parseInt(userId) 
+            });
+
+            const countResult = await this.pool.query(countQuery, [parseInt(userId)]);
             const total = parseInt(countResult.rows[0].total);
 
-            const result = await this.pool.query(query, [userId, limit, offset]);
+            console.log('REPOSITORY: Resultado da contagem', { 
+                total,
+                countResultRows: countResult.rows 
+            });
+
+            console.log('REPOSITORY: Executando query de busca', { 
+                query, 
+                userId: parseInt(userId),
+                limit,
+                offset 
+            });
+
+            const result = await this.pool.query(query, [parseInt(userId), limit, offset]);
+
+            console.log('REPOSITORY: Resultado da busca', { 
+                resultRowCount: result.rows.length,
+                resultRows: result.rows 
+            });
 
             return {
                 total,
@@ -92,12 +135,20 @@ class UserLicenseRepository {
                 data: result.rows
             };
         } catch (error) {
-            logger.error('REPOSITORY: Erro ao buscar licenças do usuário', { 
-                error: error.message, 
+            console.error('REPOSITORY: Erro completo ao buscar licenças do usuário', { 
                 userId,
+                error: error.message,
+                errorName: error.name,
+                errorStack: error.stack,
                 errorCode: error.code 
             });
-            throw new DatabaseError('Erro ao buscar licenças do usuário');
+
+            logger.error('REPOSITORY: Erro ao buscar licenças do usuário', { 
+                userId,
+                error: error.message,
+                errorCode: error.code 
+            });
+            throw error;
         }
     }
 
@@ -222,6 +273,68 @@ class UserLicenseRepository {
                 errorCode: error.code 
             });
             throw new DatabaseError('Erro ao remover associação usuário-licença');
+        }
+    }
+
+    async update(userId, licenseId, updateData) {
+        try {
+            const allowedFields = ['status', 'active'];
+            const updateFields = Object.keys(updateData).filter(field => allowedFields.includes(field));
+
+            if (updateFields.length === 0) {
+                logger.warn('REPOSITORY: Nenhum campo válido para atualização', { 
+                    userId, 
+                    licenseId, 
+                    updateData 
+                });
+                return null;
+            }
+
+            const setClause = updateFields.map((field, index) => `${field} = $${index + 3}`).join(', ');
+            const values = [
+                userId, 
+                licenseId, 
+                ...updateFields.map(field => updateData[field])
+            ];
+
+            const query = `
+                UPDATE user_license ul
+                SET ${setClause}
+                FROM licenses l
+                WHERE ul.license_id = l.license_id
+                AND ul.user_id = $1 
+                AND ul.license_id = $2
+                RETURNING ul.*, l.license_name
+            `;
+
+            const result = await this.pool.query(query, values);
+
+            if (result.rows.length === 0) {
+                logger.info('REPOSITORY: Nenhuma licença atualizada', { 
+                    userId, 
+                    licenseId 
+                });
+                return null;
+            }
+
+            logger.info('REPOSITORY: Licença de usuário atualizada', { 
+                userId, 
+                licenseId, 
+                updatedFields: updateFields 
+            });
+
+            return result.rows[0];
+        } catch (error) {
+            logger.error('REPOSITORY: Erro ao atualizar licença de usuário', { 
+                error: error.message, 
+                userId,
+                licenseId,
+                updateData,
+                errorCode: error.code,
+                errorDetail: error.detail
+            });
+
+            throw new DatabaseError('Erro ao atualizar associação usuário-licença');
         }
     }
 }

@@ -6,6 +6,7 @@ const TwoFactorAuth = require('../middlewares/security/twoFactorAuth');
 const LoginAudit = require('../models/loginAudit');
 const jwt = require('jsonwebtoken');
 const bcrypt = require('bcrypt');
+const licenseService = require('../services/licenseService'); // Adicionado a importação do licenseService
 
 class UserController {
     async register(req, res) {
@@ -651,6 +652,81 @@ class UserController {
             res.status(500).json({
                 error: 'Erro interno',
                 message: 'Erro ao processar refresh token'
+            });
+        }
+    }
+
+    async getCurrentUserLicenses(req, res) {
+        try {
+            // Usar req.user diretamente
+            const personId = req.user.person_id;
+            
+            if (!personId) {
+                return res.status(404).json({ 
+                    message: 'Pessoa não encontrada para este usuário' 
+                });
+            }
+
+            const licenses = await licenseService.getLicensesByPerson(personId);
+            
+            return res.status(200).json({
+                licenses,
+                total: licenses.length
+            });
+        } catch (error) {
+            logger.error('Erro ao buscar licenças do usuário', { 
+                error: error.message,
+                userId: req.user.user_id
+            });
+            
+            return res.status(500).json({ 
+                message: 'Erro interno ao buscar licenças' 
+            });
+        }
+    }
+
+    async getCurrentUser(req, res) {
+        try {
+            // Log detalhado para investigar o problema
+            console.log('DEBUG: Requisição getCurrentUser', {
+                reqUser: req.user,
+                reqUserId: req.userId,
+                reqUsername: req.username,
+                reqKeys: Object.keys(req),
+                reqUserKeys: req.user ? Object.keys(req.user) : 'req.user não definido'
+            });
+
+            const userId = req.user?.user_id || req.userId;
+            
+            if (!userId) {
+                console.error('DEBUG: Usuário não identificado');
+                return res.status(401).json({ 
+                    message: 'Usuário não identificado' 
+                });
+            }
+
+            const user = await UserService.getUserById(userId);
+            
+            if (!user) {
+                console.error('DEBUG: Usuário não encontrado', { userId });
+                return res.status(404).json({ 
+                    message: 'Usuário não encontrado' 
+                });
+            }
+
+            // Remover campos sensíveis
+            const { password, refresh_token, ...safeUserData } = user;
+            
+            return res.status(200).json(safeUserData);
+        } catch (error) {
+            console.error('DEBUG: Erro ao buscar usuário atual', { 
+                error: error.message,
+                stack: error.stack,
+                userId: req.user?.user_id || req.userId
+            });
+            
+            return res.status(500).json({ 
+                message: 'Erro interno ao buscar usuário' 
             });
         }
     }

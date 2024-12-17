@@ -50,13 +50,11 @@ class PaginationHelper {
         logger.info('Formatando resposta paginada', {
             totalRecords: total,
             currentPage: page,
-            itemsPerPage: limit,
-            lastPage: lastPage,
-            returnedItems: data.length
+            limit: limit
         });
 
         return {
-            data,
+            data: data,
             meta: {
                 total,
                 per_page: limit,

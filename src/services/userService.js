@@ -12,6 +12,7 @@ class ValidationError extends Error {
 const userRepository = require('../repositories/userRepository');
 const PaginationHelper = require('../utils/paginationHelper');
 const bcrypt = require('bcrypt');
+const licenseService = require('../services/licenseService'); // Adicionado a importação do licenseService
 
 class UserService {
     async listUsers(page = 1, limit = 10, filters = {}) {
@@ -351,7 +352,8 @@ class UserService {
         const accessToken = JwtMiddleware.generateToken({ 
             user_id: user.user_id, 
             username: user.username,
-            profile_id: user.profile_id 
+            profile_id: user.profile_id,
+            person_id: user.person_id
         });
 
         const refreshToken = jwt.sign(

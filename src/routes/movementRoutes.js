@@ -3,6 +3,7 @@ const movementController = require('../controllers/movementController');
 const { validateRequest } = require('../middlewares/requestValidator');
 const movementSchema = require('../schemas/movementSchema');
 const authMiddleware = require('../middlewares/authMiddleware');
+const setDefaultLicense = require('../middlewares/setDefaultLicense');
 
 const router = express.Router();
 
@@ -23,12 +24,14 @@ router.get('/:id',
 
 // Criar nova movimentação
 router.post('/', 
+    setDefaultLicense, 
     validateRequest(movementSchema.createMovement, 'body'), 
     movementController.create
 );
 
 // Atualizar movimentação
 router.put('/:id', 
+    setDefaultLicense, 
     validateRequest(movementSchema.updateMovement, 'body'),
     validateRequest(movementSchema.getMovementById, 'params'), 
     movementController.update

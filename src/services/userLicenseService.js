@@ -1,5 +1,6 @@
 const logger = require('../middlewares/logger').logger;
 const userLicenseRepository = require('../repositories/userLicenseRepository');
+const PaginationHelper = require('../utils/paginationHelper');
 const { ValidationError } = require('../utils/errors');
 
 class UserLicenseService {
@@ -65,12 +66,93 @@ class UserLicenseService {
 
     async getUserLicenses(userId, options = {}) {
         try {
-            const licenses = await userLicenseRepository.findByUser(userId, options);
+            console.log('SERVICE: Iniciando busca de licenças do usuário', { 
+                userId, 
+                options,
+                userIdType: typeof userId,
+                userIdValue: userId
+            });
+
+            // Validação de entrada
+            if (!userId) {
+                console.error('SERVICE: ID de usuário não fornecido', { userId });
+                throw new ValidationError('ID de usuário é obrigatório');
+            }
+
+            const { page = 1, limit = 10 } = options;
+            const { page: validPage, limit: validLimit } = PaginationHelper.validateParams(page, limit);
+
+            const licenses = await userLicenseRepository.findByUser(userId, { page: validPage, limit: validLimit });
             
-            return licenses;
+            return PaginationHelper.formatResponse(
+                licenses.data, 
+                licenses.total, 
+                validPage, 
+                validLimit
+            );
         } catch (error) {
+            console.error('SERVICE: Erro completo ao buscar licenças do usuário', { 
+                userId,
+                error: error.message,
+                errorName: error.name,
+                errorStack: error.stack
+            });
+
             logger.error('Erro ao buscar licenças do usuário', { 
                 userId,
+                error: error.message 
+            });
+            throw error;
+        }
+    }
+
+    async getUserLicense(userId, licenseId) {
+        try {
+            const licenses = await userLicenseRepository.findByUser(userId);
+            const userLicense = licenses.data.find(license => license.license_id === parseInt(licenseId));
+
+            if (!userLicense) {
+                throw new ValidationError('Licença não encontrada para este usuário');
+            }
+
+            return userLicense;
+        } catch (error) {
+            logger.error('Erro ao buscar licença específica do usuário', { 
+                userId,
+                licenseId,
+                error: error.message 
+            });
+            throw error;
+        }
+    }
+
+    async updateUserLicense(userId, licenseId, updateData) {
+        try {
+            // Validações básicas
+            if (!updateData || Object.keys(updateData).length === 0) {
+                throw new ValidationError('Dados para atualização são obrigatórios');
+            }
+
+            // Verificar se a licença pertence ao usuário
+            await this.getUserLicense(userId, licenseId);
+
+            const updatedLicense = await userLicenseRepository.update(userId, licenseId, updateData);
+            
+            if (!updatedLicense) {
+                throw new ValidationError('Não foi possível atualizar a licença');
+            }
+
+            logger.info('Licença de usuário atualizada', { 
+                userId, 
+                licenseId 
+            });
+
+            return updatedLicense;
+        } catch (error) {
+            logger.error('Erro ao atualizar licença de usuário', { 
+                userId,
+                licenseId,
+                updateData,
                 error: error.message 
             });
             throw error;

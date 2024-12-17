@@ -148,39 +148,45 @@ class LicenseRepository {
 
     async findByPerson(personId) {
         try {
-            logger.info('REPOSITORY: Buscando licenças por pessoa', { personId });
-            
+            logger.info('REPOSITORY: Buscando licenças por pessoa', { 
+                personId,
+                personIdType: typeof personId
+            });
+
+            if (!personId) {
+                logger.warn('REPOSITORY: ID da pessoa não fornecido');
+                return [];
+            }
+
             const query = `
                 SELECT 
-                    l.license_id,
-                    l.person_id,
-                    l.license_name,
-                    l.start_date,
-                    l.end_date,
-                    l.status,
-                    l.timezone,
-                    p.full_name
+                    l.license_id, 
+                    l.person_id, 
+                    l.start_date, 
+                    l.end_date, 
+                    l.status
                 FROM licenses l
-                LEFT JOIN persons p ON p.person_id = l.person_id
-                WHERE l.person_id = $1
+                WHERE l.person_id = $1 
+                AND l.status = 'ACTIVE'
+                AND l.end_date >= CURRENT_DATE
             `;
+
             const result = await this.pool.query(query, [personId]);
-            
-            logger.info('REPOSITORY: Resultado da busca por pessoa', { 
+
+            logger.info('REPOSITORY: Resultado da busca de licenças', { 
+                personId, 
                 rowCount: result.rowCount,
-                resultRows: result.rows
+                resultRows: result.rows 
             });
 
             return result.rows;
         } catch (error) {
             logger.error('REPOSITORY: Erro ao buscar licenças por pessoa', { 
-                error: error.message,
-                stack: error.stack,
                 personId,
-                errorName: error.name,
-                errorCode: error.code
+                error: error.message,
+                stack: error.stack
             });
-            throw new DatabaseError('Erro ao buscar licenças');
+            throw error;
         }
     }
 

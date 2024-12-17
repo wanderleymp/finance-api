@@ -56,7 +56,12 @@ const authMiddleware = (req, res, next) => {
     });
   }
 
-  req.userId = decoded.id;
+  req.user = {
+    ...decoded,
+    isAdmin: decoded.profile_id === 1, // Assumindo que profile_id 1 é admin
+    user_id: decoded.user_id
+  };
+
   return next();
 };
 

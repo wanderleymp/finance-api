@@ -9,6 +9,7 @@ const passwordSchema = require('../schemas/passwordSchema');
 const JwtMiddleware = require('../middlewares/jwtMiddleware');
 const { loginLimiter } = require('../middlewares/security/rateLimiter');
 const { passwordResetLimiter } = require('../middlewares/security/passwordResetLimiter');
+const UserLicenseController = require('../controllers/userLicenseController');
 
 const router = express.Router();
 
@@ -47,6 +48,12 @@ router.post('/reset-password',
 // Rotas protegidas de usuário
 router.use(authMiddleware);
 
+// Rota para buscar usuário atual
+router.get('/me', UserController.getCurrentUser);
+
+// Rota para buscar licenças do usuário atual
+router.get('/me/licenses', UserController.getCurrentUserLicenses);
+
 // Rotas de 2FA
 router.post('/2fa/enable', UserController.enable2FA);
 router.post('/2fa/verify', 
@@ -84,6 +91,28 @@ router.put('/:userId/password',
 router.delete('/:id', 
     validateRequest(userSchema.delete, 'params'), 
     UserController.deleteUser
+);
+
+// Rotas de licenças de usuário
+router.get('/:userId/licenses', 
+    validateRequest(userSchema.getById, 'params'), 
+    UserLicenseController.list
+);
+router.post('/:userId/licenses', 
+    validateRequest(userSchema.getById, 'params'), 
+    UserLicenseController.create
+);
+router.get('/:userId/licenses/:license_id', 
+    validateRequest(userSchema.getById, 'params'), 
+    UserLicenseController.get
+);
+router.put('/:userId/licenses/:license_id', 
+    validateRequest(userSchema.getById, 'params'), 
+    UserLicenseController.update
+);
+router.delete('/:userId/licenses/:license_id', 
+    validateRequest(userSchema.getById, 'params'), 
+    UserLicenseController.delete
 );
 
 // Rotas de senha

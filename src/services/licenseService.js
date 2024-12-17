@@ -73,8 +73,26 @@ class LicenseService {
     }
 
     async getLicensesByPerson(personId) {
-        logger.info('Buscando licenças por pessoa', { personId });
-        return await licenseRepository.findByPerson(personId);
+        logger.info('Buscando licenças por pessoa', { 
+            personId,
+            personIdType: typeof personId,
+            personIdValue: personId
+        });
+        
+        if (!personId) {
+            logger.warn('ID da pessoa não fornecido');
+            return [];
+        }
+
+        const licenses = await licenseRepository.findByPerson(personId);
+        
+        logger.info('Licenças encontradas', { 
+            personId, 
+            licensesCount: licenses.length,
+            licenses 
+        });
+
+        return licenses;
     }
 
     async findByPerson(personId) {
