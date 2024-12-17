@@ -69,6 +69,8 @@ const movementTypeRoutes = require('./routes/movementTypeRoutes');
 const movementStatusRoutes = require('./routes/movementStatusRoutes');
 const movementRoutes = require('./routes/movementRoutes');
 const itemRoutes = require('./routes/itemRoutes');
+const ServiceLc116Controller = require('./controllers/serviceLc116Controller');
+const serviceLc116Controller = new ServiceLc116Controller();
 
 app.use('/roadmap', roadmapRoutes);
 app.use('/persons', personRoutes);
@@ -85,6 +87,26 @@ app.use('/movement-types', movementTypeRoutes);
 app.use('/movement-status', movementStatusRoutes);
 app.use('/movements', movementRoutes);
 app.use('/items', itemRoutes);
+
+app.use('/service-lc116', (req, res, next) => {
+  const { method } = req;
+
+  switch (method) {
+    case 'GET':
+      if (req.params.id) {
+        return serviceLc116Controller.show(req, res);
+      }
+      return serviceLc116Controller.index(req, res);
+    case 'POST':
+      return serviceLc116Controller.store(req, res);
+    case 'PUT':
+      return serviceLc116Controller.update(req, res);
+    case 'DELETE':
+      return serviceLc116Controller.destroy(req, res);
+    default:
+      return res.status(405).json({ error: 'Método não permitido' });
+  }
+});
 
 // Rota inicial
 app.get('/', (req, res) => {
