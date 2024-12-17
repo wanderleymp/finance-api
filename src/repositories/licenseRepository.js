@@ -147,45 +147,58 @@ class LicenseRepository {
     }
 
     async findByPerson(personId) {
+        logger.info('REPOSITORY: Buscando licenças por pessoa', { 
+            personId,
+            personIdType: typeof personId
+        });
+
         try {
-            logger.info('REPOSITORY: Buscando licenças por pessoa', { 
-                personId,
-                personIdType: typeof personId
-            });
-
-            if (!personId) {
-                logger.warn('REPOSITORY: ID da pessoa não fornecido');
-                return [];
-            }
-
             const query = `
                 SELECT 
-                    l.license_id, 
-                    l.person_id, 
-                    l.start_date, 
-                    l.end_date, 
-                    l.status
-                FROM licenses l
-                WHERE l.person_id = $1 
-                AND l.status = 'ACTIVE'
-                AND l.end_date >= CURRENT_DATE
+                    license_id, 
+                    person_id, 
+                    license_name, 
+                    start_date, 
+                    end_date, 
+                    status, 
+                    timezone
+                FROM licenses
+                WHERE person_id = $1
             `;
 
-            const result = await this.pool.query(query, [personId]);
+            console.log('DEBUG: findByPerson query', {
+                query,
+                personId
+            });
 
-            logger.info('REPOSITORY: Resultado da busca de licenças', { 
+            const result = await this.pool.query(query, [personId]);
+            
+            logger.info('REPOSITORY: Licenças encontradas por pessoa', { 
                 personId, 
+                licensesCount: result.rowCount,
+                licenses: result.rows,
+                resultRows: result.rows
+            });
+
+            console.log('DEBUG: findByPerson result', {
                 rowCount: result.rowCount,
-                resultRows: result.rows 
+                rows: result.rows
             });
 
             return result.rows;
         } catch (error) {
             logger.error('REPOSITORY: Erro ao buscar licenças por pessoa', { 
                 personId,
-                error: error.message,
-                stack: error.stack
+                errorMessage: error.message,
+                errorStack: error.stack
             });
+
+            console.error('DEBUG: findByPerson error', {
+                personId,
+                errorMessage: error.message,
+                errorStack: error.stack
+            });
+
             throw error;
         }
     }

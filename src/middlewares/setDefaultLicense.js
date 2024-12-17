@@ -7,8 +7,14 @@ async function setDefaultLicense(req, res, next) {
         console.log('DEBUG: setDefaultLicense middleware', {
             reqUser: req.user,
             reqBody: req.body,
-            reqUserPersonId: req.user?.person_id
+            reqUserPersonId: req.user?.person_id,
+            reqPath: req.path
         });
+
+        // Ignorar completamente para rotas de movement-payments
+        if (req.path.startsWith('/movement-payments')) {
+            return next();
+        }
 
         // Se license_id não foi fornecido e há um usuário autenticado
         if (!req.body.license_id && req.user) {

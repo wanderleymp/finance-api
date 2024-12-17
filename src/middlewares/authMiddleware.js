@@ -1,7 +1,15 @@
 const jwt = require('jsonwebtoken');
 const { logger } = require('./logger');
+const licenseService = require('../services/licenseService');
 
-const authMiddleware = (req, res, next) => {
+// Rotas isentas de verificação de licença
+const LICENSE_FREE_ROUTES = [
+    '/movement-payments',
+    '/health',
+    '/status'
+];
+
+const authMiddleware = async (req, res, next) => {
     logger.info('Middleware de autenticação chamado', {
         path: req.path,
         method: req.method,
@@ -49,34 +57,38 @@ const authMiddleware = (req, res, next) => {
         const decoded = jwt.verify(token, process.env.JWT_SECRET);
         
         // Adiciona informações do usuário ao request para uso posterior
-        req.userId = decoded.user_id;
-        req.username = decoded.username;
-        
-        // Adiciona objeto user para compatibilidade
-        req.user = {
-            user_id: decoded.user_id,
-            username: decoded.username,
-            profile_id: decoded.profile_id || null,
-            person_id: decoded.person_id || null,
-            licenses: decoded.licenses || []
-        };
+        req.user = decoded;
 
-        next();
-    } catch (error) {
-        logger.error('Erro na validação do token', { error: error.message });
+        // Ignorar verificação de licença para rotas específicas
+        if (LICENSE_FREE_ROUTES.some(route => req.path.startsWith(route))) {
+            return next();
+        }
+
+        // Verificar licenças para outras rotas
+        const userLicenses = await licenseService.getLicensesByPerson(decoded.person_id);
         
-        if (error.name === 'TokenExpiredError') {
-            return res.status(401).json({
-                success: false,
-                message: 'Token expirado'
+        console.log('DEBUG: Licenças do usuário', {
+            userLicenses,
+            userLicensesLength: userLicenses.length
+        });
+
+        if (userLicenses.length === 0) {
+            return res.status(403).json({ 
+                message: 'Usuário não possui licenças ativas' 
             });
         }
 
-        return res.status(401).json({
+        next();
+    } catch (error) {
+        logger.error('Erro no middleware de autenticação', {
+            errorMessage: error.message,
+            errorStack: error.stack
+        });
+        res.status(401).json({
             success: false,
             message: 'Token inválido'
         });
     }
-};
+}
 
 module.exports = authMiddleware;

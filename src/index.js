@@ -73,6 +73,7 @@ const ServiceLc116Controller = require('./controllers/serviceLc116Controller');
 const serviceLc116Controller = new ServiceLc116Controller();
 const salesRoutes = require('./routes/salesRoutes');
 const paymentMethodsRoutes = require('./routes/paymentMethodsRoutes');
+const movementPaymentsRoutes = require('./routes/movementPaymentsRoutes');
 
 app.use('/roadmap', roadmapRoutes);
 app.use('/persons', personRoutes);
@@ -91,6 +92,7 @@ app.use('/movements', movementRoutes);
 app.use('/items', itemRoutes);
 app.use('/sales', salesRoutes());
 app.use('/payment-methods', paymentMethodsRoutes);
+app.use('/movement-payments', movementPaymentsRoutes);
 
 app.use('/service-lc116', (req, res, next) => {
   const { method } = req;
