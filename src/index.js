@@ -135,30 +135,34 @@ const serviceLc116Controller = new ServiceLc116Controller();
 const salesRoutes = require('./routes/salesRoutes');
 const paymentMethodsRoutes = require('./routes/paymentMethodsRoutes');
 const movementPaymentsRoutes = require('./routes/movementPaymentsRoutes');
+const installmentRoutes = require('./routes/installmentRoutes');
 
 const routes = require('./routes');
 console.log('Rotas principais carregadas:', routes);
 app.use('/', routes);
 
-// Remover rotas individuais
-// app.use('/roadmap', roadmapRoutes);
-// app.use('/persons', personRoutes);
-// app.use('/person-documents', personDocumentRoutes);
-// app.use('/contacts', contactRoutes);
-// app.use('/person-contacts', personContactRoutes);
-// app.use('/person-addresses', personAddressRoutes);
-// app.use('/addresses', addressRoutes);
-// app.use('/licenses', licenseRoutes);
-// app.use('/person-licenses', personLicenseRoutes);
-// app.use('/api/system', systemConfigRoutes(systemDatabase.pool));
-// app.use('/users', userRoutes);
-// app.use('/movement-types', movementTypeRoutes);
-// app.use('/movement-status', movementStatusRoutes);
-// app.use('/movements', movementRoutes);
-// app.use('/items', itemRoutes);
-// app.use('/sales', salesRoutes());
-// app.use('/payment-methods', paymentMethodsRoutes);
-// app.use('/movement-payments', movementPaymentsRoutes);
+// Restaurar rotas individuais
+app.use('/roadmap', roadmapRoutes);
+app.use('/persons', personRoutes);
+app.use('/person-documents', personDocumentRoutes);
+app.use('/contacts', contactRoutes);
+app.use('/person-contacts', personContactRoutes);
+app.use('/person-addresses', personAddressRoutes);
+app.use('/addresses', addressRoutes);
+app.use('/licenses', licenseRoutes);
+app.use('/person-licenses', personLicenseRoutes);
+app.use('/api/system', systemConfigRoutes(systemDatabase.pool));
+app.use('/users', userRoutes);
+app.use('/movement-types', movementTypeRoutes);
+app.use('/movement-status', movementStatusRoutes);
+app.use('/movements', movementRoutes);
+app.use('/items', itemRoutes);
+app.use('/sales', salesRoutes());
+app.use('/payment-methods', paymentMethodsRoutes);
+app.use('/movement-payments', movementPaymentsRoutes);
+
+// Adicionar rota de installments
+app.use('/installments', installmentRoutes);
 
 app.use('/service-lc116', (req, res, next) => {
   const { method } = req;

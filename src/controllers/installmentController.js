@@ -77,10 +77,9 @@ class InstallmentController {
 
   async createInstallment(req, res) {
     try {
-      const installmentData = req.body;
-      
-      const newInstallment = await installmentService.createInstallment(installmentData);
-      
+      console.log('Received installment creation request:', req.body);
+      const newInstallment = await installmentService.createInstallment(req.body);
+      console.log('Installment created successfully:', newInstallment);
       res.status(201).json(newInstallment);
     } catch (error) {
       logger.error('Erro no controller de criação de installment', { 
@@ -103,7 +102,7 @@ class InstallmentController {
       if (!installmentId || isNaN(parseInt(installmentId))) {
         return res.status(400).json({ message: 'ID de installment inválido' });
       }
-
+      
       const updatedInstallment = await installmentService.updateInstallment(
         parseInt(installmentId), 
         installmentData
@@ -112,8 +111,8 @@ class InstallmentController {
       res.json(updatedInstallment);
     } catch (error) {
       logger.error('Erro no controller de atualização de installment', { 
-        params: req.params,
-        body: req.body, 
+        params: req.params, 
+        body: req.body,
         error: error.message 
       });
       
@@ -131,14 +130,12 @@ class InstallmentController {
       if (!installmentId || isNaN(parseInt(installmentId))) {
         return res.status(400).json({ message: 'ID de installment inválido' });
       }
-
-      const deletedInstallment = await installmentService.deleteInstallment(
-        parseInt(installmentId)
-      );
       
-      res.json(deletedInstallment);
+      await installmentService.deleteInstallment(parseInt(installmentId));
+      
+      res.status(204).send(); // No content
     } catch (error) {
-      logger.error('Erro no controller de deleção de installment', { 
+      logger.error('Erro no controller de exclusão de installment', { 
         params: req.params, 
         error: error.message 
       });

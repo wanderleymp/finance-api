@@ -71,13 +71,26 @@ class InstallmentService {
 
   async createInstallment(installmentData) {
     try {
-      this.validateInstallmentData(installmentData, true);
-      return await installmentRepository.createInstallment(installmentData);
+      logger.info('Attempting to create installment with data:', installmentData);
+      
+      // Validate required fields
+      const requiredFields = ['payment_id', 'installment_number', 'due_date', 'amount', 'balance', 'status', 'expected_date'];
+      const missingFields = requiredFields.filter(field => !installmentData[field]);
+      
+      if (missingFields.length > 0) {
+        logger.error('Missing required fields:', missingFields);
+        throw new Error(`Missing required fields: ${missingFields.join(', ')}`);
+      }
+
+      // Log the account_entry_id specifically
+      logger.info('account_entry_id:', installmentData.account_entry_id);
+      
+      const newInstallment = await installmentRepository.createInstallment(installmentData);
+      logger.info('Installment created in repository:', newInstallment);
+      
+      return newInstallment;
     } catch (error) {
-      logger.error('Erro no serviço de criação de installment', { 
-        installmentData, 
-        error: error.message 
-      });
+      logger.error('Error in createInstallment service:', error);
       throw error;
     }
   }

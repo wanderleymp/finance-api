@@ -16,4 +16,13 @@ router.get('/', installmentController.listInstallments);
 // Obter installment por ID
 router.get('/:installmentId', installmentController.getInstallmentById);
 
+// Criar nova installment
+router.post('/', installmentController.createInstallment);
+
+// Atualizar installment
+router.put('/:installmentId', installmentController.updateInstallment);
+
+// Deletar installment
+router.delete('/:installmentId', installmentController.deleteInstallment);
+
 module.exports = router;
