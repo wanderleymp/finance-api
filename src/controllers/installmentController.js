@@ -1,4 +1,5 @@
 const installmentService = require('../services/installmentService');
+const boletoService = require('../services/boletoService');
 const { logger } = require('../middlewares/logger');
 
 console.log('Controller de installments carregado!');
@@ -137,6 +138,85 @@ class InstallmentController {
     } catch (error) {
       logger.error('Erro no controller de exclusão de installment', { 
         params: req.params, 
+        error: error.message 
+      });
+      
+      const statusCode = error.status || 500;
+      res.status(statusCode).json({ 
+        message: error.message || 'Erro interno do servidor' 
+      });
+    }
+  }
+
+  async listInstallmentBoletos(req, res) {
+    try {
+      const installmentId = parseInt(req.params.id);
+      const { 
+        page, 
+        limit,
+        status
+      } = req.query;
+
+      const filters = {
+        installment_id: installmentId,
+        status
+      };
+
+      const result = await boletoService.listBoletos(
+        page ? parseInt(page) : undefined, 
+        limit ? parseInt(limit) : undefined, 
+        filters
+      );
+      
+      res.json(result);
+    } catch (error) {
+      logger.error('Erro no controller de listagem de boletos de installment', { 
+        params: req.params,
+        query: req.query, 
+        error: error.message 
+      });
+      
+      const statusCode = error.status || 500;
+      res.status(statusCode).json({ 
+        message: error.message || 'Erro interno do servidor' 
+      });
+    }
+  }
+
+  async createInstallmentBoleto(req, res) {
+    try {
+      const installmentId = parseInt(req.params.id);
+      const boletoData = {
+        ...req.body,
+        installment_id: installmentId
+      };
+
+      const newBoleto = await boletoService.createBoleto(boletoData);
+      res.status(201).json(newBoleto);
+    } catch (error) {
+      logger.error('Erro no controller de criação de boleto para installment', { 
+        params: req.params,
+        body: req.body, 
+        error: error.message 
+      });
+      
+      const statusCode = error.status || 500;
+      res.status(statusCode).json({ 
+        message: error.message || 'Erro interno do servidor' 
+      });
+    }
+  }
+
+  async deleteInstallmentBoleto(req, res) {
+    try {
+      const installmentId = parseInt(req.params.id);
+      const boletoId = parseInt(req.params.boletoId);
+
+      const deletedBoleto = await boletoService.deleteBoleto(boletoId, installmentId);
+      res.status(200).json(deletedBoleto);
+    } catch (error) {
+      logger.error('Erro no controller de exclusão de boleto de installment', { 
+        params: req.params,
         error: error.message 
       });
       

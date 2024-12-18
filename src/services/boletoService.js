@@ -107,20 +107,26 @@ class BoletoService {
         }
     }
 
-    async deleteBoleto(boletoId) {
+    async deleteBoleto(boletoId, installmentId = null) {
         try {
-            // Verificar se o boleto existe antes de deletar
-            await this.getBoletoById(boletoId);
+            // Verificar se o boleto existe e pertence à installment (se especificada)
+            const boleto = await this.getBoletoById(boletoId);
+            
+            if (installmentId && boleto.installment_id !== installmentId) {
+                throw new ValidationError('Boleto não pertence à parcela especificada');
+            }
 
-            logger.info('Serviço: Boleto excluído', {
-                boletoId
+            logger.info('Serviço: Deletando boleto', { 
+                boletoId, 
+                installmentId 
             });
 
             return await boletoRepository.deleteBoleto(boletoId);
         } catch (error) {
-            logger.error('Erro no serviço ao excluir boleto', {
+            logger.error('Erro no serviço ao deletar boleto', {
                 errorMessage: error.message,
-                boletoId
+                boletoId,
+                installmentId
             });
             throw error;
         }

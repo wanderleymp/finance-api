@@ -25,4 +25,13 @@ router.put('/:installmentId', installmentController.updateInstallment);
 // Deletar installment
 router.delete('/:installmentId', installmentController.deleteInstallment);
 
+// Listar boletos de uma installment
+router.get('/:id/boletos', installmentController.listInstallmentBoletos);
+
+// Criar boleto para uma installment
+router.post('/:id/boletos', installmentController.createInstallmentBoleto);
+
+// Deletar boleto de uma installment
+router.delete('/:id/boletos/:boletoId', installmentController.deleteInstallmentBoleto);
+
 module.exports = router;
