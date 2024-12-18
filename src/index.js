@@ -136,6 +136,7 @@ const salesRoutes = require('./routes/salesRoutes');
 const paymentMethodsRoutes = require('./routes/paymentMethodsRoutes');
 const movementPaymentsRoutes = require('./routes/movementPaymentsRoutes');
 const installmentRoutes = require('./routes/installmentRoutes');
+const boletoRoutes = require('./routes/boletoRoutes');
 
 const routes = require('./routes');
 console.log('Rotas principais carregadas:', routes);
@@ -160,9 +161,8 @@ app.use('/items', itemRoutes);
 app.use('/sales', salesRoutes());
 app.use('/payment-methods', paymentMethodsRoutes);
 app.use('/movement-payments', movementPaymentsRoutes);
-
-// Adicionar rota de installments
 app.use('/installments', installmentRoutes);
+app.use('/boletos', boletoRoutes);
 
 app.use('/service-lc116', (req, res, next) => {
   const { method } = req;
