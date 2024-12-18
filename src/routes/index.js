@@ -10,6 +10,8 @@ const personCnpjRoutes = require('./personCnpjRoutes');
 const itemRoutes = require('./itemRoutes');
 const movementPaymentsRoutes = require('./movementPaymentsRoutes');
 const databaseController = require('../controllers/databaseController');
+const installmentController = require('../controllers/installmentController');
+const installmentRoutes = require('./installmentRoutes');
 
 const router = express.Router();
 
@@ -35,7 +37,11 @@ router.use('/person-addresses', personAddressRoutes);
 router.use('/licenses', licenseRoutes);
 router.use('/users', userRoutes);
 router.use('/items', itemRoutes);
-router.use('/movement-payments', movementPaymentsRoute
+router.use('/movement-payments', movementPaymentsRoutes);
+
+// Rotas de installments
+router.use('/installments', installmentRoutes);
+
 // Rotas de debug de banco de dados
 router.get('/db/table-schema/:tableName', databaseController.getTableSchema);
 router.get('/db/table-data/:tableName', databaseController.getTableData);

@@ -1,6 +1,12 @@
 const express = require('express');
 const cors = require('cors');
 const dotenv = require('dotenv');
+const helmet = require('helmet');
+const https = require('https');
+const http = require('http');
+const fs = require('fs');
+const path = require('path');
+
 const { httpLogger, logger } = require('./middlewares/logger');
 const { createRabbitMQConnection, checkRabbitMQHealth } = require('./config/rabbitmq');
 const roadmapService = require('./services/roadmapService');
@@ -8,6 +14,9 @@ const { runMigrations } = require('./scripts/migrate');
 const { systemDatabase } = require('./config/database');
 
 const app = express();
+
+// Ambiente de execução
+const NODE_ENV = process.env.NODE_ENV || 'development';
 const PORT = process.env.PORT || 3000;
 
 // Carregar variáveis de ambiente
@@ -17,17 +26,69 @@ dotenv.config();
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
-// Configuração de CORS
-app.use(cors({
-  origin: [
-    process.env.FRONTEND_URL || 'http://localhost:5173', 
-    'http://localhost:5174'
-  ],
-  methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS'],
-  allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With'],
-  credentials: true,
-  maxAge: 3600
-}));
+// Configuração de segurança e CORS baseada no ambiente
+const configureSecurityAndCORS = () => {
+  if (NODE_ENV === 'development') {
+    // Configurações para desenvolvimento
+    logger.info('🚧 Modo de Desenvolvimento: Configurações de segurança relaxadas');
+    
+    // CORS permissivo para desenvolvimento
+    app.use(cors({
+      origin: [
+        'http://localhost:5173', 
+        'http://localhost:5174',
+        'https://localhost:5173',
+        'https://localhost:5174'
+      ],
+      methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS'],
+      allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With'],
+      credentials: true,
+      maxAge: 3600
+    }));
+
+    // Desabilitar algumas proteções de segurança
+    app.use((req, res, next) => {
+      // Permitir conteúdo misto
+      res.setHeader('Content-Security-Policy', 'upgrade-insecure-requests');
+      next();
+    });
+  } else {
+    // Configurações para produção
+    logger.info('🔒 Modo de Produção: Configurações de segurança rígidas');
+    
+    // Helmet para segurança
+    app.use(helmet({
+      contentSecurityPolicy: {
+        directives: {
+          defaultSrc: ["'self'"],
+          scriptSrc: ["'self'", "'unsafe-inline'"],
+          styleSrc: ["'self'", "'unsafe-inline'"],
+          imgSrc: ["'self'", "data:", "https:"]
+        }
+      },
+      referrerPolicy: { policy: 'strict-origin-when-cross-origin' }
+    }));
+
+    // CORS restrito para produção
+    app.use(cors({
+      origin: [process.env.FRONTEND_URL],
+      methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS'],
+      allowedHeaders: ['Content-Type', 'Authorization'],
+      credentials: true
+    }));
+
+    // Forçar HTTPS
+    app.use((req, res, next) => {
+      if (req.headers['x-forwarded-proto'] !== 'https') {
+        return res.redirect(`https://${req.headers.host}${req.url}`);
+      }
+      next();
+    });
+  }
+};
+
+// Aplicar configurações de segurança e CORS
+configureSecurityAndCORS();
 
 // Middleware global
 app.use(httpLogger);
@@ -75,24 +136,29 @@ const salesRoutes = require('./routes/salesRoutes');
 const paymentMethodsRoutes = require('./routes/paymentMethodsRoutes');
 const movementPaymentsRoutes = require('./routes/movementPaymentsRoutes');
 
-app.use('/roadmap', roadmapRoutes);
-app.use('/persons', personRoutes);
-app.use('/person-documents', personDocumentRoutes);
-app.use('/contacts', contactRoutes);
-app.use('/person-contacts', personContactRoutes);
-app.use('/person-addresses', personAddressRoutes);
-app.use('/addresses', addressRoutes);
-app.use('/licenses', licenseRoutes);
-app.use('/person-licenses', personLicenseRoutes);
-app.use('/api/system', systemConfigRoutes(systemDatabase.pool));
-app.use('/users', userRoutes);
-app.use('/movement-types', movementTypeRoutes);
-app.use('/movement-status', movementStatusRoutes);
-app.use('/movements', movementRoutes);
-app.use('/items', itemRoutes);
-app.use('/sales', salesRoutes());
-app.use('/payment-methods', paymentMethodsRoutes);
-app.use('/movement-payments', movementPaymentsRoutes);
+const routes = require('./routes');
+console.log('Rotas principais carregadas:', routes);
+app.use('/', routes);
+
+// Remover rotas individuais
+// app.use('/roadmap', roadmapRoutes);
+// app.use('/persons', personRoutes);
+// app.use('/person-documents', personDocumentRoutes);
+// app.use('/contacts', contactRoutes);
+// app.use('/person-contacts', personContactRoutes);
+// app.use('/person-addresses', personAddressRoutes);
+// app.use('/addresses', addressRoutes);
+// app.use('/licenses', licenseRoutes);
+// app.use('/person-licenses', personLicenseRoutes);
+// app.use('/api/system', systemConfigRoutes(systemDatabase.pool));
+// app.use('/users', userRoutes);
+// app.use('/movement-types', movementTypeRoutes);
+// app.use('/movement-status', movementStatusRoutes);
+// app.use('/movements', movementRoutes);
+// app.use('/items', itemRoutes);
+// app.use('/sales', salesRoutes());
+// app.use('/payment-methods', paymentMethodsRoutes);
+// app.use('/movement-payments', movementPaymentsRoutes);
 
 app.use('/service-lc116', (req, res, next) => {
   const { method } = req;
@@ -205,21 +271,33 @@ async function testDatabaseConnection() {
     }
 }
 
-// Função de inicialização
+// Função de inicialização do servidor
 async function startServer() {
   try {
-    // Remover execução de migrações
-    
-    // Iniciar servidor Express
-    app.listen(PORT, () => {
-      logger.info(`Servidor rodando na porta ${PORT}`);
-    });
-
-    // Configurar conexão com RabbitMQ
+    // Criar conexão RabbitMQ
     await createRabbitMQConnection();
-    await checkRabbitMQHealth();
+
+    // Configuração do servidor baseada no ambiente
+    if (NODE_ENV === 'development') {
+      // Servidor HTTP para desenvolvimento
+      const server = http.createServer(app);
+      server.listen(PORT, () => {
+        logger.info(`🚧 Servidor de desenvolvimento rodando em http://localhost:${PORT}`);
+      });
+    } else {
+      // Configuração de HTTPS para produção
+      const httpsOptions = {
+        key: fs.readFileSync(path.resolve(__dirname, '../ssl/private.key')),
+        cert: fs.readFileSync(path.resolve(__dirname, '../ssl/certificate.crt'))
+      };
+
+      const server = https.createServer(httpsOptions, app);
+      server.listen(PORT, () => {
+        logger.info(`🔒 Servidor de produção rodando em https://localhost:${PORT}`);
+      });
+    }
   } catch (error) {
-    logger.error('Falha ao iniciar o servidor', { error: error.message || error });
+    logger.error('Erro ao iniciar o servidor', { error: error.message });
     process.exit(1);
   }
 }

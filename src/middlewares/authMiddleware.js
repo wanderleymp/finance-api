@@ -9,6 +9,8 @@ const LICENSE_FREE_ROUTES = [
     '/status'
 ];
 
+console.log('DEBUG: Rotas isentas:', LICENSE_FREE_ROUTES);
+
 const authMiddleware = async (req, res, next) => {
     logger.info('Middleware de autenticação chamado', {
         path: req.path,
@@ -22,6 +24,8 @@ const authMiddleware = async (req, res, next) => {
         headers: req.headers,
         authorization: req.headers.authorization
     });
+
+    console.log('DEBUG: Rota atual:', req.path);
 
     const authHeader = req.headers.authorization;
 
