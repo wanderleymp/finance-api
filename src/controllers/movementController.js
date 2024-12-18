@@ -1,4 +1,4 @@
-const movementService = require('../services/movementService');
+const MovementService = require('../services/movementsService');
 const { logger } = require('../middlewares/logger');
 
 class MovementController {
@@ -6,7 +6,7 @@ class MovementController {
         try {
             const { page, limit, ...filters } = req.query;
 
-            const result = await movementService.findAll(page, limit, filters);
+            const result = await MovementService.findAll(page, limit, filters);
             
             res.json(result);
         } catch (error) {
@@ -26,7 +26,7 @@ class MovementController {
     async show(req, res) {
         try {
             const { id } = req.params;
-            const movement = await movementService.findById(parseInt(id, 10));
+            const movement = await MovementService.findById(parseInt(id, 10));
             res.json(movement);
         } catch (error) {
             logger.error('Erro ao buscar movimentação', { 
@@ -45,7 +45,7 @@ class MovementController {
     async create(req, res) {
         try {
             const movementData = req.body;
-            const newMovement = await movementService.create(movementData);
+            const newMovement = await MovementService.create(movementData);
             res.status(201).json(newMovement);
         } catch (error) {
             logger.error('Erro ao criar movimentação', { 
@@ -65,7 +65,7 @@ class MovementController {
         try {
             const { id } = req.params;
             const movementData = req.body;
-            const updatedMovement = await movementService.update(
+            const updatedMovement = await MovementService.update(
                 parseInt(id, 10), 
                 movementData
             );
@@ -88,7 +88,7 @@ class MovementController {
     async delete(req, res) {
         try {
             const { id } = req.params;
-            const deletedMovement = await movementService.delete(parseInt(id, 10));
+            const deletedMovement = await MovementService.delete(parseInt(id, 10));
             res.json(deletedMovement);
         } catch (error) {
             logger.error('Erro ao excluir movimentação', { 
@@ -129,7 +129,7 @@ class MovementController {
             }
 
             // Usar serviço de movimento para criar movimento com pagamento
-            const newMovement = await movementService.createMovementWithPayment(movementData);
+            const newMovement = await MovementService.createMovementWithPayment(movementData);
 
             logger.info('Movimento com pagamento criado com sucesso', {
                 movementId: newMovement.movement_id
@@ -145,6 +145,38 @@ class MovementController {
             const statusCode = error.statusCode || 500;
             res.status(statusCode).json({
                 message: error.message || 'Erro interno ao criar movimento com pagamento',
+                error: process.env.NODE_ENV === 'development' ? error.stack : undefined
+            });
+        }
+    }
+
+    async getPayments(req, res) {
+        try {
+            const { id } = req.params;
+            const { page, limit, ...filters } = req.query;
+
+            const result = await MovementService.getMovementPayments(
+                parseInt(id, 10), 
+                page, 
+                limit, 
+                filters
+            );
+
+            logger.info('Payments de movimento buscados com sucesso', { 
+                movementId: id,
+                totalPayments: result.meta.total
+            });
+
+            res.json(result);
+        } catch (error) {
+            logger.error('Erro ao buscar payments de movimento', { 
+                error: error.message,
+                movementId: req.params.id
+            });
+            
+            const statusCode = error.statusCode || 500;
+            res.status(statusCode).json({
+                message: error.message || 'Erro interno ao buscar payments de movimento',
                 error: process.env.NODE_ENV === 'development' ? error.stack : undefined
             });
         }

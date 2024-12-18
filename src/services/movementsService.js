@@ -100,6 +100,22 @@ class MovementsService {
             throw error;
         }
     }
+
+    static async getMovementPayments(movementId, page = 1, limit = 10, filters = {}) {
+        const movementPaymentsService = new MovementPaymentsService();
+        
+        const result = await movementPaymentsService.list(page, limit, {
+            ...filters,
+            movement_id: movementId
+        });
+        
+        logger.info('Buscando payments de movimento', {
+            movementId,
+            totalPayments: result.meta.total
+        });
+        
+        return result;
+    }
 }
 
 module.exports = MovementsService;

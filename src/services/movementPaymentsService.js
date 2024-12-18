@@ -253,4 +253,4 @@ class MovementPaymentsService {
   }
 }
 
-module.exports = new MovementPaymentsService();
+module.exports = MovementPaymentsService;

@@ -22,6 +22,12 @@ router.get('/:id',
     movementController.show
 );
 
+// Obter payments de uma movimentação
+router.get('/:id/payments', 
+    validateRequest(movementSchema.getMovementById, 'params'), 
+    movementController.getPayments
+);
+
 // Criar nova movimentação
 router.post('/', 
     setDefaultLicense, 
