@@ -103,6 +103,52 @@ class MovementController {
             });
         }
     }
+
+    async createMovementWithPayment(req, res) {
+        try {
+            const movementData = req.body;
+
+            // Validações básicas
+            if (!movementData.movement_type_id) {
+                return res.status(400).json({
+                    message: 'Tipo de movimento é obrigatório'
+                });
+            }
+
+            if (!movementData.total_amount || movementData.total_amount <= 0) {
+                return res.status(400).json({
+                    message: 'Valor do movimento deve ser maior que zero'
+                });
+            }
+
+            // Verificar se método de pagamento foi informado
+            if (!movementData.payment_method_id) {
+                return res.status(400).json({
+                    message: 'Método de pagamento é obrigatório para esta operação'
+                });
+            }
+
+            // Usar serviço de movimento para criar movimento com pagamento
+            const newMovement = await movementService.createMovementWithPayment(movementData);
+
+            logger.info('Movimento com pagamento criado com sucesso', {
+                movementId: newMovement.movement_id
+            });
+
+            res.status(201).json(newMovement);
+        } catch (error) {
+            logger.error('Erro ao criar movimento com pagamento', { 
+                error: error.message,
+                movementData: req.body
+            });
+            
+            const statusCode = error.statusCode || 500;
+            res.status(statusCode).json({
+                message: error.message || 'Erro interno ao criar movimento com pagamento',
+                error: process.env.NODE_ENV === 'development' ? error.stack : undefined
+            });
+        }
+    }
 }
 
 module.exports = new MovementController();

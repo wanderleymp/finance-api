@@ -3,6 +3,8 @@ const PaginationHelper = require('../utils/paginationHelper');
 const { ValidationError } = require('../utils/errors');
 const { logger } = require('../middlewares/logger');
 const { handleDatabaseError } = require('../utils/errorHandler');
+const InstallmentService = require('../services/installmentService');
+const PaymentMethodsRepository = require('../repositories/paymentMethodsRepository');
 
 class MovementPaymentsService {
   async create(paymentData) {
@@ -58,6 +60,22 @@ class MovementPaymentsService {
       
       const paymentMethods = await MovementPaymentsRepository.findAll(validPage, validLimit, dynamicFilters);
       
+      // Buscar installments para cada payment
+      const installmentService = new InstallmentService();
+      
+      const paymentsWithInstallments = await Promise.all(
+        paymentMethods.data.map(async (payment) => {
+          const installments = await installmentService.listInstallments(1, 100, { 
+            payment_id: payment.payment_id 
+          });
+          
+          return {
+            ...payment,
+            installments: installments.data
+          };
+        })
+      );
+      
       logger.info('Serviço: Listagem de movement payments', {
         totalPaymentMethods: paymentMethods.total,
         page: validPage,
@@ -66,7 +84,7 @@ class MovementPaymentsService {
       });
 
       return PaginationHelper.formatResponse(
-        paymentMethods.data, 
+        paymentsWithInstallments, 
         paymentMethods.total, 
         validPage, 
         validLimit
@@ -82,7 +100,7 @@ class MovementPaymentsService {
     }
   }
 
-  async getById(paymentId) {
+  async getById(paymentId, page = 1, limit = 10, filters = {}) {
     try {
       const paymentMethod = await MovementPaymentsRepository.findById(paymentId);
       
@@ -90,11 +108,25 @@ class MovementPaymentsService {
         throw new ValidationError('Movement Payment não encontrado');
       }
       
+      // Buscar parcelas relacionadas ao payment
+      const installmentService = new InstallmentService();
+      
+      const result = await installmentService.listInstallments(page, limit, { 
+        ...filters,
+        payment_id: paymentId 
+      });
+      
       logger.info('Serviço: Detalhes do movement payment', {
-        paymentId
+        paymentId,
+        installmentsCount: result.data.length
       });
 
-      return { data: paymentMethod };
+      return { 
+        data: {
+          ...paymentMethod,
+          installments: result.data
+        }
+      };
     } catch (error) {
       logger.error('Erro no serviço ao buscar movement payment', {
         errorMessage: error.message,
@@ -150,6 +182,73 @@ class MovementPaymentsService {
         paymentId
       });
       throw handleDatabaseError(error);
+    }
+  }
+
+  async createFromMovement(movement, client) {
+    try {
+      // 1. Validar método de pagamento
+      const paymentMethod = await PaymentMethodsRepository.findById(movement.payment_method_id);
+      
+      if (!paymentMethod) {
+        throw new ValidationError('Método de pagamento não encontrado');
+      }
+
+      // 2. Preparar dados de payment
+      const movementPaymentData = {
+        movement_id: movement.movement_id,
+        payment_method_id: movement.payment_method_id,
+        total_amount: movement.total_amount,
+        status: 'Pendente'
+      };
+
+      // 3. Criar movement payment usando método create existente
+      const movementPayment = await this.create(movementPaymentData);
+
+      // 4. Gerar parcelas baseado no método de pagamento
+      const installmentCount = paymentMethod.installment_count || 1;
+      const daysBetweenInstallments = paymentMethod.days_between_installments || 30;
+      const firstDueDateDays = paymentMethod.first_due_date_days || 30;
+
+      const installmentAmount = movementPayment.total_amount / installmentCount;
+      const installments = [];
+
+      const installmentService = new InstallmentService();
+
+      for (let i = 1; i <= installmentCount; i++) {
+        const dueDate = new Date();
+        dueDate.setDate(dueDate.getDate() + firstDueDateDays + (i - 1) * daysBetweenInstallments);
+
+        const installmentData = {
+          payment_id: movementPayment.payment_id,
+          installment_number: i,
+          due_date: dueDate,
+          amount: installmentAmount,
+          balance: installmentAmount,
+          status: 'Pendente',
+          expected_date: dueDate
+        };
+
+        // Criar installment (que também criará o boleto)
+        const installment = await installmentService.createInstallment(installmentData);
+        
+        installments.push(installment);
+      }
+
+      logger.info('Movimento com pagamento processado com sucesso', {
+        movementId: movement.movement_id,
+        paymentId: movementPayment.payment_id,
+        installmentsCount: installments.length
+      });
+
+      return movementPayment;
+    } catch (error) {
+      logger.error('Erro ao processar movimento com pagamento', {
+        movement,
+        errorMessage: error.message,
+        errorStack: error.stack
+      });
+      throw error;
     }
   }
 }

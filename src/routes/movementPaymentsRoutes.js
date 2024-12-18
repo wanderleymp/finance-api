@@ -21,6 +21,10 @@ router.get('/:id',
     validateRequest(movementPaymentSchema.getMovementPaymentById, 'params'), 
     MovementPaymentsController.getById
 );
+router.get('/:id/installments', 
+    validateRequest(movementPaymentSchema.getMovementPaymentById, 'params'), 
+    MovementPaymentsController.getInstallments
+);
 router.put('/:id', 
     validateRequest(movementPaymentSchema.getMovementPaymentById, 'params'),
     validateRequest(movementPaymentSchema.updateMovementPayment, 'body'), 

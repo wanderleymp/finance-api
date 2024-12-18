@@ -131,6 +131,19 @@ class BoletoService {
             throw error;
         }
     }
+
+    // Métodos auxiliares para geração de códigos
+    generateCodigoBarras() {
+        // Implementação simplificada para geração de código de barras
+        const randomPart = Math.random().toString(36).substring(2, 15);
+        return `${new Date().getFullYear()}${randomPart}`.substring(0, 44);
+    }
+
+    generateLinhaDigitavel() {
+        // Implementação simplificada para geração de linha digitável
+        const randomPart = Math.random().toString(36).substring(2, 15);
+        return `${new Date().getFullYear()}${randomPart}`.substring(0, 47);
+    }
 }
 
 module.exports = new BoletoService();

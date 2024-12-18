@@ -2,6 +2,8 @@ const installmentRepository = require('../repositories/installmentRepository');
 const PaginationHelper = require('../utils/paginationHelper');
 const { ValidationError } = require('../utils/errors');
 const { logger } = require('../middlewares/logger');
+const BoletoService = require('./boletoService');
+const PaymentMethodsRepository = require('../repositories/paymentMethodsRepository');
 
 class InstallmentService {
   async listInstallments(page = 1, limit = 10, filters = {}) {
@@ -71,6 +73,7 @@ class InstallmentService {
 
   async createInstallment(installmentData) {
     try {
+      // Validações de negócio
       logger.info('Attempting to create installment with data:', installmentData);
       
       // Validate required fields
@@ -79,18 +82,37 @@ class InstallmentService {
       
       if (missingFields.length > 0) {
         logger.error('Missing required fields:', missingFields);
-        throw new Error(`Missing required fields: ${missingFields.join(', ')}`);
+        throw new ValidationError(`Missing required fields: ${missingFields.join(', ')}`);
       }
 
-      // Log the account_entry_id specifically
-      logger.info('account_entry_id:', installmentData.account_entry_id);
-      
+      // Criar installment
       const newInstallment = await installmentRepository.createInstallment(installmentData);
-      logger.info('Installment created in repository:', newInstallment);
       
+      // Criar boleto após criar a installment
+      const boletoService = new BoletoService();
+      const boletoData = {
+        installment_id: newInstallment.installment_id,
+        boleto_number: `${installmentData.payment_id}-${installmentData.installment_number}`,
+        status: 'Pendente',
+        codigo_barras: boletoService.generateCodigoBarras(),
+        linha_digitavel: boletoService.generateLinhaDigitavel(),
+        amount: installmentData.amount,
+        due_date: installmentData.due_date
+      };
+
+      await boletoService.createBoleto(boletoData);
+
+      logger.info('Installment criada com boleto', {
+        installmentId: newInstallment.installment_id
+      });
+
       return newInstallment;
     } catch (error) {
-      logger.error('Error in createInstallment service:', error);
+      logger.error('Erro ao criar installment com boleto', {
+        installmentData,
+        errorMessage: error.message,
+        errorStack: error.stack
+      });
       throw error;
     }
   }
@@ -180,4 +202,4 @@ class InstallmentService {
   }
 }
 
-module.exports = new InstallmentService();
+module.exports = InstallmentService;

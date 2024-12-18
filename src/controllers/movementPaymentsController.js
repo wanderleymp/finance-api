@@ -1,6 +1,7 @@
 const MovementPaymentsService = require('../services/movementPaymentsService');
 const { handleResponse, handleError } = require('../utils/responseHandler');
 const { logger } = require('../middlewares/logger');
+const InstallmentService = require('../services/installmentService');
 
 class MovementPaymentsController {
   async create(req, res) {
@@ -112,6 +113,41 @@ class MovementPaymentsController {
       handleResponse(res, 204);
     } catch (error) {
       logger.error('Erro ao excluir movement payment', {
+        errorMessage: error.message,
+        errorStack: error.stack,
+        paymentId: req.params.id
+      });
+      handleError(res, error);
+    }
+  }
+
+  async getInstallments(req, res) {
+    try {
+      const { id } = req.params;
+      const { page, limit, ...filters } = req.query;
+      
+      logger.info('Buscando installments de movement payment', { 
+        paymentId: id,
+        page,
+        limit,
+        filters
+      });
+      
+      const installmentService = new InstallmentService();
+      
+      const result = await installmentService.listInstallments(page, limit, {
+        ...filters,
+        payment_id: id
+      });
+      
+      logger.info('Installments de movement payment encontrados', { 
+        paymentId: id,
+        count: result.data.length 
+      });
+      
+      handleResponse(res, 200, result);
+    } catch (error) {
+      logger.error('Erro ao buscar installments de movement payment', {
         errorMessage: error.message,
         errorStack: error.stack,
         paymentId: req.params.id
