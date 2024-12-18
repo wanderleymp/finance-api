@@ -96,6 +96,35 @@ class PaymentMethodsService {
     }
   }
 
+  async findById(paymentMethodId) {
+    try {
+      if (!paymentMethodId) {
+        throw new ValidationError('ID do método de pagamento é obrigatório');
+      }
+
+      const paymentMethod = await PaymentMethodsRepository.findById(paymentMethodId);
+      
+      if (!paymentMethod) {
+        throw new ValidationError(`Método de pagamento com ID ${paymentMethodId} não encontrado`);
+      }
+
+      logger.info('Serviço: Método de pagamento encontrado', {
+        paymentMethodId,
+        methodName: paymentMethod.method_name
+      });
+
+      return { 
+        data: paymentMethod 
+      };
+    } catch (error) {
+      logger.error('Erro no serviço ao buscar método de pagamento por ID', {
+        errorMessage: error.message,
+        paymentMethodId
+      });
+      throw handleDatabaseError(error);
+    }
+  }
+
   async update(paymentMethodId, updateData) {
     try {
       // Validações de negócio

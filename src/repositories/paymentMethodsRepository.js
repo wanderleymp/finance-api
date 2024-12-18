@@ -74,16 +74,27 @@ class PaymentMethodsRepository {
             const query = `
                 SELECT * 
                 FROM payment_methods 
-                WHERE payment_method_id = $1 AND deleted_at IS NULL
+                WHERE payment_method_id = $1 
+                AND deleted_at IS NULL
             `;
 
-            logger.info('Buscando método de pagamento por ID', { paymentMethodId });
+            logger.info('Executando consulta findById de payment methods', { 
+                paymentMethodId,
+                query
+            });
 
-            const result = await systemDatabase.query(query, [paymentMethodId]);
+            const result = await this.pool.query(query, [paymentMethodId]);
 
-            return result.rows[0] || null;
+            if (result.rows.length === 0) {
+                logger.warn('Método de pagamento não encontrado', { 
+                    paymentMethodId 
+                });
+                return null;
+            }
+
+            return result.rows[0];
         } catch (error) {
-            logger.error('Erro ao buscar método de pagamento por ID', { 
+            logger.error('Erro no repositório ao buscar método de pagamento por ID', {
                 errorMessage: error.message,
                 paymentMethodId
             });

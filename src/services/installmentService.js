@@ -93,9 +93,6 @@ class InstallmentService {
       const boletoData = {
         installment_id: newInstallment.installment_id,
         boleto_number: `${installmentData.payment_id}-${installmentData.installment_number}`,
-        status: 'Pendente',
-        codigo_barras: boletoService.generateCodigoBarras(),
-        linha_digitavel: boletoService.generateLinhaDigitavel(),
         amount: installmentData.amount,
         due_date: installmentData.due_date
       };

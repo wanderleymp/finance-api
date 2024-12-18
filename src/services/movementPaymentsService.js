@@ -5,6 +5,7 @@ const { logger } = require('../middlewares/logger');
 const { handleDatabaseError } = require('../utils/errorHandler');
 const InstallmentService = require('../services/installmentService');
 const PaymentMethodsRepository = require('../repositories/paymentMethodsRepository');
+const PaymentMethodsService = require('./paymentMethodsService');
 
 class MovementPaymentsService {
   async create(paymentData) {
@@ -187,12 +188,47 @@ class MovementPaymentsService {
 
   async createFromMovement(movement, client) {
     try {
-      // 1. Validar método de pagamento
-      const paymentMethod = await PaymentMethodsRepository.findById(movement.payment_method_id);
-      
-      if (!paymentMethod) {
-        throw new ValidationError('Método de pagamento não encontrado');
+      // Log de debug nível 2
+      logger.debug('Detalhes completos do movimento para criação de pagamento', {
+        movementFullData: JSON.stringify(movement),
+        movementKeys: Object.keys(movement),
+        movementEntries: Object.entries(movement).map(([key, value]) => ({
+          key, 
+          value: typeof value === 'object' ? JSON.stringify(value) : value, 
+          type: typeof value
+        })),
+        paymentMethodId: movement.payment_method_id,
+        paymentMethodIdType: typeof movement.payment_method_id
+      });
+
+      // Validação explícita
+      if (movement.payment_method_id === undefined || movement.payment_method_id === null) {
+        logger.error('Método de pagamento não encontrado no movimento', {
+          movementData: movement
+        });
+        throw new ValidationError('ID do método de pagamento é obrigatório');
       }
+
+      logger.info('Método createFromMovement chamado', { 
+        movementData: movement,
+        paymentMethodId: movement.payment_method_id,
+        movementKeys: Object.keys(movement)
+      });
+
+      const paymentMethodsService = require('./paymentMethodsService');
+      
+      // Buscar método de pagamento
+      const { data: paymentMethod } = await paymentMethodsService.findById(movement.payment_method_id);
+
+      logger.info('Método de pagamento encontrado', { 
+        paymentMethod,
+        paymentMethodType: typeof paymentMethod
+      });
+
+      logger.debug('Detalhes do método de pagamento para criação de parcelas', {
+        paymentMethod,
+        paymentMethodKeys: Object.keys(paymentMethod)
+      });
 
       // 2. Preparar dados de payment
       const movementPaymentData = {
@@ -226,7 +262,8 @@ class MovementPaymentsService {
           amount: installmentAmount,
           balance: installmentAmount,
           status: 'Pendente',
-          expected_date: dueDate
+          expected_date: dueDate,
+          account_entry_id: 1  // Valor padrão para account_entry_id
         };
 
         // Criar installment (que também criará o boleto)
