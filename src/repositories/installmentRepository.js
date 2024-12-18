@@ -14,16 +14,21 @@ class InstallmentRepository {
             
             let query = `
                 SELECT 
-                    installment_id,
-                    payment_id,
-                    installment_number,
-                    due_date,
-                    amount,
-                    balance,
-                    status,
-                    account_entry_id,
-                    expected_date
-                FROM installments 
+                    i.installment_id,
+                    i.payment_id,
+                    i.installment_number,
+                    i.due_date,
+                    i.amount,
+                    i.balance,
+                    i.status,
+                    i.account_entry_id,
+                    i.expected_date,
+                    b.boleto_id,
+                    b.boleto_url,
+                    b.status AS boleto_status,
+                    b.generated_at
+                FROM installments i
+                LEFT JOIN boletos b ON b.installment_id = i.installment_id
                 WHERE 1=1
             `;
             const params = [];
@@ -31,71 +36,94 @@ class InstallmentRepository {
 
             // Filtro por status
             if (filters.status) {
-                query += ` AND status = $${paramCount}`;
+                query += ` AND i.status = $${paramCount}`;
                 params.push(filters.status);
                 paramCount++;
             }
 
             // Filtro por payment_id
             if (filters.payment_id) {
-                query += ` AND payment_id = $${paramCount}`;
+                query += ` AND i.payment_id = $${paramCount}`;
                 params.push(filters.payment_id);
                 paramCount++;
             }
 
             // Filtro por data de vencimento
             if (filters.start_date) {
-                query += ` AND due_date >= $${paramCount}`;
+                query += ` AND i.due_date >= $${paramCount}`;
                 params.push(filters.start_date);
                 paramCount++;
             }
 
             if (filters.end_date) {
-                query += ` AND due_date <= $${paramCount}`;
+                query += ` AND i.due_date <= $${paramCount}`;
                 params.push(filters.end_date);
                 paramCount++;
             }
 
-            // Ordenação padrão
-            query += ` ORDER BY due_date`;
+            // Adicionar ordenação
+            query += ` ORDER BY i.due_date DESC, b.generated_at DESC`;
 
             // Adicionar paginação
             query += ` LIMIT $${paramCount} OFFSET $${paramCount + 1}`;
             params.push(validLimit, offset);
 
-            // Executar consulta
-            const result = await this.pool.query(query, params);
-
-            // Contar total de registros
+            // Consulta total de registros
             const countQuery = `
-                SELECT COUNT(*) as total 
-                FROM installments 
+                SELECT COUNT(DISTINCT i.installment_id) as total 
+                FROM installments i
                 WHERE 1=1
-                ${filters.status ? ` AND status = '${filters.status}'` : ''}
-                ${filters.payment_id ? ` AND payment_id = ${filters.payment_id}` : ''}
-                ${filters.start_date ? ` AND due_date >= '${filters.start_date}'` : ''}
-                ${filters.end_date ? ` AND due_date <= '${filters.end_date}'` : ''}
+                ${filters.status ? ` AND i.status = '${filters.status}'` : ''}
+                ${filters.payment_id ? ` AND i.payment_id = ${filters.payment_id}` : ''}
+                ${filters.start_date ? ` AND i.due_date >= '${filters.start_date}'` : ''}
+                ${filters.end_date ? ` AND i.due_date <= '${filters.end_date}'` : ''}
             `;
-            const countResult = await this.pool.query(countQuery);
-            const total = parseInt(countResult.rows[0].total);
 
-            logger.info('Repositório: Listagem de installments', {
-                totalInstallments: total,
-                page,
-                limit: validLimit,
-                filters
+            const [dataResult, countResult] = await Promise.all([
+                this.pool.query(query, params),
+                this.pool.query(countQuery)
+            ]);
+
+            // Agrupar boletos por installment
+            const installmentsMap = new Map();
+            dataResult.rows.forEach(row => {
+                if (!installmentsMap.has(row.installment_id)) {
+                    const { boleto_id, boleto_url, boleto_status, generated_at, ...installmentData } = row;
+                    installmentsMap.set(row.installment_id, {
+                        ...installmentData,
+                        boletos: []
+                    });
+                }
+
+                // Adicionar boleto se existir
+                if (row.boleto_id) {
+                    const installment = installmentsMap.get(row.installment_id);
+                    installment.boletos.push({
+                        id: row.boleto_id,
+                        url: row.boleto_url,
+                        status: row.boleto_status,
+                        generated_at: row.generated_at
+                    });
+                }
+            });
+
+            const transformedData = Array.from(installmentsMap.values());
+
+            logger.info('Installments encontrados', { 
+                total: countResult.rows[0].total, 
+                returned: transformedData.length 
             });
 
             return {
-                data: result.rows,
-                total
+                data: transformedData,
+                total: parseInt(countResult.rows[0].total)
             };
         } catch (error) {
-            logger.error('Erro no repositório ao listar installments', {
-                errorMessage: error.message,
-                filters
+            logger.error('Erro ao buscar installments', { 
+                errorMessage: error.message, 
+                filters 
             });
-            throw new ValidationError('Erro ao listar installments');
+            throw new ValidationError('Erro ao buscar parcelas');
         }
     }
 
@@ -236,8 +264,24 @@ class InstallmentRepository {
     async findById(installmentId) {
         try {
             const query = `
-                SELECT * FROM installments 
-                WHERE installment_id = $1
+                SELECT 
+                    i.installment_id,
+                    i.payment_id,
+                    i.installment_number,
+                    i.due_date,
+                    i.amount,
+                    i.balance,
+                    i.status,
+                    i.account_entry_id,
+                    i.expected_date,
+                    b.boleto_id,
+                    b.boleto_url,
+                    b.status AS boleto_status,
+                    b.generated_at
+                FROM installments i
+                LEFT JOIN boletos b ON b.installment_id = i.installment_id
+                WHERE i.installment_id = $1
+                ORDER BY b.generated_at DESC
             `;
 
             const result = await this.pool.query(query, [installmentId]);
@@ -246,7 +290,30 @@ class InstallmentRepository {
                 return null;
             }
 
-            return result.rows[0];
+            // Agrupar boletos
+            const installmentData = {
+                ...result.rows[0],
+                boletos: []
+            };
+
+            result.rows.forEach(row => {
+                if (row.boleto_id) {
+                    installmentData.boletos.push({
+                        id: row.boleto_id,
+                        url: row.boleto_url,
+                        status: row.boleto_status,
+                        generated_at: row.generated_at
+                    });
+                }
+            });
+
+            // Remover campos duplicados
+            const { boleto_id, boleto_url, boleto_status, generated_at, ...cleanInstallmentData } = installmentData;
+
+            return {
+                ...cleanInstallmentData,
+                boletos: installmentData.boletos
+            };
         } catch (error) {
             logger.error('Erro no repositório ao buscar installment por ID', {
                 installmentId,
