@@ -64,7 +64,7 @@ class MovementPaymentsService {
       // Buscar installments para cada payment
       const installmentService = new InstallmentService();
       
-      const paymentsWithInstallments = await Promise.all(
+      const paymentsWithInstallments = paymentMethods.data ? await Promise.all(
         paymentMethods.data.map(async (payment) => {
           const installments = await installmentService.listInstallments(1, 100, { 
             payment_id: payment.payment_id 
@@ -75,7 +75,7 @@ class MovementPaymentsService {
             installments: installments.data
           };
         })
-      );
+      ) : [];
       
       logger.info('Serviço: Listagem de movement payments', {
         totalPaymentMethods: paymentMethods.total,

@@ -64,6 +64,34 @@ class MovementsService {
         return MovementRepository.findById(id);
     }
 
+    static async findByIdWithPayments(movementId) {
+        try {
+            // Buscar movimento base
+            const movement = await MovementRepository.findById(movementId);
+            
+            if (!movement) {
+                const error = new Error('Movimentação não encontrada');
+                error.statusCode = 404;
+                throw error;
+            }
+
+            // Buscar pagamentos relacionados
+            const movementPaymentService = new MovementPaymentsService();
+            const payments = await movementPaymentService.findByMovementId(movementId);
+
+            // Adicionar pagamentos ao movimento
+            movement.payments = payments;
+
+            return movement;
+        } catch (error) {
+            logger.error('Erro ao buscar movimentação com pagamentos', { 
+                error: error.message,
+                movementId
+            });
+            throw error;
+        }
+    }
+
     static async update(id, updateData) {
         try {
             logger.info('Atualizando movimento', { id, data: updateData });

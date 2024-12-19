@@ -1,13 +1,33 @@
 const MovementService = require('../services/movementsService');
+const MovementPaymentsService = require('../services/movementPaymentsService');
 const { logger } = require('../middlewares/logger');
 
 class MovementController {
+    constructor() {
+        this.movementPaymentsService = new MovementPaymentsService();
+    }
+
     async index(req, res) {
         try {
             const { page, limit, ...filters } = req.query;
 
             const result = await MovementService.findAll(page, limit, filters);
             
+            // Buscar pagamentos para cada movimento
+            const movementsWithPayments = await Promise.all(result.movements.map(async (movement) => {
+                const paymentsResult = await this.movementPaymentsService.list(1, 100, {
+                    movement_id: movement.movement_id
+                });
+                
+                return {
+                    ...movement,
+                    payments: paymentsResult.data || []
+                };
+            }));
+
+            // Substituir movements por movementsWithPayments
+            result.movements = movementsWithPayments;
+
             res.json(result);
         } catch (error) {
             logger.error('Erro ao listar movimentações', { 
@@ -27,7 +47,26 @@ class MovementController {
         try {
             const { id } = req.params;
             const movement = await MovementService.findById(parseInt(id, 10));
-            res.json(movement);
+            
+            if (!movement) {
+                return res.status(404).json({ message: 'Movimento não encontrado' });
+            }
+
+            const { page, limit, ...filters } = req.query;
+
+            const result = await MovementService.getMovementPayments(
+                parseInt(id, 10), 
+                page, 
+                limit, 
+                filters
+            );
+
+            const responseData = {
+                ...movement,
+                payments: result.data || []
+            };
+
+            res.json(responseData);
         } catch (error) {
             logger.error('Erro ao buscar movimentação', { 
                 error: error.message,
