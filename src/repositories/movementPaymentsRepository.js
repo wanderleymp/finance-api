@@ -65,6 +65,13 @@ class MovementPaymentsRepository {
                 systemDatabase.query(countQuery, params.slice(0, -2))
             ]);
 
+            if (dataResult.rows.length === 0) {
+                return {
+                    data: [],
+                    total: 0
+                };
+            }
+
             return {
                 data: dataResult.rows,
                 total: parseInt(countResult.rows[0].count)

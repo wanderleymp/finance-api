@@ -84,12 +84,10 @@ class MovementPaymentsService {
         filters: dynamicFilters
       });
 
-      return PaginationHelper.formatResponse(
-        paymentsWithInstallments, 
-        paymentMethods.total, 
-        validPage, 
-        validLimit
-      );
+      return {
+        data: paymentsWithInstallments,
+        total: paymentMethods.total
+      };
     } catch (error) {
       logger.error('Erro no serviço ao listar movement payments', {
         errorMessage: error.message,

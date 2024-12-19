@@ -1,10 +1,15 @@
 const movementRepository = require('../repositories/movementRepository');
+const MovementPaymentsService = require('./movementPaymentsService');
 const { logger } = require('../middlewares/logger');
 const { validateSchema } = require('../utils/schemaValidator');
 const movementSchema = require('../schemas/movementSchema');
 const PaginationHelper = require('../utils/paginationHelper');
 
 class MovementService {
+    constructor() {
+        this.movementPaymentsService = new MovementPaymentsService();
+    }
+
     async findAll(page, limit, filters = {}) {
         try {
             const { page: validPage, limit: validLimit } = PaginationHelper.validateParams(page, limit);
@@ -36,14 +41,16 @@ class MovementService {
                 normalizedFilters
             );
 
+            logger.debug('Resultado do findAll no repositório', {
+                resultType: typeof result,
+                resultKeys: Object.keys(result),
+                data: result.data,
+                meta: result.meta
+            });
+
             return {
                 movements: result.data,
-                pagination: {
-                    currentPage: validPage,
-                    pageSize: validLimit,
-                    totalRecords: result.total,
-                    totalPages: Math.ceil(result.total / validLimit)
-                }
+                pagination: result.meta
             };
         } catch (error) {
             logger.error('Erro no serviço de movimentações', { 
@@ -146,6 +153,28 @@ class MovementService {
             logger.error('Erro ao excluir movimentação', { 
                 error: error.message,
                 movementId
+            });
+            throw error;
+        }
+    }
+
+    async getMovementPayments(movementId, page = 1, limit = 10, filters = {}) {
+        try {
+            // Validar se o movimento existe
+            await this.findById(movementId);
+
+            // Buscar pagamentos do movimento
+            const result = await this.movementPaymentsService.list(page, limit, { 
+                movement_id: movementId,
+                ...filters
+            });
+
+            return result;
+        } catch (error) {
+            logger.error('Erro ao buscar pagamentos do movimento', { 
+                error: error.message,
+                movementId,
+                filters
             });
             throw error;
         }

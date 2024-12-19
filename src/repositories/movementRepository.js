@@ -86,7 +86,7 @@ class MovementRepository {
             });
 
             const countQuery = `
-                SELECT COUNT(*) 
+                SELECT COUNT(*)
                 FROM movements m
                 ${whereClause}
             `;
@@ -112,7 +112,26 @@ class MovementRepository {
                 this.pool.query(dataQuery, queryParams)
             ]);
 
+            console.log('Detalhes da consulta:', {
+                countQuery,
+                dataQuery,
+                countParams: queryParams.slice(0, -2),
+                dataParams: queryParams,
+                countResultRows: countResult.rows,
+                countResultRowsLength: countResult.rows.length,
+                countResultRowsFirstItem: countResult.rows[0]
+            });
+
             const total = parseInt(countResult.rows[0].count, 10);
+
+            console.log('Resultado da consulta:', {
+                countQuery,
+                dataQuery,
+                countParams: queryParams.slice(0, -2),
+                dataParams: queryParams,
+                countResult: countResult.rows,
+                dataResult: dataResult.rows
+            });
 
             return {
                 data: dataResult.rows,

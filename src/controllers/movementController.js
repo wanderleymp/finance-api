@@ -1,4 +1,4 @@
-const MovementService = require('../services/movementsService');
+const MovementService = require('../services/movementService');
 const MovementPaymentsService = require('../services/movementPaymentsService');
 const { logger } = require('../middlewares/logger');
 
@@ -15,9 +15,12 @@ class MovementController {
             
             // Buscar pagamentos para cada movimento
             const movementsWithPayments = await Promise.all(result.movements.map(async (movement) => {
-                const paymentsResult = await this.movementPaymentsService.list(1, 100, {
-                    movement_id: movement.movement_id
-                });
+                const paymentsResult = await MovementService.getMovementPayments(
+                    movement.movement_id, 
+                    1, 
+                    100, 
+                    {}
+                );
                 
                 return {
                     ...movement,
