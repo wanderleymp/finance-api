@@ -275,6 +275,30 @@ async function testDatabaseConnection() {
     }
 }
 
+// Função para ler o arquivo de versão
+function getAppVersion() {
+  try {
+    const versionPath = path.resolve(__dirname, '../VERSION');
+    const versionContent = fs.readFileSync(versionPath, 'utf-8');
+    const versionInfo = versionContent.split('\n').reduce((acc, line) => {
+      const [key, value] = line.split('=');
+      acc[key] = value;
+      return acc;
+    }, {});
+    return versionInfo;
+  } catch (error) {
+    console.error('Erro ao ler arquivo de versão:', error);
+    return { version: 'unknown', branch: 'unknown' };
+  }
+}
+
+const appVersion = getAppVersion();
+logger.info(`🚀 Inicializando Finance API`, {
+  version: appVersion.version,
+  branch: appVersion.branch,
+  buildDate: appVersion.build_date
+});
+
 // Função de inicialização do servidor
 async function startServer() {
   try {

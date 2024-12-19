@@ -1,0 +1,4 @@
+version=1.0.0.1
+branch=feature/boleto-n8n
+build_date=2024-12-19
+commit_hash=$(git rev-parse HEAD)
