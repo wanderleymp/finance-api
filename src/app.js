@@ -3,7 +3,12 @@ const cors = require('cors');
 const helmet = require('helmet');
 const compression = require('compression');
 const { errorHandler } = require('./middlewares/errorHandler');
-const container = require('./config/container');
+const { logger } = require('./middlewares/logger');
+
+// Importando rotas dos módulos diretamente
+const healthRoutes = require('./modules/health/health.routes');
+const authRoutes = require('./modules/auth/auth.routes');
+const userRoutes = require('./modules/users/user.routes');
 
 const app = express();
 
@@ -14,44 +19,25 @@ app.use(compression());
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
-// Logging middleware para todas as requisições
-// app.use((req, res, next) => {
-//     logger.info('Requisição recebida', {
-//         method: req.method,
-//         url: req.url,
-//         ip: req.ip,
-//         userAgent: req.get('user-agent')
-//     });
-//     next();
-// });
-
-// Health check
-app.get('/health', (req, res) => {
-    res.json({
-        status: 'ok',
-        timestamp: new Date().toISOString()
+// Logging middleware
+app.use((req, res, next) => {
+    logger.info('Requisição recebida', {
+        method: req.method,
+        url: req.url,
+        ip: req.ip
     });
+    next();
 });
 
-// Rotas da API
-const boletoController = container.resolve('boletoController');
-const installmentController = container.resolve('installmentController');
-const movementPaymentController = container.resolve('movementPaymentController');
-const movementController = container.resolve('movementController');
+// Rotas dos módulos
+app.use('/health', healthRoutes);
+app.use('/auth', authRoutes);
+app.use('/users', userRoutes);
 
-app.use('/boletos', require('./modules/boletos/boleto.routes')(boletoController));
-app.use('/installments', require('./modules/installments/installment.routes')(installmentController));
-app.use('/movement-payments', require('./modules/movement-payments/movement-payment.routes')(movementPaymentController));
-app.use('/movements', require('./modules/movements/movement.routes')(movementController));
+const authMiddleware = require('./middlewares/authMiddleware');
+app.use(authMiddleware); // Aplica autenticação para todas as rotas abaixo
 
 // Tratamento de erros global
 app.use(errorHandler);
-
-// Inicia o worker de processamento de tarefas
-// tasksWorker.start().catch(error => {
-//     logger.error('Erro ao iniciar worker de tarefas', {
-//         error: error.message
-//     });
-// });
 
 module.exports = app;

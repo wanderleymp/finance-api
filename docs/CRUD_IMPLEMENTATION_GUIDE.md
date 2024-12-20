@@ -1,280 +1,238 @@
-# Guia de Implementação de CRUDs
+# Guia de Implementação de Módulos
 
-Este documento define os padrões e regras para implementação de CRUDs na aplicação Finance API.
+Este documento define as regras e padrões para implementação de módulos no Finance API.
 
-## 1. Estrutura de Diretórios
+## Estrutura de Módulos
+
+Cada funcionalidade deve ser um módulo independente seguindo esta estrutura:
 
 ```
-/src
-  /modules
-    /{recurso}
-      /dto
-        create.dto.js    # DTO para criação
-        update.dto.js    # DTO para atualização
-        response.dto.js  # DTO para respostas
-      /interfaces
-        I{Recurso}Service.js
-        I{Recurso}Repository.js
-      /schemas
-        create.schema.js   # Schema de validação para criação
-        update.schema.js   # Schema de validação para atualização
-      {recurso}.routes.js
-      {recurso}.controller.js
-      {recurso}.service.js
-      {recurso}.repository.js
-      {recurso}.processor.js  # Se necessário processamento assíncrono
+/modules/[nome-do-modulo]/
+  ├── interfaces/           # Contratos e tipos
+  │   ├── IService.js      # Interface do serviço
+  │   └── IRepository.js   # Interface do repositório (se aplicável)
+  ├── dto/                 # Objetos de transferência de dados
+  │   ├── request.dto.js   # DTOs para requisições
+  │   └── response.dto.js  # DTOs para respostas
+  ├── models/              # Modelos de dados
+  │   └── model.js        # Definição do modelo
+  ├── schemas/            # Schemas de validação
+  │   └── schema.js      # Validações usando Joi
+  ├── routes.js          # Definição de rotas
+  ├── controller.js      # Controlador
+  ├── service.js         # Serviço com lógica de negócio
+  └── repository.js      # Acesso a dados (se aplicável)
 ```
 
-## 2. Interfaces
+## Regras de Implementação
 
-### 2.1 Interface do Serviço
+### 1. Rotas (routes.js)
+- Não usar prefixo `/api`
+- Usar express.Router()
+- Incluir validação de requisição
+- Exemplo:
 ```javascript
-interface I{Recurso}Service {
-    create(data: CreateDTO): Promise<ResponseDTO>;
-    findById(id: number): Promise<ResponseDTO>;
-    findAll(filters: FilterDTO): Promise<PaginatedResponse<ResponseDTO>>;
-    update(id: number, data: UpdateDTO): Promise<ResponseDTO>;
-    delete(id: number): Promise<void>;
-}
-```
+const express = require('express');
+const controller = require('./controller');
+const { validateRequest } = require('../../middlewares/requestValidator');
+const schema = require('./schemas/schema');
 
-### 2.2 Interface do Repositório
-```javascript
-interface I{Recurso}Repository {
-    create(data: CreateDTO): Promise<Entity>;
-    findById(id: number): Promise<Entity | null>;
-    findAll(filters: FilterDTO): Promise<PaginatedResult<Entity>>;
-    update(id: number, data: Partial<Entity>): Promise<Entity>;
-    delete(id: number): Promise<void>;
-}
-```
-
-## 3. Implementação das Camadas
-
-### 3.1 Rotas
-```javascript
 const router = express.Router();
-const controller = new {Recurso}Controller(container.get('{Recurso}Service'));
 
-router.post('/',
-    validateSchema(schemas.create),
-    authMiddleware,
-    controller.create
-);
+router.get('/', validateRequest(schema.list), controller.list);
+router.post('/', validateRequest(schema.create), controller.create);
 
-router.get('/',
-    validateSchema(schemas.list, 'query'),
-    authMiddleware,
-    controller.findAll
-);
-
-router.get('/:id',
-    validateSchema(schemas.getById, 'params'),
-    authMiddleware,
-    controller.findById
-);
-
-router.put('/:id',
-    validateSchema(schemas.update),
-    authMiddleware,
-    controller.update
-);
-
-router.delete('/:id',
-    validateSchema(schemas.delete, 'params'),
-    authMiddleware,
-    controller.delete
-);
+module.exports = router;
 ```
 
-### 3.2 Controller
+### 2. Controller
+- Responsável apenas por:
+  - Receber requisições
+  - Validar dados
+  - Chamar serviços
+  - Formatar respostas
+- Usar try/catch para tratamento de erros
+- Exemplo:
 ```javascript
-class {Recurso}Controller {
-    constructor(private service: I{Recurso}Service) {}
-
-    async create(req: Request, res: Response) {
+class Controller {
+    async create(req, res) {
         try {
-            const result = await this.service.create(req.body);
-            handleResponse(res, 201, result);
+            const result = await service.create(req.body);
+            res.status(201).json({
+                status: 'success',
+                data: result
+            });
         } catch (error) {
-            handleError(res, error);
-        }
-    }
-
-    async findAll(req: Request, res: Response) {
-        try {
-            const result = await this.service.findAll(req.query);
-            handleResponse(res, 200, result);
-        } catch (error) {
-            handleError(res, error);
-        }
-    }
-
-    // ... outros métodos CRUD
-}
-```
-
-### 3.3 Service
-```javascript
-class {Recurso}Service implements I{Recurso}Service {
-    constructor(
-        private repository: I{Recurso}Repository,
-        private taskService?: ITaskService
-    ) {}
-
-    async create(data: CreateDTO): Promise<ResponseDTO> {
-        // 1. Validações de negócio
-        await this.validateBusinessRules(data);
-
-        // 2. Persistência
-        const entity = await this.repository.create(data);
-
-        // 3. Processamento assíncrono (se necessário)
-        if (this.taskService) {
-            await this.taskService.enqueue('{RECURSO}_PROCESS', {
-                entityId: entity.id
+            logger.error('Error in create', { error });
+            res.status(400).json({
+                status: 'error',
+                message: error.message
             });
         }
-
-        // 4. Retorno
-        return this.toDTO(entity);
     }
-
-    // ... outros métodos CRUD
 }
 ```
 
-### 3.4 Repository
+### 3. Service
+- Implementar interface definida em IService
+- Conter toda lógica de negócio
+- Não acessar req/res
+- Usar injeção de dependências
+- Exemplo:
 ```javascript
-class {Recurso}Repository implements I{Recurso}Repository {
-    constructor(private db: Database) {}
-
-    async create(data: CreateDTO): Promise<Entity> {
-        const result = await this.db.query(
-            'INSERT INTO {recursos} (...) VALUES (...) RETURNING *',
-            [data.field1, data.field2]
-        );
-        return result.rows[0];
+class Service extends IService {
+    constructor(repository) {
+        super();
+        this.repository = repository;
     }
 
-    // ... outros métodos CRUD
+    async create(data) {
+        // Validações e regras de negócio
+        return this.repository.create(data);
+    }
 }
 ```
 
-## 3. Padrão de Rotas
-
-### 3.1 Base URL
-Todas as rotas da API devem seguir o padrão:
-```
-/{recurso}
-```
-Exemplo: `/boletos`, `/usuarios`, `/pagamentos`
-
-NÃO utilizar prefixos como `/api` ou `/api/v1/`
-
-### 3.2 Endpoints Padrão
-- GET    /{recurso}          - Lista recursos com paginação e filtros
-- GET    /{recurso}/:id      - Busca recurso por ID
-- POST   /{recurso}          - Cria novo recurso
-- PUT    /{recurso}/:id      - Atualiza recurso
-- DELETE /{recurso}/:id      - Remove recurso
-
-## 4. Validações
-
-### 4.1 Schema de Validação
+### 4. Interface
+- Definir contrato do serviço
+- Documentar métodos com JSDoc
+- Exemplo:
 ```javascript
-const createSchema = Joi.object({
-    field1: Joi.string().required(),
-    field2: Joi.number().min(0).required(),
-    // ...
+class IService {
+    /**
+     * Create new resource
+     * @param {Object} data - Resource data
+     * @returns {Promise<Object>} Created resource
+     */
+    async create(data) {}
+}
+```
+
+### 5. DTOs
+- Separar DTOs de request e response
+- Usar para validação e transformação
+- Exemplo:
+```javascript
+class RequestDTO {
+    constructor(data) {
+        this.name = data.name;
+        this.email = data.email.toLowerCase();
+    }
+}
+```
+
+### 6. Schemas
+- Usar Joi para validação
+- Definir mensagens de erro
+- Exemplo:
+```javascript
+const schema = {
+    create: Joi.object({
+        name: Joi.string().required(),
+        email: Joi.string().email()
+    })
+};
+```
+
+## Dependências e Imports
+
+### 1. Caminhos de Importação
+- Usar caminhos relativos ao módulo
+- Para arquivos do módulo: `./arquivo`
+- Para arquivos externos: `../../config/arquivo`
+
+### 2. Dependências Comuns
+```javascript
+// Bibliotecas
+const express = require('express');
+const Joi = require('joi');
+
+// Middlewares
+const logger = require('../../middlewares/logger');
+const { validateRequest } = require('../../middlewares/requestValidator');
+
+// Configurações
+const { systemDatabase } = require('../../config/database');
+```
+
+## Segurança
+
+### 1. Autenticação
+- Usar middleware de autenticação quando necessário
+- Validar tokens JWT
+- Implementar rate limiting
+
+### 2. Validação
+- Validar todas as entradas usando Joi
+- Sanitizar dados sensíveis
+- Usar DTOs para transformação
+
+## Logging
+
+- Usar o logger em todas as operações importantes
+- Incluir contexto nos logs
+- Exemplo:
+```javascript
+logger.info('Operação iniciada', { 
+    module: 'users',
+    action: 'create',
+    data: { id, name }
 });
-
-const updateSchema = createSchema.fork(['field1', 'field2'], (schema) => schema.optional());
 ```
 
-### 4.2 DTOs
+## Tratamento de Erros
+
+- Usar try/catch em todas as operações assíncronas
+- Logar erros com contexto
+- Retornar respostas de erro padronizadas
+- Exemplo:
 ```javascript
-class CreateDTO {
-    field1: string;
-    field2: number;
-}
-
-class UpdateDTO extends Partial<CreateDTO> {}
-
-class ResponseDTO {
-    id: number;
-    field1: string;
-    field2: number;
-    createdAt: Date;
-    updatedAt: Date;
+try {
+    // operação
+} catch (error) {
+    logger.error('Erro na operação', { error });
+    throw new AppError('Mensagem amigável', 400);
 }
 ```
 
-## 5. Processamento Assíncrono
+## Testes
 
-Se o recurso necessitar de processamento assíncrono:
-
-### 5.1 Processor
+- Criar testes unitários para services
+- Criar testes de integração para controllers
+- Usar mocks para dependências externas
+- Exemplo:
 ```javascript
-class {Recurso}Processor {
-    constructor(
-        private service: I{Recurso}Service,
-        private integration?: IIntegrationService
-    ) {}
-
-    async process(data: ProcessDTO): Promise<void> {
-        try {
-            // 1. Processamento
-            const result = await this.integration.process(data);
-
-            // 2. Atualização do status
-            await this.service.updateStatus(data.id, result.status);
-        } catch (error) {
-            // 3. Tratamento de erro
-            await this.service.handleProcessingError(data.id, error);
-            throw error;
-        }
-    }
-}
+describe('UserService', () => {
+    it('should create user', async () => {
+        const result = await service.create(mockData);
+        expect(result).toHaveProperty('id');
+    });
+});
 ```
 
-## 6. Boas Práticas
+## Boas Práticas
 
-1. **Injeção de Dependências**
-   - Sempre usar construtor injection
-   - Configurar no container de DI
-   - Usar interfaces para acoplamento fraco
+1. **Separação de Responsabilidades**
+   - Controller: Requisições e respostas
+   - Service: Lógica de negócio
+   - Repository: Acesso a dados
 
-2. **Tratamento de Erros**
-   - Usar classes de erro específicas
-   - Centralizar tratamento no controller
-   - Logar erros com contexto
+2. **Nomenclatura**
+   - Usar nomes descritivos
+   - Seguir padrão camelCase
+   - Prefixar interfaces com I
 
-3. **Logging**
-   - Usar logger estruturado
-   - Incluir IDs de correlação
-   - Logar início e fim de operações importantes
+3. **Documentação**
+   - Documentar interfaces com JSDoc
+   - Manter README atualizado
+   - Documentar APIs com Swagger
 
-4. **Transações**
-   - Usar middleware de transação quando necessário
-   - Garantir atomicidade em operações complexas
-   - Implementar compensação em falhas
+4. **Performance**
+   - Usar paginação em listagens
+   - Implementar cache quando necessário
+   - Otimizar consultas ao banco
 
-5. **Segurança**
-   - Validar inputs em todas as rotas
-   - Implementar controle de acesso
-   - Sanitizar dados sensíveis nos logs
-
-## 7. Checklist de Implementação
-
-- [ ] Criar estrutura de diretórios
-- [ ] Definir interfaces
-- [ ] Implementar DTOs e schemas
-- [ ] Criar rotas com validações
-- [ ] Implementar controller com tratamento de erros
-- [ ] Implementar service com regras de negócio
-- [ ] Implementar repository com queries otimizadas
-- [ ] Adicionar logs estruturados
-- [ ] Configurar injeção de dependências
-- [ ] Implementar testes unitários
-- [ ] Documentar endpoints (Swagger)
+5. **Manutenibilidade**
+   - Manter módulos pequenos e focados
+   - Evitar duplicação de código
+   - Seguir princípios SOLID
