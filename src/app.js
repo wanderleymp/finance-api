@@ -1,13 +1,17 @@
 const express = require('express');
 const cors = require('cors');
-const { logger } = require('./middlewares/logger');
+const helmet = require('helmet');
+const { logger, errorHandler } = require('./middlewares/logger');
 const tasksWorker = require('./workers/tasksWorker');
 const boletoRoutes = require('./modules/boletos/boleto.routes');
+const installmentRoutes = require('./modules/installments/installment.routes');
 const docsRoutes = require('./routes/docs.routes');
 
 const app = express();
 
 // Configurações básicas
+app.use(helmet());
+app.use(cors());
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
@@ -22,8 +26,17 @@ app.use((req, res, next) => {
     next();
 });
 
+// Health check
+app.get('/health', (req, res) => {
+    res.json({
+        status: 'ok',
+        timestamp: new Date().toISOString()
+    });
+});
+
 // Rotas da API
 app.use('/boletos', boletoRoutes);
+app.use('/installments', installmentRoutes);
 app.use('/api/docs', docsRoutes);
 
 // Tratamento de erros global

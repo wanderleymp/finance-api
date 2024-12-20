@@ -161,6 +161,24 @@ class {Recurso}Repository implements I{Recurso}Repository {
 }
 ```
 
+## 3. Padrão de Rotas
+
+### 3.1 Base URL
+Todas as rotas da API devem seguir o padrão:
+```
+/{recurso}
+```
+Exemplo: `/boletos`, `/usuarios`, `/pagamentos`
+
+NÃO utilizar prefixos como `/api` ou `/api/v1/`
+
+### 3.2 Endpoints Padrão
+- GET    /{recurso}          - Lista recursos com paginação e filtros
+- GET    /{recurso}/:id      - Busca recurso por ID
+- POST   /{recurso}          - Cria novo recurso
+- PUT    /{recurso}/:id      - Atualiza recurso
+- DELETE /{recurso}/:id      - Remove recurso
+
 ## 4. Validações
 
 ### 4.1 Schema de Validação
