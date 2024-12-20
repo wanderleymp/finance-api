@@ -1,246 +1,157 @@
-const { systemDatabase } = require('../config/database');
-const PaginationHelper = require('../utils/paginationHelper');
-const { ValidationError } = require('../utils/errors');
 const { logger } = require('../middlewares/logger');
+const BaseRepository = require('./base/BaseRepository');
 
-class MovementPaymentsRepository {
+class MovementPaymentsRepository extends BaseRepository {
+    constructor() {
+        super('movement_payments', 'payment_id');
+    }
+
+    /**
+     * Lista pagamentos com informações relacionadas
+     */
     async findAll(page = 1, limit = 10, filters = {}) {
         try {
-            const { limit: validLimit, offset } = PaginationHelper.getPaginationParams(page, limit);
-            
-            let query = `
+            const { whereClause, queryParams, paramCount } = this.buildWhereClause(filters);
+
+            // Query principal com JOINs
+            const query = `
                 SELECT 
-                    mp.payment_id, 
-                    mp.movement_id, 
-                    mp.payment_method_id, 
-                    mp.total_amount, 
-                    mp.status,
-                    pm.method_name,
-                    m.description as movement_description
+                    mp.*,
+                    m.description as movement_description,
+                    p.full_name as person_name,
+                    ps.name as status_name
                 FROM movement_payments mp
-                JOIN payment_methods pm ON mp.payment_method_id = pm.payment_method_id
-                JOIN movements m ON mp.movement_id = m.movement_id
-                WHERE 1=1
+                LEFT JOIN movements m ON mp.movement_id = m.movement_id
+                LEFT JOIN persons p ON m.person_id = p.person_id
+                LEFT JOIN payment_status ps ON mp.status_id = ps.status_id
+                ${whereClause}
+                ORDER BY mp.payment_date DESC
+                LIMIT $${paramCount}
+                OFFSET $${paramCount + 1}
             `;
-            const params = [];
-            let paramCount = 1;
 
-            // Filtros dinâmicos
-            if (filters.movement_id) {
-                query += ` AND mp.movement_id = $${paramCount}`;
-                params.push(filters.movement_id);
-                paramCount++;
-            }
+            // Query de contagem
+            const countQuery = `
+                SELECT COUNT(*)::integer
+                FROM movement_payments mp
+                LEFT JOIN movements m ON mp.movement_id = m.movement_id
+                LEFT JOIN persons p ON m.person_id = p.person_id
+                LEFT JOIN payment_status ps ON mp.status_id = ps.status_id
+                ${whereClause}
+            `;
 
-            if (filters.payment_method_id) {
-                query += ` AND mp.payment_method_id = $${paramCount}`;
-                params.push(filters.payment_method_id);
-                paramCount++;
-            }
+            const offset = (page - 1) * limit;
 
-            if (filters.status) {
-                query += ` AND mp.status = $${paramCount}`;
-                params.push(filters.status);
-                paramCount++;
-            }
-
-            // Consulta de contagem
-            const countQuery = query.replace('mp.payment_id, mp.movement_id, mp.payment_method_id, mp.total_amount, mp.status, pm.method_name, m.description as movement_description', 'COUNT(*)');
-            
-            // Adicionar ordenação e paginação
-            query += ` ORDER BY mp.payment_id DESC LIMIT $${paramCount} OFFSET $${paramCount + 1}`;
-            params.push(validLimit, offset);
-
-            logger.info('Executando consulta findAll de movement_payments', { 
-                query,
-                params,
-                page,
-                limit: validLimit,
-                offset,
-                filters
-            });
-
-            const [dataResult, countResult] = await Promise.all([
-                systemDatabase.query(query, params),
-                systemDatabase.query(countQuery, params.slice(0, -2))
+            const [resultQuery, countResult] = await Promise.all([
+                this.pool.query(query, [...queryParams, limit, offset]),
+                this.pool.query(countQuery, queryParams)
             ]);
 
-            if (dataResult.rows.length === 0) {
-                return {
-                    data: [],
-                    total: 0
-                };
-            }
+            const totalItems = countResult.rows[0].count;
+            const totalPages = Math.ceil(totalItems / limit);
 
             return {
-                data: dataResult.rows,
-                total: parseInt(countResult.rows[0].count)
+                data: resultQuery.rows,
+                pagination: {
+                    page,
+                    limit,
+                    totalItems,
+                    totalPages
+                }
             };
         } catch (error) {
-            logger.error('Erro ao buscar movement_payments', { 
-                errorMessage: error.message,
-                stack: error.stack,
+            logger.error('Erro ao listar pagamentos', {
+                error: error.message,
                 filters
             });
             throw error;
         }
     }
 
-    async findById(paymentId) {
+    /**
+     * Busca pagamento por ID com informações relacionadas
+     */
+    async findById(id) {
         try {
             const query = `
                 SELECT 
-                    mp.payment_id, 
-                    mp.movement_id, 
-                    mp.payment_method_id, 
-                    mp.total_amount, 
-                    mp.status,
-                    pm.method_name,
-                    m.description as movement_description
+                    mp.*,
+                    m.description as movement_description,
+                    p.full_name as person_name,
+                    ps.name as status_name
                 FROM movement_payments mp
-                JOIN payment_methods pm ON mp.payment_method_id = pm.payment_method_id
-                JOIN movements m ON mp.movement_id = m.movement_id
+                LEFT JOIN movements m ON mp.movement_id = m.movement_id
+                LEFT JOIN persons p ON m.person_id = p.person_id
+                LEFT JOIN payment_status ps ON mp.status_id = ps.status_id
                 WHERE mp.payment_id = $1
             `;
 
-            logger.info('Buscando movement_payment por ID', { paymentId });
-
-            const result = await systemDatabase.query(query, [paymentId]);
-
-            return result.rows[0] || null;
-        } catch (error) {
-            logger.error('Erro ao buscar movement_payment por ID', { 
-                errorMessage: error.message,
-                paymentId
-            });
-            throw error;
-        }
-    }
-
-    async create(paymentData) {
-        try {
-            const query = `
-                INSERT INTO movement_payments (
-                    movement_id, 
-                    payment_method_id, 
-                    total_amount, 
-                    status
-                ) VALUES (
-                    $1, $2, $3, $4
-                ) RETURNING *
-            `;
-
-            const values = [
-                paymentData.movement_id,
-                paymentData.payment_method_id,
-                paymentData.total_amount,
-                paymentData.status || 'Pendente'
-            ];
-
-            logger.info('Criando novo movement_payment', { 
-                movementId: paymentData.movement_id,
-                paymentMethodId: paymentData.payment_method_id
-            });
-
-            const result = await systemDatabase.query(query, values);
+            const result = await this.pool.query(query, [id]);
             return result.rows[0];
         } catch (error) {
-            logger.error('Erro ao criar movement_payment', { 
-                errorMessage: error.message,
-                paymentData
+            logger.error('Erro ao buscar pagamento por ID', {
+                error: error.message,
+                paymentId: id
             });
-            
-            // Tratamento de erros específicos do banco de dados
-            if (error.code === '23503') {  // Violação de chave estrangeira
-                throw new ValidationError('Movement ou Payment Method não encontrado');
-            }
-            
             throw error;
         }
     }
 
-    async update(paymentId, updateData) {
+    /**
+     * Busca pagamentos por movimento
+     */
+    async findByMovementId(movementId) {
         try {
-            const updateFields = [];
-            const values = [];
-            let paramCount = 1;
-
-            // Campos atualizáveis
-            const updateableFields = [
-                'movement_id', 
-                'payment_method_id', 
-                'total_amount', 
-                'status'
-            ];
-
-            updateableFields.forEach(field => {
-                if (updateData[field] !== undefined) {
-                    updateFields.push(`${field} = $${paramCount}`);
-                    values.push(updateData[field]);
-                    paramCount++;
-                }
-            });
-
-            if (updateFields.length === 0) {
-                throw new ValidationError('Nenhum campo para atualizar');
-            }
-
-            values.push(paymentId);
-
             const query = `
-                UPDATE movement_payments 
-                SET ${updateFields.join(', ')}
-                WHERE payment_id = $${paramCount}
+                SELECT 
+                    mp.*,
+                    m.description as movement_description,
+                    p.full_name as person_name,
+                    ps.name as status_name
+                FROM movement_payments mp
+                LEFT JOIN movements m ON mp.movement_id = m.movement_id
+                LEFT JOIN persons p ON m.person_id = p.person_id
+                LEFT JOIN payment_status ps ON mp.status_id = ps.status_id
+                WHERE mp.movement_id = $1
+                ORDER BY mp.payment_date DESC
+            `;
+
+            const result = await this.pool.query(query, [movementId]);
+            return result.rows;
+        } catch (error) {
+            logger.error('Erro ao buscar pagamentos por movimento', {
+                error: error.message,
+                movementId
+            });
+            throw error;
+        }
+    }
+
+    /**
+     * Atualiza status do pagamento
+     */
+    async updateStatus(id, statusId, client = this.pool) {
+        try {
+            const query = `
+                UPDATE movement_payments
+                SET 
+                    status_id = $1,
+                    updated_at = CURRENT_TIMESTAMP
+                WHERE payment_id = $2
                 RETURNING *
             `;
 
-            logger.info('Atualizando movement_payment', { 
-                paymentId, 
-                updatedFields: updateFields 
-            });
-
-            const result = await systemDatabase.query(query, values);
-
-            if (result.rows.length === 0) {
-                throw new ValidationError('Movement Payment não encontrado');
-            }
-
+            const result = await client.query(query, [statusId, id]);
             return result.rows[0];
         } catch (error) {
-            logger.error('Erro ao atualizar movement_payment', { 
-                errorMessage: error.message,
-                paymentId,
-                updateData
-            });
-            throw error;
-        }
-    }
-
-    async delete(paymentId) {
-        try {
-            const query = `
-                DELETE FROM movement_payments 
-                WHERE payment_id = $1
-                RETURNING *
-            `;
-
-            logger.info('Excluindo movement_payment', { paymentId });
-
-            const result = await systemDatabase.query(query, [paymentId]);
-
-            if (result.rows.length === 0) {
-                throw new ValidationError('Movement Payment não encontrado');
-            }
-
-            return result.rows[0];
-        } catch (error) {
-            logger.error('Erro ao excluir movement_payment', { 
-                errorMessage: error.message,
-                paymentId
+            logger.error('Erro ao atualizar status do pagamento', {
+                error: error.message,
+                paymentId: id,
+                statusId
             });
             throw error;
         }
     }
 }
 
-module.exports = new MovementPaymentsRepository();
+module.exports = MovementPaymentsRepository;

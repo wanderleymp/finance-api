@@ -2,19 +2,22 @@ const { logger } = require('../../middlewares/logger');
 const { ValidationError } = require('../../utils/errors');
 const IBoletoService = require('./interfaces/IBoletoService');
 const IBoletoRepository = require('./interfaces/IBoletoRepository');
-const ITaskService = require('../../interfaces/ITaskService');
+const ITaskService = require('../tasks/interfaces/ITaskService');
 const { BoletoResponseDTO } = require('./dto/boleto.dto');
 const cacheService = require('../../services/cache.service');
 
 class BoletoService extends IBoletoService {
     /**
-     * @param {IBoletoRepository} boletoRepository Repositório de boletos
-     * @param {ITaskService} taskService Serviço de tasks
+     * @param {Object} params 
+     * @param {IBoletoRepository} params.boletoRepository Repositório de boletos
+     * @param {ITaskService} params.taskService Serviço de tasks
+     * @param {cacheService} params.cacheService Serviço de cache
      */
-    constructor(boletoRepository, taskService) {
+    constructor({ boletoRepository, taskService, cacheService }) {
         super();
         this.boletoRepository = boletoRepository;
         this.taskService = taskService;
+        this.cacheService = cacheService;
         this.cachePrefix = 'boletos';
         this.cacheTTL = {
             list: 300, // 5 minutos
@@ -29,13 +32,13 @@ class BoletoService extends IBoletoService {
         try {
             logger.info('Serviço: Listando boletos', { page, limit, filters });
             
-            const cacheKey = cacheService.generateKey(`${this.cachePrefix}:list`, {
+            const cacheKey = this.cacheService.generateKey(`${this.cachePrefix}:list`, {
                 page,
                 limit,
                 ...filters
             });
 
-            const result = await cacheService.getOrSet(
+            const result = await this.cacheService.getOrSet(
                 cacheKey,
                 async () => {
                     const data = await this.boletoRepository.findAll(page, limit, filters);
@@ -62,9 +65,9 @@ class BoletoService extends IBoletoService {
         try {
             logger.info('Serviço: Buscando boleto por ID', { id });
             
-            const cacheKey = cacheService.generateKey(`${this.cachePrefix}:detail`, { id });
+            const cacheKey = this.cacheService.generateKey(`${this.cachePrefix}:detail`, { id });
 
-            const boleto = await cacheService.getOrSet(
+            const boleto = await this.cacheService.getOrSet(
                 cacheKey,
                 async () => {
                     const data = await this.boletoRepository.findById(id);
@@ -106,7 +109,7 @@ class BoletoService extends IBoletoService {
             });
             
             // Invalidar cache de listagem
-            await cacheService.deletePattern(`${this.cachePrefix}:list:*`);
+            await this.cacheService.deletePattern(`${this.cachePrefix}:list:*`);
             
             logger.info('Boleto criado e enfileirado com sucesso', { 
                 boletoId: newBoleto.boleto_id 
@@ -142,9 +145,9 @@ class BoletoService extends IBoletoService {
             const updatedBoleto = await this.boletoRepository.update(id, boletoDTO);
             
             // Invalidar caches
-            await cacheService.deletePattern(`${this.cachePrefix}:list:*`);
-            await cacheService.delete(
-                cacheService.generateKey(`${this.cachePrefix}:detail`, { id })
+            await this.cacheService.deletePattern(`${this.cachePrefix}:list:*`);
+            await this.cacheService.delete(
+                this.cacheService.generateKey(`${this.cachePrefix}:detail`, { id })
             );
 
             return new BoletoResponseDTO(updatedBoleto);
@@ -185,7 +188,7 @@ class BoletoService extends IBoletoService {
             }
 
             // Invalidar cache de listagem
-            await cacheService.deletePattern(`${this.cachePrefix}:list:*`);
+            await this.cacheService.deletePattern(`${this.cachePrefix}:list:*`);
 
             logger.info('Boletos emitidos com sucesso', { 
                 movimentoId,
@@ -230,9 +233,9 @@ class BoletoService extends IBoletoService {
             );
 
             // Invalidar caches
-            await cacheService.deletePattern(`${this.cachePrefix}:list:*`);
-            await cacheService.delete(
-                cacheService.generateKey(`${this.cachePrefix}:detail`, { id })
+            await this.cacheService.deletePattern(`${this.cachePrefix}:list:*`);
+            await this.cacheService.delete(
+                this.cacheService.generateKey(`${this.cachePrefix}:detail`, { id })
             );
 
             return new BoletoResponseDTO(canceledBoleto);

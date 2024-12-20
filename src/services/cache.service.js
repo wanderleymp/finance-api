@@ -8,9 +8,6 @@ class CacheService {
 
     /**
      * Gera uma chave única para o cache
-     * @param {string} prefix Prefixo da chave
-     * @param {Object} params Parâmetros para compor a chave
-     * @returns {string} Chave formatada
      */
     generateKey(prefix, params = {}) {
         const sortedParams = Object.keys(params)
@@ -24,96 +21,47 @@ class CacheService {
     }
 
     /**
-     * Obtém um valor do cache
-     * @param {string} key Chave do cache
-     * @returns {Promise<any>} Valor armazenado
+     * Busca um valor no cache
      */
     async get(key) {
         try {
             const value = await redis.get(key);
             return value ? JSON.parse(value) : null;
         } catch (error) {
-            logger.error('Erro ao obter valor do cache', {
-                error: error.message,
-                key
-            });
+            logger.error('Erro ao buscar cache', { error });
             return null;
         }
     }
 
     /**
-     * Armazena um valor no cache
-     * @param {string} key Chave do cache
-     * @param {any} value Valor a ser armazenado
-     * @param {number} ttl Tempo de vida em segundos
+     * Define um valor no cache
      */
     async set(key, value, ttl = this.defaultTTL) {
         try {
-            await redis.set(
-                key,
-                JSON.stringify(value),
-                'EX',
-                ttl
-            );
-            
-            logger.debug('Valor armazenado no cache', { key });
+            await redis.set(key, JSON.stringify(value), 'EX', ttl);
         } catch (error) {
-            logger.error('Erro ao armazenar valor no cache', {
-                error: error.message,
-                key
-            });
+            logger.error('Erro ao definir cache', { error });
         }
     }
 
     /**
      * Remove um valor do cache
-     * @param {string} key Chave do cache
      */
     async delete(key) {
         try {
             await redis.del(key);
-            logger.debug('Valor removido do cache', { key });
         } catch (error) {
-            logger.error('Erro ao remover valor do cache', {
-                error: error.message,
-                key
-            });
+            logger.error('Erro ao deletar cache', { error });
         }
     }
 
     /**
-     * Remove valores do cache por padrão
-     * @param {string} pattern Padrão da chave
-     */
-    async deletePattern(pattern) {
-        try {
-            const keys = await redis.keys(pattern);
-            if (keys.length > 0) {
-                await redis.del(...keys);
-                logger.debug('Valores removidos do cache por padrão', {
-                    pattern,
-                    count: keys.length
-                });
-            }
-        } catch (error) {
-            logger.error('Erro ao remover valores do cache por padrão', {
-                error: error.message,
-                pattern
-            });
-        }
-    }
-
-    /**
-     * Obtém um valor do cache ou executa função para obtê-lo
-     * @param {string} key Chave do cache
-     * @param {Function} fn Função para obter o valor
-     * @param {number} ttl Tempo de vida em segundos
+     * Busca um valor no cache ou executa uma função
      */
     async getOrSet(key, fn, ttl = this.defaultTTL) {
         try {
             const cached = await this.get(key);
             if (cached) {
-                logger.debug('Valor obtido do cache', { key });
                 return cached;
             }
 
@@ -121,12 +69,8 @@ class CacheService {
             await this.set(key, value, ttl);
             return value;
         } catch (error) {
-            logger.error('Erro ao obter/armazenar valor no cache', {
-                error: error.message,
-                key
-            });
-            // Em caso de erro no cache, executa a função diretamente
-            return fn();
+            logger.error('Erro ao buscar/definir cache', { error });
+            return await fn();
         }
     }
 }

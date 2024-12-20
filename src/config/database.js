@@ -62,12 +62,6 @@ const createDatabaseConnection = (databaseUrl, name) => {
           rows: result.rowCount
         });
         return result;
-      } catch (error) {
-        logger.error(`Erro na consulta`, {
-          query: text,
-          error: error.message
-        });
-        throw error;
       } finally {
         client.release();
       }
@@ -75,12 +69,19 @@ const createDatabaseConnection = (databaseUrl, name) => {
   };
 };
 
-// Exportar instâncias únicas das conexões
-const systemDatabase = createDatabaseConnection(process.env.SYSTEM_DATABASE_URL, 'AgileDB');
-systemDatabase.getClient = async () => {
-  return await systemDatabase.pool.connect();
-};
+// Criar instância única da conexão
+const systemDatabase = createDatabaseConnection(process.env.DATABASE_URL || process.env.SYSTEM_DATABASE_URL, 'AgileDB');
+
+// Função para testar a conexão com o banco
+async function connectToDatabase() {
+  const result = await systemDatabase.testConnection();
+  if (!result.success) {
+    throw new Error(`Falha ao conectar com o banco de dados: ${result.error}`);
+  }
+  return result;
+}
 
 module.exports = {
-  systemDatabase
+  systemDatabase,
+  connectToDatabase
 };

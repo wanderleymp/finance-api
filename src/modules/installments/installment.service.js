@@ -1,14 +1,18 @@
 const { logger } = require('../../middlewares/logger');
 const { ValidationError } = require('../../utils/errors');
 const IInstallmentService = require('./interfaces/IInstallmentService');
-const installmentRepository = require('../../repositories/installmentRepository');
 const { InstallmentResponseDTO } = require('./dto/installment.dto');
-const cacheService = require('../../services/cache.service');
 
 class InstallmentService extends IInstallmentService {
-    constructor(repository) {
+    /**
+     * @param {Object} params
+     * @param {import('../../repositories/installmentRepository')} params.installmentRepository
+     * @param {import('../../services/cache.service')} params.cacheService
+     */
+    constructor({ installmentRepository, cacheService }) {
         super();
-        this.installmentRepository = repository;
+        this.installmentRepository = installmentRepository;
+        this.cacheService = cacheService;
         this.cachePrefix = 'installments';
         this.cacheTTL = {
             list: 300, // 5 minutos
@@ -23,9 +27,9 @@ class InstallmentService extends IInstallmentService {
         try {
             logger.info('Serviço: Buscando parcela por ID', { id });
             
-            const cacheKey = cacheService.generateKey(`${this.cachePrefix}:detail`, { id });
+            const cacheKey = this.cacheService.generateKey(`${this.cachePrefix}:detail`, { id });
 
-            const installment = await cacheService.getOrSet(
+            const installment = await this.cacheService.getOrSet(
                 cacheKey,
                 async () => {
                     const data = await this.installmentRepository.findById(id);
@@ -54,13 +58,13 @@ class InstallmentService extends IInstallmentService {
         try {
             logger.info('Serviço: Listando parcelas', { page, limit, filters });
             
-            const cacheKey = cacheService.generateKey(`${this.cachePrefix}:list`, {
+            const cacheKey = this.cacheService.generateKey(`${this.cachePrefix}:list`, {
                 page,
                 limit,
                 ...filters
             });
 
-            const result = await cacheService.getOrSet(
+            const result = await this.cacheService.getOrSet(
                 cacheKey,
                 async () => {
                     const data = await this.installmentRepository.findAll(page, limit, filters);

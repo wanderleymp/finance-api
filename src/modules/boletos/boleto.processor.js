@@ -1,7 +1,7 @@
 const { logger } = require('../../middlewares/logger');
 const { ProcessingError } = require('../../utils/errors');
 const IBoletoService = require('./interfaces/IBoletoService');
-const IIntegrationService = require('../../interfaces/IIntegrationService');
+const IIntegrationService = require('../integrations/interfaces/IIntegrationService');
 
 class BoletoProcessor {
     /**

@@ -1,74 +1,196 @@
-const { systemDatabase } = require('../config/database');
+const BaseRepository = require('./base/BaseRepository');
+const TransactionHelper = require('../utils/transactionHelper');
+const BoletoValidations = require('../validations/boletoValidations');
 const { logger } = require('../middlewares/logger');
-const PaginationHelper = require('../utils/paginationHelper');
-const { ValidationError } = require('../utils/errors');
 
-class BoletoRepository {
+class BoletoRepository extends BaseRepository {
     constructor() {
-        this.pool = systemDatabase.pool;
+        super('boletos');
     }
 
-    async findAll(page = 1, limit = 10, filters = {}) {
+    /**
+     * Lista boletos com informações relacionadas
+     * @param {number} page - Número da página
+     * @param {number} limit - Limite de itens por página
+     * @param {Object} filters - Filtros a serem aplicados
+     * @param {Object} orderBy - Configuração de ordenação
+     * @param {Object} [client] - Client opcional para transação
+     * @returns {Promise<Object>} Lista paginada de boletos
+     */
+    async findAllWithRelations(page = 1, limit = 10, filters = {}, orderBy = {}, client) {
         try {
-            const { limit: validLimit, offset } = PaginationHelper.getPaginationParams(page, limit);
-            
-            let query = `
-                SELECT * 
-                FROM boletos 
-                WHERE 1=1
+            const { whereClause, queryParams, paramCount } = this.buildWhereClause(filters);
+            const orderByClause = this.buildOrderByClause(orderBy);
+            const offset = (page - 1) * limit;
+
+            const query = `
+                SELECT 
+                    b.*,
+                    m.description as movement_description,
+                    m.type as movement_type,
+                    m.status as movement_status
+                FROM boletos b
+                LEFT JOIN movements m ON b.movement_id = m.id
+                ${whereClause}
+                ${orderByClause}
+                LIMIT $${paramCount}
+                OFFSET $${paramCount + 1}
             `;
-            const params = [];
-            let paramCount = 1;
 
-            // Filtro por installment_id
-            if (filters.installment_id) {
-                query += ` AND installment_id = $${paramCount}`;
-                params.push(filters.installment_id);
-                paramCount++;
-            }
+            const countQuery = `
+                SELECT COUNT(*)::integer
+                FROM boletos b
+                LEFT JOIN movements m ON b.movement_id = m.id
+                ${whereClause}
+            `;
 
-            // Filtro por status
-            if (filters.status) {
-                query += ` AND status = $${paramCount}`;
-                params.push(filters.status);
-                paramCount++;
-            }
-
-            // Consulta de contagem
-            const countQuery = query.replace('*', 'COUNT(*)');
-            
-            // Adicionar ordenação e paginação
-            query += ` ORDER BY boleto_id DESC LIMIT $${paramCount} OFFSET $${paramCount + 1}`;
-            params.push(validLimit, offset);
-
-            logger.info('Executando consulta findAll de boletos', { 
-                query,
-                params,
-                page,
-                limit: validLimit,
-                offset,
-                filters
-            });
-
-            // Executar consultas em paralelo
-            const [{ rows: [count] }, { rows: data }] = await Promise.all([
-                this.pool.query(countQuery, params.slice(0, -2)),
-                this.pool.query(query, params)
+            const dbClient = TransactionHelper.getClient(client);
+            const [resultQuery, countResult] = await Promise.all([
+                dbClient.query(query, [...queryParams, limit, offset]),
+                dbClient.query(countQuery, queryParams)
             ]);
 
+            const totalItems = countResult.rows[0].count;
+            const totalPages = Math.ceil(totalItems / limit);
+
             return {
-                data,
-                total: parseInt(count.count)
+                data: resultQuery.rows,
+                pagination: {
+                    page,
+                    limit,
+                    totalItems,
+                    totalPages
+                }
             };
         } catch (error) {
-            logger.error('Erro ao buscar boletos', {
-                errorMessage: error.message,
-                page,
-                limit,
+            logger.error('Erro ao listar boletos com relações', {
+                error: error.message,
                 filters
             });
             throw error;
         }
+    }
+
+    /**
+     * Busca boleto por ID com informações relacionadas
+     * @param {number} id - ID do boleto
+     * @param {Object} [client] - Client opcional para transação
+     * @returns {Promise<Object>} Boleto encontrado
+     */
+    async findByIdWithRelations(id, client) {
+        try {
+            const query = `
+                SELECT 
+                    b.*,
+                    m.description as movement_description,
+                    m.type as movement_type,
+                    m.status as movement_status
+                FROM boletos b
+                LEFT JOIN movements m ON b.movement_id = m.id
+                WHERE b.id = $1
+            `;
+
+            const result = await TransactionHelper.getClient(client)
+                .query(query, [id]);
+            return result.rows[0] || null;
+        } catch (error) {
+            logger.error('Erro ao buscar boleto por ID com relações', {
+                error: error.message,
+                id
+            });
+            throw error;
+        }
+    }
+
+    /**
+     * Atualiza o status de um boleto
+     * @param {number} id - ID do boleto
+     * @param {string} status - Novo status
+     * @param {Object} [client] - Client opcional para transação
+     * @returns {Promise<Object>} Boleto atualizado
+     */
+    async updateStatus(id, status, client) {
+        return TransactionHelper.executeInTransaction(async (dbClient) => {
+            // Busca boleto atual
+            const current = await this.findById(id, dbClient);
+            if (!current) {
+                throw new Error('Boleto não encontrado');
+            }
+
+            // Valida transição de status
+            BoletoValidations.validateStatusUpdate(status, current.status);
+
+            // Atualiza status
+            const updated = await this.update(id, { 
+                status,
+                paid_date: status === 'PAID' ? new Date() : null
+            }, dbClient);
+
+            // Se boleto foi pago, atualiza status do movimento
+            if (status === 'PAID') {
+                const movementRepository = new BaseRepository('movements');
+                await movementRepository.update(
+                    current.movement_id,
+                    { status: 'PAID' },
+                    dbClient
+                );
+            }
+
+            return updated;
+        });
+    }
+
+    /**
+     * Cria vários boletos para um movimento
+     * @param {Object} movement - Movimento
+     * @param {Object[]} boletos - Array de boletos
+     * @returns {Promise<Object[]>} Boletos criados
+     */
+    async createMany(movement, boletos) {
+        // Valida boletos
+        BoletoValidations.validateMany(boletos);
+
+        return TransactionHelper.executeInTransaction(async (client) => {
+            const boletosWithMovementId = boletos.map(boleto => ({
+                ...boleto,
+                movement_id: movement.id
+            }));
+
+            return this.createMany(boletosWithMovementId, client);
+        });
+    }
+
+    /**
+     * Atualiza vários boletos
+     * @param {Object[]} boletos - Array de boletos
+     * @returns {Promise<Object[]>} Boletos atualizados
+     */
+    async updateMany(boletos) {
+        return TransactionHelper.executeInTransaction(async (client) => {
+            const results = [];
+
+            for (const boleto of boletos) {
+                // Valida dados
+                BoletoValidations.validateBoletoUpdate(boleto);
+
+                // Busca boleto atual
+                const current = await this.findById(boleto.id, client);
+                if (!current) {
+                    throw new Error(`Boleto ${boleto.id} não encontrado`);
+                }
+
+                // Valida transição de status se houver mudança
+                if (boleto.status && boleto.status !== current.status) {
+                    BoletoValidations.validateStatusUpdate(boleto.status, current.status);
+                }
+
+                // Atualiza boleto
+                const updated = await this.update(boleto.id, boleto, client);
+                results.push(updated);
+            }
+
+            return results;
+        });
     }
 
     async getBoletoById(boletoId) {
@@ -316,4 +438,4 @@ class BoletoRepository {
     }
 }
 
-module.exports = new BoletoRepository();
+module.exports = BoletoRepository;

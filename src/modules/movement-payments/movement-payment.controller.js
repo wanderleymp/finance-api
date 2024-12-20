@@ -3,10 +3,11 @@ const IMovementPaymentService = require('./interfaces/IMovementPaymentService');
 
 class MovementPaymentController {
     /**
-     * @param {IMovementPaymentService} service Serviço de pagamentos
+     * @param {Object} params
+     * @param {IMovementPaymentService} params.movementPaymentService Serviço de pagamentos
      */
-    constructor(service) {
-        this.service = service;
+    constructor({ movementPaymentService }) {
+        this.service = movementPaymentService;
     }
 
     /**

@@ -1,125 +1,137 @@
-const { handleResponse, handleError } = require('../../utils/responseHandler');
 const { logger } = require('../../middlewares/logger');
 const IBoletoService = require('./interfaces/IBoletoService');
-const { BoletoCreateDTO, BoletoUpdateDTO } = require('./dto/boleto.dto');
 
 class BoletoController {
     /**
-     * @param {IBoletoService} boletoService Serviço de boletos
+     * @param {Object} params
+     * @param {IBoletoService} params.boletoService Serviço de boletos
      */
-    constructor(boletoService) {
-        this.boletoService = boletoService;
+    constructor({ boletoService }) {
+        this.service = boletoService;
     }
 
     /**
      * Lista boletos
      */
-    async index(req, res) {
+    async index(req, res, next) {
         try {
-            const page = parseInt(req.query.page) || 1;
-            const limit = parseInt(req.query.limit) || 10;
-            const filters = req.query;
-
-            logger.info('Listando boletos', { filters });
-            const result = await this.boletoService.listBoletos(page, limit, filters);
+            const { page, limit, ...filters } = req.query;
             
-            handleResponse(res, 200, result);
-        } catch (error) {
-            logger.error('Erro ao listar boletos', { 
-                error: error.message,
-                stack: error.stack
+            logger.info('Controller: Listando boletos', { 
+                page, 
+                limit, 
+                filters 
             });
-            handleError(res, error);
+
+            const result = await this.service.listBoletos(
+                parseInt(page), 
+                parseInt(limit), 
+                filters
+            );
+
+            return res.json(result);
+        } catch (error) {
+            next(error);
         }
     }
 
     /**
      * Busca boleto por ID
      */
-    async show(req, res) {
+    async show(req, res, next) {
         try {
-            const boletoId = parseInt(req.params.id);
+            const { id } = req.params;
             
-            logger.info('Buscando boleto por ID', { boletoId });
-            const boleto = await this.boletoService.getBoletoById(boletoId);
-            
-            handleResponse(res, 200, boleto);
+            logger.info('Controller: Buscando boleto por ID', { id });
+
+            const boleto = await this.service.getBoletoById(parseInt(id));
+
+            return res.json(boleto);
         } catch (error) {
-            logger.error('Erro ao buscar boleto', { 
-                error: error.message,
-                boletoId: req.params.id
-            });
-            handleError(res, error);
+            next(error);
         }
     }
 
     /**
      * Cria novo boleto
      */
-    async store(req, res) {
+    async store(req, res, next) {
         try {
-            const boletoDTO = new BoletoCreateDTO(req.body);
-            boletoDTO.validate();
-
-            logger.info('Criando boleto', { boletoData: req.body });
-            const newBoleto = await this.boletoService.createBoleto(boletoDTO);
+            const boletoData = req.body;
             
-            handleResponse(res, 201, newBoleto);
+            logger.info('Controller: Criando novo boleto', { boletoData });
+
+            const boleto = await this.service.createBoleto(boletoData);
+
+            return res.status(201).json(boleto);
         } catch (error) {
-            logger.error('Erro ao criar boleto', { 
-                error: error.message,
-                boletoData: req.body
-            });
-            handleError(res, error);
+            next(error);
         }
     }
 
     /**
      * Atualiza boleto
      */
-    async update(req, res) {
+    async update(req, res, next) {
         try {
-            const boletoId = parseInt(req.params.id);
-            const boletoDTO = new BoletoUpdateDTO(req.body);
-            boletoDTO.validate();
-
-            logger.info('Atualizando boleto', { 
-                boletoId,
-                boletoData: req.body
-            });
-            const updatedBoleto = await this.boletoService.updateBoleto(boletoId, boletoDTO);
+            const { id } = req.params;
+            const boletoData = req.body;
             
-            handleResponse(res, 200, updatedBoleto);
-        } catch (error) {
-            logger.error('Erro ao atualizar boleto', { 
-                error: error.message,
-                boletoId: req.params.id,
-                boletoData: req.body
+            logger.info('Controller: Atualizando boleto', { 
+                id, 
+                boletoData 
             });
-            handleError(res, error);
+
+            const boleto = await this.service.updateBoleto(parseInt(id), boletoData);
+
+            return res.json(boleto);
+        } catch (error) {
+            next(error);
+        }
+    }
+
+    /**
+     * Emite boletos para um movimento
+     */
+    async emitirBoletos(req, res, next) {
+        try {
+            const { movimentoId } = req.params;
+            const { parcelas } = req.body;
+            
+            logger.info('Controller: Emitindo boletos para movimento', { 
+                movimentoId, 
+                parcelas 
+            });
+
+            const boletos = await this.service.emitirBoletosMovimento(
+                parseInt(movimentoId), 
+                parcelas
+            );
+
+            return res.status(201).json(boletos);
+        } catch (error) {
+            next(error);
         }
     }
 
     /**
      * Cancela boleto
      */
-    async cancel(req, res) {
+    async cancel(req, res, next) {
         try {
-            const boletoId = parseInt(req.params.id);
+            const { id } = req.params;
+            const { motivo } = req.body;
             
-            logger.info('Cancelando boleto', { 
-                boletoId,
-                reason: req.body.reason
+            logger.info('Controller: Cancelando boleto', { 
+                id, 
+                motivo 
             });
-            const canceledBoleto = await this.boletoService.cancelBoleto(boletoId, req.body.reason);
-            
-            handleResponse(res, 200, canceledBoleto);
+
+            const boleto = await this.service.cancelBoleto(parseInt(id), motivo);
+
+            return res.json(boleto);
         } catch (error) {
-            logger.error('Erro ao cancelar boleto', { 
-                error: error.message,
-                boletoId: req.params.id
-            });
-            handleError(res, error);
+            next(error);
         }
     }
 }

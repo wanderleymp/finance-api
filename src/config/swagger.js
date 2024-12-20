@@ -1,5 +1,4 @@
 const swaggerJsdoc = require('swagger-jsdoc');
-const swaggerUi = require('swagger-ui-express');
 const path = require('path');
 const yaml = require('js-yaml');
 const fs = require('fs');
@@ -69,12 +68,4 @@ const options = {
 
 const swaggerSpec = swaggerJsdoc(options);
 
-module.exports = {
-    serve: swaggerUi.serve,
-    setup: swaggerUi.setup(swaggerSpec, {
-        explorer: true,
-        customCss: '.swagger-ui .topbar { display: none }',
-        customSiteTitle: 'Finance API - Documentação',
-        customfavIcon: '/favicon.ico'
-    })
-};
+module.exports = swaggerSpec;

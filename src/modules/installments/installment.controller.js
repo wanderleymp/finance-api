@@ -3,10 +3,11 @@ const IInstallmentService = require('./interfaces/IInstallmentService');
 
 class InstallmentController {
     /**
-     * @param {IInstallmentService} service Serviço de parcelas
+     * @param {Object} params
+     * @param {IInstallmentService} params.installmentService Serviço de parcelas
      */
-    constructor(service) {
-        this.service = service;
+    constructor({ installmentService }) {
+        this.service = installmentService;
     }
 
     /**

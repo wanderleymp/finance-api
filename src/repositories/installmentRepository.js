@@ -1,337 +1,245 @@
-const { systemDatabase } = require('../config/database');
+const BaseRepository = require('./base/BaseRepository');
+const TransactionHelper = require('../utils/transactionHelper');
+const InstallmentValidations = require('../validations/installmentValidations');
 const { logger } = require('../middlewares/logger');
-const PaginationHelper = require('../utils/paginationHelper');
-const { ValidationError } = require('../utils/errors');
 
-class InstallmentRepository {
+class InstallmentRepository extends BaseRepository {
     constructor() {
-        this.pool = systemDatabase.pool;
+        super('installments');
     }
 
-    async findAll(page = 1, limit = 10, filters = {}) {
+    /**
+     * Lista parcelas com informações relacionadas
+     * @param {number} page - Número da página
+     * @param {number} limit - Limite de itens por página
+     * @param {Object} filters - Filtros a serem aplicados
+     * @param {Object} orderBy - Configuração de ordenação
+     * @param {Object} [client] - Client opcional para transação
+     * @returns {Promise<Object>} Lista paginada de parcelas
+     */
+    async findAllWithRelations(page = 1, limit = 10, filters = {}, orderBy = {}, client) {
         try {
-            const { limit: validLimit, offset } = PaginationHelper.getPaginationParams(page, limit);
-            
-            let query = `
+            const { whereClause, queryParams, paramCount } = this.buildWhereClause(filters);
+            const orderByClause = this.buildOrderByClause(orderBy);
+            const offset = (page - 1) * limit;
+
+            const query = `
                 SELECT 
-                    i.installment_id,
-                    i.payment_id,
-                    i.installment_number,
-                    i.due_date,
-                    i.amount,
-                    i.balance,
-                    i.status,
-                    i.account_entry_id,
-                    i.expected_date,
-                    b.boleto_id,
-                    b.boleto_url,
-                    b.status AS boleto_status,
-                    b.generated_at
+                    i.*,
+                    m.description as movement_description,
+                    m.type as movement_type,
+                    m.status as movement_status
                 FROM installments i
-                LEFT JOIN boletos b ON b.installment_id = i.installment_id
-                LEFT JOIN payments p ON i.payment_id = p.payment_id
-                WHERE 1=1
+                LEFT JOIN movements m ON i.movement_id = m.id
+                ${whereClause}
+                ${orderByClause}
+                LIMIT $${paramCount}
+                OFFSET $${paramCount + 1}
             `;
-            const params = [];
-            let paramCount = 1;
 
-            // Filtro por status
-            if (filters.status) {
-                query += ` AND i.status = $${paramCount}`;
-                params.push(filters.status);
-                paramCount++;
-            }
-
-            // Filtro por payment_id
-            if (filters.payment_id) {
-                query += ` AND i.payment_id = $${paramCount}`;
-                params.push(filters.payment_id);
-                paramCount++;
-            }
-
-            // Filtro por movement_id
-            if (filters.movement_id) {
-                query += ` AND p.movement_id = $${paramCount}`;
-                params.push(filters.movement_id);
-                paramCount++;
-            }
-
-            // Filtro por data de vencimento
-            if (filters.start_date) {
-                query += ` AND i.due_date >= $${paramCount}`;
-                params.push(filters.start_date);
-                paramCount++;
-            }
-
-            if (filters.end_date) {
-                query += ` AND i.due_date <= $${paramCount}`;
-                params.push(filters.end_date);
-                paramCount++;
-            }
-
-            // Adicionar ordenação
-            query += ` ORDER BY i.due_date DESC, b.generated_at DESC`;
-
-            // Adicionar paginação
-            query += ` LIMIT $${paramCount} OFFSET $${paramCount + 1}`;
-            params.push(validLimit, offset);
-
-            // Consulta total de registros
             const countQuery = `
-                SELECT COUNT(DISTINCT i.installment_id) as total 
+                SELECT COUNT(*)::integer
                 FROM installments i
-                LEFT JOIN payments p ON i.payment_id = p.payment_id
-                WHERE 1=1
-                ${filters.status ? ` AND i.status = '${filters.status}'` : ''}
-                ${filters.payment_id ? ` AND i.payment_id = ${filters.payment_id}` : ''}
-                ${filters.movement_id ? ` AND p.movement_id = ${filters.movement_id}` : ''}
-                ${filters.start_date ? ` AND i.due_date >= '${filters.start_date}'` : ''}
-                ${filters.end_date ? ` AND i.due_date <= '${filters.end_date}'` : ''}
+                LEFT JOIN movements m ON i.movement_id = m.id
+                ${whereClause}
             `;
 
-            const [dataResult, countResult] = await Promise.all([
-                this.pool.query(query, params),
-                this.pool.query(countQuery)
+            const dbClient = TransactionHelper.getClient(client);
+            const [resultQuery, countResult] = await Promise.all([
+                dbClient.query(query, [...queryParams, limit, offset]),
+                dbClient.query(countQuery, queryParams)
             ]);
 
-            // Agrupar boletos por installment
-            const installmentsMap = new Map();
-            dataResult.rows.forEach(row => {
-                if (!installmentsMap.has(row.installment_id)) {
-                    const { boleto_id, boleto_url, boleto_status, generated_at, ...installmentData } = row;
-                    installmentsMap.set(row.installment_id, {
-                        ...installmentData,
-                        boletos: []
-                    });
-                }
-
-                // Adicionar boleto se existir
-                if (row.boleto_id) {
-                    const installment = installmentsMap.get(row.installment_id);
-                    installment.boletos.push({
-                        id: row.boleto_id,
-                        url: row.boleto_url,
-                        status: row.boleto_status,
-                        generated_at: row.generated_at
-                    });
-                }
-            });
-
-            const transformedData = Array.from(installmentsMap.values());
-
-            logger.info('Installments encontrados', { 
-                total: countResult.rows[0].total, 
-                returned: transformedData.length 
-            });
+            const totalItems = countResult.rows[0].count;
+            const totalPages = Math.ceil(totalItems / limit);
 
             return {
-                data: transformedData,
-                total: parseInt(countResult.rows[0].total)
+                data: resultQuery.rows,
+                pagination: {
+                    page,
+                    limit,
+                    totalItems,
+                    totalPages
+                }
             };
         } catch (error) {
-            logger.error('Erro ao buscar installments', { 
-                errorMessage: error.message, 
-                filters 
-            });
-            throw new ValidationError('Erro ao buscar parcelas');
-        }
-    }
-
-    async query(query, values) {
-        try {
-            const result = await this.pool.query(query, values);
-            return result;
-        } catch (error) {
-            logger.error('Erro ao executar query no repositório de installments', {
-                query,
-                values,
-                errorMessage: error.message
+            logger.error('Erro ao listar parcelas com relações', {
+                error: error.message,
+                filters
             });
             throw error;
         }
     }
 
-    async createInstallment(installmentData) {
-        try {
-            logger.info('Attempting to create installment in repository:', JSON.stringify(installmentData));
-            const query = `
-                INSERT INTO installments 
-                (payment_id, installment_number, due_date, amount, balance, status, account_entry_id, expected_date) 
-                VALUES 
-                ($1, $2, $3, $4, $5, $6, $7, $8)
-                RETURNING *
-            `;
-
-            const values = [
-                installmentData.payment_id,
-                installmentData.installment_number,
-                installmentData.due_date,
-                installmentData.amount,
-                installmentData.balance,
-                installmentData.status,
-                installmentData.account_entry_id,
-                installmentData.expected_date
-            ];
-
-            logger.info('Executing query with values:', JSON.stringify(values));
-
-            const result = await this.pool.query(query, values);
-
-            logger.info('Installment created successfully:', JSON.stringify(result.rows[0]));
-            return result.rows[0];
-        } catch (error) {
-            logger.error('Error creating installment in repository:', error);
-            throw error;
-        }
-    }
-
-    async updateInstallment(installmentId, installmentData) {
-        try {
-            const updateFields = [];
-            const values = [];
-            let index = 1;
-
-            // Construir campos dinâmicos para atualização
-            if (installmentData.payment_id) {
-                updateFields.push(`payment_id = $${index++}`);
-                values.push(installmentData.payment_id);
-            }
-            if (installmentData.installment_number) {
-                updateFields.push(`installment_number = $${index++}`);
-                values.push(installmentData.installment_number);
-            }
-            if (installmentData.due_date) {
-                updateFields.push(`due_date = $${index++}`);
-                values.push(installmentData.due_date);
-            }
-            if (installmentData.amount) {
-                updateFields.push(`amount = $${index++}`);
-                values.push(installmentData.amount);
-            }
-            if (installmentData.balance) {
-                updateFields.push(`balance = $${index++}`);
-                values.push(installmentData.balance);
-            }
-            if (installmentData.status) {
-                updateFields.push(`status = $${index++}`);
-                values.push(installmentData.status);
-            }
-            if (installmentData.expected_date) {
-                updateFields.push(`expected_date = $${index++}`);
-                values.push(installmentData.expected_date);
-            }
-
-            values.push(installmentId);
-
-            const query = `
-                UPDATE installments 
-                SET ${updateFields.join(', ')}
-                WHERE installment_id = $${index}
-                RETURNING *
-            `;
-
-            const result = await this.pool.query(query, values);
-            
-            if (result.rows.length === 0) {
-                throw new Error('Installment não encontrado');
-            }
-
-            return result.rows[0];
-        } catch (error) {
-            logger.error('Erro no repositório ao atualizar installment', {
-                installmentId,
-                installmentData,
-                errorMessage: error.message
-            });
-            throw error;
-        }
-    }
-
-    async deleteInstallment(installmentId) {
-        try {
-            const query = `
-                DELETE FROM installments 
-                WHERE installment_id = $1
-                RETURNING *
-            `;
-
-            const result = await this.pool.query(query, [installmentId]);
-            
-            if (result.rows.length === 0) {
-                throw new Error('Installment não encontrado');
-            }
-
-            return result.rows[0];
-        } catch (error) {
-            logger.error('Erro no repositório ao deletar installment', {
-                installmentId,
-                errorMessage: error.message
-            });
-            throw error;
-        }
-    }
-
-    async findById(installmentId) {
+    /**
+     * Busca parcela por ID com informações relacionadas
+     * @param {number} id - ID da parcela
+     * @param {Object} [client] - Client opcional para transação
+     * @returns {Promise<Object>} Parcela encontrada
+     */
+    async findByIdWithRelations(id, client) {
         try {
             const query = `
                 SELECT 
-                    i.installment_id,
-                    i.payment_id,
-                    i.installment_number,
-                    i.due_date,
-                    i.amount,
-                    i.balance,
-                    i.status,
-                    i.account_entry_id,
-                    i.expected_date,
-                    b.boleto_id,
-                    b.boleto_url,
-                    b.status AS boleto_status,
-                    b.generated_at
+                    i.*,
+                    m.description as movement_description,
+                    m.type as movement_type,
+                    m.status as movement_status
                 FROM installments i
-                LEFT JOIN boletos b ON b.installment_id = i.installment_id
-                WHERE i.installment_id = $1
-                ORDER BY b.generated_at DESC
+                LEFT JOIN movements m ON i.movement_id = m.id
+                WHERE i.id = $1
             `;
 
-            const result = await this.pool.query(query, [installmentId]);
-            
-            if (result.rows.length === 0) {
-                return null;
+            const result = await TransactionHelper.getClient(client)
+                .query(query, [id]);
+            return result.rows[0] || null;
+        } catch (error) {
+            logger.error('Erro ao buscar parcela por ID com relações', {
+                error: error.message,
+                id
+            });
+            throw error;
+        }
+    }
+
+    /**
+     * Atualiza o status de uma parcela
+     * @param {number} id - ID da parcela
+     * @param {string} status - Novo status
+     * @param {Object} [client] - Client opcional para transação
+     * @returns {Promise<Object>} Parcela atualizada
+     */
+    async updateStatus(id, status, client) {
+        return TransactionHelper.executeInTransaction(async (dbClient) => {
+            // Busca parcela atual
+            const current = await this.findById(id, dbClient);
+            if (!current) {
+                throw new Error('Parcela não encontrada');
             }
 
-            // Agrupar boletos
-            const installmentData = {
-                ...result.rows[0],
-                boletos: []
-            };
+            // Valida transição de status
+            InstallmentValidations.validateStatusUpdate(status, current.status);
 
-            result.rows.forEach(row => {
-                if (row.boleto_id) {
-                    installmentData.boletos.push({
-                        id: row.boleto_id,
-                        url: row.boleto_url,
-                        status: row.boleto_status,
-                        generated_at: row.generated_at
-                    });
+            // Atualiza status
+            const updated = await this.update(id, { 
+                status,
+                paid_date: status === 'PAID' ? new Date() : null
+            }, dbClient);
+
+            // Se parcela foi paga, verifica se todas as parcelas foram pagas
+            if (status === 'PAID') {
+                const query = `
+                    SELECT COUNT(*)::integer as total,
+                           COUNT(*) FILTER (WHERE status = 'PAID')::integer as paid
+                    FROM installments
+                    WHERE movement_id = $1
+                `;
+
+                const result = await dbClient.query(query, [current.movement_id]);
+                const { total, paid } = result.rows[0];
+
+                // Se todas as parcelas foram pagas, atualiza status do movimento
+                if (total === paid) {
+                    const movementRepository = new BaseRepository('movements');
+                    await movementRepository.update(
+                        current.movement_id,
+                        { status: 'PAID' },
+                        dbClient
+                    );
                 }
-            });
+            }
 
-            // Remover campos duplicados
-            const { boleto_id, boleto_url, boleto_status, generated_at, ...cleanInstallmentData } = installmentData;
+            return updated;
+        });
+    }
 
-            return {
-                ...cleanInstallmentData,
-                boletos: installmentData.boletos
-            };
+    /**
+     * Cria parcelas para um movimento
+     * @param {Object} movement - Movimento
+     * @param {Object[]} installments - Array de parcelas
+     * @returns {Promise<Object[]>} Parcelas criadas
+     */
+    async createInstallments(movement, installments) {
+        // Valida parcelas
+        InstallmentValidations.validateInstallments(movement, installments);
+
+        return TransactionHelper.executeInTransaction(async (client) => {
+            const installmentsWithMovementId = installments.map(installment => ({
+                ...installment,
+                movement_id: movement.id
+            }));
+
+            return this.createMany(installmentsWithMovementId, client);
+        });
+    }
+
+    /**
+     * Atualiza várias parcelas
+     * @param {Object[]} installments - Array de parcelas
+     * @returns {Promise<Object[]>} Parcelas atualizadas
+     */
+    async updateMany(installments) {
+        return TransactionHelper.executeInTransaction(async (client) => {
+            const results = [];
+
+            for (const installment of installments) {
+                // Valida dados
+                InstallmentValidations.validateInstallmentUpdate(installment);
+
+                // Busca parcela atual
+                const current = await this.findById(installment.id, client);
+                if (!current) {
+                    throw new Error(`Parcela ${installment.id} não encontrada`);
+                }
+
+                // Valida transição de status se houver mudança
+                if (installment.status && installment.status !== current.status) {
+                    InstallmentValidations.validateStatusUpdate(
+                        installment.status,
+                        current.status
+                    );
+                }
+
+                // Atualiza parcela
+                const updated = await this.update(installment.id, installment, client);
+                results.push(updated);
+            }
+
+            return results;
+        });
+    }
+
+    /**
+     * Busca parcelas por movimento
+     * @param {number} movementId - ID do movimento
+     * @param {Object} [client] - Client opcional para transação
+     * @returns {Promise<Object[]>} Lista de parcelas
+     */
+    async findByMovementId(movementId, client) {
+        try {
+            const query = `
+                SELECT 
+                    i.*,
+                    m.description as movement_description,
+                    m.type as movement_type,
+                    m.status as movement_status
+                FROM installments i
+                LEFT JOIN movements m ON i.movement_id = m.id
+                WHERE i.movement_id = $1
+                ORDER BY i.installment_number ASC
+            `;
+
+            const result = await TransactionHelper.getClient(client)
+                .query(query, [movementId]);
+            return result.rows;
         } catch (error) {
-            logger.error('Erro no repositório ao buscar installment por ID', {
-                installmentId,
-                errorMessage: error.message
+            logger.error('Erro ao buscar parcelas por movimento', {
+                error: error.message,
+                movementId
             });
             throw error;
         }
     }
 }
 
-module.exports = new InstallmentRepository();
+module.exports = InstallmentRepository;

@@ -1,14 +1,18 @@
 const { logger } = require('../../middlewares/logger');
 const { ValidationError } = require('../../utils/errors');
 const IMovementPaymentService = require('./interfaces/IMovementPaymentService');
-const movementPaymentsRepository = require('../../repositories/movementPaymentsRepository');
 const { MovementPaymentResponseDTO } = require('./dto/movement-payment.dto');
-const cacheService = require('../../services/cache.service');
 
 class MovementPaymentService extends IMovementPaymentService {
-    constructor(repository) {
+    /**
+     * @param {Object} params
+     * @param {import('../../repositories/movementPaymentsRepository')} params.movementPaymentsRepository
+     * @param {import('../../services/cache.service')} params.cacheService
+     */
+    constructor({ movementPaymentsRepository, cacheService }) {
         super();
-        this.movementPaymentsRepository = repository;
+        this.movementPaymentsRepository = movementPaymentsRepository;
+        this.cacheService = cacheService;
         this.cachePrefix = 'movement-payments';
         this.cacheTTL = {
             list: 300, // 5 minutos
@@ -23,9 +27,9 @@ class MovementPaymentService extends IMovementPaymentService {
         try {
             logger.info('Serviço: Buscando pagamento por ID', { id });
             
-            const cacheKey = cacheService.generateKey(`${this.cachePrefix}:detail`, { id });
+            const cacheKey = this.cacheService.generateKey(`${this.cachePrefix}:detail`, { id });
 
-            const payment = await cacheService.getOrSet(
+            const payment = await this.cacheService.getOrSet(
                 cacheKey,
                 async () => {
                     const data = await this.movementPaymentsRepository.findById(id);
@@ -54,13 +58,13 @@ class MovementPaymentService extends IMovementPaymentService {
         try {
             logger.info('Serviço: Listando pagamentos', { page, limit, filters });
             
-            const cacheKey = cacheService.generateKey(`${this.cachePrefix}:list`, {
+            const cacheKey = this.cacheService.generateKey(`${this.cachePrefix}:list`, {
                 page,
                 limit,
                 ...filters
             });
 
-            const result = await cacheService.getOrSet(
+            const result = await this.cacheService.getOrSet(
                 cacheKey,
                 async () => {
                     const data = await this.movementPaymentsRepository.findAll(page, limit, filters);

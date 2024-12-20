@@ -2,49 +2,49 @@ const express = require('express');
 const { validateRequest } = require('../../middlewares/requestValidator');
 const { authMiddleware } = require('../../middlewares/auth');
 const boletoSchema = require('./schemas/boleto.schema');
-const BoletoController = require('./boleto.controller');
-const BoletoService = require('./boleto.service');
-const BoletoRepository = require('../../repositories/boletoRepository');
-const TaskService = require('../../services/taskService');
 
-const router = express.Router();
+/**
+ * @param {import('./boleto.controller')} boletoController 
+ */
+module.exports = (boletoController) => {
+    const router = express.Router();
 
-// Injeção de dependências
-const boletoService = new BoletoService(
-    new BoletoRepository(),
-    new TaskService()
-);
-const boletoController = new BoletoController(boletoService);
+    // Middleware de autenticação para todas as rotas
+    router.use(authMiddleware);
 
-// Middleware de autenticação para todas as rotas
-router.use(authMiddleware);
+    // Rotas
+    router.get('/', 
+        validateRequest(boletoSchema.listBoletos, 'query'),
+        boletoController.index.bind(boletoController)
+    );
 
-// Rotas
-router.get('/', 
-    validateRequest(boletoSchema.listBoletos, 'query'),
-    boletoController.index.bind(boletoController)
-);
+    router.get('/:id',
+        validateRequest(boletoSchema.getBoletoById, 'params'),
+        boletoController.show.bind(boletoController)
+    );
 
-router.get('/:id',
-    validateRequest(boletoSchema.getBoletoById, 'params'),
-    boletoController.show.bind(boletoController)
-);
+    router.post('/',
+        validateRequest(boletoSchema.createBoleto, 'body'),
+        boletoController.store.bind(boletoController)
+    );
 
-router.post('/',
-    validateRequest(boletoSchema.createBoleto, 'body'),
-    boletoController.store.bind(boletoController)
-);
+    router.put('/:id',
+        validateRequest(boletoSchema.updateBoleto, 'body'),
+        validateRequest(boletoSchema.getBoletoById, 'params'),
+        boletoController.update.bind(boletoController)
+    );
 
-router.put('/:id',
-    validateRequest(boletoSchema.getBoletoById, 'params'),
-    validateRequest(boletoSchema.updateBoleto, 'body'),
-    boletoController.update.bind(boletoController)
-);
+    router.post('/:id/cancel',
+        validateRequest(boletoSchema.cancelBoleto, 'body'),
+        validateRequest(boletoSchema.getBoletoById, 'params'),
+        boletoController.cancel.bind(boletoController)
+    );
 
-router.post('/:id/cancel',
-    validateRequest(boletoSchema.getBoletoById, 'params'),
-    validateRequest(boletoSchema.cancelBoleto, 'body'),
-    boletoController.cancel.bind(boletoController)
-);
+    router.post('/movimento/:movimentoId',
+        validateRequest(boletoSchema.emitirBoletos, 'body'),
+        validateRequest(boletoSchema.getMovimentoId, 'params'),
+        boletoController.emitirBoletos.bind(boletoController)
+    );
 
-module.exports = router;
+    return router;
+};
