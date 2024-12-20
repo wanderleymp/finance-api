@@ -33,14 +33,38 @@ class UserController {
     }
 
     async login(req, res) {
+        // Leitura da versão antes do bloco try
+        const fs = require('fs');
+        const path = require('path');
+        let versionInfo = { version: 'unknown', branch: 'unknown', build_date: 'unknown' };
+
+        try {
+            const versionFilePath = path.resolve(__dirname, '../../VERSION');
+            const versionFileContent = fs.readFileSync(versionFilePath, 'utf-8');
+            versionInfo = versionFileContent.split('\n').reduce((acc, line) => {
+                const [key, value] = line.split('=');
+                acc[key.trim()] = value ? value.trim() : 'unknown';
+                return acc;
+            }, {});
+        } catch (versionError) {
+            logger.warn('Erro ao ler arquivo de versão', { error: versionError.message });
+        }
+
         try {
             const { username, password } = req.body;
 
-            logger.info('CONTROLLER: Tentativa de login', { username });
+            logger.info('Tentativa de login', { 
+                username, 
+                version: versionInfo.version,
+                branch: versionInfo.branch,
+                buildDate: versionInfo.build_date
+            });
 
             const loginResult = await UserService.login(username, password);
 
             res.json({
+                version: versionInfo.version,
+                branch: versionInfo.branch,
                 accessToken: loginResult.accessToken,
                 refreshToken: loginResult.refreshToken,
                 user: {
@@ -51,16 +75,16 @@ class UserController {
                 }
             });
         } catch (error) {
-            logger.error('CONTROLLER: Erro no login', { 
-                error: error.message,
-                stack: error.stack,
-                username: req.body.username 
+            logger.error('Erro no login', { 
+                username: req.body.username, 
+                errorMessage: error.message,
+                version: versionInfo.version
             });
-
-            res.status(500).json({ 
-                status: 'error',
-                message: 'Erro interno no login',
-                details: error.message 
+            
+            res.status(400).json({
+                success: false,
+                message: error.message || 'Erro no login',
+                version: versionInfo.version
             });
         }
     }
