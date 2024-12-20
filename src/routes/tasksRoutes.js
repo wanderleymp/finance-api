@@ -20,4 +20,7 @@ router.get('/type/:type', tasksController.listByType);
 // Listar tipos de tarefas
 router.get('/types/list', tasksController.listTypes);
 
+// Processar uma tarefa específica
+router.post('/:id/process', tasksController.processTask);
+
 module.exports = router;

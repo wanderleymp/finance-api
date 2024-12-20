@@ -50,42 +50,36 @@ class BoletoRepository {
                 filters
             });
 
-            const [dataResult, countResult] = await Promise.all([
-                this.pool.query(query, params),
-                this.pool.query(countQuery, params.slice(0, -2))
+            // Executar consultas em paralelo
+            const [{ rows: [count] }, { rows: data }] = await Promise.all([
+                this.pool.query(countQuery, params.slice(0, -2)),
+                this.pool.query(query, params)
             ]);
 
             return {
-                data: dataResult.rows,
-                total: parseInt(countResult.rows[0].count)
+                data,
+                total: parseInt(count.count)
             };
         } catch (error) {
-            logger.error('Erro ao buscar boletos', { 
+            logger.error('Erro ao buscar boletos', {
                 errorMessage: error.message,
-                stack: error.stack,
+                page,
+                limit,
                 filters
             });
             throw error;
         }
     }
 
-    async findById(boletoId) {
+    async getBoletoById(boletoId) {
         try {
-            const query = `
-                SELECT * 
-                FROM boletos 
-                WHERE boleto_id = $1
-            `;
-
-            logger.info('Buscando boleto por ID', { boletoId });
-
-            const result = await this.pool.query(query, [boletoId]);
-
-            return result.rows[0] || null;
+            const query = 'SELECT * FROM boletos WHERE boleto_id = $1';
+            const { rows } = await this.pool.query(query, [boletoId]);
+            return rows[0];
         } catch (error) {
-            logger.error('Erro ao buscar boleto por ID', { 
-                errorMessage: error.message,
-                boletoId
+            logger.error('Erro ao buscar boleto por ID', {
+                boletoId,
+                errorMessage: error.message
             });
             throw error;
         }
@@ -94,164 +88,228 @@ class BoletoRepository {
     async createBoleto(boletoData) {
         try {
             const query = `
-                INSERT INTO boletos 
-                (installment_id, boleto_number, boleto_url, status, 
-                codigo_barras, linha_digitavel, pix_copia_e_cola, external_boleto_id) 
-                VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+                INSERT INTO boletos (
+                    installment_id, 
+                    valor, 
+                    vencimento, 
+                    status
+                ) VALUES ($1, $2, $3, $4)
                 RETURNING *
             `;
 
-            const values = [
+            const params = [
                 boletoData.installment_id,
-                boletoData.boleto_number,
-                boletoData.boleto_url || null,
-                boletoData.status || 'Pendente',
-                boletoData.codigo_barras,
-                boletoData.linha_digitavel,
-                boletoData.pix_copia_e_cola || null,
-                boletoData.external_boleto_id || null
+                boletoData.valor,
+                boletoData.vencimento,
+                boletoData.status
             ];
 
-            logger.info('Criando novo boleto', { 
-                installmentId: boletoData.installment_id,
-                status: boletoData.status
-            });
-
-            const result = await this.pool.query(query, values);
-            return result.rows[0];
+            const { rows } = await this.pool.query(query, params);
+            return rows[0];
         } catch (error) {
-            logger.error('Erro ao criar boleto', { 
-                errorMessage: error.message,
-                boletoData
-            });
-            
-            // Tratamento de erros específicos do banco de dados
-            if (error.code === '23505') {  // Violação de restrição única
-                throw new ValidationError('Já existe um boleto com este número');
-            }
-            
-            throw error;
-        }
-    }
-
-    async updateBoleto(boletoId, updateData) {
-        try {
-            const updateFields = [];
-            const values = [];
-            let paramCount = 1;
-
-            // Construir campos dinâmicos para atualização
-            const updateableFields = [
-                'installment_id', 'boleto_number', 'boleto_url', 'status', 
-                'codigo_barras', 'linha_digitavel', 'pix_copia_e_cola', 'external_boleto_id'
-            ];
-
-            updateableFields.forEach(field => {
-                if (updateData[field] !== undefined) {
-                    updateFields.push(`${field} = $${paramCount}`);
-                    values.push(updateData[field]);
-                    paramCount++;
-                }
-            });
-
-            if (updateFields.length === 0) {
-                throw new ValidationError('Nenhum campo para atualizar');
-            }
-
-            values.push(boletoId);
-
-            const query = `
-                UPDATE boletos 
-                SET ${updateFields.join(', ')}, last_status_update = NOW()
-                WHERE boleto_id = $${paramCount}
-                RETURNING *
-            `;
-
-            logger.info('Atualizando boleto', { 
-                boletoId, 
-                updatedFields: updateFields 
-            });
-
-            const result = await this.pool.query(query, values);
-
-            if (result.rows.length === 0) {
-                throw new ValidationError('Boleto não encontrado');
-            }
-
-            return result.rows[0];
-        } catch (error) {
-            logger.error('Erro ao atualizar boleto', { 
-                errorMessage: error.message,
-                boletoId,
-                updateData
+            logger.error('Erro ao criar boleto', {
+                boletoData,
+                errorMessage: error.message
             });
             throw error;
         }
     }
 
-    async updateBoletoStatus(boletoId, status, responseData) {
+    async updateBoletoStatus(boletoId, status) {
         try {
             const query = `
                 UPDATE boletos 
-                SET 
-                    status = $1, 
-                    response_data = $2, 
-                    updated_at = CURRENT_TIMESTAMP 
-                WHERE boleto_id = $3
+                SET status = $1, 
+                    last_status_update = NOW() 
+                WHERE boleto_id = $2
                 RETURNING *
             `;
 
-            const values = [
-                status, 
-                JSON.stringify(responseData), 
-                boletoId
-            ];
-
-            logger.info('Atualizando status do boleto', { 
-                boletoId, 
-                status, 
-                responseData 
-            });
-
-            const result = await this.pool.query(query, values);
-
-            if (result.rows.length === 0) {
-                throw new ValidationError('Boleto não encontrado', 'BOLETO_NOT_FOUND');
-            }
-
-            return result.rows[0];
+            const { rows } = await this.pool.query(query, [status, boletoId]);
+            return rows[0];
         } catch (error) {
             logger.error('Erro ao atualizar status do boleto', {
                 boletoId,
                 status,
                 errorMessage: error.message
             });
-
             throw error;
         }
     }
 
-    async deleteBoleto(boletoId) {
+    async getParcelasMovimento(movimentoId) {
         try {
             const query = `
-                DELETE FROM boletos 
-                WHERE boleto_id = $1
-                RETURNING *
+                SELECT 
+                    i.installment_id,
+                    i.amount as valor,
+                    i.due_date as vencimento,
+                    i.installment_number,
+                    m.movement_id
+                FROM installments i
+                JOIN movement_payments mp ON mp.payment_id = i.payment_id
+                JOIN movements m ON m.movement_id = mp.movement_id
+                WHERE m.movement_id = $1
+                ORDER BY i.installment_number
             `;
 
-            logger.info('Excluindo boleto', { boletoId });
+            const { rows } = await this.pool.query(query, [movimentoId]);
+            return rows;
+        } catch (error) {
+            logger.error('Erro ao buscar parcelas do movimento', {
+                movimentoId,
+                errorMessage: error.message
+            });
+            throw error;
+        }
+    }
 
-            const result = await this.pool.query(query, [boletoId]);
+    async getDadosBoleto(installmentId) {
+        try {
+            const query = `
+                WITH installment_data AS (
+                    SELECT 
+                        i.installment_id, 
+                        i.amount AS valor_nominal, 
+                        i.due_date, 
+                        i.installment_number AS seu_numero,
+                        m.license_id,
+                        m.person_id AS pagador_person_id
+                    FROM installments i
+                    JOIN movement_payments mp ON mp.payment_id = i.payment_id
+                    JOIN movements m ON m.movement_id = mp.movement_id
+                    WHERE i.installment_id = $1
+                ),
+                pagador_data AS (
+                    SELECT 
+                        json_build_object(
+                            'full_name', p.full_name,
+                            'documents', (
+                                SELECT json_agg(
+                                    json_build_object(
+                                        'document_type', d.document_type,
+                                        'document_value', d.document_value
+                                    )
+                                )
+                                FROM person_documents d 
+                                WHERE d.person_id = p.person_id
+                            ),
+                            'addresses', (
+                                SELECT json_agg(
+                                    json_build_object(
+                                        'street', a.street,
+                                        'number', a.number,
+                                        'neighborhood', a.neighborhood,
+                                        'city', a.city,
+                                        'state', a.state,
+                                        'postal_code', a.postal_code
+                                    )
+                                )
+                                FROM person_addresses a
+                                WHERE a.person_id = p.person_id
+                            )
+                        ) AS pagador_details
+                    FROM installment_data id
+                    JOIN persons p ON p.person_id = id.pagador_person_id
+                ),
+                beneficiario_data AS (
+                    SELECT 
+                        json_build_object(
+                            'full_name', p.full_name,
+                            'documents', (
+                                SELECT json_agg(
+                                    json_build_object(
+                                        'document_type', d.document_type,
+                                        'document_value', d.document_value
+                                    )
+                                )
+                                FROM person_documents d 
+                                WHERE d.person_id = p.person_id
+                            ),
+                            'addresses', (
+                                SELECT json_agg(
+                                    json_build_object(
+                                        'street', a.street,
+                                        'number', a.number,
+                                        'neighborhood', a.neighborhood,
+                                        'city', a.city,
+                                        'state', a.state,
+                                        'postal_code', a.postal_code
+                                    )
+                                )
+                                FROM person_addresses a
+                                WHERE a.person_id = p.person_id
+                            )
+                        ) AS beneficiario_details
+                    FROM installment_data id
+                    JOIN licenses l ON l.license_id = id.license_id
+                    JOIN persons p ON p.person_id = l.person_id
+                )
+                SELECT 
+                    id.*,
+                    pd.pagador_details,
+                    bd.beneficiario_details
+                FROM installment_data id, 
+                     pagador_data pd, 
+                     beneficiario_data bd
+            `;
 
-            if (result.rows.length === 0) {
-                throw new ValidationError('Boleto não encontrado');
+            const { rows } = await this.pool.query(query, [installmentId]);
+
+            if (rows.length === 0) {
+                throw new ValidationError('Dados para geração de boleto não encontrados');
             }
 
-            return result.rows[0];
+            const dadosBoleto = rows[0];
+
+            // Determinar tipo de pessoa e documento para pagador
+            const documentoPagador = dadosBoleto.pagador_details.documents.find(
+                doc => ['cpf', 'cnpj'].includes(doc.document_type.toLowerCase())
+            );
+            const tipoPessoaPagador = documentoPagador.document_type.toLowerCase() === 'cpf' ? 'FISICA' : 'JURIDICA';
+
+            // Determinar tipo de pessoa e documento para beneficiário
+            const documentoBeneficiario = dadosBoleto.beneficiario_details.documents.find(
+                doc => ['cpf', 'cnpj'].includes(doc.document_type.toLowerCase())
+            );
+            const tipoPessoaBeneficiario = documentoBeneficiario.document_type.toLowerCase() === 'cpf' ? 'FISICA' : 'JURIDICA';
+
+            // Selecionar primeiro endereço disponível
+            const enderecoPagador = dadosBoleto.pagador_details.addresses?.[0] || {};
+            const enderecoBeneficiario = dadosBoleto.beneficiario_details.addresses?.[0] || {};
+
+            // Montar JSON de boleto
+            return {
+                seuNumero: dadosBoleto.seu_numero,
+                valorNominal: dadosBoleto.valor_nominal,
+                dataVencimento: dadosBoleto.due_date.toISOString().split('T')[0],
+                pagador: {
+                    cpfCnpj: documentoPagador.document_value,
+                    tipoPessoa: tipoPessoaPagador,
+                    nome: dadosBoleto.pagador_details.full_name,
+                    endereco: enderecoPagador.street,
+                    numero: enderecoPagador.number,
+                    bairro: enderecoPagador.neighborhood,
+                    cidade: enderecoPagador.city,
+                    uf: enderecoPagador.state,
+                    cep: enderecoPagador.postal_code
+                },
+                beneficiarioFinal: {
+                    cpfCnpj: documentoBeneficiario.document_value,
+                    tipoPessoa: tipoPessoaBeneficiario,
+                    nome: dadosBoleto.beneficiario_details.full_name,
+                    endereco: enderecoBeneficiario.street,
+                    numero: enderecoBeneficiario.number,
+                    bairro: enderecoBeneficiario.neighborhood,
+                    cidade: enderecoBeneficiario.city,
+                    uf: enderecoBeneficiario.state,
+                    cep: enderecoBeneficiario.postal_code
+                }
+            };
         } catch (error) {
-            logger.error('Erro ao excluir boleto', { 
-                errorMessage: error.message,
-                boletoId
+            logger.error('Erro ao buscar dados do boleto', {
+                installmentId,
+                errorMessage: error.message
             });
             throw error;
         }

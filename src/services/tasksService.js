@@ -149,7 +149,20 @@ class TasksService {
             logger.error('Erro ao atualizar status da tarefa', {
                 taskId,
                 status,
-                error: error.message
+                errorMessage: error.message
+            });
+            throw error;
+        }
+    }
+
+    async getPendingTasks(limit = 10) {
+        try {
+            const { data } = await TasksRepository.findAll(1, limit, { status: 'pending' });
+            return data;
+        } catch (error) {
+            logger.error('Erro ao buscar tarefas pendentes', {
+                errorMessage: error.message,
+                limit
             });
             throw error;
         }

@@ -18,8 +18,7 @@ class BoletoService {
             
             // Criar tarefa assíncrona para emissão do boleto
             await TasksService.createTask('BOLETO', newBoleto.boleto_id, {
-                boleto_id: newBoleto.boleto_id,
-                installment_id: newBoleto.installment_id
+                boleto_id: newBoleto.boleto_id
             });
             
             logger.info('Boleto criado e enfileirado com sucesso', { 
@@ -36,413 +35,143 @@ class BoletoService {
         }
     }
 
-    async processQueue() {
+    async emitirBoletosMovimento(movimentoId) {
         try {
-            const pendingItems = await TasksService.getPendingTasks('BOLETO');
-            
-            for (const item of pendingItems) {
-                try {
-                    await TasksService.updateTaskStatus(item.task_id, 'processing');
-                    
-                    const boleto = await boletoRepository.getBoletoById(item.data.boleto_id);
-                    await this.emitirBoletoN8N(boleto, item.data.installment_id);
-                    
-                    await TasksService.updateTaskStatus(item.task_id, 'completed');
-                    
-                    logger.info('Boleto processado com sucesso', {
-                        boletoId: item.data.boleto_id,
-                        taskId: item.task_id
-                    });
-                } catch (error) {
-                    logger.error('Erro ao processar boleto da fila', {
-                        boletoId: item.data.boleto_id,
-                        taskId: item.task_id,
-                        error: error.message
-                    });
-                    
-                    await TasksService.updateTaskStatus(
-                        item.task_id,
-                        'failed',
-                        error.message
-                    );
-                }
+            logger.info('Iniciando emissão de boletos para movimento', { movimentoId });
+
+            // Buscar parcelas do movimento
+            const parcelas = await boletoRepository.getParcelasMovimento(movimentoId);
+            if (!parcelas || parcelas.length === 0) {
+                throw new ValidationError('Movimento não possui parcelas para emissão de boletos');
             }
+
+            // Criar boletos para cada parcela
+            const boletos = [];
+            for (const parcela of parcelas) {
+                const boletoData = {
+                    installment_id: parcela.installment_id,
+                    valor: parcela.valor,
+                    vencimento: parcela.vencimento,
+                    status: 'A Emitir'
+                };
+
+                const boleto = await this.createBoleto(boletoData);
+                boletos.push(boleto);
+            }
+
+            logger.info('Boletos criados com sucesso', { 
+                movimentoId,
+                quantidadeBoletos: boletos.length
+            });
+
+            return boletos;
         } catch (error) {
-            logger.error('Erro ao processar fila de boletos', {
-                error: error.message
+            logger.error('Erro ao emitir boletos para movimento', {
+                movimentoId,
+                errorMessage: error.message,
+                errorStack: error.stack
             });
             throw error;
         }
     }
 
-    async gerarJsonBoleto(installmentId) {
+    async getBoletoById(boletoId) {
         try {
-            const query = `
-                WITH installment_data AS (
-                    SELECT 
-                        i.installment_id, 
-                        i.amount AS valor_nominal, 
-                        i.due_date, 
-                        i.installment_number AS seu_numero,
-                        m.license_id,
-                        m.person_id AS pagador_person_id
-                    FROM installments i
-                    JOIN movement_payments mp ON mp.payment_id = i.payment_id
-                    JOIN movements m ON m.movement_id = mp.movement_id
-                    WHERE i.installment_id = $1
-                ),
-                pagador_data AS (
-                    SELECT 
-                        json_build_object(
-                            'full_name', p.full_name,
-                            'documents', (
-                                SELECT json_agg(
-                                    json_build_object(
-                                        'document_type', d.document_type,
-                                        'document_value', d.document_value
-                                    )
-                                )
-                                FROM person_documents d 
-                                WHERE d.person_id = p.person_id
-                            ),
-                            'addresses', (
-                                SELECT json_agg(
-                                    json_build_object(
-                                        'street', a.street,
-                                        'number', a.number,
-                                        'neighborhood', a.neighborhood,
-                                        'city', a.city,
-                                        'state', a.state,
-                                        'postal_code', a.postal_code
-                                    )
-                                )
-                                FROM person_addresses a
-                                WHERE a.person_id = p.person_id
-                            )
-                        ) AS pagador_details
-                    FROM installment_data id
-                    JOIN persons p ON p.person_id = id.pagador_person_id
-                ),
-                beneficiario_data AS (
-                    SELECT 
-                        json_build_object(
-                            'full_name', p.full_name,
-                            'documents', (
-                                SELECT json_agg(
-                                    json_build_object(
-                                        'document_type', d.document_type,
-                                        'document_value', d.document_value
-                                    )
-                                )
-                                FROM person_documents d 
-                                WHERE d.person_id = p.person_id
-                            ),
-                            'addresses', (
-                                SELECT json_agg(
-                                    json_build_object(
-                                        'street', a.street,
-                                        'number', a.number,
-                                        'neighborhood', a.neighborhood,
-                                        'city', a.city,
-                                        'state', a.state,
-                                        'postal_code', a.postal_code
-                                    )
-                                )
-                                FROM person_addresses a
-                                WHERE a.person_id = p.person_id
-                            )
-                        ) AS beneficiario_details
-                    FROM installment_data id
-                    JOIN licenses l ON l.license_id = id.license_id
-                    JOIN persons p ON p.person_id = l.person_id
-                )
-                SELECT 
-                    id.*,
-                    pd.pagador_details,
-                    bd.beneficiario_details
-                FROM installment_data id, 
-                     pagador_data pd, 
-                     beneficiario_data bd
-            `;
-
-            const result = await boletoRepository.pool.query(query, [installmentId]);
-
-            if (result.rows.length === 0) {
-                throw new ValidationError('Dados para geração de boleto não encontrados', 'BOLETO_DATA_NOT_FOUND');
+            const boleto = await boletoRepository.getBoletoById(boletoId);
+            if (!boleto) {
+                throw new ValidationError('Boleto não encontrado');
             }
-
-            const dadosBoleto = result.rows[0];
-
-            // Determinar tipo de pessoa e documento para pagador
-            const documentoPagador = dadosBoleto.pagador_details.documents.find(
-                doc => ['cpf', 'cnpj'].includes(doc.document_type.toLowerCase())
-            );
-            const tipoPessoaPagador = documentoPagador.document_type.toLowerCase() === 'cpf' ? 'FISICA' : 'JURIDICA';
-
-            // Determinar tipo de pessoa e documento para beneficiário
-            const documentoBeneficiario = dadosBoleto.beneficiario_details.documents.find(
-                doc => ['cpf', 'cnpj'].includes(doc.document_type.toLowerCase())
-            );
-            const tipoPessoaBeneficiario = documentoBeneficiario.document_type.toLowerCase() === 'cpf' ? 'FISICA' : 'JURIDICA';
-
-            // Selecionar primeiro endereço disponível
-            const enderecoPagador = dadosBoleto.pagador_details.addresses?.[0] || {};
-            const enderecoBeneficiario = dadosBoleto.beneficiario_details.addresses?.[0] || {};
-
-            // Montar JSON de boleto
-            const boletoDados = {
-                seuNumero: dadosBoleto.seu_numero,
-                valorNominal: dadosBoleto.valor_nominal,
-                dataVencimento: dadosBoleto.due_date.toISOString().split('T')[0],
-                pagador: {
-                    cpfCnpj: documentoPagador.document_value,
-                    tipoPessoa: tipoPessoaPagador,
-                    nome: dadosBoleto.pagador_details.full_name,
-                    endereco: enderecoPagador.street,
-                    numero: enderecoPagador.number,
-                    bairro: enderecoPagador.neighborhood,
-                    cidade: enderecoPagador.city,
-                    uf: enderecoPagador.state,
-                    cep: enderecoPagador.postal_code
-                },
-                beneficiarioFinal: {
-                    cpfCnpj: documentoBeneficiario.document_value,
-                    tipoPessoa: tipoPessoaBeneficiario,
-                    nome: dadosBoleto.beneficiario_details.full_name,
-                    endereco: enderecoBeneficiario.street,
-                    numero: enderecoBeneficiario.number,
-                    bairro: enderecoBeneficiario.neighborhood,
-                    cidade: enderecoBeneficiario.city,
-                    uf: enderecoBeneficiario.state,
-                    cep: enderecoBeneficiario.postal_code
-                }
-            };
-
-            logger.info('JSON de boleto gerado com sucesso', { 
-                installmentId,
-                boletoDados 
-            });
-
-            return boletoDados;
+            return boleto;
         } catch (error) {
-            logger.error('Erro ao gerar JSON de boleto', {
-                installmentId,
+            logger.error('Erro ao buscar boleto por ID', {
+                boletoId,
                 errorMessage: error.message
             });
             throw error;
         }
     }
 
-    async emitirBoletoN8N(boletoDados, installmentId) {
+    async emitirBoletoN8N(boleto) {
         try {
-            // URL completa do webhook
-            const n8nUrl = 'https://n8n.webhook.agilefinance.com.br/webhook/inter/cobranca/emissao';
-            const n8nApiSecret = process.env.N8N_API_SECRET.trim();
-            const n8nApiKey = process.env.N8N_API_KEY.trim();
-
-            logger.info('Configurações de N8N para emissão de boleto', { 
-                url: n8nUrl,
-                apiSecretPresent: !!n8nApiSecret,
-                apiKeyPresent: !!n8nApiKey
+            logger.info('Iniciando emissão de boleto via N8N', { 
+                boletoId: boleto.boleto_id,
+                installmentId: boleto.installment_id
             });
 
-            if (!n8nUrl || !n8nApiSecret || !n8nApiKey) {
-                throw new Error('Configurações de N8N não definidas completamente');
+            // Gerar JSON do boleto
+            const dadosBoleto = await boletoRepository.getDadosBoleto(boleto.installment_id);
+            if (!dadosBoleto) {
+                throw new ValidationError('Dados para geração de boleto não encontrados');
             }
 
-            // Log de todos os headers e configurações
-            const headers = {
-                'Content-Type': 'application/json',
-                'Authorization': `Bearer ${n8nApiSecret}`,
-                'X-API-KEY': n8nApiKey,
-                'Accept': 'application/json'
-            };
+            // Configurar URL do N8N
+            const url = 'https://n8n.webhook.agilefinance.com.br/webhook/inter/cobranca/emissao';
 
-            // Validação e normalização dos dados
-            const dadosValidados = {
-                dados: {
-                    seuNumero: boletoDados.seuNumero || '',
-                    valorNominal: boletoDados.valorNominal || '0.00',
-                    dataVencimento: boletoDados.dataVencimento || '',
-                    pagador: {
-                        cpfCnpj: boletoDados.pagador?.cpfCnpj || '',
-                        tipoPessoa: boletoDados.pagador?.tipoPessoa || '',
-                        nome: boletoDados.pagador?.nome || '',
-                        endereco: boletoDados.pagador?.endereco || '',
-                        numero: boletoDados.pagador?.numero || '',
-                        bairro: boletoDados.pagador?.bairro || '',
-                        cidade: boletoDados.pagador?.cidade || '',
-                        uf: boletoDados.pagador?.uf || '',
-                        cep: boletoDados.pagador?.cep || ''
-                    },
-                    beneficiarioFinal: {
-                        cpfCnpj: boletoDados.beneficiarioFinal?.cpfCnpj || '',
-                        tipoPessoa: boletoDados.beneficiarioFinal?.tipoPessoa || '',
-                        nome: boletoDados.beneficiarioFinal?.nome || '',
-                        endereco: boletoDados.beneficiarioFinal?.endereco || '',
-                        numero: boletoDados.beneficiarioFinal?.numero || '',
-                        bairro: boletoDados.beneficiarioFinal?.bairro || '',
-                        cidade: boletoDados.beneficiarioFinal?.cidade || '',
-                        uf: boletoDados.beneficiarioFinal?.uf || '',
-                        cep: boletoDados.beneficiarioFinal?.cep || ''
+            // Preparar payload no formato esperado
+            const payload = {
+                Dados: {
+                    ...dadosBoleto,
+                    headers: {
+                        'Content-Type': 'application/json'
                     }
                 },
-                installment_id: installmentId
+                installment_id: boleto.installment_id
             };
 
-            logger.info('Dados validados para emissão de boleto', { 
-                dadosValidados: JSON.stringify(dadosValidados, null, 2)
+            logger.info('Enviando requisição para N8N', { 
+                url,
+                payload,
+                boletoId: boleto.boleto_id,
+                headers: {
+                    'Content-Type': 'application/json'
+                }
             });
 
+            // Enviar requisição para o N8N
             try {
-                const response = await axios.post(n8nUrl, dadosValidados, {
-                    headers,
-                    timeout: 10000, // 10 segundos de timeout
-                    transformRequest: [
-                        (data) => {
-                            // Garantir que os dados sejam serializados como JSON
-                            return JSON.stringify(data);
-                        }
-                    ]
+                const response = await axios.post(url, payload, {
+                    headers: {
+                        'Content-Type': 'application/json'
+                    }
                 });
 
-                logger.info('Resposta da emissão de boleto N8N', {
-                    status: response.status,
-                    data: response.data
+                // Verificar resposta
+                if (response.status !== 200) {
+                    logger.error('Resposta não-200 do N8N', {
+                        status: response.status,
+                        statusText: response.statusText,
+                        data: response.data,
+                        boletoId: boleto.boleto_id
+                    });
+                    throw new Error(`Erro ao emitir boleto: ${response.statusText}`);
+                }
+
+                // Atualizar status do boleto
+                await boletoRepository.updateBoletoStatus(boleto.boleto_id, 'Emitido');
+
+                logger.info('Boleto emitido com sucesso via N8N', { 
+                    boletoId: boleto.boleto_id,
+                    responseData: response.data
                 });
 
                 return response.data;
             } catch (axiosError) {
-                // Log detalhado do erro de axios
-                logger.error('Erro detalhado na requisição N8N', {
-                    errorCode: axiosError.code,
-                    errorMessage: axiosError.message,
-                    errorResponse: axiosError.response ? {
-                        status: axiosError.response.status,
-                        data: JSON.stringify(axiosError.response.data, null, 2),
-                        headers: axiosError.response.headers
-                    } : 'Sem resposta',
-                    requestConfig: {
-                        url: axiosError.config?.url,
-                        method: axiosError.config?.method,
-                        headers: Object.keys(axiosError.config?.headers || {}),
-                        data: JSON.stringify(axiosError.config?.data, null, 2)
-                    }
+                logger.error('Erro na requisição ao N8N', {
+                    url,
+                    status: axiosError.response?.status,
+                    statusText: axiosError.response?.statusText,
+                    data: axiosError.response?.data,
+                    boletoId: boleto.boleto_id,
+                    error: axiosError.message,
+                    stack: axiosError.stack
                 });
-
                 throw axiosError;
             }
         } catch (error) {
             logger.error('Erro ao emitir boleto via N8N', {
+                boletoId: boleto.boleto_id,
                 errorMessage: error.message,
-                errorStack: error.stack,
-                boletoDados: JSON.stringify(boletoDados, null, 2)
-            });
-            throw error;
-        }
-    }
-
-    async buscarDadosParcela(installmentId) {
-        try {
-            // Buscar dados da parcela no banco de dados
-            const query = `
-                SELECT 
-                    i.installment_id,
-                    i.value,
-                    i.due_date,
-                    p.name as person_name,
-                    p.document as person_document
-                FROM 
-                    installments i
-                JOIN 
-                    persons p ON i.person_id = p.person_id
-                WHERE 
-                    i.installment_id = $1
-            `;
-
-            const result = await boletoRepository.pool.query(query, [installmentId]);
-
-            if (result.rows.length === 0) {
-                throw new ValidationError('Parcela não encontrada', 'INSTALLMENT_NOT_FOUND');
-            }
-
-            return result.rows[0];
-        } catch (error) {
-            logger.error('Erro ao buscar dados da parcela', {
-                installmentId,
-                errorMessage: error.message
-            });
-            throw error;
-        }
-    }
-
-    async emitirBoletosMovimento(movementId) {
-        try {
-            // Buscar todas as parcelas do movimento
-            const query = `
-                SELECT 
-                    i.installment_id,
-                    i.amount,
-                    i.due_date,
-                    i.installment_number,
-                    m.movement_id
-                FROM installments i
-                JOIN movement_payments mp ON mp.payment_id = i.payment_id
-                JOIN movements m ON m.movement_id = mp.movement_id
-                WHERE m.movement_id = $1
-                ORDER BY i.installment_number
-            `;
-
-            const { rows: installments } = await boletoRepository.pool.query(query, [movementId]);
-
-            if (installments.length === 0) {
-                logger.warn('Nenhuma parcela encontrada para o movimento', { movementId });
-                return [];
-            }
-
-            // Emitir boletos para cada parcela
-            const boletosEmitidos = [];
-            for (const installment of installments) {
-                try {
-                    // Gerar JSON do boleto
-                    const boletoDados = await this.gerarJsonBoleto(installment.installment_id);
-                    
-                    // Emitir boleto via N8N
-                    const resultadoEmissao = await this.emitirBoletoN8N(boletoDados, installment.installment_id);
-                    
-                    boletosEmitidos.push({
-                        installmentId: installment.installment_id,
-                        installmentNumber: installment.installment_number,
-                        boletoDados,
-                        resultadoEmissao
-                    });
-
-                    logger.info('Boleto emitido com sucesso', {
-                        movementId,
-                        installmentId: installment.installment_id,
-                        installmentNumber: installment.installment_number
-                    });
-                } catch (installmentError) {
-                    logger.error('Erro ao emitir boleto para parcela', {
-                        movementId,
-                        installmentId: installment.installment_id,
-                        errorMessage: installmentError.message
-                    });
-                    
-                    // Continuar processando outras parcelas mesmo se uma falhar
-                    boletosEmitidos.push({
-                        installmentId: installment.installment_id,
-                        installmentNumber: installment.installment_number,
-                        erro: installmentError.message
-                    });
-                }
-            }
-
-            return boletosEmitidos;
-        } catch (error) {
-            logger.error('Erro ao emitir boletos do movimento', {
-                movementId,
-                errorMessage: error.message
+                stack: error.stack
             });
             throw error;
         }
@@ -451,25 +180,17 @@ class BoletoService {
     async listBoletos(page, limit, filters) {
         try {
             logger.info('Listando boletos', { page, limit, filters });
-            
-            const result = await boletoRepository.findAll(page, limit, filters);
-            
-            logger.info('Boletos listados com sucesso', { 
-                total: result.total,
-                count: result.data.length
-            });
-
-            return result;
+            return await boletoRepository.findAll(page, limit, filters);
         } catch (error) {
             logger.error('Erro ao listar boletos', {
+                errorMessage: error.message,
                 page,
                 limit,
-                filters,
-                errorMessage: error.message
+                filters
             });
             throw error;
         }
     }
 }
 
-module.exports = BoletoService;
+module.exports = new BoletoService();

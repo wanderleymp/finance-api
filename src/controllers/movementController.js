@@ -1,6 +1,7 @@
 const MovementService = require('../services/movementService');
 const MovementPaymentsService = require('../services/movementPaymentsService');
 const BoletoService = require('../services/boletoService');
+const { handleResponse, handleError } = require('../utils/responseHandler');
 const { logger } = require('../middlewares/logger');
 
 class MovementController {
@@ -32,56 +33,36 @@ class MovementController {
             // Substituir movements por movementsWithPayments
             result.movements = movementsWithPayments;
 
-            res.json(result);
+            handleResponse(res, 200, result);
         } catch (error) {
             logger.error('Erro ao listar movimentações', { 
                 error: error.message,
                 query: req.query
             });
-            
-            const statusCode = error.statusCode || 500;
-            res.status(statusCode).json({
-                message: error.message || 'Erro interno ao listar movimentações',
-                error: process.env.NODE_ENV === 'development' ? error.stack : undefined
-            });
+            handleError(res, error);
         }
     }
 
     async show(req, res) {
         try {
             const { id } = req.params;
-            const movement = await MovementService.findById(parseInt(id, 10));
+            const movement = await MovementService.findById(id);
             
             if (!movement) {
-                return res.status(404).json({ message: 'Movimento não encontrado' });
+                return handleResponse(res, 404, { message: 'Movimento não encontrado' });
             }
 
-            const { page, limit, ...filters } = req.query;
+            // Buscar pagamentos do movimento
+            const paymentsResult = await MovementService.getMovementPayments(id, 1, 100, {});
+            movement.payments = paymentsResult.data || [];
 
-            const result = await MovementService.getMovementPayments(
-                parseInt(id, 10), 
-                page, 
-                limit, 
-                filters
-            );
-
-            const responseData = {
-                ...movement,
-                payments: result.data || []
-            };
-
-            res.json(responseData);
+            handleResponse(res, 200, movement);
         } catch (error) {
-            logger.error('Erro ao buscar movimentação', { 
+            logger.error('Erro ao buscar movimento', { 
                 error: error.message,
                 movementId: req.params.id
             });
-            
-            const statusCode = error.statusCode || 500;
-            res.status(statusCode).json({
-                message: error.message || 'Erro interno ao buscar movimentação',
-                error: process.env.NODE_ENV === 'development' ? error.stack : undefined
-            });
+            handleError(res, error);
         }
     }
 
@@ -89,18 +70,13 @@ class MovementController {
         try {
             const movementData = req.body;
             const newMovement = await MovementService.create(movementData);
-            res.status(201).json(newMovement);
+            handleResponse(res, 201, newMovement);
         } catch (error) {
-            logger.error('Erro ao criar movimentação', { 
+            logger.error('Erro ao criar movimento', { 
                 error: error.message,
                 movementData: req.body
             });
-            
-            const statusCode = error.statusCode || 500;
-            res.status(statusCode).json({
-                message: error.message || 'Erro interno ao criar movimentação',
-                error: process.env.NODE_ENV === 'development' ? error.stack : undefined
-            });
+            handleError(res, error);
         }
     }
 
@@ -108,42 +84,35 @@ class MovementController {
         try {
             const { id } = req.params;
             const movementData = req.body;
-            const updatedMovement = await MovementService.update(
-                parseInt(id, 10), 
-                movementData
-            );
-            res.json(updatedMovement);
+            
+            const updatedMovement = await MovementService.update(id, movementData);
+            
+            if (!updatedMovement) {
+                return handleResponse(res, 404, { message: 'Movimento não encontrado' });
+            }
+
+            handleResponse(res, 200, updatedMovement);
         } catch (error) {
-            logger.error('Erro ao atualizar movimentação', { 
+            logger.error('Erro ao atualizar movimento', { 
                 error: error.message,
                 movementId: req.params.id,
                 movementData: req.body
             });
-            
-            const statusCode = error.statusCode || 500;
-            res.status(statusCode).json({
-                message: error.message || 'Erro interno ao atualizar movimentação',
-                error: process.env.NODE_ENV === 'development' ? error.stack : undefined
-            });
+            handleError(res, error);
         }
     }
 
     async delete(req, res) {
         try {
             const { id } = req.params;
-            const deletedMovement = await MovementService.delete(parseInt(id, 10));
-            res.json(deletedMovement);
+            await MovementService.delete(id);
+            handleResponse(res, 204);
         } catch (error) {
-            logger.error('Erro ao excluir movimentação', { 
+            logger.error('Erro ao excluir movimento', { 
                 error: error.message,
                 movementId: req.params.id
             });
-            
-            const statusCode = error.statusCode || 500;
-            res.status(statusCode).json({
-                message: error.message || 'Erro interno ao excluir movimentação',
-                error: process.env.NODE_ENV === 'development' ? error.stack : undefined
-            });
+            handleError(res, error);
         }
     }
 
@@ -153,22 +122,16 @@ class MovementController {
 
             // Validações básicas
             if (!movementData.movement_type_id) {
-                return res.status(400).json({
-                    message: 'Tipo de movimento é obrigatório'
-                });
+                return handleResponse(res, 400, { message: 'Tipo de movimento é obrigatório' });
             }
 
             if (!movementData.total_amount || movementData.total_amount <= 0) {
-                return res.status(400).json({
-                    message: 'Valor do movimento deve ser maior que zero'
-                });
+                return handleResponse(res, 400, { message: 'Valor do movimento deve ser maior que zero' });
             }
 
             // Verificar se método de pagamento foi informado
             if (!movementData.payment_method_id) {
-                return res.status(400).json({
-                    message: 'Método de pagamento é obrigatório para esta operação'
-                });
+                return handleResponse(res, 400, { message: 'Método de pagamento é obrigatório para esta operação' });
             }
 
             // Usar serviço de movimento para criar movimento com pagamento
@@ -178,18 +141,13 @@ class MovementController {
                 movementId: newMovement.movement_id
             });
 
-            res.status(201).json(newMovement);
+            handleResponse(res, 201, newMovement);
         } catch (error) {
             logger.error('Erro ao criar movimento com pagamento', { 
                 error: error.message,
                 movementData: req.body
             });
-            
-            const statusCode = error.statusCode || 500;
-            res.status(statusCode).json({
-                message: error.message || 'Erro interno ao criar movimento com pagamento',
-                error: process.env.NODE_ENV === 'development' ? error.stack : undefined
-            });
+            handleError(res, error);
         }
     }
 
@@ -199,7 +157,7 @@ class MovementController {
             const { page, limit, ...filters } = req.query;
 
             const result = await MovementService.getMovementPayments(
-                parseInt(id, 10), 
+                id, 
                 page, 
                 limit, 
                 filters
@@ -210,18 +168,13 @@ class MovementController {
                 totalPayments: result.meta.total
             });
 
-            res.json(result);
+            handleResponse(res, 200, result);
         } catch (error) {
             logger.error('Erro ao buscar payments de movimento', { 
                 error: error.message,
                 movementId: req.params.id
             });
-            
-            const statusCode = error.statusCode || 500;
-            res.status(statusCode).json({
-                message: error.message || 'Erro interno ao buscar payments de movimento',
-                error: process.env.NODE_ENV === 'development' ? error.stack : undefined
-            });
+            handleError(res, error);
         }
     }
 
@@ -229,35 +182,24 @@ class MovementController {
         try {
             const { id } = req.params;
 
-            // Validar se o movimento existe (pode adicionar lógica adicional se necessário)
-            const movimento = await MovementService.findById(id);
-            if (!movimento) {
-                return res.status(404).json({
-                    message: 'Movimento não encontrado'
-                });
-            }
-
-            // Emitir boletos para o movimento
-            const boletosEmitidos = await BoletoService.emitirBoletosMovimento(id);
-
-            res.json({
-                message: 'Boletos emitidos com sucesso',
-                movimento: {
-                    movement_id: id
-                },
-                boletos: boletosEmitidos
+            logger.info('Iniciando emissão de boletos para movimento', { 
+                movementId: id 
             });
+
+            const boletos = await BoletoService.emitirBoletosMovimento(id);
+
+            logger.info('Boletos emitidos com sucesso', { 
+                movementId: id,
+                quantidadeBoletos: boletos.length
+            });
+
+            handleResponse(res, 200, boletos);
         } catch (error) {
-            logger.error('Erro ao emitir boletos do movimento', { 
-                movementId: req.params.id,
-                error: error.message
+            logger.error('Erro ao emitir boletos', { 
+                error: error.message,
+                movementId: req.params.id
             });
-            
-            const statusCode = error.statusCode || 500;
-            res.status(statusCode).json({
-                message: error.message || 'Erro interno ao emitir boletos do movimento',
-                error: process.env.NODE_ENV === 'development' ? error.stack : undefined
-            });
+            handleError(res, error);
         }
     }
 }

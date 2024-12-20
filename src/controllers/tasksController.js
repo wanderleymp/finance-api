@@ -1,6 +1,8 @@
 const tasksService = require('../services/tasksService');
 const { handleResponse, handleError } = require('../utils/responseHandler');
 const { logger } = require('../middlewares/logger');
+const BoletoProcessor = require('../processors/boletoProcessor');
+const { ValidationError } = require('../utils/errors');
 
 class TasksController {
     async index(req, res) {
@@ -95,6 +97,46 @@ class TasksController {
                 error: error.message
             });
             handleError(res, error);
+        }
+    }
+
+    async processTask(req, res) {
+        try {
+            const { id } = req.params;
+            
+            // Buscar a task
+            const task = await tasksService.getTaskById(id);
+            if (!task) {
+                throw new ValidationError('Tarefa não encontrada');
+            }
+
+            // Verificar se a task já foi processada
+            if (task.status !== 'pending') {
+                throw new ValidationError(`Tarefa não pode ser processada pois está com status ${task.status}`);
+            }
+
+            // Processar baseado no tipo
+            switch (task.type_name) {
+                case 'BOLETO':
+                    await BoletoProcessor.process(task);
+                    break;
+                // Adicionar outros tipos aqui
+                default:
+                    throw new ValidationError(`Tipo de tarefa ${task.type_name} não suportado para processamento manual`);
+            }
+
+            handleResponse(res, 200, { message: 'Tarefa processada com sucesso' });
+        } catch (error) {
+            logger.error('Erro ao processar tarefa', { 
+                taskId: req.params.id,
+                error: error.message 
+            });
+
+            if (error instanceof ValidationError) {
+                handleError(res, error, 400);
+            } else {
+                handleError(res, error);
+            }
         }
     }
 }
