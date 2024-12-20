@@ -49,4 +49,7 @@ router.delete('/:id',
     movementController.delete
 );
 
+// Emissão de boletos de um movimento
+router.post('/:id/boletos', authMiddleware, movementController.emitirBoletos);
+
 module.exports = router;

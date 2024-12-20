@@ -1,5 +1,6 @@
 const MovementService = require('../services/movementService');
 const MovementPaymentsService = require('../services/movementPaymentsService');
+const BoletoService = require('../services/boletoService');
 const { logger } = require('../middlewares/logger');
 
 class MovementController {
@@ -219,6 +220,42 @@ class MovementController {
             const statusCode = error.statusCode || 500;
             res.status(statusCode).json({
                 message: error.message || 'Erro interno ao buscar payments de movimento',
+                error: process.env.NODE_ENV === 'development' ? error.stack : undefined
+            });
+        }
+    }
+
+    async emitirBoletos(req, res) {
+        try {
+            const { id } = req.params;
+
+            // Validar se o movimento existe (pode adicionar lógica adicional se necessário)
+            const movimento = await MovementService.findById(id);
+            if (!movimento) {
+                return res.status(404).json({
+                    message: 'Movimento não encontrado'
+                });
+            }
+
+            // Emitir boletos para o movimento
+            const boletosEmitidos = await BoletoService.emitirBoletosMovimento(id);
+
+            res.json({
+                message: 'Boletos emitidos com sucesso',
+                movimento: {
+                    movement_id: id
+                },
+                boletos: boletosEmitidos
+            });
+        } catch (error) {
+            logger.error('Erro ao emitir boletos do movimento', { 
+                movementId: req.params.id,
+                error: error.message
+            });
+            
+            const statusCode = error.statusCode || 500;
+            res.status(statusCode).json({
+                message: error.message || 'Erro interno ao emitir boletos do movimento',
                 error: process.env.NODE_ENV === 'development' ? error.stack : undefined
             });
         }

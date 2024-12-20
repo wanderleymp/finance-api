@@ -189,6 +189,48 @@ class BoletoRepository {
         }
     }
 
+    async updateBoletoStatus(boletoId, status, responseData) {
+        try {
+            const query = `
+                UPDATE boletos 
+                SET 
+                    status = $1, 
+                    response_data = $2, 
+                    updated_at = CURRENT_TIMESTAMP 
+                WHERE boleto_id = $3
+                RETURNING *
+            `;
+
+            const values = [
+                status, 
+                JSON.stringify(responseData), 
+                boletoId
+            ];
+
+            logger.info('Atualizando status do boleto', { 
+                boletoId, 
+                status, 
+                responseData 
+            });
+
+            const result = await this.pool.query(query, values);
+
+            if (result.rows.length === 0) {
+                throw new ValidationError('Boleto não encontrado', 'BOLETO_NOT_FOUND');
+            }
+
+            return result.rows[0];
+        } catch (error) {
+            logger.error('Erro ao atualizar status do boleto', {
+                boletoId,
+                status,
+                errorMessage: error.message
+            });
+
+            throw error;
+        }
+    }
+
     async deleteBoleto(boletoId) {
         try {
             const query = `
