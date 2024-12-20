@@ -119,6 +119,7 @@ app.use((req, res, next) => {
 });
 
 // Importar rotas
+const routes = require('./routes');
 const roadmapRoutes = require('./routes/roadmapRoutes');
 const personRoutes = require('./routes/personRoutes');
 const personDocumentRoutes = require('./routes/personDocumentRoutes');
@@ -134,19 +135,16 @@ const movementTypeRoutes = require('./routes/movementTypeRoutes');
 const movementStatusRoutes = require('./routes/movementStatusRoutes');
 const movementRoutes = require('./routes/movementRoutes');
 const itemRoutes = require('./routes/itemRoutes');
-const ServiceLc116Controller = require('./controllers/serviceLc116Controller');
-const serviceLc116Controller = new ServiceLc116Controller();
 const salesRoutes = require('./routes/salesRoutes');
 const paymentMethodsRoutes = require('./routes/paymentMethodsRoutes');
 const movementPaymentsRoutes = require('./routes/movementPaymentsRoutes');
 const installmentRoutes = require('./routes/installmentRoutes');
 const boletoRoutes = require('./routes/boletoRoutes');
+const tasksRoutes = require('./routes/tasksRoutes');
+const healthRoutes = require('./routes/healthRoutes');
 
-const routes = require('./routes');
-console.log('Rotas principais carregadas:', routes);
+// Registrar rotas
 app.use('/', routes);
-
-// Restaurar rotas individuais
 app.use('/roadmap', roadmapRoutes);
 app.use('/persons', personRoutes);
 app.use('/person-documents', personDocumentRoutes);
@@ -162,11 +160,16 @@ app.use('/movement-types', movementTypeRoutes);
 app.use('/movement-status', movementStatusRoutes);
 app.use('/movements', movementRoutes);
 app.use('/items', itemRoutes);
-app.use('/sales', salesRoutes());
+app.use('/sales', salesRoutes);
 app.use('/payment-methods', paymentMethodsRoutes);
 app.use('/movement-payments', movementPaymentsRoutes);
 app.use('/installments', installmentRoutes);
 app.use('/boletos', boletoRoutes);
+app.use('/tasks', tasksRoutes);
+app.use('/health', healthRoutes);
+
+const ServiceLc116Controller = require('./controllers/serviceLc116Controller');
+const serviceLc116Controller = new ServiceLc116Controller();
 
 app.use('/service-lc116', (req, res, next) => {
   const { method } = req;

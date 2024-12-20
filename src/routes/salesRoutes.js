@@ -1,18 +1,22 @@
 const express = require('express');
-const SalesController = require('../controllers/salesController');
+const salesController = require('../controllers/salesController');
+const movementController = require('../controllers/movementController');
+const { validateRequest } = require('../middlewares/requestValidator');
 const { authMiddleware } = require('../middlewares/auth');
 
-module.exports = () => {
-    const router = express.Router();
-    const salesController = new SalesController();
+const router = express.Router();
 
-    router.use(authMiddleware);
+// Adicionar middleware de autenticação para todas as rotas
+router.use(authMiddleware);
 
-    router.get('/', (req, res) => salesController.index(req, res));
-    router.get('/:id', (req, res) => salesController.show(req, res));
-    router.post('/', (req, res) => salesController.store(req, res));
-    router.put('/:id', (req, res) => salesController.update(req, res));
-    router.delete('/:id', (req, res) => salesController.destroy(req, res));
+// Rotas de vendas
+router.get('/', salesController.index.bind(salesController));
+router.get('/:id', salesController.show.bind(salesController));
+router.post('/', salesController.store.bind(salesController));
+router.put('/:id', salesController.update.bind(salesController));
+router.delete('/:id', salesController.destroy.bind(salesController));
 
-    return router;
-};
+// Rota para emitir boletos de um movimento
+router.post('/:id/boletos', movementController.emitirBoletos);
+
+module.exports = router;

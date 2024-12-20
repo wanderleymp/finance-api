@@ -1,24 +1,11 @@
 const express = require('express');
 const cors = require('cors');
 const { logger } = require('./middlewares/logger');
-const salesRoutes = require('./routes/salesRoutes');
+const tasksWorker = require('./workers/tasksWorker');
 
 const app = express();
 
-// Middlewares
-const corsOptions = {
-    origin: [
-        process.env.FRONTEND_URL || '*', 
-        'https://api.agilefinance.com.br',
-        'http://api.agilefinance.com.br'
-    ], 
-    methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'], 
-    allowedHeaders: ['Content-Type', 'Authorization', '*'], 
-    credentials: true 
-};
-
 // Configurações básicas
-app.use(cors(corsOptions));
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
@@ -46,14 +33,10 @@ app.use((err, req, res, next) => {
     });
 });
 
-// Rotas da aplicação
-app.use('/sales', salesRoutes);
-
-// Rota 404 para endpoints não encontrados
-app.use((req, res) => {
-    res.status(404).json({
-        success: false,
-        message: 'Endpoint não encontrado'
+// Inicia o worker de processamento de tarefas
+tasksWorker.start().catch(error => {
+    logger.error('Erro ao iniciar worker de tarefas', {
+        error: error.message
     });
 });
 

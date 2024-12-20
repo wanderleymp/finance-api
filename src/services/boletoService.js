@@ -1,6 +1,7 @@
 const logger = require('../middlewares/logger').logger;
 const { ValidationError } = require('../utils/errors');
 const boletoRepository = require('../repositories/boletoRepository');
+const TasksService = require('./tasksService');
 const axios = require('axios');
 
 class BoletoService {
@@ -15,10 +16,13 @@ class BoletoService {
 
             const newBoleto = await boletoRepository.createBoleto(defaultBoletoData);
             
-            // Emitir boleto via N8N
-            await this.emitirBoletoN8N(newBoleto, newBoleto.installment_id);
+            // Criar tarefa assíncrona para emissão do boleto
+            await TasksService.createTask('BOLETO', newBoleto.boleto_id, {
+                boleto_id: newBoleto.boleto_id,
+                installment_id: newBoleto.installment_id
+            });
             
-            logger.info('Boleto criado com sucesso', { 
+            logger.info('Boleto criado e enfileirado com sucesso', { 
                 boletoId: newBoleto.boleto_id 
             });
 
@@ -27,6 +31,45 @@ class BoletoService {
             logger.error('Erro ao criar boleto', {
                 boletoData,
                 errorMessage: error.message
+            });
+            throw error;
+        }
+    }
+
+    async processQueue() {
+        try {
+            const pendingItems = await TasksService.getPendingTasks('BOLETO');
+            
+            for (const item of pendingItems) {
+                try {
+                    await TasksService.updateTaskStatus(item.task_id, 'processing');
+                    
+                    const boleto = await boletoRepository.getBoletoById(item.data.boleto_id);
+                    await this.emitirBoletoN8N(boleto, item.data.installment_id);
+                    
+                    await TasksService.updateTaskStatus(item.task_id, 'completed');
+                    
+                    logger.info('Boleto processado com sucesso', {
+                        boletoId: item.data.boleto_id,
+                        taskId: item.task_id
+                    });
+                } catch (error) {
+                    logger.error('Erro ao processar boleto da fila', {
+                        boletoId: item.data.boleto_id,
+                        taskId: item.task_id,
+                        error: error.message
+                    });
+                    
+                    await TasksService.updateTaskStatus(
+                        item.task_id,
+                        'failed',
+                        error.message
+                    );
+                }
+            }
+        } catch (error) {
+            logger.error('Erro ao processar fila de boletos', {
+                error: error.message
             });
             throw error;
         }
@@ -429,4 +472,4 @@ class BoletoService {
     }
 }
 
-module.exports = new BoletoService();
+module.exports = BoletoService;

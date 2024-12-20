@@ -199,4 +199,4 @@ class InstallmentService {
   }
 }
 
-module.exports = new InstallmentService();
+module.exports = InstallmentService;

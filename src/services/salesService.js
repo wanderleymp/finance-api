@@ -3,7 +3,6 @@ const MovementsService = require('./movementsService');
 
 class SalesService {
     constructor() {
-        this.movementsService = new MovementsService();
         this.MOVEMENT_TYPE_ID_SALES = 1; // Tipo de movimento para vendas
     }
 
@@ -20,7 +19,7 @@ class SalesService {
             };
 
             // Delega criação para movementsService
-            const movement = await this.movementsService.create(movementData);
+            const movement = await MovementsService.create(movementData);
 
             logger.info('Venda criada com sucesso', { 
                 movementId: movement.movement_id 
@@ -44,7 +43,7 @@ class SalesService {
                 limit 
             });
 
-            const result = await this.movementsService.list(
+            const result = await MovementsService.list(
                 { ...filters, movement_type_id: this.MOVEMENT_TYPE_ID_SALES }, 
                 page, 
                 limit
@@ -69,7 +68,7 @@ class SalesService {
         try {
             logger.info('Buscando venda por ID', { id });
 
-            const sale = await this.movementsService.getById(
+            const sale = await MovementsService.getById(
                 id, 
                 this.MOVEMENT_TYPE_ID_SALES
             );
@@ -98,7 +97,7 @@ class SalesService {
                 data: updateData 
             });
 
-            const updatedMovement = await this.movementsService.update(
+            const updatedMovement = await MovementsService.update(
                 id, 
                 {
                     ...updateData,
@@ -125,7 +124,7 @@ class SalesService {
         try {
             logger.info('Deletando venda', { id });
 
-            const deletedMovement = await this.movementsService.delete(
+            const deletedMovement = await MovementsService.delete(
                 id, 
                 this.MOVEMENT_TYPE_ID_SALES
             );

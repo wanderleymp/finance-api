@@ -53,12 +53,14 @@ class SalesController {
 
     async store(req, res) {
         try {
-            logger.info('Criando nova venda', { body: req.body });
+            const saleData = req.body;
             
-            const newSale = await this.salesService.create(req.body);
+            logger.info('Iniciando criação de venda', { saleData });
+            
+            const newSale = await this.salesService.create(saleData);
             
             logger.info('Venda criada com sucesso', { 
-                movementId: newSale.movement_id 
+                saleId: newSale.id 
             });
             
             handleResponse(res, 201, newSale);
@@ -66,7 +68,7 @@ class SalesController {
             logger.error('Erro ao criar venda', {
                 errorMessage: error.message,
                 errorStack: error.stack,
-                body: req.body
+                saleData: req.body
             });
             handleError(res, error);
         }
@@ -75,13 +77,17 @@ class SalesController {
     async update(req, res) {
         try {
             const { id } = req.params;
+            const saleData = req.body;
             
-            logger.info('Atualizando venda', { id, body: req.body });
+            logger.info('Iniciando atualização de venda', { 
+                id, 
+                saleData 
+            });
             
-            const updatedSale = await this.salesService.update(id, req.body);
+            const updatedSale = await this.salesService.update(id, saleData);
             
             logger.info('Venda atualizada com sucesso', { 
-                movementId: updatedSale.movement_id 
+                saleId: id 
             });
             
             handleResponse(res, 200, updatedSale);
@@ -90,7 +96,7 @@ class SalesController {
                 errorMessage: error.message,
                 errorStack: error.stack,
                 id: req.params.id,
-                body: req.body
+                saleData: req.body
             });
             handleError(res, error);
         }
@@ -100,15 +106,17 @@ class SalesController {
         try {
             const { id } = req.params;
             
-            logger.info('Deletando venda', { id });
+            logger.info('Iniciando exclusão de venda', { id });
             
-            const deletedSale = await this.salesService.delete(id);
+            await this.salesService.delete(id);
             
-            logger.info('Venda deletada com sucesso', { id });
+            logger.info('Venda excluída com sucesso', { 
+                saleId: id 
+            });
             
-            handleResponse(res, 200, deletedSale);
+            handleResponse(res, 204);
         } catch (error) {
-            logger.error('Erro ao deletar venda', {
+            logger.error('Erro ao excluir venda', {
                 errorMessage: error.message,
                 errorStack: error.stack,
                 id: req.params.id
@@ -118,4 +126,5 @@ class SalesController {
     }
 }
 
-module.exports = SalesController;
+// Exportar uma instância do controller
+module.exports = new SalesController();
