@@ -49,7 +49,21 @@ router.delete('/:id',
     movementController.delete
 );
 
-// Emissão de boletos de um movimento
-router.post('/:id/boletos', authMiddleware, movementController.emitirBoletos);
+// Rotas de boletos
+router.get('/:id/boletos', 
+    validateRequest(movementSchema.getMovementById, 'params'),
+    movementController.listBoletos
+);
+
+router.post('/:id/boletos', 
+    validateRequest(movementSchema.getMovementById, 'params'),
+    movementController.emitirBoletos
+);
+
+// Rotas de parcelas
+router.get('/:id/installments', 
+    validateRequest(movementSchema.getMovementById, 'params'),
+    movementController.listInstallments
+);
 
 module.exports = router;

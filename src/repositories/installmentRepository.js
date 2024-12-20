@@ -29,6 +29,7 @@ class InstallmentRepository {
                     b.generated_at
                 FROM installments i
                 LEFT JOIN boletos b ON b.installment_id = i.installment_id
+                LEFT JOIN payments p ON i.payment_id = p.payment_id
                 WHERE 1=1
             `;
             const params = [];
@@ -45,6 +46,13 @@ class InstallmentRepository {
             if (filters.payment_id) {
                 query += ` AND i.payment_id = $${paramCount}`;
                 params.push(filters.payment_id);
+                paramCount++;
+            }
+
+            // Filtro por movement_id
+            if (filters.movement_id) {
+                query += ` AND p.movement_id = $${paramCount}`;
+                params.push(filters.movement_id);
                 paramCount++;
             }
 
@@ -72,9 +80,11 @@ class InstallmentRepository {
             const countQuery = `
                 SELECT COUNT(DISTINCT i.installment_id) as total 
                 FROM installments i
+                LEFT JOIN payments p ON i.payment_id = p.payment_id
                 WHERE 1=1
                 ${filters.status ? ` AND i.status = '${filters.status}'` : ''}
                 ${filters.payment_id ? ` AND i.payment_id = ${filters.payment_id}` : ''}
+                ${filters.movement_id ? ` AND p.movement_id = ${filters.movement_id}` : ''}
                 ${filters.start_date ? ` AND i.due_date >= '${filters.start_date}'` : ''}
                 ${filters.end_date ? ` AND i.due_date <= '${filters.end_date}'` : ''}
             `;

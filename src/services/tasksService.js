@@ -2,6 +2,7 @@ const TasksRepository = require('../repositories/tasksRepository');
 const { logger } = require('../middlewares/logger');
 const { ValidationError } = require('../utils/errors');
 const PaginationHelper = require('../utils/paginationHelper');
+const BoletoProcessor = require('../processors/boletoProcessor'); // Adicione essa linha
 
 class TasksService {
     async listTasks({ page = 1, limit = 10, status, type }) {
@@ -163,6 +164,55 @@ class TasksService {
             logger.error('Erro ao buscar tarefas pendentes', {
                 errorMessage: error.message,
                 limit
+            });
+            throw error;
+        }
+    }
+
+    async processQueue() {
+        try {
+            logger.info('Processando fila de tarefas');
+
+            // Buscar tarefas pendentes
+            const tasks = await this.getPendingTasks(10);
+            if (!tasks || tasks.length === 0) {
+                logger.info('Nenhuma tarefa pendente encontrada');
+                return;
+            }
+
+            logger.info(`Processando ${tasks.length} tarefas`);
+
+            // Processar cada tarefa
+            for (const task of tasks) {
+                try {
+                    switch (task.type_name) {
+                        case 'BOLETO':
+                            await BoletoProcessor.process(task);
+                            break;
+                        // Adicionar outros tipos aqui
+                        default:
+                            logger.warn(`Tipo de tarefa não suportado: ${task.type_name}`);
+                            continue;
+                    }
+
+                    await this.updateTaskStatus(task.task_id, 'completed');
+                    logger.info('Tarefa processada com sucesso', { 
+                        taskId: task.task_id,
+                        type: task.type_name
+                    });
+                } catch (error) {
+                    logger.error('Erro ao processar tarefa', {
+                        taskId: task.task_id,
+                        type: task.type_name,
+                        error: error.message
+                    });
+                    await this.updateTaskStatus(task.task_id, 'failed', error.message);
+                }
+            }
+        } catch (error) {
+            logger.error('Erro ao processar fila de tarefas', {
+                error: error.message,
+                stack: error.stack
             });
             throw error;
         }

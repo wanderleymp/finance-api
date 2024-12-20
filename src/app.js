@@ -2,6 +2,8 @@ const express = require('express');
 const cors = require('cors');
 const { logger } = require('./middlewares/logger');
 const tasksWorker = require('./workers/tasksWorker');
+const boletoRoutes = require('./modules/boletos/boleto.routes');
+const docsRoutes = require('./routes/docs.routes');
 
 const app = express();
 
@@ -19,6 +21,10 @@ app.use((req, res, next) => {
     });
     next();
 });
+
+// Rotas da API
+app.use('/boletos', boletoRoutes);
+app.use('/api/docs', docsRoutes);
 
 // Tratamento de erros global
 app.use((err, req, res, next) => {

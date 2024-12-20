@@ -11,7 +11,8 @@ class InstallmentController {
         page, 
         limit,
         status, 
-        payment_id, 
+        payment_id,
+        movement_id,
         start_date, 
         end_date 
       } = req.query;
@@ -20,14 +21,16 @@ class InstallmentController {
         page, 
         limit,
         status, 
-        payment_id, 
+        payment_id,
+        movement_id,
         start_date, 
         end_date 
       });
 
       const filters = {
         status, 
-        payment_id, 
+        payment_id,
+        movement_id: movement_id ? parseInt(movement_id) : undefined,
         start_date, 
         end_date
       };
@@ -42,12 +45,14 @@ class InstallmentController {
     } catch (error) {
       logger.error('Erro no controller de listagem de installments', { 
         query: req.query, 
-        error: error.message 
+        error: error.message,
+        stack: error.stack
       });
       
       const statusCode = error.status || 500;
       res.status(statusCode).json({ 
-        message: error.message || 'Erro interno do servidor' 
+        message: 'Erro ao buscar parcelas',
+        error: error.message
       });
     }
   }
@@ -66,12 +71,14 @@ class InstallmentController {
     } catch (error) {
       logger.error('Erro no controller de busca de installment', { 
         params: req.params, 
-        error: error.message 
+        error: error.message,
+        stack: error.stack
       });
       
       const statusCode = error.status || 500;
       res.status(statusCode).json({ 
-        message: error.message || 'Erro interno do servidor' 
+        message: 'Erro ao buscar parcela',
+        error: error.message
       });
     }
   }
@@ -85,12 +92,14 @@ class InstallmentController {
     } catch (error) {
       logger.error('Erro no controller de criação de installment', { 
         body: req.body, 
-        error: error.message 
+        error: error.message,
+        stack: error.stack
       });
       
       const statusCode = error.status || 500;
       res.status(statusCode).json({ 
-        message: error.message || 'Erro interno do servidor' 
+        message: 'Erro ao criar parcela',
+        error: error.message
       });
     }
   }
@@ -114,12 +123,14 @@ class InstallmentController {
       logger.error('Erro no controller de atualização de installment', { 
         params: req.params, 
         body: req.body,
-        error: error.message 
+        error: error.message,
+        stack: error.stack
       });
       
       const statusCode = error.status || 500;
       res.status(statusCode).json({ 
-        message: error.message || 'Erro interno do servidor' 
+        message: 'Erro ao atualizar parcela',
+        error: error.message
       });
     }
   }
@@ -138,12 +149,14 @@ class InstallmentController {
     } catch (error) {
       logger.error('Erro no controller de exclusão de installment', { 
         params: req.params, 
-        error: error.message 
+        error: error.message,
+        stack: error.stack
       });
       
       const statusCode = error.status || 500;
       res.status(statusCode).json({ 
-        message: error.message || 'Erro interno do servidor' 
+        message: 'Erro ao excluir parcela',
+        error: error.message
       });
     }
   }
@@ -173,12 +186,14 @@ class InstallmentController {
       logger.error('Erro no controller de listagem de boletos de installment', { 
         params: req.params,
         query: req.query, 
-        error: error.message 
+        error: error.message,
+        stack: error.stack
       });
       
       const statusCode = error.status || 500;
       res.status(statusCode).json({ 
-        message: error.message || 'Erro interno do servidor' 
+        message: 'Erro ao buscar boletos',
+        error: error.message
       });
     }
   }
@@ -197,12 +212,14 @@ class InstallmentController {
       logger.error('Erro no controller de criação de boleto para installment', { 
         params: req.params,
         body: req.body, 
-        error: error.message 
+        error: error.message,
+        stack: error.stack
       });
       
       const statusCode = error.status || 500;
       res.status(statusCode).json({ 
-        message: error.message || 'Erro interno do servidor' 
+        message: 'Erro ao criar boleto',
+        error: error.message
       });
     }
   }
@@ -217,12 +234,14 @@ class InstallmentController {
     } catch (error) {
       logger.error('Erro no controller de exclusão de boleto de installment', { 
         params: req.params,
-        error: error.message 
+        error: error.message,
+        stack: error.stack
       });
       
       const statusCode = error.status || 500;
       res.status(statusCode).json({ 
-        message: error.message || 'Erro interno do servidor' 
+        message: 'Erro ao excluir boleto',
+        error: error.message
       });
     }
   }

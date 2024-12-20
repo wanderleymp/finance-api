@@ -1,0 +1,340 @@
+openapi: 3.0.0
+info:
+  title: API de Boletos
+  description: API para gerenciamento de boletos bancários
+  version: 1.0.0
+
+components:
+  schemas:
+    Boleto:
+      type: object
+      properties:
+        boleto_id:
+          type: integer
+          description: ID único do boleto
+        installment_id:
+          type: integer
+          description: ID da parcela associada
+        due_date:
+          type: string
+          format: date
+          description: Data de vencimento
+        amount:
+          type: number
+          format: float
+          description: Valor do boleto
+        status:
+          type: string
+          enum: ['A Emitir', 'Emitido', 'Cancelado', 'Pago']
+          description: Status atual do boleto
+        url:
+          type: string
+          description: URL para visualização/download do boleto
+        barcode:
+          type: string
+          description: Código de barras do boleto
+        our_number:
+          type: string
+          description: Nosso número
+        description:
+          type: string
+          description: Descrição do boleto
+        created_at:
+          type: string
+          format: date-time
+          description: Data de criação
+        updated_at:
+          type: string
+          format: date-time
+          description: Data da última atualização
+      required:
+        - installment_id
+        - due_date
+        - amount
+
+    BoletoCreate:
+      type: object
+      properties:
+        installment_id:
+          type: integer
+          description: ID da parcela
+        due_date:
+          type: string
+          format: date
+          description: Data de vencimento
+        amount:
+          type: number
+          format: float
+          description: Valor do boleto
+        description:
+          type: string
+          description: Descrição do boleto
+      required:
+        - installment_id
+        - due_date
+        - amount
+
+    BoletoUpdate:
+      type: object
+      properties:
+        due_date:
+          type: string
+          format: date
+          description: Nova data de vencimento
+        amount:
+          type: number
+          format: float
+          description: Novo valor do boleto
+        status:
+          type: string
+          enum: ['A Emitir', 'Cancelado']
+          description: Novo status do boleto
+
+    BoletoCancel:
+      type: object
+      properties:
+        reason:
+          type: string
+          description: Motivo do cancelamento
+      required:
+        - reason
+
+    Error:
+      type: object
+      properties:
+        message:
+          type: string
+          description: Mensagem de erro
+        code:
+          type: string
+          description: Código do erro
+
+  responses:
+    NotFound:
+      description: Recurso não encontrado
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+    ValidationError:
+      description: Erro de validação
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+    UnauthorizedError:
+      description: Não autorizado
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+
+paths:
+  /boletos:
+    get:
+      summary: Lista boletos
+      description: Retorna uma lista paginada de boletos com filtros opcionais
+      tags:
+        - Boletos
+      parameters:
+        - in: query
+          name: page
+          schema:
+            type: integer
+            minimum: 1
+            default: 1
+          description: Número da página
+        - in: query
+          name: limit
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 100
+            default: 10
+          description: Itens por página
+        - in: query
+          name: status
+          schema:
+            type: string
+            enum: ['A Emitir', 'Emitido', 'Cancelado', 'Pago']
+          description: Filtrar por status
+        - in: query
+          name: start_date
+          schema:
+            type: string
+            format: date
+          description: Data inicial
+        - in: query
+          name: end_date
+          schema:
+            type: string
+            format: date
+          description: Data final
+        - in: query
+          name: movement_id
+          schema:
+            type: integer
+          description: ID do movimento
+      responses:
+        '200':
+          description: Lista de boletos
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/Boleto'
+                  meta:
+                    type: object
+                    properties:
+                      total:
+                        type: integer
+                      page:
+                        type: integer
+                      limit:
+                        type: integer
+                      pages:
+                        type: integer
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+
+    post:
+      summary: Cria novo boleto
+      description: Cria um novo boleto bancário
+      tags:
+        - Boletos
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/BoletoCreate'
+      responses:
+        '201':
+          description: Boleto criado
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Boleto'
+        '400':
+          $ref: '#/components/responses/ValidationError'
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+
+  /boletos/{id}:
+    parameters:
+      - in: path
+        name: id
+        required: true
+        schema:
+          type: integer
+        description: ID do boleto
+    
+    get:
+      summary: Obtém boleto por ID
+      description: Retorna os detalhes de um boleto específico
+      tags:
+        - Boletos
+      responses:
+        '200':
+          description: Detalhes do boleto
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Boleto'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+
+    put:
+      summary: Atualiza boleto
+      description: Atualiza os dados de um boleto existente
+      tags:
+        - Boletos
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/BoletoUpdate'
+      responses:
+        '200':
+          description: Boleto atualizado
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Boleto'
+        '400':
+          $ref: '#/components/responses/ValidationError'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+
+  /boletos/{id}/cancel:
+    parameters:
+      - in: path
+        name: id
+        required: true
+        schema:
+          type: integer
+        description: ID do boleto
+    
+    post:
+      summary: Cancela boleto
+      description: Cancela um boleto existente
+      tags:
+        - Boletos
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/BoletoCancel'
+      responses:
+        '200':
+          description: Boleto cancelado
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Boleto'
+        '400':
+          $ref: '#/components/responses/ValidationError'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+
+  /boletos/movimento/{movimentoId}:
+    parameters:
+      - in: path
+        name: movimentoId
+        required: true
+        schema:
+          type: integer
+        description: ID do movimento
+    
+    post:
+      summary: Emite boletos para movimento
+      description: Gera boletos para todas as parcelas de um movimento
+      tags:
+        - Boletos
+      responses:
+        '200':
+          description: Boletos emitidos
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Boleto'
+        '400':
+          $ref: '#/components/responses/ValidationError'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'

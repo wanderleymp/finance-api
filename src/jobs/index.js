@@ -1,15 +1,15 @@
 const cron = require('node-cron');
-const BoletoService = require('../services/boletoService');
+const TasksService = require('../services/tasksService');
 const { logger } = require('../middlewares/logger');
 
-// Processar tarefas de boleto a cada minuto
+// Processar tarefas pendentes a cada minuto
 cron.schedule('* * * * *', async () => {
     try {
-        logger.info('Iniciando processamento de tarefas de boleto');
-        await BoletoService.processQueue();
-        logger.info('Processamento de tarefas de boleto concluído');
+        logger.info('Iniciando processamento de tarefas pendentes');
+        await TasksService.processQueue();
+        logger.info('Processamento de tarefas concluído');
     } catch (error) {
-        logger.error('Erro ao processar tarefas de boleto', {
+        logger.error('Erro ao processar tarefas', {
             errorMessage: error.message
         });
     }

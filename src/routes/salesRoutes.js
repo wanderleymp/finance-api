@@ -1,8 +1,8 @@
 const express = require('express');
 const salesController = require('../controllers/salesController');
-const movementController = require('../controllers/movementController');
 const { validateRequest } = require('../middlewares/requestValidator');
 const { authMiddleware } = require('../middlewares/auth');
+const salesSchema = require('../schemas/salesSchema');
 
 const router = express.Router();
 
@@ -10,13 +10,30 @@ const router = express.Router();
 router.use(authMiddleware);
 
 // Rotas de vendas
-router.get('/', salesController.index.bind(salesController));
-router.get('/:id', salesController.show.bind(salesController));
-router.post('/', salesController.store.bind(salesController));
-router.put('/:id', salesController.update.bind(salesController));
-router.delete('/:id', salesController.destroy.bind(salesController));
+router.get('/', 
+    validateRequest(salesSchema.listSales, 'query'),
+    salesController.index
+);
 
-// Rota para emitir boletos de um movimento
-router.post('/:id/boletos', movementController.emitirBoletos);
+router.get('/:id', 
+    validateRequest(salesSchema.getSaleById, 'params'),
+    salesController.show
+);
+
+router.post('/', 
+    validateRequest(salesSchema.createSale, 'body'),
+    salesController.store
+);
+
+router.put('/:id', 
+    validateRequest(salesSchema.updateSale, 'body'),
+    validateRequest(salesSchema.getSaleById, 'params'),
+    salesController.update
+);
+
+router.delete('/:id', 
+    validateRequest(salesSchema.getSaleById, 'params'),
+    salesController.destroy
+);
 
 module.exports = router;

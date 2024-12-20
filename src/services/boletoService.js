@@ -191,6 +191,53 @@ class BoletoService {
             throw error;
         }
     }
+
+    async processQueue() {
+        try {
+            logger.info('Processando fila de boletos');
+
+            // Buscar tarefas pendentes do tipo BOLETO
+            const tasks = await TasksService.getPendingTasks(10);
+            if (!tasks || tasks.length === 0) {
+                logger.info('Nenhuma tarefa pendente encontrada');
+                return;
+            }
+
+            logger.info(`Processando ${tasks.length} tarefas`);
+
+            // Processar cada tarefa
+            for (const task of tasks) {
+                try {
+                    if (task.type_name === 'BOLETO') {
+                        const boleto = await this.getBoletoById(task.payload.boleto_id);
+                        if (!boleto) {
+                            throw new Error(`Boleto ${task.payload.boleto_id} não encontrado`);
+                        }
+
+                        await this.emitirBoletoN8N(boleto);
+                        await TasksService.updateTaskStatus(task.task_id, 'completed');
+
+                        logger.info('Tarefa processada com sucesso', { 
+                            taskId: task.task_id,
+                            boletoId: task.payload.boleto_id
+                        });
+                    }
+                } catch (error) {
+                    logger.error('Erro ao processar tarefa', {
+                        taskId: task.task_id,
+                        error: error.message
+                    });
+                    await TasksService.updateTaskStatus(task.task_id, 'failed', error.message);
+                }
+            }
+        } catch (error) {
+            logger.error('Erro ao processar fila de boletos', {
+                error: error.message,
+                stack: error.stack
+            });
+            throw error;
+        }
+    }
 }
 
 module.exports = new BoletoService();

@@ -202,6 +202,71 @@ class MovementController {
             handleError(res, error);
         }
     }
+
+    async listBoletos(req, res) {
+        try {
+            const { id } = req.params;
+            const { page, limit } = req.query;
+
+            const movement = await MovementService.findById(id);
+            if (!movement) {
+                return handleResponse(res, 404, { message: 'Movimento não encontrado' });
+            }
+
+            const boletos = await BoletoService.listBoletosByMovement(id, page, limit);
+            handleResponse(res, 200, boletos);
+        } catch (error) {
+            logger.error('Erro ao listar boletos do movimento', {
+                movementId: req.params.id,
+                error: error.message,
+                stack: error.stack
+            });
+            handleError(res, error);
+        }
+    }
+
+    async emitirBoletos(req, res) {
+        try {
+            const { id } = req.params;
+
+            const movement = await MovementService.findById(id);
+            if (!movement) {
+                return handleResponse(res, 404, { message: 'Movimento não encontrado' });
+            }
+
+            await BoletoService.emitirBoletosMovimento(id);
+            handleResponse(res, 200, { message: 'Boletos emitidos com sucesso' });
+        } catch (error) {
+            logger.error('Erro ao emitir boletos do movimento', {
+                movementId: req.params.id,
+                error: error.message,
+                stack: error.stack
+            });
+            handleError(res, error);
+        }
+    }
+
+    async listInstallments(req, res) {
+        try {
+            const { id } = req.params;
+            const { page, limit } = req.query;
+
+            const movement = await MovementService.findById(id);
+            if (!movement) {
+                return handleResponse(res, 404, { message: 'Movimento não encontrado' });
+            }
+
+            const installments = await this.movementPaymentsService.listInstallments(id, page, limit);
+            handleResponse(res, 200, installments);
+        } catch (error) {
+            logger.error('Erro ao listar parcelas do movimento', {
+                movementId: req.params.id,
+                error: error.message,
+                stack: error.stack
+            });
+            handleError(res, error);
+        }
+    }
 }
 
 module.exports = new MovementController();
