@@ -1,11 +1,11 @@
+const fs = require('fs');
+const path = require('path');
 const express = require('express');
 const cors = require('cors');
 const dotenv = require('dotenv');
 const helmet = require('helmet');
 const https = require('https');
 const http = require('http');
-const fs = require('fs');
-const path = require('path');
 
 const { httpLogger, logger } = require('./middlewares/logger');
 const { createRabbitMQConnection, checkRabbitMQHealth } = require('./config/rabbitmq');
@@ -71,7 +71,11 @@ const configureSecurityAndCORS = () => {
 
     // CORS restrito para produção
     app.use(cors({
-      origin: [process.env.FRONTEND_URL],
+      origin: [
+        process.env.FRONTEND_URL,
+        'https://api.agilefinance.com.br',
+        'http://api.agilefinance.com.br'
+      ],
       methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS'],
       allowedHeaders: ['Content-Type', 'Authorization'],
       credentials: true
@@ -293,11 +297,13 @@ function getAppVersion() {
 }
 
 const appVersion = getAppVersion();
+console.log('DEBUG: App Version', appVersion);
 logger.info(`🚀 Inicializando Finance API`, {
   version: appVersion.version,
   branch: appVersion.branch,
   buildDate: appVersion.build_date
 });
+console.log('DEBUG: Logger Info chamado');
 
 // Função de inicialização do servidor
 async function startServer() {

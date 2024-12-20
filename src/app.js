@@ -7,7 +7,11 @@ const app = express();
 
 // Middlewares
 const corsOptions = {
-    origin: process.env.FRONTEND_URL || '*', 
+    origin: [
+        process.env.FRONTEND_URL || '*', 
+        'https://api.agilefinance.com.br',
+        'http://api.agilefinance.com.br'
+    ], 
     methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'], 
     allowedHeaders: ['Content-Type', 'Authorization', '*'], 
     credentials: true 
