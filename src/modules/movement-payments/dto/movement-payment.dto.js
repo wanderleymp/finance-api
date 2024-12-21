@@ -6,7 +6,8 @@ class MovementPaymentResponseDTO {
         this.total_amount = data.total_amount;
         this.status = data.status;
         this.method_name = data.method_name;
-        this.movement_description = data.movement_description;
+        this.created_at = data.created_at;
+        this.updated_at = data.updated_at;
     }
 }
 

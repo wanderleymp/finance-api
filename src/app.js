@@ -10,6 +10,8 @@ const authRoutes = require('./modules/auth/auth.routes');
 const boletoRoutes = require('./modules/boletos/boleto.routes');
 const healthRoutes = require('./modules/health/health.routes');
 const movementRoutes = require('./modules/movements/movement.module');
+const movementPaymentRoutes = require('./modules/movement-payments/movement-payment.module');
+const paymentMethodRoutes = require('./modules/payment-methods/payment-method.module');
 const userRoutes = require('./modules/users/user.routes');
 
 const app = express();
@@ -39,6 +41,8 @@ app.use(authMiddleware);
 // Rotas autenticadas
 app.use('/boletos', boletoRoutes);
 app.use('/movements', movementRoutes);
+app.use('/movement-payments', movementPaymentRoutes);
+app.use('/payment-methods', paymentMethodRoutes);
 app.use('/users', userRoutes);
 
 // Tratamento de erros global

@@ -8,7 +8,7 @@ class IMovementPaymentService {
      * @param {number} id - ID do pagamento
      * @returns {Promise<object>} Pagamento encontrado
      */
-    async getPaymentById(id) {
+    async findById(id) {
         throw new Error('Method not implemented');
     }
 
@@ -19,7 +19,35 @@ class IMovementPaymentService {
      * @param {object} filters - Filtros aplicados
      * @returns {Promise<object>} Lista paginada de pagamentos
      */
-    async listPayments(page, limit, filters) {
+    async findAll(page, limit, filters) {
+        throw new Error('Method not implemented');
+    }
+
+    /**
+     * Cria um novo pagamento
+     * @param {object} data - Dados do pagamento
+     * @returns {Promise<object>} Pagamento criado
+     */
+    async create(data) {
+        throw new Error('Method not implemented');
+    }
+
+    /**
+     * Atualiza um pagamento existente
+     * @param {number} id - ID do pagamento
+     * @param {object} data - Dados do pagamento
+     * @returns {Promise<object>} Pagamento atualizado
+     */
+    async update(id, data) {
+        throw new Error('Method not implemented');
+    }
+
+    /**
+     * Remove um pagamento
+     * @param {number} id - ID do pagamento
+     * @returns {Promise<object>} Pagamento removido
+     */
+    async delete(id) {
         throw new Error('Method not implemented');
     }
 }
