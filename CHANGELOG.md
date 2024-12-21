@@ -134,6 +134,18 @@
 - Estrutura base de arquivos
 - Configuração do ambiente de desenvolvimento
 
+## [1.0.3] - 2024-12-21
+### Added
+- Implementação completa de movement payments
+- Novo módulo de payment methods
+- Validação aprimorada com novo middleware
+- Script de build para Docker com suporte multi-plataforma
+
+### Changed
+- Refatoração da estrutura de movement payments
+- Melhorias nas rotas e controllers
+- Otimização do processo de build
+
 ## [Unreleased]
 
 ### Added
