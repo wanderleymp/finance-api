@@ -240,9 +240,10 @@ class MovementService extends IMovementService {
 
             // Prepara os filtros
             const preparedFilters = this.prepareFilters(filters);
+            const detailed = filters.detailed === 'true' || filters.detailed === true;
 
             // Tenta buscar do cache
-            const cacheKey = `movements:${page}:${limit}:${JSON.stringify(preparedFilters)}`;
+            const cacheKey = `movements:${page}:${limit}:${JSON.stringify(preparedFilters)}:${detailed}`;
             const cachedData = await this.cacheService?.get(cacheKey);
             if (cachedData) {
                 return cachedData;
@@ -253,7 +254,7 @@ class MovementService extends IMovementService {
 
             // Para cada movimento, busca os dados relacionados
             const enrichedData = await Promise.all(movements.map(async movement => {
-                return this.findById(movement.movement_id, preparedFilters.detailed || false);
+                return this.findById(movement.movement_id, detailed);
             }));
 
             const result = {
@@ -500,6 +501,7 @@ class MovementService extends IMovementService {
      */
     prepareFilters(filters) {
         const preparedFilters = { ...filters };
+        delete preparedFilters.detailed; // Remove o detailed dos filtros pois não é usado na query
 
         // Converte strings para números
         if (preparedFilters.person_id) {
