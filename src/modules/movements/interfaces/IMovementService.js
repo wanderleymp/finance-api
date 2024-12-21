@@ -25,6 +25,8 @@ class IMovementService {
      * @param {string} [filters.search] - Busca textual em description e full_name
      * @param {string} [filters.movement_date_start] - Data inicial
      * @param {string} [filters.movement_date_end] - Data final
+     * @param {string} [filters.order_by] - Campo para ordenação (movement_id, created_at, movement_date, description, value, person_name, type_name, status_name)
+     * @param {string} [filters.order_direction] - Direção da ordenação (ASC ou DESC)
      * @returns {Promise<object>} Lista paginada de movimentos
      */
     async findAll(page, limit, filters) {

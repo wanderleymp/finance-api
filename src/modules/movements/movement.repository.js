@@ -18,6 +18,25 @@ class MovementRepository extends BaseRepository {
             const conditions = [];
             let paramCount = 1;
 
+            // Mapeamento de colunas permitidas para ordenação
+            const allowedOrderColumns = {
+                'movement_id': 'm.movement_id',
+                'created_at': 'm.created_at',
+                'movement_date': 'm.movement_date',
+                'description': 'm.description',
+                'total_amount': 'm.total_amount',
+                'person_name': 'p.full_name',
+                'type_name': 'mt.type_name',
+                'status_name': 'ms.status_name'
+            };
+
+            // Construção da cláusula ORDER BY
+            let orderByClause = 'ORDER BY m.created_at DESC';  // Default ordering
+            if (filters.order_by && allowedOrderColumns[filters.order_by]) {
+                const direction = (filters.order_direction || '').toUpperCase() === 'ASC' ? 'ASC' : 'DESC';
+                orderByClause = `ORDER BY ${allowedOrderColumns[filters.order_by]} ${direction}`;
+            }
+
             // Filtros básicos (exceto datas e valores)
             if (filters.person_id) {
                 conditions.push(`m.person_id = $${paramCount}`);
@@ -39,12 +58,12 @@ class MovementRepository extends BaseRepository {
 
             // Filtro por valor (range)
             if (filters.value_min) {
-                conditions.push(`m.value >= $${paramCount}`);
+                conditions.push(`m.total_amount >= $${paramCount}`);
                 queryParams.push(filters.value_min);
                 paramCount++;
             }
             if (filters.value_max) {
-                conditions.push(`m.value <= $${paramCount}`);
+                conditions.push(`m.total_amount <= $${paramCount}`);
                 queryParams.push(filters.value_max);
                 paramCount++;
             }
@@ -92,7 +111,7 @@ class MovementRepository extends BaseRepository {
                     ms.status_name as status_name
                 ${baseQuery}
                 ${whereClause}
-                ORDER BY m.created_at DESC
+                ${orderByClause}
                 LIMIT $${paramCount} OFFSET $${paramCount + 1}
             `;
 
@@ -149,6 +168,25 @@ class MovementRepository extends BaseRepository {
             const conditions = [];
             let paramCount = 1;
 
+            // Mapeamento de colunas permitidas para ordenação
+            const allowedOrderColumns = {
+                'movement_id': 'm.movement_id',
+                'created_at': 'm.created_at',
+                'movement_date': 'm.movement_date',
+                'description': 'm.description',
+                'total_amount': 'm.total_amount',
+                'person_name': 'p.full_name',
+                'type_name': 'mt.type_name',
+                'status_name': 'ms.status_name'
+            };
+
+            // Construção da cláusula ORDER BY
+            let orderByClause = 'ORDER BY m.created_at DESC';  // Default ordering
+            if (filters.order_by && allowedOrderColumns[filters.order_by]) {
+                const direction = (filters.order_direction || '').toUpperCase() === 'ASC' ? 'ASC' : 'DESC';
+                orderByClause = `ORDER BY ${allowedOrderColumns[filters.order_by]} ${direction}`;
+            }
+
             // Filtros básicos (exceto datas e valores)
             if (filters.person_id) {
                 conditions.push(`m.person_id = $${paramCount}`);
@@ -170,12 +208,12 @@ class MovementRepository extends BaseRepository {
 
             // Filtro por valor (range)
             if (filters.value_min) {
-                conditions.push(`m.value >= $${paramCount}`);
+                conditions.push(`m.total_amount >= $${paramCount}`);
                 queryParams.push(filters.value_min);
                 paramCount++;
             }
             if (filters.value_max) {
-                conditions.push(`m.value <= $${paramCount}`);
+                conditions.push(`m.total_amount <= $${paramCount}`);
                 queryParams.push(filters.value_max);
                 paramCount++;
             }
@@ -260,7 +298,7 @@ class MovementRepository extends BaseRepository {
                     p.person_id,
                     mt.movement_type_id,
                     ms.movement_status_id
-                ORDER BY m.created_at DESC
+                ${orderByClause}
                 LIMIT $${paramCount} OFFSET $${paramCount + 1}
             `;
 
