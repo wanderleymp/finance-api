@@ -11,6 +11,13 @@ const boletoSwagger = yaml.load(
     )
 );
 
+const healthSwagger = yaml.load(
+    fs.readFileSync(
+        path.join(__dirname, '../modules/health/docs/swagger.yaml'),
+        'utf8'
+    )
+);
+
 // Configuração base do Swagger
 const swaggerDefinition = {
     openapi: '3.0.0',
@@ -47,25 +54,24 @@ const swaggerDefinition = {
 
 // Mesclar documentações
 const mergedPaths = {
-    ...boletoSwagger.paths
+    ...boletoSwagger.paths,
+    ...healthSwagger.paths
     // Adicionar outros módulos aqui
 };
 
 const mergedComponents = {
     ...swaggerDefinition.components,
-    ...boletoSwagger.components
-    // Adicionar outros módulos aqui
+    ...(boletoSwagger.components || {}),
+    ...(healthSwagger.components || {})
 };
 
 const options = {
-    swaggerDefinition: {
+    definition: {
         ...swaggerDefinition,
         paths: mergedPaths,
         components: mergedComponents
     },
-    apis: [] // Não usamos anotações nos arquivos
+    apis: [] // Não precisamos disso já que estamos usando YAML
 };
 
-const swaggerSpec = swaggerJsdoc(options);
-
-module.exports = swaggerSpec;
+module.exports = swaggerJsdoc(options);

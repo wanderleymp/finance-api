@@ -1,0 +1,239 @@
+paths:
+  /health:
+    get:
+      tags:
+        - Health
+      summary: Verificar saúde geral do sistema
+      description: Retorna o status geral do sistema, incluindo banco de dados e métricas do sistema
+      security: []  # Endpoint público, não requer autenticação
+      responses:
+        '200':
+          description: Sistema saudável
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: string
+                    enum: [healthy, unhealthy]
+                    example: healthy
+                  timestamp:
+                    type: string
+                    format: date-time
+                    example: '2024-12-21T12:00:00Z'
+                  version:
+                    type: string
+                    example: '1.0.4'
+                  databases:
+                    type: object
+                    properties:
+                      AgileDB:
+                        type: object
+                        properties:
+                          success:
+                            type: boolean
+                            example: true
+                          responseTime:
+                            type: string
+                            example: '50ms'
+                          version:
+                            type: string
+                            example: 'PostgreSQL 14.5'
+                          activeConnections:
+                            type: string
+                            example: '5'
+                  system:
+                    type: object
+                    properties:
+                      cpu:
+                        type: object
+                        properties:
+                          count:
+                            type: integer
+                            example: 8
+                          model:
+                            type: string
+                            example: 'Intel(R) Core(TM) i7'
+                          speed:
+                            type: string
+                            example: '2.6 GHz'
+                          usage:
+                            type: array
+                            items:
+                              type: object
+                              properties:
+                                usage:
+                                  type: string
+                                  example: '45.2%'
+                      memory:
+                        type: object
+                        properties:
+                          total:
+                            type: string
+                            example: '16.00 GB'
+                          free:
+                            type: string
+                            example: '8.50 GB'
+                          used:
+                            type: string
+                            example: '7.50 GB'
+                          usagePercentage:
+                            type: string
+                            example: '46.88%'
+                      os:
+                        type: object
+                        properties:
+                          platform:
+                            type: string
+                            example: 'darwin'
+                          type:
+                            type: string
+                            example: 'Darwin'
+                          release:
+                            type: string
+                            example: '20.0.0'
+                          arch:
+                            type: string
+                            example: 'x64'
+                          uptime:
+                            type: string
+                            example: '5d 12h 30m 15s'
+        '503':
+          description: Sistema não saudável
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: string
+                    enum: [unhealthy]
+                    example: unhealthy
+        '500':
+          description: Erro interno do servidor
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: string
+                    enum: [error]
+                    example: error
+                  message:
+                    type: string
+                    example: 'Internal server error during health check'
+                  error:
+                    type: string
+                    example: 'Database connection failed'
+
+  /health/databases:
+    get:
+      tags:
+        - Health
+      summary: Verificar status dos bancos de dados
+      description: Retorna informações detalhadas sobre o estado dos bancos de dados
+      security: []  # Endpoint público, não requer autenticação
+      responses:
+        '200':
+          description: Status dos bancos de dados
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: string
+                    enum: [healthy, unhealthy]
+                    example: healthy
+                  timestamp:
+                    type: string
+                    format: date-time
+                    example: '2024-12-21T12:00:00Z'
+                  databases:
+                    type: object
+                    properties:
+                      AgileDB:
+                        type: object
+                        properties:
+                          success:
+                            type: boolean
+                            example: true
+                          responseTime:
+                            type: string
+                            example: '50ms'
+                          version:
+                            type: string
+                            example: 'PostgreSQL 14.5'
+                          activeConnections:
+                            type: string
+                            example: '5'
+        '503':
+          description: Bancos de dados não saudáveis
+        '500':
+          description: Erro ao verificar bancos de dados
+
+  /health/system:
+    get:
+      tags:
+        - Health
+      summary: Verificar métricas do sistema
+      description: Retorna métricas detalhadas sobre o estado do sistema operacional e processo
+      security: []  # Endpoint público, não requer autenticação
+      responses:
+        '200':
+          description: Métricas do sistema
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: string
+                    enum: [success]
+                    example: success
+                  timestamp:
+                    type: string
+                    format: date-time
+                    example: '2024-12-21T12:00:00Z'
+                  system:
+                    type: object
+                    properties:
+                      cpu:
+                        type: object
+                        properties:
+                          count:
+                            type: integer
+                            example: 8
+                          model:
+                            type: string
+                            example: 'Intel(R) Core(TM) i7'
+                          speed:
+                            type: string
+                            example: '2.6 GHz'
+                          usage:
+                            type: array
+                            items:
+                              type: object
+                              properties:
+                                usage:
+                                  type: string
+                                  example: '45.2%'
+                      memory:
+                        type: object
+                        properties:
+                          total:
+                            type: string
+                            example: '16.00 GB'
+                          free:
+                            type: string
+                            example: '8.50 GB'
+                          used:
+                            type: string
+                            example: '7.50 GB'
+                          usagePercentage:
+                            type: string
+                            example: '46.88%'
+        '500':
+          description: Erro ao coletar métricas do sistema
