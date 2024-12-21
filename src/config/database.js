@@ -3,7 +3,7 @@ const { logger } = require('../middlewares/logger');
 require('dotenv').config();
 
 const createDatabaseConnection = (databaseUrl, name) => {
-  logger.info(`Configurando conexão com banco ${name}`);
+  logger.info(`Configurando conexão com banco ${name}`, {});
   
   // Remover parâmetro SSL da URL
   const cleanUrl = databaseUrl.replace(/\?.*$/, '');
@@ -48,22 +48,6 @@ const createDatabaseConnection = (databaseUrl, name) => {
           database: name, 
           error: connectionError.message 
         };
-      }
-    },
-    async query(text, params) {
-      const client = await pool.connect();
-      try {
-        const start = Date.now();
-        const result = await client.query(text, params);
-        const duration = Date.now() - start;
-        logger.info(`Consulta executada`, {
-          query: text,
-          duration,
-          rows: result.rowCount
-        });
-        return result;
-      } finally {
-        client.release();
       }
     }
   };

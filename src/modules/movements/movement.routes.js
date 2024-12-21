@@ -1,26 +1,48 @@
-const express = require('express');
+const { Router } = require('express');
 const { validateRequest } = require('../../middlewares/requestValidator');
 const { authMiddleware } = require('../../middlewares/auth');
-const movementSchema = require('./schemas/movement.schema');
+const { 
+    listMovementsSchema,
+    createMovementSchema,
+    updateMovementSchema,
+    updateStatusSchema
+} = require('./validators/movement.validator');
 
 /**
- * @param {import('./movement.controller')} movementController 
+ * @param {MovementController} controller 
  */
-module.exports = (movementController) => {
-    const router = express.Router();
+module.exports = (controller) => {
+    const router = Router();
 
     // Middleware de autenticação para todas as rotas
     router.use(authMiddleware);
 
-    // Rotas
     router.get('/', 
-        validateRequest(movementSchema.listMovements, 'query'),
-        movementController.index.bind(movementController)
+        validateRequest(listMovementsSchema, 'query'),
+        controller.index.bind(controller)
     );
 
-    router.get('/:id',
-        validateRequest(movementSchema.getMovementById, 'params'),
-        movementController.show.bind(movementController)
+    router.get('/:id', 
+        controller.show.bind(controller)
+    );
+
+    router.post('/', 
+        validateRequest(createMovementSchema),
+        controller.create.bind(controller)
+    );
+
+    router.put('/:id', 
+        validateRequest(updateMovementSchema),
+        controller.update.bind(controller)
+    );
+
+    router.delete('/:id', 
+        controller.delete.bind(controller)
+    );
+
+    router.patch('/:id/status', 
+        validateRequest(updateStatusSchema),
+        controller.updateStatus.bind(controller)
     );
 
     return router;

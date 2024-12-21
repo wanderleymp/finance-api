@@ -9,6 +9,7 @@ const { logger } = require('./middlewares/logger');
 const healthRoutes = require('./modules/health/health.routes');
 const authRoutes = require('./modules/auth/auth.routes');
 const userRoutes = require('./modules/users/user.routes');
+const movementRoutes = require('./modules/movements/movement.module');
 
 const app = express();
 
@@ -36,6 +37,9 @@ app.use('/users', userRoutes);
 
 const { authMiddleware } = require('./middlewares/auth');
 app.use(authMiddleware); // Aplica autenticação para todas as rotas abaixo
+
+// Rotas autenticadas
+app.use('/movements', movementRoutes);
 
 // Tratamento de erros global
 app.use(errorHandler);
