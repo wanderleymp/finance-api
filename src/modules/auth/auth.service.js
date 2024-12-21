@@ -4,7 +4,7 @@ const IAuthService = require('./interfaces/IAuthService');
 const LoginAudit = require('./models/loginAudit');
 const { AuthResponseDTO } = require('./dto/login.dto');
 const UserService = require('../users/user.service');
-const logger = require('../../middlewares/logger');
+const { logger } = require('../../middlewares/logger');
 const redis = require('../../config/redis');
 
 class AuthService extends IAuthService {
@@ -13,29 +13,19 @@ class AuthService extends IAuthService {
         this.userService = UserService;
     }
 
-    async login(username, password, twoFactorToken = null) {
+    async login(username, password, twoFactorToken = null, ip, userAgent) {
         try {
-            // Registrar tentativa de login
-            await LoginAudit.create({
-                username,
-                success: false,
-                ip: null, // Será preenchido no controller
-                userAgent: null // Será preenchido no controller
-            });
-
-            // Verificar tentativas falhas
-            const failedAttempts = await LoginAudit.getFailedAttempts(
-                username,
-                process.env.LOGIN_BLOCK_DURATION
-            );
-
-            if (failedAttempts >= process.env.MAX_LOGIN_ATTEMPTS) {
-                throw new Error('Too many failed attempts. Try again later.');
-            }
-
-            // Buscar usuário
+            // Buscar usuário primeiro
             const user = await this.userService.findByUsername(username);
             if (!user) {
+                await LoginAudit.create({
+                    username,
+                    success: false,
+                    ip,
+                    userAgent,
+                    userId: null
+                });
+                logger.error('User not found', { username });
                 throw new Error('Invalid credentials');
             }
 
@@ -45,64 +35,73 @@ class AuthService extends IAuthService {
                 await LoginAudit.create({
                     username,
                     success: false,
-                    ip: null,
-                    userAgent: null
+                    ip,
+                    userAgent,
+                    userId: user.user_id
                 });
+                logger.error('Invalid password', { username });
                 throw new Error('Invalid credentials');
             }
 
-            // Verificar 2FA se estiver habilitado
-            if (user.enable_2fa) {
-                if (!twoFactorToken) {
-                    await LoginAudit.create({
-                        username,
-                        success: false,
-                        ip: null,
-                        userAgent: null
-                    });
-                    throw new Error('Two factor token is required');
-                }
+            // Registrar login bem-sucedido
+            await LoginAudit.create({
+                username,
+                success: true,
+                ip,
+                userAgent,
+                userId: user.user_id
+            });
 
-                const isValid2FA = await this.verify2FA(user.user_id, twoFactorToken);
-                if (!isValid2FA) {
-                    throw new Error('Invalid two factor token');
+            // Verificar 2FA se estiver habilitado
+            if (user.enable_2fa && process.env.ENABLE_2FA === 'true') {
+                if (!twoFactorToken) {
+                    throw new Error('Two factor authentication token is required');
                 }
+                // TODO: Implementar verificação do token 2FA
             }
 
             // Gerar tokens
-            const accessToken = this.generateAccessToken(user);
-            const refreshToken = this.generateRefreshToken(user);
+            const accessToken = jwt.sign(
+                {
+                    user_id: user.user_id,
+                    username: user.username,
+                    profile_id: user.profile_id
+                },
+                process.env.JWT_SECRET,
+                { expiresIn: process.env.JWT_EXPIRATION }
+            );
+
+            const refreshToken = jwt.sign(
+                {
+                    user_id: user.user_id,
+                    username: user.username
+                },
+                process.env.JWT_SECRET, // Usando a mesma chave para refresh token
+                { expiresIn: process.env.REFRESH_TOKEN_EXPIRATION }
+            );
+
+            // Calcular expiração em segundos
+            const refreshExpirationInSeconds = 7 * 24 * 60 * 60; // 7 dias em segundos
 
             // Salvar refresh token no Redis
             await redis.set(
                 `refresh_token:${refreshToken}`,
                 user.user_id,
                 'EX',
-                process.env.REFRESH_TOKEN_EXPIRATION
+                refreshExpirationInSeconds
             );
-
-            // Atualizar último login
-            await this.userService.update(user.user_id, {
-                last_login: new Date().toISOString()
-            });
-
-            // Registrar login bem-sucedido
-            await LoginAudit.create({
-                username,
-                success: true,
-                ip: null,
-                userAgent: null
-            });
-
-            logger.info('Login successful', { username });
 
             return new AuthResponseDTO({
                 accessToken,
                 refreshToken,
-                user
+                user: {
+                    user_id: user.user_id,
+                    username: user.username,
+                    profile_id: user.profile_id
+                }
             });
         } catch (error) {
-            logger.error('Login error', { username, error });
+            logger.error('Login error', { error: error.message, username });
             throw error;
         }
     }
@@ -115,78 +114,43 @@ class AuthService extends IAuthService {
                 throw new Error('Invalid refresh token');
             }
 
+            // Verificar e decodificar o token
+            const decoded = jwt.verify(refreshToken, process.env.JWT_SECRET);
+
             // Buscar usuário
-            const user = await this.userService.findById(userId);
+            const user = await this.userService.findById(decoded.user_id);
             if (!user) {
                 throw new Error('User not found');
             }
 
-            // Gerar novos tokens
-            const newAccessToken = this.generateAccessToken(user);
-            const newRefreshToken = this.generateRefreshToken(user);
-
-            // Invalidar token antigo e salvar novo
-            await redis.del(`refresh_token:${refreshToken}`);
-            await redis.set(
-                `refresh_token:${newRefreshToken}`,
-                user.user_id,
-                'EX',
-                process.env.REFRESH_TOKEN_EXPIRATION
+            // Gerar novo access token
+            const newAccessToken = jwt.sign(
+                {
+                    user_id: user.user_id,
+                    username: user.username,
+                    profile_id: user.profile_id
+                },
+                process.env.JWT_SECRET,
+                { expiresIn: process.env.JWT_EXPIRATION }
             );
 
             return {
-                accessToken: newAccessToken,
-                refreshToken: newRefreshToken
+                accessToken: newAccessToken
             };
         } catch (error) {
-            logger.error('Refresh token error', { error });
+            logger.error('Error refreshing token', { error });
             throw error;
-        }
-    }
-
-    async validateToken(token) {
-        try {
-            return jwt.verify(token, process.env.JWT_SECRET);
-        } catch (error) {
-            throw new Error('Invalid token');
         }
     }
 
     async logout(refreshToken) {
         try {
+            // Remover refresh token do Redis
             await redis.del(`refresh_token:${refreshToken}`);
         } catch (error) {
-            logger.error('Logout error', { error });
+            logger.error('Error during logout', { error });
             throw error;
         }
-    }
-
-    generateAccessToken(user) {
-        return jwt.sign(
-            {
-                user_id: user.user_id,
-                username: user.username,
-                profile_id: user.profile_id
-            },
-            process.env.JWT_SECRET,
-            { expiresIn: process.env.ACCESS_TOKEN_EXPIRATION }
-        );
-    }
-
-    generateRefreshToken(user) {
-        return jwt.sign(
-            {
-                user_id: user.user_id,
-                type: 'refresh'
-            },
-            process.env.JWT_REFRESH_SECRET,
-            { expiresIn: process.env.REFRESH_TOKEN_EXPIRATION }
-        );
-    }
-
-    async verify2FA(userId, token) {
-        // Implementar verificação 2FA
-        return true; // Placeholder
     }
 }
 

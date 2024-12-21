@@ -1,6 +1,7 @@
 const bcrypt = require('bcrypt');
 const IUserService = require('./interfaces/IUserService');
 const userRepository = require('./user.repository');
+const { logger } = require('../../middlewares/logger');
 
 class UserService extends IUserService {
     constructor() {
@@ -12,6 +13,7 @@ class UserService extends IUserService {
         try {
             return await this.repository.findById(id);
         } catch (error) {
+            logger.error('Error finding user by ID', { error: error.message, id });
             throw error;
         }
     }
@@ -20,6 +22,7 @@ class UserService extends IUserService {
         try {
             return await this.repository.findByUsername(username);
         } catch (error) {
+            logger.error('Error finding user by username', { error: error.message, username });
             throw error;
         }
     }
@@ -36,6 +39,7 @@ class UserService extends IUserService {
 
             return await this.repository.create(userData);
         } catch (error) {
+            logger.error('Error creating user', { error: error.message });
             throw error;
         }
     }
@@ -49,6 +53,7 @@ class UserService extends IUserService {
 
             return await this.repository.update(id, data);
         } catch (error) {
+            logger.error('Error updating user', { error: error.message, id });
             throw error;
         }
     }
@@ -57,6 +62,7 @@ class UserService extends IUserService {
         try {
             await this.repository.delete(id);
         } catch (error) {
+            logger.error('Error deleting user', { error: error.message, id });
             throw error;
         }
     }
@@ -65,6 +71,7 @@ class UserService extends IUserService {
         try {
             return await this.repository.list(filters);
         } catch (error) {
+            logger.error('Error listing users', { error: error.message });
             throw error;
         }
     }

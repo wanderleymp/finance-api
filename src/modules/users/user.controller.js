@@ -5,12 +5,11 @@ class UserController {
         try {
             const user = await userService.create(req.body);
             res.status(201).json({
-                status: 'success',
+                message: 'User created successfully',
                 data: user
             });
         } catch (error) {
             res.status(400).json({
-                status: 'error',
                 message: error.message
             });
         }
@@ -19,13 +18,12 @@ class UserController {
     async update(req, res) {
         try {
             const user = await userService.update(req.params.id, req.body);
-            res.json({
-                status: 'success',
+            res.status(200).json({
+                message: 'User updated successfully',
                 data: user
             });
         } catch (error) {
             res.status(400).json({
-                status: 'error',
                 message: error.message
             });
         }
@@ -34,13 +32,11 @@ class UserController {
     async delete(req, res) {
         try {
             await userService.delete(req.params.id);
-            res.json({
-                status: 'success',
+            res.status(200).json({
                 message: 'User deleted successfully'
             });
         } catch (error) {
             res.status(400).json({
-                status: 'error',
                 message: error.message
             });
         }
@@ -51,17 +47,14 @@ class UserController {
             const user = await userService.findById(req.params.id);
             if (!user) {
                 return res.status(404).json({
-                    status: 'error',
                     message: 'User not found'
                 });
             }
-            res.json({
-                status: 'success',
+            res.status(200).json({
                 data: user
             });
         } catch (error) {
             res.status(400).json({
-                status: 'error',
                 message: error.message
             });
         }
@@ -70,13 +63,11 @@ class UserController {
     async list(req, res) {
         try {
             const users = await userService.list(req.query);
-            res.json({
-                status: 'success',
+            res.status(200).json({
                 data: users
             });
         } catch (error) {
             res.status(400).json({
-                status: 'error',
                 message: error.message
             });
         }

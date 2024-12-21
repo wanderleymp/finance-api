@@ -1,14 +1,14 @@
 const { systemDatabase } = require('../../../config/database');
-const logger = require('../../../middlewares/logger');
+const { logger } = require('../../../middlewares/logger');
 
 class LoginAudit {
-    static async create({ username, success, ip, userAgent }) {
+    static async create({ username, success, ip, userAgent, userId }) {
         try {
             await systemDatabase.query(
                 `INSERT INTO login_audit 
-                (username, success, ip_address, user_agent, created_at)
-                VALUES ($1, $2, $3, $4, NOW())`,
-                [username, success, ip, userAgent]
+                (user_id, success, ip_address, user_agent)
+                VALUES ($1, $2, $3, $4)`,
+                [userId, success, ip, userAgent]
             );
         } catch (error) {
             logger.error('Error registering login audit', { error });
@@ -21,9 +21,9 @@ class LoginAudit {
             const result = await systemDatabase.query(
                 `SELECT COUNT(*) 
                 FROM login_audit 
-                WHERE username = $1 
+                WHERE user_id = (SELECT user_id FROM users WHERE username = $1)
                 AND success = false 
-                AND created_at > NOW() - INTERVAL '${minutes} minutes'`,
+                AND attempt_timestamp > NOW() - INTERVAL '${minutes} minutes'`,
                 [username]
             );
             return parseInt(result.rows[0].count);
