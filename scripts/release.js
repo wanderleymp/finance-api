@@ -48,6 +48,16 @@ function updateChangelog(version) {
     fs.writeFileSync(changelogPath, updatedChangelog);
 }
 
+// Função para verificar se a tag existe
+function tagExists(version) {
+    try {
+        execSync(`git rev-parse v${version}`, { stdio: 'ignore' });
+        return true;
+    } catch (error) {
+        return false;
+    }
+}
+
 // Função principal de release
 async function release() {
     try {
@@ -58,9 +68,13 @@ async function release() {
             process.exit(1);
         }
 
-        // 2. Pegar a versão atual
-        const currentVersion = require('../package.json').version;
-        console.log(`Current version: ${currentVersion}`);
+        // 2. Pegar a versão atual e verificar se já existe
+        let currentVersion = require('../package.json').version;
+        while (tagExists(currentVersion)) {
+            console.log(`Version ${currentVersion} already exists, incrementing...`);
+            currentVersion = updateVersion('patch');
+        }
+        console.log(`Using version: ${currentVersion}`);
 
         // 3. Build e teste
         console.log('Running tests...');
