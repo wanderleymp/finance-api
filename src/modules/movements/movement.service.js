@@ -107,6 +107,16 @@ class MovementService extends IMovementService {
             }
 
             // Enriquece com os dados detalhados
+            const [payments, installments] = await Promise.all([
+                this.movementPaymentRepository.findByMovementId(movement.movement_id),
+                this.installmentRepository.findByMovementId(movement.movement_id)
+            ]);
+
+            // Calcula totais
+            const total_paid = payments
+                .filter(p => p.status_id === 2) // Status "Confirmado"
+                .reduce((sum, p) => sum + p.amount, 0);
+
             const enrichedPerson = person ? {
                 ...person,
                 contacts: await this.personRepository.findContacts(person.person_id)
@@ -114,7 +124,11 @@ class MovementService extends IMovementService {
 
             return {
                 ...result,
-                person: enrichedPerson
+                person: enrichedPerson,
+                payments,
+                installments,
+                total_paid,
+                remaining_amount: movement.total_amount - total_paid
             };
         } catch (error) {
             logger.error('Erro ao buscar movimento por ID', {

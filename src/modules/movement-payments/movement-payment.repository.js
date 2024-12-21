@@ -13,10 +13,12 @@ class MovementPaymentRepository extends BaseRepository {
         try {
             const query = `
                 SELECT 
-                    mp.*
+                    mp.*,
+                    ps.name as status_name
                 FROM movement_payments mp
+                LEFT JOIN payment_status ps ON ps.status_id = mp.status_id
                 WHERE mp.movement_id = $1
-                ORDER BY mp.payment_date
+                ORDER BY mp.created_at DESC
             `;
 
             const { rows } = await this.pool.query(query, [movementId]);
