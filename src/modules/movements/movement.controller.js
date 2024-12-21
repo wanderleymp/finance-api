@@ -15,7 +15,7 @@ class MovementController {
      */
     async index(req, res, next) {
         try {
-            const { page = 1, limit = 10, detailed = true, ...filters } = req.query;
+            const { page = 1, limit = 10, detailed = false, ...filters } = req.query;
             
             logger.info('Controller: Listando movimentos', { 
                 page, 
@@ -43,10 +43,17 @@ class MovementController {
     async show(req, res, next) {
         try {
             const { id } = req.params;
+            const { detailed = false } = req.query;
             
-            logger.info('Controller: Buscando movimento por ID', { id });
+            logger.info('Controller: Buscando movimento por ID', { 
+                id,
+                detailed 
+            });
 
-            const movement = await this.service.getMovementById(parseInt(id));
+            const movement = await this.service.getMovementById(
+                parseInt(id),
+                detailed === 'true'
+            );
 
             return res.json(movement);
         } catch (error) {

@@ -19,14 +19,17 @@ class MovementService extends IMovementService {
     /**
      * Busca movimento por ID
      */
-    async getMovementById(id) {
+    async getMovementById(id, detailed = false) {
         try {
-            logger.info('Serviço: Buscando movimento por ID', { id });
+            logger.info('Serviço: Buscando movimento por ID', { id, detailed });
             
             let movement;
+            const cacheKey = this.cacheService?.generateKey(
+                `${this.cachePrefix}:${detailed ? 'detail' : 'basic'}`, 
+                { id }
+            );
             
             if (this.cacheService) {
-                const cacheKey = this.cacheService.generateKey(`${this.cachePrefix}:detail`, { id });
                 movement = await this.cacheService.get(cacheKey);
                 
                 if (movement) {
@@ -35,7 +38,10 @@ class MovementService extends IMovementService {
                 }
             }
 
-            const data = await this.movementRepository.findById(id);
+            const data = detailed 
+                ? await this.movementRepository.findByIdDetailed(id)
+                : await this.movementRepository.findById(id);
+
             if (!data) {
                 throw new ValidationError('Movimento não encontrado');
             }
@@ -43,8 +49,11 @@ class MovementService extends IMovementService {
             movement = new MovementResponseDTO(data);
 
             if (this.cacheService) {
-                const cacheKey = this.cacheService.generateKey(`${this.cachePrefix}:detail`, { id });
-                await this.cacheService.set(cacheKey, movement, this.cacheTTL.detail);
+                await this.cacheService.set(
+                    cacheKey, 
+                    movement, 
+                    detailed ? this.cacheTTL.detail : this.cacheTTL.list
+                );
             }
             
             return movement;
@@ -60,7 +69,7 @@ class MovementService extends IMovementService {
     /**
      * Lista movimentos com paginação e filtros
      */
-    async findAll(page = 1, limit = 10, filters = {}, detailed = true) {
+    async findAll(page = 1, limit = 10, filters = {}, detailed = false) {
         try {
             logger.info('Service: Iniciando listagem de movimentos', {
                 page,
@@ -97,54 +106,43 @@ class MovementService extends IMovementService {
             }
 
             let cached;
+            const cacheKey = this.cacheService?.generateKey(
+                `${this.cachePrefix}:${detailed ? 'detail' : 'basic'}:list`, 
+                { page, limit, ...preparedFilters }
+            );
             
             if (this.cacheService) {
-                const cacheKey = this.cacheService.generateKey(`${this.cachePrefix}:list`, { 
-                    page, 
-                    limit, 
-                    filters: preparedFilters, 
-                    detailed 
-                });
                 cached = await this.cacheService.get(cacheKey);
-            }
-            
-            if (cached) {
-                logger.info('Service: Retornando movimentos do cache', { 
-                    page, 
-                    limit,
-                    filters: preparedFilters,
-                    detailed 
-                });
-                return cached;
+                if (cached) {
+                    logger.info('Service: Retornando lista do cache');
+                    return cached;
+                }
             }
 
-            const movements = detailed 
+            const result = detailed
                 ? await this.movementRepository.findAllDetailed(page, limit, preparedFilters)
                 : await this.movementRepository.findAll(page, limit, preparedFilters);
 
             const response = {
-                ...movements,
-                data: movements.data.map(movement => new MovementResponseDTO(movement))
+                data: result.data.map(item => new MovementResponseDTO(item)),
+                pagination: result.pagination
             };
 
             if (this.cacheService) {
-                const cacheKey = this.cacheService.generateKey(`${this.cachePrefix}:list`, { 
-                    page, 
-                    limit, 
-                    filters: preparedFilters, 
-                    detailed 
-                });
-                await this.cacheService.set(cacheKey, response, this.cacheTTL.list);
+                await this.cacheService.set(
+                    cacheKey, 
+                    response, 
+                    detailed ? this.cacheTTL.detail : this.cacheTTL.list
+                );
             }
 
             return response;
         } catch (error) {
-            logger.error('Service: Erro ao listar movimentos', {
+            logger.error('Erro ao listar movimentos no serviço', {
                 error: error.message,
                 page,
                 limit,
-                filters,
-                detailed
+                filters
             });
             throw error;
         }
