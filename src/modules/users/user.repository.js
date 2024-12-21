@@ -2,9 +2,14 @@ const { systemDatabase } = require('../../config/database');
 const IUserRepository = require('./interfaces/IUserRepository');
 
 class UserRepository extends IUserRepository {
+    constructor() {
+        super();
+        this.pool = systemDatabase.pool;
+    }
+
     async findById(id) {
         try {
-            const result = await systemDatabase.query(
+            const result = await this.pool.query(
                 `SELECT 
                     u.user_id,
                     u.username,
@@ -27,7 +32,7 @@ class UserRepository extends IUserRepository {
 
     async findByUsername(username) {
         try {
-            const result = await systemDatabase.query(
+            const result = await this.pool.query(
                 `SELECT 
                     u.user_id,
                     u.username,
@@ -51,7 +56,7 @@ class UserRepository extends IUserRepository {
 
     async create(data) {
         try {
-            const result = await systemDatabase.query(
+            const result = await this.pool.query(
                 `INSERT INTO users (
                     username,
                     password,
@@ -129,7 +134,7 @@ class UserRepository extends IUserRepository {
             // Adicionar ID do usuário como último parâmetro
             values.push(id);
 
-            const result = await systemDatabase.query(
+            const result = await this.pool.query(
                 `UPDATE users 
                 SET ${setClause.join(', ')}
                 WHERE user_id = $${paramCount}
@@ -153,7 +158,7 @@ class UserRepository extends IUserRepository {
 
     async delete(id) {
         try {
-            await systemDatabase.query(
+            await this.pool.query(
                 'DELETE FROM users WHERE user_id = $1',
                 [id]
             );
@@ -184,7 +189,7 @@ class UserRepository extends IUserRepository {
                 ? `WHERE ${conditions.join(' AND ')}` 
                 : '';
 
-            const result = await systemDatabase.query(
+            const result = await this.pool.query(
                 `SELECT 
                     u.user_id,
                     u.username,
