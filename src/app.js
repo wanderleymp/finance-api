@@ -1,28 +1,27 @@
 const express = require('express');
 const cors = require('cors');
 const helmet = require('helmet');
-const compression = require('compression');
 const { errorHandler } = require('./middlewares/errorHandler');
+const { authMiddleware } = require('./middlewares/auth');
 const { logger } = require('./middlewares/logger');
 
-// Importando rotas dos módulos diretamente
-const healthRoutes = require('./modules/health/health.routes');
+// Importando rotas dos módulos
 const authRoutes = require('./modules/auth/auth.routes');
-const userRoutes = require('./modules/users/user.routes');
+const boletoRoutes = require('./modules/boletos/boleto.routes');
+const healthRoutes = require('./modules/health/health.routes');
 const movementRoutes = require('./modules/movements/movement.module');
+const userRoutes = require('./modules/users/user.routes');
 
 const app = express();
 
 // Configurações básicas
 app.use(helmet());
 app.use(cors());
-app.use(compression());
 app.use(express.json());
-app.use(express.urlencoded({ extended: true }));
 
-// Logging middleware
+// Middleware de log
 app.use((req, res, next) => {
-    logger.info('Requisição recebida', {
+    logger.info('Nova requisição', {
         method: req.method,
         url: req.url,
         ip: req.ip
@@ -30,16 +29,17 @@ app.use((req, res, next) => {
     next();
 });
 
-// Rotas dos módulos
-app.use('/health', healthRoutes);
+// Rotas públicas
 app.use('/auth', authRoutes);
-app.use('/users', userRoutes);
+app.use('/health', healthRoutes);
 
-const { authMiddleware } = require('./middlewares/auth');
-app.use(authMiddleware); // Aplica autenticação para todas as rotas abaixo
+// Middleware de autenticação
+app.use(authMiddleware);
 
 // Rotas autenticadas
+app.use('/boletos', boletoRoutes);
 app.use('/movements', movementRoutes);
+app.use('/users', userRoutes);
 
 // Tratamento de erros global
 app.use(errorHandler);

@@ -1,13 +1,23 @@
+const MovementRepository = require('./movement.repository');
+const PersonRepository = require('../persons/person.repository');
+const MovementTypeRepository = require('../movement-types/movement-type.repository');
+const MovementStatusRepository = require('../movement-statuses/movement-status.repository');
+const MovementPaymentRepository = require('../movement-payments/movement-payment.repository');
+const InstallmentRepository = require('../installments/installment.repository');
 const { logger } = require('../../middlewares/logger');
 const { ValidationError } = require('../../utils/errors');
 const IMovementService = require('./interfaces/IMovementService');
 const { MovementResponseDTO } = require('./dto/movement.dto');
-const MovementRepository = require('./movement.repository');
 
 class MovementService extends IMovementService {
     constructor({ movementRepository, cacheService }) {
         super();
-        this.movementRepository = movementRepository;
+        this.movementRepository = movementRepository || new MovementRepository();
+        this.personRepository = new PersonRepository();
+        this.movementTypeRepository = new MovementTypeRepository();
+        this.movementStatusRepository = new MovementStatusRepository();
+        this.movementPaymentRepository = new MovementPaymentRepository();
+        this.installmentRepository = new InstallmentRepository();
         this.cacheService = cacheService;
         this.cachePrefix = 'movements';
         this.cacheTTL = {
@@ -39,7 +49,7 @@ class MovementService extends IMovementService {
             }
 
             const data = detailed 
-                ? await this.movementRepository.findByIdDetailed(id)
+                ? await this.findById(id, true)
                 : await this.movementRepository.findById(id);
 
             if (!data) {
@@ -67,6 +77,91 @@ class MovementService extends IMovementService {
     }
 
     /**
+     * Busca movimento por ID
+     */
+    async findById(id, detailed = false) {
+        try {
+            // Tenta buscar do cache
+            const cacheKey = `movement:${id}:${detailed}`;
+            const cachedData = await this.cacheService?.get(cacheKey);
+            if (cachedData) {
+                return cachedData;
+            }
+
+            // Busca o movimento básico
+            const movement = await this.movementRepository.findById(id);
+            if (!movement) {
+                throw new ValidationError('Movimento não encontrado');
+            }
+
+            // Busca dados básicos relacionados (sempre)
+            const [person, type, status] = await Promise.all([
+                this.personRepository.findById(movement.person_id),
+                this.movementTypeRepository.findById(movement.movement_type_id),
+                this.movementStatusRepository.findById(movement.movement_status_id)
+            ]);
+
+            // Enriquece com dados básicos
+            const enrichedMovement = {
+                ...movement,
+                person_name: person?.full_name,
+                type_name: type?.type_name,
+                status_name: status?.status_name
+            };
+
+            // Se não precisa de detalhes, retorna com os dados básicos
+            if (!detailed) {
+                return enrichedMovement;
+            }
+
+            // Busca dados detalhados
+            const [
+                personContacts,
+                payments,
+                installments
+            ] = await Promise.all([
+                person ? this.personRepository.findContacts(person.person_id) : null,
+                this.movementPaymentRepository.findByMovementId(movement.movement_id),
+                this.installmentRepository.findByMovementId(movement.movement_id)
+            ]);
+
+            // Calcula totais
+            const total_paid = payments
+                .filter(p => p.status_id === 2) // Status "Confirmado"
+                .reduce((sum, p) => sum + p.amount, 0);
+
+            // Enriquece com dados detalhados
+            const detailedMovement = {
+                ...enrichedMovement,
+                // Dados detalhados da pessoa
+                person_email: personContacts?.find(c => c.contact_type === 'EMAIL' && c.is_main)?.contact_value,
+                person_phone: personContacts?.find(c => c.contact_type === 'PHONE' && c.is_main)?.contact_value,
+                // Dados detalhados do tipo e status
+                type_description: type?.description,
+                status_description: status?.description,
+                // Listas relacionadas
+                payments,
+                installments,
+                // Campos calculados
+                total_paid,
+                remaining_amount: movement.total_amount - total_paid
+            };
+
+            // Salva no cache
+            await this.cacheService?.set(cacheKey, detailedMovement, this.cacheTTL.detail);
+
+            return detailedMovement;
+        } catch (error) {
+            logger.error('Erro ao buscar movimento por ID', {
+                error: error.message,
+                id,
+                detailed
+            });
+            throw error;
+        }
+    }
+
+    /**
      * Lista movimentos com paginação e filtros
      */
     async findAll(page = 1, limit = 10, filters = {}, detailed = false) {
@@ -78,65 +173,103 @@ class MovementService extends IMovementService {
                 detailed
             });
 
+            // Valida os filtros
+            this.validateFilters(filters);
+
             // Prepara os filtros
-            const preparedFilters = { ...filters };
+            const preparedFilters = this.prepareFilters(filters);
 
-            // Converte as datas para o formato correto
-            if (preparedFilters.movement_date_start) {
-                const startDate = new Date(preparedFilters.movement_date_start);
-                if (isNaN(startDate.getTime())) {
-                    throw new ValidationError('Data inicial inválida');
-                }
-                preparedFilters.movement_date_start = startDate.toISOString().split('T')[0];
-                logger.debug('Data inicial convertida', { 
-                    original: filters.movement_date_start,
-                    converted: preparedFilters.movement_date_start 
-                });
-            }
-            if (preparedFilters.movement_date_end) {
-                const endDate = new Date(preparedFilters.movement_date_end);
-                if (isNaN(endDate.getTime())) {
-                    throw new ValidationError('Data final inválida');
-                }
-                preparedFilters.movement_date_end = endDate.toISOString().split('T')[0];
-                logger.debug('Data final convertida', { 
-                    original: filters.movement_date_end,
-                    converted: preparedFilters.movement_date_end 
-                });
-            }
-
-            let cached;
+            // Tenta buscar do cache
             const cacheKey = this.cacheService?.generateKey(
                 `${this.cachePrefix}:${detailed ? 'detail' : 'basic'}:list`, 
                 { page, limit, ...preparedFilters }
             );
             
             if (this.cacheService) {
-                cached = await this.cacheService.get(cacheKey);
+                const cached = await this.cacheService.get(cacheKey);
                 if (cached) {
                     logger.info('Service: Retornando lista do cache');
                     return cached;
                 }
             }
 
-            const result = detailed
-                ? await this.movementRepository.findAllDetailed(page, limit, preparedFilters)
-                : await this.movementRepository.findAll(page, limit, preparedFilters);
+            // Busca os movimentos básicos
+            const movements = await this.movementRepository.findAll(page, limit, preparedFilters);
 
-            const response = {
-                data: result.data.map(item => new MovementResponseDTO(item)),
-                pagination: result.pagination
-            };
-
-            if (this.cacheService) {
-                await this.cacheService.set(
-                    cacheKey, 
-                    response, 
-                    detailed ? this.cacheTTL.detail : this.cacheTTL.list
-                );
+            // Se não precisa de detalhes, retorna apenas os movimentos
+            if (!detailed) {
+                return movements;
             }
 
-            return response;
+            // Para cada movimento, busca os dados relacionados
+            const enrichedData = await Promise.all(movements.data.map(async movement => {
+                return this.findById(movement.movement_id, true);
+            }));
+
+            const result = {
+                data: enrichedData,
+                pagination: movements.pagination
+            };
+
+            // Salva no cache
+            await this.cacheService?.set(
+                cacheKey, 
+                result, 
+                detailed ? this.cacheTTL.detail : this.cacheTTL.list
+            );
+
+            return result;
+        } catch (error) {
+            logger.error('Erro ao listar movimentos no serviço', {
+                error: error.message,
+                page,
+                limit,
+                filters
+            });
+            throw error;
+        }
+    }
+
+    /**
+     * Lista todos os movimentos
+     */
+    async findAll(page = 1, limit = 10, filters = {}) {
+        try {
+            // Valida os filtros
+            this.validateFilters(filters);
+
+            // Prepara os filtros
+            const preparedFilters = this.prepareFilters(filters);
+
+            // Tenta buscar do cache
+            const cacheKey = `movements:${page}:${limit}:${JSON.stringify(preparedFilters)}`;
+            const cachedData = await this.cacheService?.get(cacheKey);
+            if (cachedData) {
+                return cachedData;
+            }
+
+            // Busca os movimentos com paginação
+            const { data: movements, total } = await this.movementRepository.findAll(page, limit, preparedFilters);
+
+            // Para cada movimento, busca os dados relacionados
+            const enrichedData = await Promise.all(movements.map(async movement => {
+                return this.findById(movement.movement_id, preparedFilters.detailed || false);
+            }));
+
+            const result = {
+                data: enrichedData,
+                pagination: {
+                    page: parseInt(page),
+                    limit: parseInt(limit),
+                    total: parseInt(total),
+                    total_pages: Math.ceil(total / limit)
+                }
+            };
+
+            // Salva no cache
+            await this.cacheService?.set(cacheKey, result, this.cacheTTL.list);
+
+            return result;
         } catch (error) {
             logger.error('Erro ao listar movimentos no serviço', {
                 error: error.message,
@@ -334,6 +467,58 @@ class MovementService extends IMovementService {
         if (currentStatus === 'PAID' && newStatus !== 'CANCELED') {
             throw new ValidationError('Um movimento pago só pode ser cancelado');
         }
+    }
+
+    /**
+     * Valida os filtros
+     */
+    validateFilters(filters) {
+        const { 
+            value_min,
+            value_max,
+            movement_date_start,
+            movement_date_end
+        } = filters;
+
+        // Valida range de valores
+        if (value_min && value_max && parseFloat(value_min) > parseFloat(value_max)) {
+            throw new ValidationError('O valor mínimo não pode ser maior que o valor máximo');
+        }
+
+        // Valida range de datas
+        if (movement_date_start && movement_date_end) {
+            const start = new Date(movement_date_start);
+            const end = new Date(movement_date_end);
+            if (start > end) {
+                throw new ValidationError('A data inicial não pode ser maior que a data final');
+            }
+        }
+    }
+
+    /**
+     * Prepara os filtros para a query
+     */
+    prepareFilters(filters) {
+        const preparedFilters = { ...filters };
+
+        // Converte strings para números
+        if (preparedFilters.person_id) {
+            preparedFilters.person_id = parseInt(preparedFilters.person_id);
+        }
+        if (preparedFilters.movement_type_id) {
+            preparedFilters.movement_type_id = parseInt(preparedFilters.movement_type_id);
+        }
+        if (preparedFilters.movement_status_id) {
+            preparedFilters.movement_status_id = parseInt(preparedFilters.movement_status_id);
+        }
+        if (preparedFilters.value_min) {
+            preparedFilters.value_min = parseFloat(preparedFilters.value_min);
+        }
+        if (preparedFilters.value_max) {
+            preparedFilters.value_max = parseFloat(preparedFilters.value_max);
+        }
+
+        return preparedFilters;
     }
 }
 
