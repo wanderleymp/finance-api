@@ -17,7 +17,8 @@
     "db:migrate": "node src/db/migrate.js",
     "roadmap:populate": "node scripts/populate_roadmap_full.js",
     "migrate": "node src/scripts/migrate.js",
-    "docker:build": "docker build --platform linux/amd64 -t wanderleymp/finance-api:1.0.3 ."
+    "docker:build": "docker build --platform linux/amd64 -t wanderleymp/finance-api:1.0.3 .",
+    "release": "node scripts/release.js"
   },
   "keywords": [
     "finance",
