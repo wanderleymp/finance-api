@@ -1,7 +1,7 @@
 const bcrypt = require('bcrypt');
 const jwt = require('jsonwebtoken');
 const IAuthService = require('./interfaces/IAuthService');
-const LoginAudit = require('./models/loginAudit');
+const LoginAuditRepository = require('./repositories/loginAudit.repository');
 const { AuthResponseDTO } = require('./dto/login.dto');
 const UserService = require('../users/user.service');
 const { logger } = require('../../middlewares/logger');
@@ -11,6 +11,7 @@ class AuthService extends IAuthService {
     constructor() {
         super();
         this.userService = UserService;
+        this.loginAuditRepository = new LoginAuditRepository();
     }
 
     async login(username, password, twoFactorToken = null, ip, userAgent) {
@@ -18,7 +19,7 @@ class AuthService extends IAuthService {
             // Buscar usuário primeiro
             const user = await this.userService.findByUsername(username);
             if (!user) {
-                await LoginAudit.create({
+                await this.loginAuditRepository.create({
                     username,
                     success: false,
                     ip,
@@ -32,7 +33,7 @@ class AuthService extends IAuthService {
             // Verificar senha
             const isValidPassword = await bcrypt.compare(password, user.password);
             if (!isValidPassword) {
-                await LoginAudit.create({
+                await this.loginAuditRepository.create({
                     username,
                     success: false,
                     ip,
@@ -44,7 +45,7 @@ class AuthService extends IAuthService {
             }
 
             // Registrar login bem-sucedido
-            await LoginAudit.create({
+            await this.loginAuditRepository.create({
                 username,
                 success: true,
                 ip,
@@ -76,19 +77,16 @@ class AuthService extends IAuthService {
                     user_id: user.user_id,
                     username: user.username
                 },
-                process.env.JWT_SECRET, // Usando a mesma chave para refresh token
+                process.env.JWT_SECRET,
                 { expiresIn: process.env.REFRESH_TOKEN_EXPIRATION }
             );
 
-            // Calcular expiração em segundos
-            const refreshExpirationInSeconds = 7 * 24 * 60 * 60; // 7 dias em segundos
-
-            // Salvar refresh token no Redis
+            // Armazenar refresh token no Redis
             await redis.set(
-                `refresh_token:${refreshToken}`,
-                user.user_id,
+                `refresh_token:${user.user_id}`,
+                refreshToken,
                 'EX',
-                refreshExpirationInSeconds
+                7 * 24 * 60 * 60 // 7 dias
             );
 
             return new AuthResponseDTO({
@@ -106,25 +104,21 @@ class AuthService extends IAuthService {
         }
     }
 
-    async refreshToken(refreshToken) {
+    async refreshToken(token) {
         try {
-            // Verificar se o token existe no Redis
-            const userId = await redis.get(`refresh_token:${refreshToken}`);
-            if (!userId) {
+            const decoded = jwt.verify(token, process.env.JWT_SECRET);
+            const storedToken = await redis.get(`refresh_token:${decoded.user_id}`);
+
+            if (!storedToken || storedToken !== token) {
                 throw new Error('Invalid refresh token');
             }
 
-            // Verificar e decodificar o token
-            const decoded = jwt.verify(refreshToken, process.env.JWT_SECRET);
-
-            // Buscar usuário
             const user = await this.userService.findById(decoded.user_id);
             if (!user) {
                 throw new Error('User not found');
             }
 
-            // Gerar novo access token
-            const newAccessToken = jwt.sign(
+            const accessToken = jwt.sign(
                 {
                     user_id: user.user_id,
                     username: user.username,
@@ -134,21 +128,19 @@ class AuthService extends IAuthService {
                 { expiresIn: process.env.JWT_EXPIRATION }
             );
 
-            return {
-                accessToken: newAccessToken
-            };
+            return { accessToken };
         } catch (error) {
-            logger.error('Error refreshing token', { error });
+            logger.error('Token refresh error', { error: error.message });
             throw error;
         }
     }
 
-    async logout(refreshToken) {
+    async logout(token) {
         try {
-            // Remover refresh token do Redis
-            await redis.del(`refresh_token:${refreshToken}`);
+            const decoded = jwt.verify(token, process.env.JWT_SECRET);
+            await redis.del(`refresh_token:${decoded.user_id}`);
         } catch (error) {
-            logger.error('Error during logout', { error });
+            logger.error('Logout error', { error: error.message });
             throw error;
         }
     }

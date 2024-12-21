@@ -10,229 +10,173 @@ Cada funcionalidade deve ser um módulo independente seguindo esta estrutura:
 /modules/[nome-do-modulo]/
   ├── interfaces/           # Contratos e tipos
   │   ├── IService.js      # Interface do serviço
-  │   └── IRepository.js   # Interface do repositório (se aplicável)
+  │   └── IRepository.js   # Interface do repositório
   ├── dto/                 # Objetos de transferência de dados
-  │   ├── request.dto.js   # DTOs para requisições
-  │   └── response.dto.js  # DTOs para respostas
-  ├── models/              # Modelos de dados
-  │   └── model.js        # Definição do modelo
-  ├── schemas/            # Schemas de validação
-  │   └── schema.js      # Validações usando Joi
-  ├── routes.js          # Definição de rotas
-  ├── controller.js      # Controlador
-  ├── service.js         # Serviço com lógica de negócio
-  └── repository.js      # Acesso a dados (se aplicável)
+  │   └── module.dto.js    # DTOs para request/response
+  ├── schemas/             # Schemas de validação
+  │   └── module.schema.js # Validações usando Joi
+  ├── __tests__/          # Testes unitários e de integração
+  ├── module.routes.js     # Definição de rotas
+  ├── module.controller.js # Controlador
+  ├── module.service.js    # Serviço com lógica de negócio
+  └── module.repository.js # Acesso a dados (Repository Pattern)
 ```
 
-## Regras de Implementação
+## Padrões de Implementação
 
-### 1. Rotas (routes.js)
-- Não usar prefixo `/api`
-- Usar express.Router()
-- Incluir validação de requisição
+### 1. Repository Pattern
+- Responsável pelo acesso ao banco de dados
+- Herda da interface IRepository
+- Usa transações quando necessário
 - Exemplo:
 ```javascript
-const express = require('express');
-const controller = require('./controller');
-const { validateRequest } = require('../../middlewares/requestValidator');
-const schema = require('./schemas/schema');
+class UserRepository extends IUserRepository {
+    constructor() {
+        super();
+        this.pool = systemDatabase.pool;
+    }
 
-const router = express.Router();
-
-router.get('/', validateRequest(schema.list), controller.list);
-router.post('/', validateRequest(schema.create), controller.create);
-
-module.exports = router;
-```
-
-### 2. Controller
-- Responsável apenas por:
-  - Receber requisições
-  - Validar dados
-  - Chamar serviços
-  - Formatar respostas
-- Usar try/catch para tratamento de erros
-- Exemplo:
-```javascript
-class Controller {
-    async create(req, res) {
+    async create(data) {
+        const client = await this.pool.connect();
         try {
-            const result = await service.create(req.body);
-            res.status(201).json({
-                status: 'success',
-                data: result
-            });
+            await client.query('BEGIN');
+            const result = await client.query(
+                'INSERT INTO users (name, email) VALUES ($1, $2) RETURNING *',
+                [data.name, data.email]
+            );
+            await client.query('COMMIT');
+            return result.rows[0];
         } catch (error) {
-            logger.error('Error in create', { error });
-            res.status(400).json({
-                status: 'error',
-                message: error.message
-            });
+            await client.query('ROLLBACK');
+            throw error;
+        } finally {
+            client.release();
         }
     }
 }
 ```
 
-### 3. Service
-- Implementar interface definida em IService
-- Conter toda lógica de negócio
-- Não acessar req/res
-- Usar injeção de dependências
-- Exemplo:
+### 2. Service Layer
+- Implementa a lógica de negócio
+- Usa o repository para acesso a dados
+- Não conhece detalhes do HTTP
 ```javascript
-class Service extends IService {
+class UserService extends IUserService {
     constructor(repository) {
         super();
         this.repository = repository;
     }
 
-    async create(data) {
+    async createUser(data) {
         // Validações e regras de negócio
         return this.repository.create(data);
     }
 }
 ```
 
-### 4. Interface
-- Definir contrato do serviço
-- Documentar métodos com JSDoc
-- Exemplo:
+### 3. Controller
+- Lida com requisições HTTP
+- Usa DTOs para validação
+- Chama o service apropriado
 ```javascript
-class IService {
-    /**
-     * Create new resource
-     * @param {Object} data - Resource data
-     * @returns {Promise<Object>} Created resource
-     */
-    async create(data) {}
-}
-```
+class UserController {
+    constructor(service) {
+        this.service = service;
+    }
 
-### 5. DTOs
-- Separar DTOs de request e response
-- Usar para validação e transformação
-- Exemplo:
-```javascript
-class RequestDTO {
-    constructor(data) {
-        this.name = data.name;
-        this.email = data.email.toLowerCase();
+    async create(req, res) {
+        try {
+            const dto = new UserDTO(req.body);
+            const user = await this.service.createUser(dto);
+            res.status(201).json(user);
+        } catch (error) {
+            res.status(400).json({ error: error.message });
+        }
     }
 }
 ```
 
-### 6. Schemas
-- Usar Joi para validação
-- Definir mensagens de erro
-- Exemplo:
+### 4. Rotas
+```javascript
+const router = express.Router();
+const controller = new UserController(service);
+
+router.post('/', 
+    validateRequest(schema.create),
+    controller.create.bind(controller)
+);
+```
+
+### 5. DTOs
+```javascript
+class UserDTO {
+    constructor(data) {
+        this.name = data.name;
+        this.email = data.email?.toLowerCase();
+    }
+
+    validate() {
+        if (!this.name) throw new Error('Nome é obrigatório');
+        if (!this.email) throw new Error('Email é obrigatório');
+    }
+}
+```
+
+### 6. Schemas (Joi)
 ```javascript
 const schema = {
     create: Joi.object({
         name: Joi.string().required(),
-        email: Joi.string().email()
+        email: Joi.string().email().required()
     })
 };
 ```
 
-## Dependências e Imports
-
-### 1. Caminhos de Importação
-- Usar caminhos relativos ao módulo
-- Para arquivos do módulo: `./arquivo`
-- Para arquivos externos: `../../config/arquivo`
-
-### 2. Dependências Comuns
-```javascript
-// Bibliotecas
-const express = require('express');
-const Joi = require('joi');
-
-// Middlewares
-const logger = require('../../middlewares/logger');
-const { validateRequest } = require('../../middlewares/requestValidator');
-
-// Configurações
-const { systemDatabase } = require('../../config/database');
-```
-
-## Segurança
-
-### 1. Autenticação
-- Usar middleware de autenticação quando necessário
-- Validar tokens JWT
-- Implementar rate limiting
-
-### 2. Validação
-- Validar todas as entradas usando Joi
-- Sanitizar dados sensíveis
-- Usar DTOs para transformação
-
-## Logging
-
-- Usar o logger em todas as operações importantes
-- Incluir contexto nos logs
-- Exemplo:
-```javascript
-logger.info('Operação iniciada', { 
-    module: 'users',
-    action: 'create',
-    data: { id, name }
-});
-```
-
 ## Tratamento de Erros
 
-- Usar try/catch em todas as operações assíncronas
+- Usar classes de erro específicas
 - Logar erros com contexto
-- Retornar respostas de erro padronizadas
-- Exemplo:
 ```javascript
 try {
-    // operação
+    await operation();
 } catch (error) {
-    logger.error('Erro na operação', { error });
+    logger.error('Operação falhou', { error });
     throw new AppError('Mensagem amigável', 400);
 }
 ```
 
+## Logging
+
+- Usar em operações importantes
+- Incluir contexto relevante
+```javascript
+logger.info('Usuário criado', { 
+    userId: user.id,
+    action: 'create'
+});
+```
+
 ## Testes
 
-- Criar testes unitários para services
-- Criar testes de integração para controllers
-- Usar mocks para dependências externas
-- Exemplo:
+### 1. Testes Unitários
 ```javascript
 describe('UserService', () => {
     it('should create user', async () => {
-        const result = await service.create(mockData);
-        expect(result).toHaveProperty('id');
+        const repository = new UserRepository();
+        const service = new UserService(repository);
+        const user = await service.createUser(userData);
+        expect(user).toBeDefined();
     });
 });
 ```
 
-## Boas Práticas
-
-1. **Separação de Responsabilidades**
-   - Controller: Requisições e respostas
-   - Service: Lógica de negócio
-   - Repository: Acesso a dados
-
-2. **Nomenclatura**
-   - Usar nomes descritivos
-   - Seguir padrão camelCase
-   - Prefixar interfaces com I
-
-3. **Documentação**
-   - Documentar interfaces com JSDoc
-   - Manter README atualizado
-   - Documentar APIs com Swagger
-
-4. **Performance**
-   - Usar paginação em listagens
-   - Implementar cache quando necessário
-   - Otimizar consultas ao banco
-
-5. **Manutenibilidade**
-   - Manter módulos pequenos e focados
-   - Evitar duplicação de código
-   - Seguir princípios SOLID
+### 2. Testes de Integração
+```javascript
+describe('UserController', () => {
+    it('should create user via API', async () => {
+        const response = await request(app)
+            .post('/users')
+            .send(userData);
+        expect(response.status).toBe(201);
+    });
+});

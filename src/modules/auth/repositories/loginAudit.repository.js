@@ -1,24 +1,41 @@
 const { systemDatabase } = require('../../../config/database');
 const { logger } = require('../../../middlewares/logger');
+const ILoginAuditRepository = require('../interfaces/ILoginAuditRepository');
 
-class LoginAudit {
-    static async create({ username, success, ip, userAgent, userId }) {
+class LoginAuditRepository extends ILoginAuditRepository {
+    constructor() {
+        super();
+        this.pool = systemDatabase.pool;
+    }
+
+    async create({ username, success, ip, userAgent, userId }) {
+        const client = await this.pool.connect();
         try {
-            await systemDatabase.query(
+            await client.query('BEGIN');
+            
+            const result = await client.query(
                 `INSERT INTO login_audit 
                 (user_id, success, ip_address, user_agent)
-                VALUES ($1, $2, $3, $4)`,
+                VALUES ($1, $2, $3, $4)
+                RETURNING *`,
                 [userId, success, ip, userAgent]
             );
+
+            await client.query('COMMIT');
+            return result.rows[0];
         } catch (error) {
+            await client.query('ROLLBACK');
             logger.error('Error registering login audit', { error });
             throw error;
+        } finally {
+            client.release();
         }
     }
 
-    static async getFailedAttempts(username, minutes) {
+    async getFailedAttempts(username, minutes) {
+        const client = await this.pool.connect();
         try {
-            const result = await systemDatabase.query(
+            const result = await client.query(
                 `SELECT COUNT(*) 
                 FROM login_audit 
                 WHERE user_id = (SELECT user_id FROM users WHERE username = $1)
@@ -30,8 +47,10 @@ class LoginAudit {
         } catch (error) {
             logger.error('Error getting failed login attempts', { error });
             throw error;
+        } finally {
+            client.release();
         }
     }
 }
 
-module.exports = LoginAudit;
+module.exports = LoginAuditRepository;
