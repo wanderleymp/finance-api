@@ -77,80 +77,45 @@ class MovementService extends IMovementService {
     }
 
     /**
-     * Busca movimento por ID
+     * Busca um movimento por ID
      */
     async findById(id, detailed = false) {
         try {
-            // Tenta buscar do cache
-            const cacheKey = `movement:${id}:${detailed}`;
-            const cachedData = await this.cacheService?.get(cacheKey);
-            if (cachedData) {
-                return cachedData;
-            }
-
-            // Busca o movimento básico
+            // Busca o movimento
             const movement = await this.movementRepository.findById(id);
             if (!movement) {
-                throw new ValidationError('Movimento não encontrado');
+                return null;
             }
 
-            // Busca dados básicos relacionados (sempre)
+            // Enriquece com os dados básicos
             const [person, type, status] = await Promise.all([
                 this.personRepository.findById(movement.person_id),
                 this.movementTypeRepository.findById(movement.movement_type_id),
                 this.movementStatusRepository.findById(movement.movement_status_id)
             ]);
 
-            // Enriquece com dados básicos
-            const enrichedMovement = {
+            const result = {
                 ...movement,
                 person_name: person?.full_name,
                 type_name: type?.type_name,
                 status_name: status?.status_name
             };
 
-            // Se não precisa de detalhes, retorna com os dados básicos
+            // Se não for detalhado, retorna apenas os dados básicos
             if (!detailed) {
-                return enrichedMovement;
+                return result;
             }
 
-            // Busca dados detalhados
-            const [
-                personContacts,
-                payments,
-                installments
-            ] = await Promise.all([
-                person ? this.personRepository.findContacts(person.person_id) : null,
-                this.movementPaymentRepository.findByMovementId(movement.movement_id),
-                this.installmentRepository.findByMovementId(movement.movement_id)
-            ]);
+            // Enriquece com os dados detalhados
+            const enrichedPerson = person ? {
+                ...person,
+                contacts: await this.personRepository.findContacts(person.person_id)
+            } : null;
 
-            // Calcula totais
-            const total_paid = payments
-                .filter(p => p.status_id === 2) // Status "Confirmado"
-                .reduce((sum, p) => sum + p.amount, 0);
-
-            // Enriquece com dados detalhados
-            const detailedMovement = {
-                ...enrichedMovement,
-                // Dados detalhados da pessoa
-                person_email: personContacts?.find(c => c.contact_type === 'EMAIL' && c.is_main)?.contact_value,
-                person_phone: personContacts?.find(c => c.contact_type === 'PHONE' && c.is_main)?.contact_value,
-                // Dados detalhados do tipo e status
-                type_description: type?.description,
-                status_description: status?.description,
-                // Listas relacionadas
-                payments,
-                installments,
-                // Campos calculados
-                total_paid,
-                remaining_amount: movement.total_amount - total_paid
+            return {
+                ...result,
+                person: enrichedPerson
             };
-
-            // Salva no cache
-            await this.cacheService?.set(cacheKey, detailedMovement, this.cacheTTL.detail);
-
-            return detailedMovement;
         } catch (error) {
             logger.error('Erro ao buscar movimento por ID', {
                 error: error.message,

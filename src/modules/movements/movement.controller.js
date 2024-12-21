@@ -15,20 +15,18 @@ class MovementController {
      */
     async index(req, res, next) {
         try {
-            const { page = 1, limit = 10, detailed = false, ...filters } = req.query;
+            const { page = 1, limit = 10, ...filters } = req.query;
             
             logger.info('Controller: Listando movimentos', { 
                 page, 
                 limit,
-                detailed,
                 filters 
             });
 
             const result = await this.service.findAll(
                 parseInt(page), 
                 parseInt(limit), 
-                filters,
-                detailed === 'true'
+                filters
             );
 
             return res.json(result);

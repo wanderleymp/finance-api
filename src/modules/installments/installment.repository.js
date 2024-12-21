@@ -13,10 +13,8 @@ class InstallmentRepository extends BaseRepository {
         try {
             const query = `
                 SELECT 
-                    i.*,
-                    ist.name as status_name
+                    i.*
                 FROM installments i
-                LEFT JOIN installment_status ist ON ist.status_id = i.status_id
                 WHERE i.movement_id = $1
                 ORDER BY i.installment_number
             `;
