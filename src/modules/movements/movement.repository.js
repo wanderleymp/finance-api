@@ -18,13 +18,45 @@ class MovementRepository extends BaseRepository {
             const conditions = [];
             let paramCount = 1;
 
-            // Filtros básicos (exceto datas)
-            for (const [key, value] of Object.entries(filters)) {
-                if (value !== undefined && value !== null && !key.includes('movement_date')) {
-                    conditions.push(`m.${key} = $${paramCount}`);
-                    queryParams.push(value);
-                    paramCount++;
-                }
+            // Filtros básicos (exceto datas e valores)
+            if (filters.person_id) {
+                conditions.push(`m.person_id = $${paramCount}`);
+                queryParams.push(filters.person_id);
+                paramCount++;
+            }
+
+            if (filters.movement_type_id) {
+                conditions.push(`m.movement_type_id = $${paramCount}`);
+                queryParams.push(filters.movement_type_id);
+                paramCount++;
+            }
+
+            if (filters.movement_status_id) {
+                conditions.push(`m.movement_status_id = $${paramCount}`);
+                queryParams.push(filters.movement_status_id);
+                paramCount++;
+            }
+
+            // Filtro por valor (range)
+            if (filters.value_min) {
+                conditions.push(`m.value >= $${paramCount}`);
+                queryParams.push(filters.value_min);
+                paramCount++;
+            }
+            if (filters.value_max) {
+                conditions.push(`m.value <= $${paramCount}`);
+                queryParams.push(filters.value_max);
+                paramCount++;
+            }
+
+            // Filtro por texto (description e full_name)
+            if (filters.search) {
+                conditions.push(`(
+                    m.description ILIKE $${paramCount} 
+                    OR p.full_name ILIKE $${paramCount}
+                )`);
+                queryParams.push(`%${filters.search}%`);
+                paramCount++;
             }
 
             // Filtros de data
@@ -117,13 +149,45 @@ class MovementRepository extends BaseRepository {
             const conditions = [];
             let paramCount = 1;
 
-            // Filtros básicos (exceto datas)
-            for (const [key, value] of Object.entries(filters)) {
-                if (value !== undefined && value !== null && !key.includes('movement_date')) {
-                    conditions.push(`m.${key} = $${paramCount}`);
-                    queryParams.push(value);
-                    paramCount++;
-                }
+            // Filtros básicos (exceto datas e valores)
+            if (filters.person_id) {
+                conditions.push(`m.person_id = $${paramCount}`);
+                queryParams.push(filters.person_id);
+                paramCount++;
+            }
+
+            if (filters.movement_type_id) {
+                conditions.push(`m.movement_type_id = $${paramCount}`);
+                queryParams.push(filters.movement_type_id);
+                paramCount++;
+            }
+
+            if (filters.movement_status_id) {
+                conditions.push(`m.movement_status_id = $${paramCount}`);
+                queryParams.push(filters.movement_status_id);
+                paramCount++;
+            }
+
+            // Filtro por valor (range)
+            if (filters.value_min) {
+                conditions.push(`m.value >= $${paramCount}`);
+                queryParams.push(filters.value_min);
+                paramCount++;
+            }
+            if (filters.value_max) {
+                conditions.push(`m.value <= $${paramCount}`);
+                queryParams.push(filters.value_max);
+                paramCount++;
+            }
+
+            // Filtro por texto (description e full_name)
+            if (filters.search) {
+                conditions.push(`(
+                    m.description ILIKE $${paramCount} 
+                    OR p.full_name ILIKE $${paramCount}
+                )`);
+                queryParams.push(`%${filters.search}%`);
+                paramCount++;
             }
 
             // Filtros de data
