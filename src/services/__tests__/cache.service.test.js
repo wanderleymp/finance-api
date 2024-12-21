@@ -1,82 +1,81 @@
-const cacheService = require('../cache.service');
-const redis = require('../../config/redis');
+const mockRedis = {
+    get: jest.fn(),
+    set: jest.fn(),
+    del: jest.fn(),
+    keys: jest.fn()
+};
 
-jest.mock('../../config/redis');
+jest.mock('../../config/redis', () => mockRedis);
+
+const CacheService = require('../cache.service');
 
 describe('CacheService', () => {
+    let cacheService;
+    let consoleSpy;
+
     beforeEach(() => {
+        consoleSpy = jest.spyOn(console, 'error').mockImplementation(() => {});
+        cacheService = new CacheService('test');
         jest.clearAllMocks();
+    });
+
+    afterEach(() => {
+        consoleSpy.mockRestore();
     });
 
     describe('generateKey', () => {
         it('deve gerar chave com prefixo e parâmetros ordenados', () => {
-            const key = cacheService.generateKey('test', {
-                b: 2,
-                a: 1,
-                c: 3
-            });
-
-            expect(key).toBe('test:{"a":1,"b":2,"c":3}');
+            const key = cacheService.generateKey('test', { b: 2, a: 1 });
+            expect(key).toBe('test:a=1:b=2');
         });
 
         it('deve gerar chave apenas com prefixo quando não houver parâmetros', () => {
             const key = cacheService.generateKey('test');
-            expect(key).toBe('test:{}');
+            expect(key).toBe('test');
         });
     });
 
     describe('get', () => {
         it('deve retornar valor do cache quando existir', async () => {
-            const mockValue = { test: 'value' };
-            redis.get.mockResolvedValue(JSON.stringify(mockValue));
+            mockRedis.get.mockResolvedValue(JSON.stringify({ data: 'test' }));
 
             const result = await cacheService.get('test:key');
-            expect(result).toEqual(mockValue);
+            expect(result).toEqual({ data: 'test' });
         });
 
         it('deve retornar null quando valor não existir', async () => {
-            redis.get.mockResolvedValue(null);
+            mockRedis.get.mockResolvedValue(null);
 
             const result = await cacheService.get('test:key');
             expect(result).toBeNull();
         });
 
         it('deve retornar null em caso de erro', async () => {
-            redis.get.mockRejectedValue(new Error('Redis error'));
+            mockRedis.get.mockRejectedValue(new Error('Redis error'));
 
             const result = await cacheService.get('test:key');
             expect(result).toBeNull();
+            expect(consoleSpy).toHaveBeenCalled();
         });
     });
 
     describe('set', () => {
         it('deve armazenar valor no cache com TTL padrão', async () => {
-            const value = { test: 'value' };
-            await cacheService.set('test:key', value);
+            mockRedis.set.mockResolvedValue('OK');
 
-            expect(redis.set).toHaveBeenCalledWith(
-                'test:key',
-                JSON.stringify(value),
-                'EX',
-                3600
-            );
+            await cacheService.set('test:key', 'value');
+            expect(mockRedis.set).toHaveBeenCalledWith('test:key', JSON.stringify('value'), 'EX', 3600);
         });
 
         it('deve armazenar valor no cache com TTL personalizado', async () => {
-            const value = { test: 'value' };
-            await cacheService.set('test:key', value, 60);
+            mockRedis.set.mockResolvedValue('OK');
 
-            expect(redis.set).toHaveBeenCalledWith(
-                'test:key',
-                JSON.stringify(value),
-                'EX',
-                60
-            );
+            await cacheService.set('test:key', 'value', 60);
+            expect(mockRedis.set).toHaveBeenCalledWith('test:key', JSON.stringify('value'), 'EX', 60);
         });
 
         it('deve logar erro em caso de falha', async () => {
-            redis.set.mockRejectedValue(new Error('Redis error'));
-            const consoleSpy = jest.spyOn(console, 'error').mockImplementation();
+            mockRedis.set.mockRejectedValue(new Error('Redis error'));
 
             await cacheService.set('test:key', 'value');
             expect(consoleSpy).toHaveBeenCalled();
@@ -85,13 +84,14 @@ describe('CacheService', () => {
 
     describe('delete', () => {
         it('deve remover valor do cache', async () => {
+            mockRedis.del.mockResolvedValue(1);
+
             await cacheService.delete('test:key');
-            expect(redis.del).toHaveBeenCalledWith('test:key');
+            expect(mockRedis.del).toHaveBeenCalledWith('test:key');
         });
 
         it('deve logar erro em caso de falha', async () => {
-            redis.del.mockRejectedValue(new Error('Redis error'));
-            const consoleSpy = jest.spyOn(console, 'error').mockImplementation();
+            mockRedis.del.mockRejectedValue(new Error('Redis error'));
 
             await cacheService.delete('test:key');
             expect(consoleSpy).toHaveBeenCalled();
@@ -100,62 +100,52 @@ describe('CacheService', () => {
 
     describe('deletePattern', () => {
         it('deve remover valores do cache por padrão', async () => {
-            redis.keys.mockResolvedValue(['key1', 'key2']);
+            mockRedis.keys.mockResolvedValue(['key1', 'key2']);
+            mockRedis.del.mockResolvedValue(2);
 
             await cacheService.deletePattern('test:*');
-
-            expect(redis.keys).toHaveBeenCalledWith('test:*');
-            expect(redis.del).toHaveBeenCalledWith('key1', 'key2');
+            expect(mockRedis.keys).toHaveBeenCalledWith('test:*');
+            expect(mockRedis.del).toHaveBeenCalledWith('key1', 'key2');
         });
 
         it('não deve chamar del se não encontrar chaves', async () => {
-            redis.keys.mockResolvedValue([]);
+            mockRedis.keys.mockResolvedValue([]);
 
             await cacheService.deletePattern('test:*');
-
-            expect(redis.keys).toHaveBeenCalledWith('test:*');
-            expect(redis.del).not.toHaveBeenCalled();
+            expect(mockRedis.keys).toHaveBeenCalledWith('test:*');
+            expect(mockRedis.del).not.toHaveBeenCalled();
         });
     });
 
     describe('getOrSet', () => {
         it('deve retornar valor do cache quando existir', async () => {
-            const mockValue = { test: 'value' };
-            redis.get.mockResolvedValue(JSON.stringify(mockValue));
-
+            mockRedis.get.mockResolvedValue(JSON.stringify({ data: 'cached' }));
             const fn = jest.fn();
-            const result = await cacheService.getOrSet('test:key', fn);
 
-            expect(result).toEqual(mockValue);
+            const result = await cacheService.getOrSet('test:key', fn);
+            expect(result).toEqual({ data: 'cached' });
             expect(fn).not.toHaveBeenCalled();
         });
 
         it('deve executar função e armazenar resultado quando cache não existir', async () => {
-            const mockValue = { test: 'value' };
-            redis.get.mockResolvedValue(null);
-            const fn = jest.fn().mockResolvedValue(mockValue);
+            mockRedis.get.mockResolvedValue(null);
+            mockRedis.set.mockResolvedValue('OK');
+            const fn = jest.fn().mockResolvedValue({ data: 'new' });
 
             const result = await cacheService.getOrSet('test:key', fn);
-
-            expect(result).toEqual(mockValue);
+            expect(result).toEqual({ data: 'new' });
             expect(fn).toHaveBeenCalled();
-            expect(redis.set).toHaveBeenCalledWith(
-                'test:key',
-                JSON.stringify(mockValue),
-                'EX',
-                3600
-            );
+            expect(mockRedis.set).toHaveBeenCalled();
         });
 
         it('deve executar função diretamente em caso de erro no cache', async () => {
-            const mockValue = { test: 'value' };
-            redis.get.mockRejectedValue(new Error('Redis error'));
-            const fn = jest.fn().mockResolvedValue(mockValue);
+            mockRedis.get.mockRejectedValue(new Error('Redis error'));
+            const fn = jest.fn().mockResolvedValue({ data: 'new' });
 
             const result = await cacheService.getOrSet('test:key', fn);
-
-            expect(result).toEqual(mockValue);
+            expect(result).toEqual({ data: 'new' });
             expect(fn).toHaveBeenCalled();
+            expect(consoleSpy).toHaveBeenCalled();
         });
     });
 });

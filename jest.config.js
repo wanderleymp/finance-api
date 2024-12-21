@@ -20,9 +20,13 @@ module.exports = {
     testMatch: [
         '**/src/**/__tests__/**/*.test.js'
     ],
-    setupFilesAfterEnv: ['<rootDir>/jest.setup.js'],
-    testTimeout: 10000,
-    verbose: true,
+    setupFiles: [
+        '<rootDir>/.jest/setEnvVars.js'
+    ],
+    moduleNameMapper: {
+        '^@/(.*)$': '<rootDir>/src/$1'
+    },
     clearMocks: true,
+    resetMocks: true,
     restoreMocks: true
 };

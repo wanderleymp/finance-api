@@ -2,8 +2,9 @@ const redis = require('../config/redis');
 const { logger } = require('../middlewares/logger');
 
 class CacheService {
-    constructor() {
+    constructor(prefix) {
         this.defaultTTL = 3600; // 1 hora em segundos
+        this.prefix = prefix;
     }
 
     /**
@@ -17,7 +18,11 @@ class CacheService {
                 return acc;
             }, {});
 
-        return `${prefix}:${JSON.stringify(sortedParams)}`;
+        const paramsStr = Object.entries(sortedParams)
+            .map(([key, value]) => `${key}=${value}`)
+            .join(':');
+
+        return paramsStr ? `${prefix}:${paramsStr}` : prefix;
     }
 
     /**
@@ -56,6 +61,20 @@ class CacheService {
     }
 
     /**
+     * Remove valores do cache por padrão
+     */
+    async deletePattern(pattern) {
+        try {
+            const keys = await redis.keys(pattern);
+            if (keys.length > 0) {
+                await redis.del(...keys);
+            }
+        } catch (error) {
+            logger.error('Erro ao deletar cache por padrão', { error });
+        }
+    }
+
+    /**
      * Busca um valor no cache ou executa uma função
      */
     async getOrSet(key, fn, ttl = this.defaultTTL) {
@@ -75,4 +94,4 @@ class CacheService {
     }
 }
 
-module.exports = new CacheService();
+module.exports = CacheService;
