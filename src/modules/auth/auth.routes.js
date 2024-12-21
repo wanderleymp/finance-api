@@ -1,6 +1,7 @@
 const express = require('express');
 const authController = require('./auth.controller');
 const { validateRequest } = require('../../middlewares/requestValidator');
+const { authMiddleware } = require('../../middlewares/auth');
 const authSchema = require('./schemas/auth.schema');
 const rateLimiter = require('../../middlewares/security/rateLimiter');
 
@@ -19,8 +20,6 @@ router.post('/refresh',
 );
 
 // Rotas que requerem autenticação
-const authMiddleware = require('../../middlewares/authMiddleware');
-
 router.post('/logout',
     authMiddleware,
     validateRequest(authSchema.logout),

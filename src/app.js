@@ -34,7 +34,7 @@ app.use('/health', healthRoutes);
 app.use('/auth', authRoutes);
 app.use('/users', userRoutes);
 
-const authMiddleware = require('./middlewares/authMiddleware');
+const { authMiddleware } = require('./middlewares/auth');
 app.use(authMiddleware); // Aplica autenticação para todas as rotas abaixo
 
 // Tratamento de erros global
