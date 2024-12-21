@@ -148,6 +148,12 @@
 
 ## [Unreleased]
 
+## [1.0.5] - 2024-12-21
+### Added
+- Development version
+
+
+
 ### Added
 - Implementação inicial do módulo de Licenças
 - Criação de endpoints para gerenciamento de licenças
