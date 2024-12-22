@@ -11,6 +11,8 @@ class AddressSchema {
         city: Joi.string().trim().max(100).required(),
         state: Joi.string().trim().length(2).uppercase().required(),
         postal_code: Joi.string().trim().custom((value, helpers) => {
+            if (!value) return '';
+            
             // Remove todos os caracteres não numéricos
             const cleanedPostalCode = value.replace(/\D/g, '');
             

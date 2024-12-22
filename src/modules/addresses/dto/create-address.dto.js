@@ -7,7 +7,7 @@ class CreateAddressDTO {
         this.neighborhood = data.neighborhood || '';
         this.city = data.city || '';
         this.state = data.state ? data.state.toUpperCase() : '';
-        this.postal_code = data.postal_code ? data.postal_code.replace(/[^\d]/g, '') : '';
+        this.postal_code = data.postal_code || '';
         this.country = data.country || 'Brasil';
         this.reference = data.reference || null;
         this.ibge = data.ibge || null;

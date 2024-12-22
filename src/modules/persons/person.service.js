@@ -624,9 +624,15 @@ class PersonService {
                     neighborhood: cnpjData.endereco.bairro || 'Não informado',
                     city: cnpjData.endereco.cidade || 'Não informado',
                     state: cnpjData.endereco.estado || 'XX',
-                    postal_code: cnpjData.endereco.cep ? cnpjData.endereco.cep.replace(/[^\d]/g, '') : '00000000',
-                    country: 'Brasil'
+                    postal_code: cnpjData.endereco.cep ? cnpjData.endereco.cep.replace(/[^\d]/g, '') : '',
+                    country: 'Brasil',
+                    ibge: null // Forçando o IBGE como null para que o AddressService busque pelo CEP
                 };
+
+                // Garante que o CEP está no formato correto
+                if (addressData.postal_code) {
+                    addressData.postal_code = addressData.postal_code.replace(/[^\d]/g, '');
+                }
 
                 // Atualiza ou cria o endereço
                 if (existingAddresses && existingAddresses.length > 0) {
@@ -669,9 +675,15 @@ class PersonService {
                     neighborhood: cnpjData.endereco.bairro || 'Não informado',
                     city: cnpjData.endereco.cidade || 'Não informado',
                     state: cnpjData.endereco.estado || 'XX',
-                    postal_code: cnpjData.endereco.cep ? cnpjData.endereco.cep.replace(/[^\d]/g, '') : '00000000',
-                    country: 'Brasil'
+                    postal_code: cnpjData.endereco.cep ? cnpjData.endereco.cep.replace(/[^\d]/g, '') : '',
+                    country: 'Brasil',
+                    ibge: null // Forçando o IBGE como null para que o AddressService busque pelo CEP
                 };
+
+                // Garante que o CEP está no formato correto
+                if (addressData.postal_code) {
+                    addressData.postal_code = addressData.postal_code.replace(/[^\d]/g, '');
+                }
 
                 // Cria o endereço
                 await addressService.create(addressData);

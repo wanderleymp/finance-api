@@ -189,16 +189,16 @@ class AddressService {
         if (addressData.ibge) return addressData;
 
         // Tenta buscar o IBGE pelo CEP
-        if (addressData.cep) {
+        if (addressData.postal_code) {
             try {
-                const cepInfo = await cepService.findByCep(addressData.cep);
+                const cepInfo = await cepService.findAddressByCep(addressData.postal_code);
                 if (cepInfo && cepInfo.ibge) {
                     addressData.ibge = cepInfo.ibge;
                 }
             } catch (error) {
                 logger.warn('Falha ao buscar IBGE pelo CEP', { 
                     error: error.message,
-                    cep: addressData.cep 
+                    cep: addressData.postal_code 
                 });
             }
         }
