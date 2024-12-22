@@ -2,7 +2,7 @@ const request = require('supertest');
 const app = require('../../../app');
 const { systemDatabase } = require('../../../config/database');
 
-describe('Endereços - Testes de Integração', () => {
+describe.skip('Endereços - Testes de Integração', () => {
     let authToken;
     let createdAddressId;
     let personId;

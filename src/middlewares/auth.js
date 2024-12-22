@@ -2,11 +2,11 @@ const JwtService = require('../config/jwt');
 const { logger } = require('./logger');
 
 const PUBLIC_ROUTES = [
-  { path: '/auth/login', method: 'POST' },
-  { path: '/auth/refresh-token', method: 'POST' },
-  { path: '/users/register', method: 'POST' },
-  { path: '/health', method: 'GET' },
-  { path: '/status', method: 'GET' }
+  { path: '/api/auth/login', method: 'POST' },
+  { path: '/api/auth/refresh-token', method: 'POST' },
+  { path: '/api/users/register', method: 'POST' },
+  { path: '/api/health', method: 'GET' },
+  { path: '/api/status', method: 'GET' }
 ];
 
 const authMiddleware = (req, res, next) => {
