@@ -1,5 +1,7 @@
 const { logger } = require('../../middlewares/logger');
 const PersonRepository = require('./person.repository');
+const AddressService = require('../addresses/address.service');
+const CnpjService = require('../../services/cnpjService');
 const CacheService = require('../../services/cacheService');
 const PersonValidator = require('./validators/person.validator');
 const CreatePersonDTO = require('./dto/create-person.dto');
@@ -146,6 +148,61 @@ class PersonService {
             logger.error('Erro ao buscar pessoa por documento', {
                 error: error.message,
                 document
+            });
+            throw error;
+        }
+    }
+
+    async findByCnpj(cnpj) {
+        try {
+            logger.debug('Service findByCnpj - params:', {
+                cnpj
+            });
+
+            // Limpa o CNPJ para busca
+            const cleanCnpj = cnpj.replace(/[^\d]/g, '');
+
+            // Gera uma chave única para o cache
+            const cacheKey = `person:cnpj:${cleanCnpj}`;
+            
+            // Tenta buscar do cache
+            try {
+                const cachedPerson = await this.cacheService.get(cacheKey);
+                if (cachedPerson) {
+                    logger.info('Retornando pessoa do cache', { cacheKey });
+                    return cachedPerson;
+                }
+            } catch (cacheError) {
+                logger.warn('Falha ao buscar do cache', { 
+                    error: cacheError.message,
+                    cacheKey 
+                });
+            }
+
+            // Busca a pessoa pelo CNPJ
+            const person = await this.personRepository.findByCnpj(cleanCnpj);
+            
+            // Se encontrou, salva no cache
+            if (person) {
+                try {
+                    await this.cacheService.set(cacheKey, person, 3600); // 1 hora
+                } catch (cacheError) {
+                    logger.warn('Falha ao salvar no cache', { 
+                        error: cacheError.message,
+                        cacheKey 
+                    });
+                }
+            }
+
+            logger.debug('Service findByCnpj - result:', {
+                person
+            });
+
+            return person;
+        } catch (error) {
+            logger.error('Erro ao buscar pessoa por CNPJ', {
+                error: error.message,
+                cnpj
             });
             throw error;
         }
@@ -505,6 +562,127 @@ class PersonService {
             logger.error('Erro ao verificar dependências da pessoa', {
                 error: error.message,
                 personId
+            });
+            throw error;
+        }
+    }
+
+    async createOrUpdateFromCnpj(cnpj, license_id, req) {
+        try {
+            // Valida e busca os dados do CNPJ
+            const cnpjData = await CnpjService.findByCnpj(cnpj);
+            logger.info('Dados do CNPJ obtidos', { 
+                cnpj: cnpjData.cnpj,
+                razao_social: cnpjData.razao_social
+            });
+
+            // Limpa o CNPJ para busca e armazenamento
+            const cleanCnpj = cnpj.replace(/[^\d]/g, '');
+
+            // Busca pessoa pelo documento
+            const PersonDocumentService = require('../person-documents/person-document.service');
+            const documentService = new PersonDocumentService();
+
+            // Busca todos os documentos do tipo CNPJ
+            const documents = await documentService.findAll(1, 100, {
+                document_type: 'CNPJ',
+                document_value: cleanCnpj
+            });
+
+            let person;
+
+            if (documents && documents.data && documents.data.length > 0) {
+                // Se encontrou documento, atualiza a pessoa
+                const document = documents.data[0];
+                person = await this.findById(document.person_id);
+                if (!person) {
+                    throw new Error('Pessoa não encontrada');
+                }
+
+                const updateData = {
+                    full_name: cnpjData.razao_social,
+                    birth_date: cnpjData.data_abertura,
+                    fantasy_name: cnpjData.fantasia,
+                    person_type: 'PJ'
+                };
+
+                person = await this.update(person.id, updateData);
+                logger.info('Pessoa atualizada com sucesso', { personId: person.id });
+
+                // Busca endereço existente
+                const AddressService = require('../addresses/address.service');
+                const addressService = new AddressService();
+
+                const existingAddresses = await addressService.findByPersonId(person.id);
+
+                // Mapeia os dados do endereço
+                const addressData = {
+                    person_id: person.id,
+                    street: cnpjData.endereco.logradouro || 'Não informado',
+                    number: cnpjData.endereco.numero || 'S/N',
+                    complement: cnpjData.endereco.complemento || null,
+                    neighborhood: cnpjData.endereco.bairro || 'Não informado',
+                    city: cnpjData.endereco.cidade || 'Não informado',
+                    state: cnpjData.endereco.estado || 'XX',
+                    postal_code: cnpjData.endereco.cep ? cnpjData.endereco.cep.replace(/[^\d]/g, '') : '00000000',
+                    country: 'Brasil'
+                };
+
+                // Atualiza ou cria o endereço
+                if (existingAddresses && existingAddresses.length > 0) {
+                    await addressService.update(existingAddresses[0].id, addressData);
+                    logger.info('Endereço atualizado com sucesso', { personId: person.id });
+                } else {
+                    await addressService.create(addressData);
+                    logger.info('Endereço criado com sucesso', { personId: person.id });
+                }
+
+            } else {
+                // Se não encontrou, cria uma nova pessoa
+                const createData = {
+                    full_name: cnpjData.razao_social,
+                    fantasy_name: cnpjData.fantasia,
+                    birth_date: cnpjData.data_abertura,
+                    person_type: 'PJ'
+                };
+
+                person = await this.create(createData);
+                logger.info('Pessoa criada com sucesso', { personId: person.id });
+
+                // Cria o documento para a pessoa
+                await documentService.create(person.id, {
+                    document_type: 'CNPJ',
+                    document_value: cleanCnpj
+                });
+                logger.info('Documento criado com sucesso', { personId: person.id, documentType: 'CNPJ' });
+
+                // Adiciona o endereço
+                const AddressService = require('../addresses/address.service');
+                const addressService = new AddressService();
+
+                // Mapeia os dados do endereço
+                const addressData = {
+                    person_id: person.id,
+                    street: cnpjData.endereco.logradouro || 'Não informado',
+                    number: cnpjData.endereco.numero || 'S/N',
+                    complement: cnpjData.endereco.complemento || null,
+                    neighborhood: cnpjData.endereco.bairro || 'Não informado',
+                    city: cnpjData.endereco.cidade || 'Não informado',
+                    state: cnpjData.endereco.estado || 'XX',
+                    postal_code: cnpjData.endereco.cep ? cnpjData.endereco.cep.replace(/[^\d]/g, '') : '00000000',
+                    country: 'Brasil'
+                };
+
+                // Cria o endereço
+                await addressService.create(addressData);
+                logger.info('Endereço criado com sucesso', { personId: person.id });
+            }
+
+            return person;
+        } catch (error) {
+            logger.error('Erro ao criar/atualizar pessoa por CNPJ', {
+                error: error.message,
+                cnpj
             });
             throw error;
         }

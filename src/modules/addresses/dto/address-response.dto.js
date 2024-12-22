@@ -12,7 +12,6 @@ class AddressResponseDTO {
         this.country = data.country || 'Brasil';
         this.reference = data.reference;
         this.ibge = data.ibge;
-        this.is_main = data.is_main || false;
         this.created_at = data.created_at;
         this.updated_at = data.updated_at;
     }

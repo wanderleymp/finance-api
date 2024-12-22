@@ -1,10 +1,32 @@
+const express = require('express');
+const router = express.Router();
 const { logger } = require('../../middlewares/logger');
 const PersonService = require('./person.service');
 const { handleResponse, handleError } = require('../../utils/responseHandler');
+const { authMiddleware } = require('../../middlewares/auth');
 
 class PersonController {
     constructor(personService = new PersonService()) {
         this.personService = personService;
+        this.router = router;
+        this.setupRoutes();
+    }
+
+    setupRoutes() {
+        this.router.use(authMiddleware);
+        
+        this.router.get('/', this.findAll.bind(this));
+        this.router.get('/details', this.findAllWithDetails.bind(this));
+        this.router.get('/:id', this.findById.bind(this));
+        this.router.get('/:id/details', this.findPersonWithDetails.bind(this));
+        this.router.post('/', this.create.bind(this));
+        this.router.post('/cnpj', this.createOrUpdateFromCnpj.bind(this));
+        this.router.put('/:id', this.update.bind(this));
+        this.router.delete('/:id', this.delete.bind(this));
+        this.router.post('/:id/addresses', this.addAddress.bind(this));
+        this.router.post('/:id/contacts', this.addContact.bind(this));
+        this.router.delete('/addresses/:id', this.removeAddress.bind(this));
+        this.router.delete('/contacts/:id', this.removeContact.bind(this));
     }
 
     async findAll(req, res) {
@@ -158,6 +180,25 @@ class PersonController {
             logger.error('Erro ao criar pessoa', {
                 error: error.message,
                 body: req.body
+            });
+            return handleError(res, error);
+        }
+    }
+
+    async createOrUpdateFromCnpj(req, res) {
+        try {
+            const { cnpj, license_id } = req.body;
+
+            if (!cnpj) {
+                return handleError(res, new Error('CNPJ é obrigatório'));
+            }
+
+            const person = await this.personService.createOrUpdateFromCnpj(cnpj, license_id, req);
+            return handleResponse(res, person);
+        } catch (error) {
+            logger.error('Erro ao criar/atualizar pessoa por CNPJ', {
+                error: error.message,
+                cnpj: req.body.cnpj
             });
             return handleError(res, error);
         }

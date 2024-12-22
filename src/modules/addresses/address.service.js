@@ -221,11 +221,7 @@ class AddressService {
 
             // Valida os dados
             const createDTO = new CreateAddressDTO(enrichedAddressData);
-            const validationResult = await AddressValidator.validateCreate(createDTO);
-
-            if (!validationResult.isValid) {
-                throw new ValidationError('Dados inválidos', 400, validationResult.errors);
-            }
+            await AddressValidator.validateCreate(createDTO);
 
             // Verifica se já existe um endereço principal para a pessoa
             if (createDTO.is_main) {
@@ -247,11 +243,6 @@ class AddressService {
 
             logger.debug('Service create - result:', {
                 newAddress
-            });
-
-            logger.info('Endereço criado com sucesso', { 
-                addressId: newAddress.id,
-                personId: createDTO.person_id 
             });
 
             return newAddress;

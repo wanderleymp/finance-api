@@ -25,8 +25,7 @@ class AddressSchema {
         country: Joi.string().trim().default('Brasil').optional(),
         reference: Joi.string().trim().max(255).optional().allow(null),
         ibge: Joi.string().trim().max(20).optional().allow(null),
-        external_id: Joi.any().optional().allow(null),
-        is_main: Joi.boolean().optional().default(false)
+        external_id: Joi.any().optional().allow(null)
     });
 
     static update = this.create.fork(['person_id', 'street', 'number', 'neighborhood', 'city', 'state', 'postal_code'], schema => schema.optional());

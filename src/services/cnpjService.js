@@ -15,6 +15,7 @@ class CnpjService {
         logger.info('CNPJ SERVICE: Iniciando validação de formato', { cnpj });
 
         const cleanCnpj = cnpj.replace(/[^\d]/g, '');
+        logger.info('CNPJ SERVICE: CNPJ limpo', { cleanCnpj });
         
         if (cleanCnpj.length !== 14) {
             throw new ValidationError('CNPJ deve conter 14 dígitos', 400);
@@ -27,13 +28,36 @@ class CnpjService {
         let sum = 0;
         let pos = size - 7;
 
+        logger.info('CNPJ SERVICE: Dados para validação', { 
+            size,
+            numbers,
+            digits,
+            pos
+        });
+
         // Validação do primeiro dígito
         for (let i = size; i >= 1; i--) {
-            sum += numbers.charAt(size - i) * pos--;
+            const digit = numbers.charAt(size - i);
+            const multiplier = pos--;
+            sum += digit * multiplier;
             if (pos < 2) pos = 9;
+
+            logger.info('CNPJ SERVICE: Validação primeiro dígito', {
+                i,
+                digit,
+                multiplier,
+                sum,
+                pos
+            });
         }
 
         let result = sum % 11 < 2 ? 0 : 11 - sum % 11;
+        logger.info('CNPJ SERVICE: Resultado primeiro dígito', {
+            sum,
+            result,
+            expectedDigit: parseInt(digits.charAt(0))
+        });
+
         if (result !== parseInt(digits.charAt(0))) {
             throw new ValidationError('CNPJ inválido', 400);
         }
@@ -44,12 +68,35 @@ class CnpjService {
         sum = 0;
         pos = size - 7;
 
+        logger.info('CNPJ SERVICE: Dados para validação do segundo dígito', {
+            size,
+            numbers,
+            digits,
+            pos
+        });
+
         for (let i = size; i >= 1; i--) {
-            sum += numbers.charAt(size - i) * pos--;
+            const digit = numbers.charAt(size - i);
+            const multiplier = pos--;
+            sum += digit * multiplier;
             if (pos < 2) pos = 9;
+
+            logger.info('CNPJ SERVICE: Validação segundo dígito', {
+                i,
+                digit,
+                multiplier,
+                sum,
+                pos
+            });
         }
 
         result = sum % 11 < 2 ? 0 : 11 - sum % 11;
+        logger.info('CNPJ SERVICE: Resultado segundo dígito', {
+            sum,
+            result,
+            expectedDigit: parseInt(digits.charAt(1))
+        });
+
         if (result !== parseInt(digits.charAt(1))) {
             throw new ValidationError('CNPJ inválido', 400);
         }
@@ -166,44 +213,44 @@ class CnpjService {
     mapApiResponse(data) {
         return {
             // Campos principais
-            nome: data.nome || '',
-            razao_social: data.nome || '',
-            fantasia: data.fantasia || '',
+            nome: data?.nome || '',
+            razao_social: data?.nome || '',
+            fantasia: data?.fantasia || '',
             
             // Contato
             contato: {
-                email: data.email || '',
-                telefone: data.telefone || ''
+                email: data?.email || '',
+                telefone: data?.telefone || ''
             },
             
             // Endereço
             endereco: {
-                logradouro: data.logradouro || '',
-                numero: data.numero || '',
-                complemento: data.complemento || '',
-                bairro: data.bairro || '',
-                cidade: data.municipio || '',
-                estado: data.uf || '',
-                cep: data.cep ? data.cep.replace(/[.-]/g, '') : ''
+                logradouro: data?.logradouro || '',
+                numero: data?.numero || '',
+                complemento: data?.complemento || '',
+                bairro: data?.bairro || '',
+                cidade: data?.municipio || '',
+                estado: data?.uf || '',
+                cep: data?.cep ? data.cep.replace(/[.-]/g, '') : ''
             },
             
             // Informações adicionais
-            cnpj: data.cnpj ? data.cnpj.replace(/[.-/]/g, '') : '',
-            situacao_cadastral: data.situacao || '',
-            natureza_juridica: data.natureza_juridica || '',
-            porte: data.porte || '',
-            capital_social: data.capital_social || 0,
-            data_abertura: data.abertura ? this.parseDate(data.abertura) : null,
+            cnpj: data?.cnpj ? data.cnpj.replace(/[.-/]/g, '') : '',
+            situacao_cadastral: data?.situacao || '',
+            natureza_juridica: data?.natureza_juridica || '',
+            porte: data?.porte || '',
+            capital_social: data?.capital_social || 0,
+            data_abertura: data?.abertura ? this.parseDate(data.abertura) : null,
             
             // Detalhes extras
-            atividade_principal: data.atividade_principal?.[0]?.text || '',
-            ultima_atualizacao: data.ultima_atualizacao ? new Date(data.ultima_atualizacao) : null,
+            atividade_principal: data?.atividade_principal?.[0]?.text || '',
+            ultima_atualizacao: data?.ultima_atualizacao ? new Date(data.ultima_atualizacao) : null,
             
             // Informações societárias
-            qsa: data.qsa?.map(socio => ({
-                nome: socio.nome || '',
-                cargo: socio.qual || ''
-            })) || []
+            qsa: Array.isArray(data?.qsa) ? data.qsa.map(socio => ({
+                nome: socio?.nome || '',
+                cargo: socio?.qual || ''
+            })) : []
         };
     }
 

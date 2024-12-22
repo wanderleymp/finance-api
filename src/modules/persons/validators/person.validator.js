@@ -1,7 +1,8 @@
 const Joi = require('joi');
 const PersonSchema = require('../schemas/person.schema');
 const { ValidationError } = require('../../../utils/errors');
-const { validateCPF, validateCNPJ } = require('../../../utils/documentValidator');
+const { validateCPF } = require('../../../utils/documentValidator');
+const CnpjService = require('../../../services/cnpjService');
 
 const listPersonsSchema = Joi.object({
     page: Joi.number().integer().min(1).optional(),
@@ -39,10 +40,12 @@ class PersonValidator {
 
         // Valida CNPJ
         if (cleanDocument.length === 14) {
-            if (!validateCNPJ(cleanDocument)) {
+            try {
+                CnpjService.validateCnpjFormat(document);
+                return true;
+            } catch (error) {
                 throw new Error('CNPJ inválido');
             }
-            return true;
         }
 
         throw new Error('Documento deve ser um CPF (11 dígitos) ou CNPJ (14 dígitos)');
