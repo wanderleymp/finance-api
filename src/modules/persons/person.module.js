@@ -14,7 +14,7 @@ class PersonModule {
     }
 
     register(app) {
-        app.use('/api/persons', this.routes.getRouter());
+        app.use('/persons', this.routes.getRouter());
     }
 }
 
