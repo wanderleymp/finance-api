@@ -31,6 +31,13 @@ class MovementController {
 
             return res.json(result);
         } catch (error) {
+            logger.error('Erro ao listar movimentos:', {
+                error: error.message,
+                stack: error.stack,
+                page: req.query.page,
+                limit: req.query.limit,
+                filters: req.query
+            });
             next(error);
         }
     }
@@ -40,21 +47,23 @@ class MovementController {
      */
     async show(req, res, next) {
         try {
-            const { id } = req.params;
-            const { detailed = false } = req.query;
-            
-            logger.info('Controller: Buscando movimento por ID', { 
+            const id = parseInt(req.params.id);
+            const detailed = req.query.detailed === 'true';
+
+            logger.info('Controller: Buscando movimento por ID', {
                 id,
-                detailed 
+                detailed
             });
 
-            const movement = await this.service.getMovementById(
-                parseInt(id),
-                detailed === 'true'
-            );
-
-            return res.json(movement);
+            const result = await this.service.getMovementById(id, detailed);
+            return res.json(result);
         } catch (error) {
+            logger.error('Erro ao buscar movimento por ID:', {
+                error: error.message,
+                stack: error.stack,
+                id: req.params.id,
+                detailed: req.query.detailed
+            });
             next(error);
         }
     }

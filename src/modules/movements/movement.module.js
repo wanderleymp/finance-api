@@ -1,10 +1,11 @@
 const MovementController = require('./movement.controller');
 const MovementService = require('./movement.service');
 const MovementRepository = require('./movement.repository');
-const cacheService = require('../../services/cache.service');
+const CacheService = require('../../services/cache.service');
 
 // Instancia as dependências
 const repository = new MovementRepository();
+const cacheService = new CacheService('movements');
 const service = new MovementService({ 
     movementRepository: repository,
     cacheService 

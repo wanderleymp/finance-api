@@ -1,6 +1,5 @@
 const { Router } = require('express');
 const { validateRequest } = require('../../middlewares/requestValidator');
-const { authMiddleware } = require('../../middlewares/auth');
 const { 
     listMovementsSchema,
     createMovementSchema,
@@ -13,9 +12,6 @@ const {
  */
 module.exports = (controller) => {
     const router = Router();
-
-    // Middleware de autenticação para todas as rotas
-    router.use(authMiddleware);
 
     router.get('/', 
         validateRequest(listMovementsSchema, 'query'),

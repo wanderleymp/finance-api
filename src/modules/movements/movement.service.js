@@ -48,9 +48,7 @@ class MovementService extends IMovementService {
                 }
             }
 
-            const data = detailed 
-                ? await this.findById(id, true)
-                : await this.movementRepository.findById(id);
+            const data = await this.findById(id, detailed);
 
             if (!data) {
                 throw new ValidationError('Movimento não encontrado');
