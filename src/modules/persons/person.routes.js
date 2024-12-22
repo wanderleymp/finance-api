@@ -1,7 +1,7 @@
 const { Router } = require('express');
 const PersonController = require('./person.controller');
-const authMiddleware = require('../../middlewares/authMiddleware');
-const { validateRequest } = require('../../middlewares/validationMiddleware');
+const { authMiddleware } = require('../../middlewares/auth');
+const { validateSchema } = require('../../utils/validateSchema');
 const { 
     createPersonSchema, 
     updatePersonSchema 
@@ -11,51 +11,55 @@ const addressSchema = require('../addresses/schemas/address.schema');
 const contactSchema = require('../contacts/schemas/contact.schema');
 
 class PersonRoutes {
-    constructor(personController = new PersonController()) {
+    constructor() {
         this.router = Router();
-        this.personController = personController;
+        this.personController = new PersonController();
         this.setupRoutes();
     }
 
     setupRoutes() {
         // Rotas públicas
-        this.router.get('/', 
-            authMiddleware, 
-            this.personController.findAll.bind(this.personController)
-        );
-
-        this.router.get('/:id', 
-            authMiddleware, 
-            this.personController.findById.bind(this.personController)
-        );
-
-        this.router.get('/:id/details', 
-            authMiddleware, 
-            this.personController.findPersonWithDetails.bind(this.personController)
-        );
+        this.router.get('/', this.personController.findAll.bind(this.personController));
+        this.router.get('/:id', this.personController.findById.bind(this.personController));
+        this.router.get('/:id/details', this.personController.findPersonWithDetails.bind(this.personController));
 
         // Rotas protegidas com validação
         this.router.post('/', 
             authMiddleware,
-            validateRequest(createPersonSchema),
+            (req, res, next) => validateSchema(createPersonSchema, req.body)
+                .then(validatedData => {
+                    req.body = validatedData;
+                    next();
+                })
+                .catch(next),
             this.personController.create.bind(this.personController)
         );
 
         this.router.put('/:id', 
             authMiddleware,
-            validateRequest(updatePersonSchema),
+            (req, res, next) => validateSchema(updatePersonSchema, req.body)
+                .then(validatedData => {
+                    req.body = validatedData;
+                    next();
+                })
+                .catch(next),
             this.personController.update.bind(this.personController)
         );
 
         this.router.delete('/:id', 
-            authMiddleware, 
+            authMiddleware,
             this.personController.delete.bind(this.personController)
         );
 
         // Rotas de endereços
         this.router.post('/:id/addresses', 
             authMiddleware,
-            validateRequest(addressSchema),
+            (req, res, next) => validateSchema(addressSchema.create, req.body)
+                .then(validatedData => {
+                    req.body = validatedData;
+                    next();
+                })
+                .catch(next),
             this.personController.addAddress.bind(this.personController)
         );
 
@@ -67,7 +71,12 @@ class PersonRoutes {
         // Rotas de contatos
         this.router.post('/:id/contacts', 
             authMiddleware,
-            validateRequest(contactSchema),
+            (req, res, next) => validateSchema(contactSchema.create, req.body)
+                .then(validatedData => {
+                    req.body = validatedData;
+                    next();
+                })
+                .catch(next),
             this.personController.addContact.bind(this.personController)
         );
 
@@ -75,8 +84,6 @@ class PersonRoutes {
             authMiddleware,
             this.personController.removeContact.bind(this.personController)
         );
-
-        return this.router;
     }
 
     getRouter() {
