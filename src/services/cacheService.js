@@ -53,7 +53,7 @@ class CacheService {
         }
     }
 
-    async delete(key) {
+    async del(key) {
         try {
             await this.redis.del(key);
         } catch (error) {
@@ -64,11 +64,27 @@ class CacheService {
         }
     }
 
+    async clearPattern(pattern) {
+        try {
+            const keys = await this.redis.keys(pattern);
+            if (keys.length > 0) {
+                await this.redis.del(...keys);
+                logger.info('Cache limpo com sucesso', { pattern, keysRemoved: keys.length });
+            }
+        } catch (error) {
+            logger.error('Erro ao limpar cache por padrão', { 
+                pattern, 
+                error: error.message 
+            });
+        }
+    }
+
     async clearAll() {
         try {
-            await this.redis.flushdb();
+            await this.redis.flushall();
+            logger.info('Todo o cache foi limpo');
         } catch (error) {
-            logger.error('Erro ao limpar cache', { 
+            logger.error('Erro ao limpar todo o cache', { 
                 error: error.message 
             });
         }

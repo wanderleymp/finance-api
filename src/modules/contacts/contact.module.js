@@ -10,7 +10,7 @@ class ContactModule {
         const contactController = new ContactController(contactService);
 
         // Registra as rotas de contatos
-        app.use('/api/contacts', contactRoutes(contactController));
+        app.use('/contacts', contactRoutes(contactController));
     }
 }
 

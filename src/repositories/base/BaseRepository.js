@@ -13,7 +13,18 @@ class BaseRepository {
      */
     async findAll(page = 1, limit = 10, filters = {}) {
         try {
-            const offset = (page - 1) * limit;
+            logger.debug('BaseRepository findAll - input:', {
+                page,
+                limit,
+                filters,
+                tableName: this.tableName,
+                primaryKey: this.primaryKey
+            });
+
+            // Garante que page e limit são números
+            const parsedPage = parseInt(page) || 1;
+            const parsedLimit = parseInt(limit) || 10;
+            const offset = (parsedPage - 1) * parsedLimit;
             
             // Prepara os filtros
             const queryParams = [];
@@ -22,7 +33,7 @@ class BaseRepository {
 
             // Filtros básicos
             for (const [key, value] of Object.entries(filters)) {
-                if (value !== undefined && value !== null) {
+                if (value !== undefined && value !== null && value !== '') {
                     conditions.push(`${key} = $${paramCount}`);
                     queryParams.push(value);
                     paramCount++;
@@ -49,35 +60,48 @@ class BaseRepository {
                 ${whereClause}
             `;
 
-            logger.debug('Repository: Executando query', {
+            logger.debug('BaseRepository findAll - queries:', {
                 query,
                 countQuery,
                 queryParams,
-                paramCount
+                paramCount,
+                offset,
+                parsedPage,
+                parsedLimit
             });
 
+            // Executa as queries
             const [data, countResult] = await Promise.all([
-                this.pool.query(query, [...queryParams, limit, offset]),
+                this.pool.query(query, [...queryParams, parsedLimit, offset]),
                 this.pool.query(countQuery, queryParams)
             ]);
 
             const totalItems = parseInt(countResult.rows[0].total);
-            const totalPages = Math.ceil(totalItems / limit);
+            const totalPages = Math.ceil(totalItems / parsedLimit);
 
-            return {
+            const result = {
                 data: data.rows,
                 pagination: {
-                    page,
-                    limit,
+                    page: parsedPage,
+                    limit: parsedLimit,
                     totalItems,
                     totalPages
                 }
             };
+
+            logger.debug('BaseRepository findAll - result:', {
+                result
+            });
+
+            return result;
         } catch (error) {
-            logger.error('Erro ao listar registros', {
+            logger.error('BaseRepository - Erro ao listar registros', {
                 error: error.message,
                 tableName: this.tableName,
-                filters
+                filters,
+                page,
+                limit,
+                stack: error.stack
             });
             throw error;
         }
@@ -88,19 +112,36 @@ class BaseRepository {
      */
     async findById(id) {
         try {
+            logger.debug('BaseRepository findById - input:', {
+                id,
+                tableName: this.tableName,
+                primaryKey: this.primaryKey
+            });
+
             const query = `
                 SELECT *
                 FROM ${this.tableName}
                 WHERE ${this.primaryKey} = $1
             `;
 
+            logger.debug('BaseRepository findById - query:', {
+                query,
+                id
+            });
+
             const result = await this.pool.query(query, [id]);
+
+            logger.debug('BaseRepository findById - result:', {
+                result: result.rows[0]
+            });
+
             return result.rows[0];
         } catch (error) {
-            logger.error('Erro ao buscar registro por ID', {
+            logger.error('BaseRepository - Erro ao buscar registro por ID', {
                 error: error.message,
                 tableName: this.tableName,
-                id
+                id,
+                stack: error.stack
             });
             throw error;
         }
@@ -111,6 +152,11 @@ class BaseRepository {
      */
     async create(data) {
         try {
+            logger.debug('BaseRepository create - input:', {
+                data,
+                tableName: this.tableName
+            });
+
             const columns = Object.keys(data);
             const values = Object.values(data);
             const placeholders = values.map((_, index) => `$${index + 1}`);
@@ -121,13 +167,24 @@ class BaseRepository {
                 RETURNING *
             `;
 
+            logger.debug('BaseRepository create - query:', {
+                query,
+                values
+            });
+
             const result = await this.pool.query(query, values);
+
+            logger.debug('BaseRepository create - result:', {
+                result: result.rows[0]
+            });
+
             return result.rows[0];
         } catch (error) {
-            logger.error('Erro ao criar registro', {
+            logger.error('BaseRepository - Erro ao criar registro', {
                 error: error.message,
                 tableName: this.tableName,
-                data
+                data,
+                stack: error.stack
             });
             throw error;
         }
@@ -138,6 +195,12 @@ class BaseRepository {
      */
     async update(id, data) {
         try {
+            logger.debug('BaseRepository update - input:', {
+                id,
+                data,
+                tableName: this.tableName
+            });
+
             const updates = Object.entries(data)
                 .map(([key, _], index) => `${key} = $${index + 1}`)
                 .join(', ');
@@ -149,14 +212,25 @@ class BaseRepository {
                 RETURNING *
             `;
 
+            logger.debug('BaseRepository update - query:', {
+                query,
+                values: [...Object.values(data), id]
+            });
+
             const result = await this.pool.query(query, [...Object.values(data), id]);
+
+            logger.debug('BaseRepository update - result:', {
+                result: result.rows[0]
+            });
+
             return result.rows[0];
         } catch (error) {
-            logger.error('Erro ao atualizar registro', {
+            logger.error('BaseRepository - Erro ao atualizar registro', {
                 error: error.message,
                 tableName: this.tableName,
                 id,
-                data
+                data,
+                stack: error.stack
             });
             throw error;
         }
@@ -167,19 +241,35 @@ class BaseRepository {
      */
     async delete(id) {
         try {
+            logger.debug('BaseRepository delete - input:', {
+                id,
+                tableName: this.tableName
+            });
+
             const query = `
                 DELETE FROM ${this.tableName}
                 WHERE ${this.primaryKey} = $1
                 RETURNING *
             `;
 
+            logger.debug('BaseRepository delete - query:', {
+                query,
+                id
+            });
+
             const result = await this.pool.query(query, [id]);
+
+            logger.debug('BaseRepository delete - result:', {
+                result: result.rows[0]
+            });
+
             return result.rows[0];
         } catch (error) {
-            logger.error('Erro ao remover registro', {
+            logger.error('BaseRepository - Erro ao remover registro', {
                 error: error.message,
                 tableName: this.tableName,
-                id
+                id,
+                stack: error.stack
             });
             throw error;
         }

@@ -1,50 +1,43 @@
-const { Router } = require('express');
-const { validateRequest } = require('../../middlewares/requestValidator');
-const { 
-    listContactsSchema,
-    createContactSchema,
-    updateContactSchema
-} = require('./validators/contact.validator');
-const { authMiddleware } = require('../../middlewares/authMiddleware');
+const express = require('express');
+const { authMiddleware } = require('../../middlewares/auth');
 
 /**
- * @param {ContactController} controller 
+ * @param {ContactController} contactController 
  */
 module.exports = (contactController) => {
-    const router = Router();
+    const router = express.Router();
 
     // Rotas protegidas por autenticação
     router.use(authMiddleware);
 
+    // Buscar todos os contatos
     router.get('/', 
-        validateRequest(listContactsSchema, 'query'),
-        contactController.findAll.bind(contactController)
+        (req, res) => contactController.findAll(req, res)
     );
 
+    // Buscar contato por ID
     router.get('/:id', 
-        contactController.findById.bind(contactController)
+        (req, res) => contactController.findById(req, res)
     );
 
+    // Buscar contatos de uma pessoa
     router.get('/person/:personId', 
-        contactController.findByPersonId.bind(contactController)
+        (req, res) => contactController.findByPersonId(req, res)
     );
 
-    router.get('/person/:personId/main', 
-        contactController.findMainContactByPersonId.bind(contactController)
-    );
-
+    // Criar novo contato
     router.post('/', 
-        validateRequest(createContactSchema),
-        contactController.create.bind(contactController)
+        (req, res) => contactController.create(req, res)
     );
 
+    // Atualizar contato
     router.put('/:id', 
-        validateRequest(updateContactSchema),
-        contactController.update.bind(contactController)
+        (req, res) => contactController.update(req, res)
     );
 
+    // Deletar contato
     router.delete('/:id', 
-        contactController.delete.bind(contactController)
+        (req, res) => contactController.delete(req, res)
     );
 
     return router;

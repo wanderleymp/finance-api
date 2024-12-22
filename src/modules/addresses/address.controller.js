@@ -5,20 +5,16 @@ const { handleResponse, handleError } = require('../../utils/responseHandler');
 
 class AddressController {
     constructor(addressService) {
-        console.log('AddressService:', addressService);
-        this.addressService = addressService;
+        this.addressService = addressService || new AddressService();
     }
 
     async findAll(req, res) {
         try {
-            const { page = 1, limit = 10, ...filters } = req.query;
+            const page = parseInt(req.query.page) || 1;
+            const limit = parseInt(req.query.limit) || 10;
+            const { page: _, limit: __, ...filters } = req.query;
 
-            const result = await this.addressService.findAll(
-                filters, 
-                parseInt(page), 
-                parseInt(limit)
-            );
-
+            const result = await this.addressService.findAll(page, limit, filters);
             return handleResponse(res, result);
         } catch (error) {
             logger.error('Erro ao buscar endereços', {
