@@ -218,7 +218,7 @@ class PersonRepository extends IPersonRepository {
                     birth_date, 
                     person_type,
                     fantasy_name,
-                    is_active
+                    active
                 ) VALUES (
                     $1, $2, $3, $4, $5
                 ) RETURNING *
@@ -228,7 +228,7 @@ class PersonRepository extends IPersonRepository {
                 data.birth_date,
                 data.person_type,
                 data.fantasy_name,
-                data.is_active
+                data.active
             ];
 
             const result = await this.pool.query(query, values);

@@ -2,12 +2,11 @@ const { createPersonSchema } = require('../schemas/person.schema');
 
 class CreatePersonDTO {
     constructor(data) {
-        this.name = data.name;
-        this.document = data.document;
-        this.email = data.email;
+        this.full_name = data.full_name;
+        this.fantasy_name = data.fantasy_name;
         this.birth_date = data.birth_date;
-        this.type = data.type || 'individual';
-        this.is_active = data.is_active !== undefined ? data.is_active : true;
+        this.person_type = data.person_type || 'PJ';
+        this.active = data.active !== undefined ? data.active : true;
     }
 
     validate() {
@@ -16,23 +15,21 @@ class CreatePersonDTO {
 
     toJSON() {
         return {
-            name: this.name,
-            document: this.document,
-            email: this.email,
+            full_name: this.full_name,
+            fantasy_name: this.fantasy_name,
             birth_date: this.birth_date,
-            type: this.type,
-            is_active: this.is_active
+            person_type: this.person_type,
+            active: this.active
         };
     }
 
     static fromDatabase(data) {
         return new CreatePersonDTO({
-            name: data.name,
-            document: data.document,
-            email: data.email,
+            full_name: data.full_name,
+            fantasy_name: data.fantasy_name,
             birth_date: data.birth_date,
-            type: data.type,
-            is_active: data.is_active
+            person_type: data.person_type,
+            active: data.active
         });
     }
 }

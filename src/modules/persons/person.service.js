@@ -275,23 +275,6 @@ class PersonService {
                 throw new Error(error.message);
             }
 
-            // Valida documento
-            PersonValidator.validateDocument(createDTO.document);
-
-            // Verifica se já existe pessoa com o mesmo documento
-            const existingPerson = await this.findByDocument(createDTO.document);
-            if (existingPerson) {
-                logger.warn('Tentativa de criar pessoa com documento duplicado', { 
-                    document: createDTO.document 
-                });
-                throw new Error('Já existe uma pessoa cadastrada com este documento');
-            }
-
-            // Valida email se fornecido
-            if (createDTO.email) {
-                PersonValidator.validateEmail(createDTO.email);
-            }
-
             // Cria a pessoa
             const newPerson = await this.personRepository.create(createDTO);
 
@@ -385,12 +368,8 @@ class PersonService {
             
             // Limpa cache relacionado
             await this.cacheService.del(`person:${id}`);
-            await this.cacheService.del(`person:details:${id}`);
-            
-            const keys = await this.cacheService.keys('persons:*');
-            if (keys && keys.length > 0) {
-                await Promise.all(keys.map(key => this.cacheService.del(key)));
-            }
+
+            logger.info('Pessoa deletada com sucesso', { id });
         } catch (error) {
             logger.error('Erro ao deletar pessoa', { error: error.message, id });
             throw error;
