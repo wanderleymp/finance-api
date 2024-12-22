@@ -278,16 +278,8 @@ class AddressService {
                 ...enrichedAddressData
             });
 
-            const validationResult = await AddressValidator.validateUpdate(updateDTO);
-
-            if (!validationResult.isValid) {
-                throw new ValidationError('Dados inválidos', 400, validationResult.errors);
-            }
-
-            // Se está definindo como principal, remove o principal anterior
-            if (updateDTO.is_main && !existingAddress.is_main) {
-                await this.unsetMainAddress(existingAddress.person_id);
-            }
+            // Se a validação falhar, ela lançará um erro
+            await AddressValidator.validateUpdate(updateDTO);
 
             // Atualiza o endereço
             const updatedAddress = await this.addressRepository.update(id, updateDTO);

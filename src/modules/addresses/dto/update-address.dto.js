@@ -11,7 +11,6 @@ class UpdateAddressDTO {
         this.country = data.country;
         this.reference = data.reference;
         this.ibge = data.ibge;
-        this.is_main = data.is_main;
     }
 
     validate(schema) {
