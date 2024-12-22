@@ -16,6 +16,7 @@ const movementRoutes = require('./modules/movements/movement.module');
 const movementPaymentRoutes = require('./modules/movement-payments/movement-payment.module');
 const paymentMethodRoutes = require('./modules/payment-methods/payment-method.module');
 const userRoutes = require('./modules/users/user.routes');
+const addressRoutes = require('./modules/addresses/address.module');
 
 const app = express();
 
@@ -82,6 +83,7 @@ app.use('/movements', movementRoutes);
 app.use('/movement-payments', movementPaymentRoutes);
 app.use('/payment-methods', paymentMethodRoutes);
 app.use('/users', userRoutes);
+app.use('/addresses', addressRoutes);
 
 // Rota 404 para capturar requisições não encontradas
 app.use((req, res) => {
