@@ -67,6 +67,54 @@ class PersonController {
         }
     }
 
+    async findDocuments(req, res) {
+        try {
+            const { id } = req.params;
+
+            const result = await this.personService.findDocuments(parseInt(id));
+
+            return handleResponse(res, result);
+        } catch (error) {
+            logger.error('Erro ao buscar documentos da pessoa', {
+                error: error.message,
+                params: req.params
+            });
+            return handleError(res, error);
+        }
+    }
+
+    async findContacts(req, res) {
+        try {
+            const { id } = req.params;
+
+            const result = await this.personService.findContacts(parseInt(id));
+
+            return handleResponse(res, result);
+        } catch (error) {
+            logger.error('Erro ao buscar contatos da pessoa', {
+                error: error.message,
+                params: req.params
+            });
+            return handleError(res, error);
+        }
+    }
+
+    async findAddresses(req, res) {
+        try {
+            const { id } = req.params;
+
+            const result = await this.personService.findAddresses(parseInt(id));
+
+            return handleResponse(res, result);
+        } catch (error) {
+            logger.error('Erro ao buscar endereços da pessoa', {
+                error: error.message,
+                params: req.params
+            });
+            return handleError(res, error);
+        }
+    }
+
     async create(req, res) {
         try {
             const personData = req.body;

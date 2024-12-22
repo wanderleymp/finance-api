@@ -118,21 +118,93 @@ class PersonService {
                 return cachedPersonDetails;
             }
 
-            const personDetails = await this.personRepository.findPersonWithDetails(id);
-            
-            if (!personDetails) {
-                logger.warn('Detalhes da pessoa não encontrados', { id });
-                return null;
+            const person = await this.findById(id);
+            if (!person) {
+                throw new Error('Pessoa não encontrada');
             }
-
-            // Salva no cache
-            await this.cacheService.set(cacheKey, personDetails, 3600); // 1 hora
-
-            return personDetails;
+            return person;
         } catch (error) {
             logger.error('Erro ao buscar detalhes da pessoa', {
                 error: error.message,
                 id
+            });
+            throw error;
+        }
+    }
+
+    async findDocuments(personId) {
+        try {
+            // Verifica se a pessoa existe
+            const person = await this.findById(personId);
+            if (!person) {
+                throw new Error('Pessoa não encontrada');
+            }
+
+            // Usa o serviço de documentos para buscar
+            const PersonDocumentService = require('../person-documents/person-document.service');
+            const documentService = new PersonDocumentService();
+            
+            const result = await documentService.findAll(1, 100, { person_id: personId });
+            return {
+                data: result.data,
+                meta: result.meta
+            };
+        } catch (error) {
+            logger.error('Erro ao buscar documentos da pessoa', {
+                error: error.message,
+                personId
+            });
+            throw error;
+        }
+    }
+
+    async findContacts(personId) {
+        try {
+            // Verifica se a pessoa existe
+            const person = await this.findById(personId);
+            if (!person) {
+                throw new Error('Pessoa não encontrada');
+            }
+
+            // Usa o serviço de contatos para buscar
+            const PersonContactService = require('../person-contacts/person-contact.service');
+            const contactService = new PersonContactService();
+            
+            const result = await contactService.findAll(1, 100, { person_id: personId });
+            return {
+                data: result.data,
+                meta: result.meta
+            };
+        } catch (error) {
+            logger.error('Erro ao buscar contatos da pessoa', {
+                error: error.message,
+                personId
+            });
+            throw error;
+        }
+    }
+
+    async findAddresses(personId) {
+        try {
+            // Verifica se a pessoa existe
+            const person = await this.findById(personId);
+            if (!person) {
+                throw new Error('Pessoa não encontrada');
+            }
+
+            // Usa o serviço de endereços para buscar
+            const AddressService = require('../addresses/address.service');
+            const addressService = new AddressService();
+            
+            const result = await addressService.findAll(1, 100, { person_id: personId });
+            return {
+                data: result.data,
+                meta: result.meta
+            };
+        } catch (error) {
+            logger.error('Erro ao buscar endereços da pessoa', {
+                error: error.message,
+                personId
             });
             throw error;
         }
