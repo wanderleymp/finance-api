@@ -15,33 +15,46 @@ class PersonContactRepository extends IPersonContactRepository {
     async findAll(page = 1, limit = 10, filters = {}) {
         try {
             const offset = (page - 1) * limit;
-            const values = [limit, offset];
             let whereClause = '';
-            
+            const queryParams = [];
+            let paramCount = 1;
+
+            // Constrói a cláusula WHERE
             if (filters.person_id) {
-                whereClause = 'WHERE person_id = $3';
-                values.push(filters.person_id);
+                whereClause = `WHERE pc.person_id = $${paramCount}`;
+                queryParams.push(filters.person_id);
+                paramCount++;
             }
 
+            // Adiciona parâmetros de paginação
+            queryParams.push(limit, offset);
+
             const query = `
-                SELECT pc.*, p.full_name, c.contact_value, c.contact_type, c.contact_name
+                SELECT 
+                    pc.contact_id,
+                    pc.created_at,
+                    c.contact_value,
+                    c.contact_type,
+                    c.contact_name
                 FROM ${this.tableName} pc
-                JOIN persons p ON p.person_id = pc.person_id
                 JOIN contacts c ON c.contact_id = pc.contact_id
                 ${whereClause}
                 ORDER BY pc.created_at DESC
-                LIMIT $1 OFFSET $2
+                LIMIT $${paramCount} OFFSET $${paramCount + 1}
             `;
 
             const countQuery = `
                 SELECT COUNT(*) as total
-                FROM ${this.tableName}
+                FROM ${this.tableName} pc
                 ${whereClause}
             `;
 
+            // Para a query de contagem, usamos apenas os parâmetros do WHERE
+            const countParams = filters.person_id ? [filters.person_id] : [];
+
             const [result, count] = await Promise.all([
-                this.pool.query(query, values),
-                this.pool.query(countQuery, whereClause ? [filters.person_id] : [])
+                this.pool.query(query, queryParams),
+                this.pool.query(countQuery, countParams)
             ]);
 
             return {
@@ -54,12 +67,7 @@ class PersonContactRepository extends IPersonContactRepository {
                 }
             };
         } catch (error) {
-            logger.error('Erro ao listar person-contacts', {
-                error: error.message,
-                page,
-                limit,
-                filters
-            });
+            logger.error('Erro ao listar person-contacts', { error: error.message, page, limit, filters });
             throw error;
         }
     }
@@ -70,14 +78,23 @@ class PersonContactRepository extends IPersonContactRepository {
     async findById(id) {
         try {
             const query = `
-                SELECT pc.*, p.full_name, c.contact_value, c.contact_type, c.contact_name
+                SELECT 
+                    pc.contact_id,
+                    pc.created_at,
+                    c.contact_value,
+                    c.contact_type,
+                    c.contact_name
                 FROM ${this.tableName} pc
-                JOIN persons p ON p.person_id = pc.person_id
                 JOIN contacts c ON c.contact_id = pc.contact_id
                 WHERE pc.person_contact_id = $1
             `;
 
             const result = await this.pool.query(query, [id]);
+
+            if (result.rows.length === 0) {
+                throw new Error('Person-contact não encontrado');
+            }
+
             return result.rows[0];
         } catch (error) {
             logger.error('Erro ao buscar person-contact por ID', {
@@ -97,7 +114,12 @@ class PersonContactRepository extends IPersonContactRepository {
             const values = [personId, limit, offset];
 
             const query = `
-                SELECT pc.*, c.contact_value, c.contact_type, c.contact_name
+                SELECT 
+                    pc.contact_id,
+                    pc.created_at,
+                    c.contact_value,
+                    c.contact_type,
+                    c.contact_name
                 FROM ${this.tableName} pc
                 JOIN contacts c ON c.contact_id = pc.contact_id
                 WHERE pc.person_id = $1
@@ -142,9 +164,19 @@ class PersonContactRepository extends IPersonContactRepository {
     async create(data) {
         try {
             const query = `
-                INSERT INTO ${this.tableName} (person_id, contact_id)
-                VALUES ($1, $2)
-                RETURNING *
+                WITH inserted AS (
+                    INSERT INTO ${this.tableName} (person_id, contact_id)
+                    VALUES ($1, $2)
+                    RETURNING contact_id, created_at
+                )
+                SELECT 
+                    i.contact_id,
+                    i.created_at,
+                    c.contact_value,
+                    c.contact_type,
+                    c.contact_name
+                FROM inserted i
+                JOIN contacts c ON c.contact_id = i.contact_id
             `;
 
             const result = await this.pool.query(query, [
@@ -168,12 +200,27 @@ class PersonContactRepository extends IPersonContactRepository {
     async delete(id) {
         try {
             const query = `
-                DELETE FROM ${this.tableName}
-                WHERE person_contact_id = $1
-                RETURNING *
+                WITH deleted AS (
+                    DELETE FROM ${this.tableName}
+                    WHERE person_contact_id = $1
+                    RETURNING contact_id, created_at
+                )
+                SELECT 
+                    d.contact_id,
+                    d.created_at,
+                    c.contact_value,
+                    c.contact_type,
+                    c.contact_name
+                FROM deleted d
+                JOIN contacts c ON c.contact_id = d.contact_id
             `;
 
             const result = await this.pool.query(query, [id]);
+
+            if (result.rows.length === 0) {
+                throw new Error('Person-contact não encontrado');
+            }
+
             return result.rows[0];
         } catch (error) {
             logger.error('Erro ao deletar person-contact', {

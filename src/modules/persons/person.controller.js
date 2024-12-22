@@ -9,17 +9,49 @@ class PersonController {
 
     async findAll(req, res) {
         try {
-            const { page = 1, limit = 10, ...filters } = req.query;
+            const page = parseInt(req.query.page) || 1;
+            const limit = parseInt(req.query.limit) || 10;
+            const filters = {
+                search: req.query.search,
+                type: req.query.type,
+                document: req.query.document
+            };
+            const order = {
+                field: req.query.orderBy,
+                direction: req.query.orderDirection?.toUpperCase()
+            };
 
-            const result = await this.personService.findAll(
-                filters, 
-                parseInt(page), 
-                parseInt(limit)
-            );
+            const result = await this.personService.findAll(filters, page, limit, order);
 
             return handleResponse(res, result);
         } catch (error) {
             logger.error('Erro ao buscar pessoas', {
+                error: error.message,
+                query: req.query
+            });
+            return handleError(res, error);
+        }
+    }
+
+    async findAllWithDetails(req, res) {
+        try {
+            const page = parseInt(req.query.page) || 1;
+            const limit = parseInt(req.query.limit) || 10;
+            const filters = {
+                search: req.query.search,
+                type: req.query.type,
+                document: req.query.document
+            };
+            const order = {
+                field: req.query.orderBy,
+                direction: req.query.orderDirection?.toUpperCase()
+            };
+
+            const result = await this.personService.findAllWithDetails(page, limit, filters, order);
+
+            return handleResponse(res, result);
+        } catch (error) {
+            logger.error('Erro ao buscar pessoas com detalhes', {
                 error: error.message,
                 query: req.query
             });
@@ -242,26 +274,8 @@ class PersonController {
     async delete(req, res) {
         try {
             const { id } = req.params;
-
-            // Verifica se a pessoa tem dependências
-            const hasDependencies = await this.personService.checkPersonDependencies(
-                parseInt(id)
-            );
-
-            if (hasDependencies) {
-                return handleError(
-                    res, 
-                    new Error('Não é possível deletar pessoa com endereços ou contatos vinculados'), 
-                    400
-                );
-            }
-
-            const deletedPerson = await this.personService.delete(
-                parseInt(id), 
-                req
-            );
-
-            return handleResponse(res, deletedPerson);
+            await this.personService.delete(parseInt(id));
+            return handleResponse(res, { message: 'Pessoa deletada com sucesso' });
         } catch (error) {
             logger.error('Erro ao deletar pessoa', {
                 error: error.message,

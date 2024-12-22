@@ -1,6 +1,7 @@
 const { logger } = require('../../middlewares/logger');
 const PersonContactRepository = require('./person-contact.repository');
 const CacheService = require('../../services/cacheService');
+const PersonContactResponseDTO = require('./dto/person-contact-response.dto');
 
 class PersonContactService {
     constructor({ 
@@ -26,10 +27,16 @@ class PersonContactService {
 
             const result = await this.personContactRepository.findAll(page, limit, filters);
 
-            // Salva no cache por 5 minutos
-            await this.cacheService.set(cacheKey, result, 300);
+            // Converte para DTO
+            const dtoResult = {
+                data: result.data.map(item => PersonContactResponseDTO.fromDatabase(item)),
+                pagination: result.pagination
+            };
 
-            return result;
+            // Salva no cache por 5 minutos
+            await this.cacheService.set(cacheKey, dtoResult, 300);
+
+            return dtoResult;
         } catch (error) {
             logger.error('Erro ao listar person-contacts', {
                 error: error.message,
@@ -56,12 +63,13 @@ class PersonContactService {
 
             const result = await this.personContactRepository.findById(id);
 
-            if (result) {
-                // Salva no cache por 1 hora
-                await this.cacheService.set(cacheKey, result, 3600);
-            }
+            // Converte para DTO
+            const dto = PersonContactResponseDTO.fromDatabase(result);
 
-            return result;
+            // Salva no cache por 1 hora
+            await this.cacheService.set(cacheKey, dto, 3600);
+
+            return dto;
         } catch (error) {
             logger.error('Erro ao buscar person-contact', {
                 error: error.message,
@@ -86,10 +94,16 @@ class PersonContactService {
 
             const result = await this.personContactRepository.findByPersonId(personId, page, limit);
 
-            // Salva no cache por 1 hora
-            await this.cacheService.set(cacheKey, result, 3600);
+            // Converte para DTO
+            const dtoResult = {
+                data: result.data.map(item => PersonContactResponseDTO.fromDatabase(item)),
+                pagination: result.pagination
+            };
 
-            return result;
+            // Salva no cache por 1 hora
+            await this.cacheService.set(cacheKey, dtoResult, 3600);
+
+            return dtoResult;
         } catch (error) {
             logger.error('Erro ao buscar contatos da pessoa', {
                 error: error.message,
@@ -119,11 +133,16 @@ class PersonContactService {
             const mainContact = await this.personContactRepository.findMainContactByPersonId(personId);
 
             if (mainContact) {
+                // Converte para DTO
+                const dto = PersonContactResponseDTO.fromDatabase(mainContact);
+
                 // Salva no cache por 1 hora
-                await this.cacheService.set(cacheKey, mainContact, 3600);
+                await this.cacheService.set(cacheKey, dto, 3600);
+
+                return dto;
             }
 
-            return mainContact;
+            return null;
         } catch (error) {
             logger.error('Erro ao buscar contato principal da pessoa', {
                 error: error.message,
@@ -143,13 +162,16 @@ class PersonContactService {
                 contact_id: data.contact_id
             });
 
+            // Converte para DTO
+            const dto = PersonContactResponseDTO.fromDatabase(result);
+
             // Invalida caches
             await Promise.all([
                 this.cacheService.del('person-contacts:list:*'),
                 this.cacheService.del(`person-contacts:person:${data.person_id}:*`)
             ]);
 
-            return result;
+            return dto;
         } catch (error) {
             logger.error('Erro ao criar person-contact', {
                 error: error.message,
@@ -173,6 +195,9 @@ class PersonContactService {
 
             const updatedContact = await this.personContactRepository.update(contactId, validatedData);
 
+            // Converte para DTO
+            const dto = PersonContactResponseDTO.fromDatabase(updatedContact);
+
             // Limpa cache de contatos da pessoa
             await this.cacheService.delete(`person-contacts:${updatedContact.person_id}:*`);
             await this.cacheService.delete(`person-main-contact:${updatedContact.person_id}`);
@@ -183,7 +208,7 @@ class PersonContactService {
                 userContext: req.user?.id 
             });
 
-            return updatedContact;
+            return dto;
         } catch (error) {
             logger.error('Erro ao atualizar contato', {
                 error: error.message,
@@ -206,6 +231,9 @@ class PersonContactService {
 
             const result = await this.personContactRepository.delete(id);
 
+            // Converte para DTO
+            const dto = PersonContactResponseDTO.fromDatabase(result);
+
             // Invalida caches
             await Promise.all([
                 this.cacheService.del('person-contacts:list:*'),
@@ -213,7 +241,7 @@ class PersonContactService {
                 this.cacheService.del(`person-contacts:${id}`)
             ]);
 
-            return result;
+            return dto;
         } catch (error) {
             logger.error('Erro ao deletar person-contact', {
                 error: error.message,

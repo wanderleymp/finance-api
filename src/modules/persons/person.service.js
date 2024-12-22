@@ -14,30 +14,74 @@ class PersonService {
         this.cacheService = cacheService;
     }
 
-    async findAll(filters = {}, page = 1, limit = 10) {
+    async findAll(filters = {}, page = 1, limit = 10, order = {}) {
         try {
-            const cacheKey = `persons:list:${JSON.stringify(filters)}:page:${page}:limit:${limit}`;
+            const cacheKey = `persons:list:${JSON.stringify(filters)}:page:${page}:limit:${limit}:order:${JSON.stringify(order)}`;
             
             // Tenta buscar do cache
-            const cachedResult = await this.cacheService.get(cacheKey);
-            if (cachedResult) {
+            const cachedPersons = await this.cacheService.get(cacheKey);
+            if (cachedPersons) {
                 logger.info('Retornando pessoas do cache', { cacheKey });
-                return cachedResult;
+                return cachedPersons;
             }
 
-            const result = await this.personRepository.findAll(filters, page, limit);
-            
+            // Se não estiver no cache, busca do banco
+            const result = await this.personRepository.findAll(filters, page, limit, order);
+
             // Salva no cache
-            await this.cacheService.set(cacheKey, result, 3600); // 1 hora
+            if (result && result.data) {
+                await this.cacheService.set(cacheKey, result, 3600); // 1 hora
+            }
 
             return result;
         } catch (error) {
-            logger.error('Erro ao buscar pessoas', {
-                error: error.message,
-                filters,
-                page,
-                limit
-            });
+            logger.error('Erro ao listar pessoas', { error: error.message, page, limit, filters, order });
+            throw error;
+        }
+    }
+
+    async findAllWithDetails(page = 1, limit = 10, filters = {}, order = {}) {
+        try {
+            // Busca as pessoas
+            const persons = await this.findAll(filters, page, limit, order);
+            
+            if (!persons || !persons.data) {
+                return {
+                    data: [],
+                    pagination: {
+                        total: 0,
+                        page: parseInt(page),
+                        limit: parseInt(limit)
+                    }
+                };
+            }
+
+            // Para cada pessoa, busca seus relacionamentos
+            const personsWithDetails = await Promise.all(
+                persons.data.map(async (person) => {
+                    const [documents, contacts, addresses] = await Promise.all([
+                        this.findDocuments(person.id),
+                        this.findContacts(person.id),
+                        this.findAddresses(person.id)
+                    ]);
+
+                    // Usa o DTO de detalhes
+                    const { PersonDetailsResponseDTO } = require('./dto/person-response.dto');
+                    return PersonDetailsResponseDTO.fromDatabase({
+                        ...person,
+                        documents: documents.data,
+                        contacts: contacts.data,
+                        addresses: addresses.data
+                    });
+                })
+            );
+
+            return {
+                data: personsWithDetails,
+                pagination: persons.pagination
+            };
+        } catch (error) {
+            logger.error('Erro ao listar pessoas com detalhes', { error: error.message, page, limit, filters, order });
             throw error;
         }
     }
@@ -109,20 +153,27 @@ class PersonService {
 
     async findPersonWithDetails(id) {
         try {
-            const cacheKey = `person:details:${id}`;
-            
-            // Tenta buscar do cache
-            const cachedPersonDetails = await this.cacheService.get(cacheKey);
-            if (cachedPersonDetails) {
-                logger.info('Retornando detalhes da pessoa do cache', { cacheKey });
-                return cachedPersonDetails;
-            }
-
+            // Verifica se a pessoa existe
             const person = await this.findById(id);
             if (!person) {
                 throw new Error('Pessoa não encontrada');
             }
-            return person;
+
+            // Busca os relacionamentos
+            const [documents, contacts, addresses] = await Promise.all([
+                this.findDocuments(id),
+                this.findContacts(id),
+                this.findAddresses(id)
+            ]);
+
+            // Usa o DTO de detalhes
+            const { PersonDetailsResponseDTO } = require('./dto/person-response.dto');
+            return PersonDetailsResponseDTO.fromDatabase({
+                ...person,
+                documents: documents.data,
+                contacts: contacts.data,
+                addresses: addresses.data
+            });
         } catch (error) {
             logger.error('Erro ao buscar detalhes da pessoa', {
                 error: error.message,
@@ -327,57 +378,25 @@ class PersonService {
         }
     }
 
-    async delete(id, req = {}) {
+    async delete(id) {
         try {
-            // Primeiro, verifica se a pessoa existe
-            const existingPerson = await this.findById(id);
+            await this.findById(id);
+            await this.personRepository.delete(id);
             
-            if (!existingPerson) {
-                logger.warn('Tentativa de deletar pessoa inexistente', { id });
-                throw new Error('Pessoa não encontrada');
-            }
-
-            // Verifica se a pessoa tem dependências (endereços, contatos, etc)
-            const personDetails = await this.findPersonWithDetails(id);
-            if (personDetails && (personDetails.addresses.length > 0 || personDetails.contacts.length > 0)) {
-                logger.warn('Tentativa de deletar pessoa com dependências', { 
-                    personId: id,
-                    addressCount: personDetails.addresses.length,
-                    contactCount: personDetails.contacts.length
-                });
-                throw new Error('Não é possível deletar pessoa com endereços ou contatos vinculados');
-            }
-
-            // Deleta a pessoa
-            const deletedPerson = await this.personRepository.delete(id);
-
             // Limpa cache relacionado
-            await Promise.all([
-                this.cacheService.delete(`person:${id}`),
-                this.cacheService.delete(`person:details:${id}`),
-                this.cacheService.delete('persons:list:*')
-            ]);
-
-            logger.info('Pessoa deletada com sucesso', { 
-                personId: id 
-            });
-
-            return deletedPerson;
+            await this.cacheService.del(`person:${id}`);
+            await this.cacheService.del(`person:details:${id}`);
+            
+            const keys = await this.cacheService.keys('persons:*');
+            if (keys && keys.length > 0) {
+                await Promise.all(keys.map(key => this.cacheService.del(key)));
+            }
         } catch (error) {
-            logger.error('Erro ao deletar pessoa', {
-                error: error.message,
-                id
-            });
+            logger.error('Erro ao deletar pessoa', { error: error.message, id });
             throw error;
         }
     }
 
-    /**
-     * Adiciona um endereço a uma pessoa
-     * @param {number} personId - ID da pessoa
-     * @param {Object} addressData - Dados do endereço
-     * @returns {Promise<Object>}
-     */
     async addAddress(personId, addressData) {
         try {
             // Verifica se a pessoa existe
@@ -412,12 +431,6 @@ class PersonService {
         }
     }
 
-    /**
-     * Adiciona um contato a uma pessoa
-     * @param {number} personId - ID da pessoa
-     * @param {Object} contactData - Dados do contato
-     * @returns {Promise<Object>}
-     */
     async addContact(personId, contactData) {
         try {
             // Verifica se a pessoa existe
@@ -458,11 +471,6 @@ class PersonService {
         }
     }
 
-    /**
-     * Remove um endereço de uma pessoa
-     * @param {number} addressId - ID do endereço
-     * @returns {Promise<Object|null>}
-     */
     async removeAddress(addressId) {
         try {
             const removedAddress = await this.personRepository.removeAddress(addressId);
@@ -487,11 +495,6 @@ class PersonService {
         }
     }
 
-    /**
-     * Remove um contato de uma pessoa
-     * @param {number} contactId - ID do contato
-     * @returns {Promise<Object|null>}
-     */
     async removeContact(contactId) {
         try {
             const removedContact = await this.personRepository.removeContact(contactId);
@@ -516,11 +519,6 @@ class PersonService {
         }
     }
 
-    /**
-     * Verifica se uma pessoa tem dependências antes de deletar
-     * @param {number} personId - ID da pessoa
-     * @returns {Promise<boolean>}
-     */
     async checkPersonDependencies(personId) {
         try {
             return await this.personRepository.hasDependencies(personId);

@@ -23,6 +23,9 @@ class PersonRoutes {
             .get('/', 
                 this.personController.findAll.bind(this.personController)
             )
+            .get('/details', 
+                this.personController.findAllWithDetails.bind(this.personController)
+            )
             .get('/:id', 
                 this.personController.findById.bind(this.personController)
             )

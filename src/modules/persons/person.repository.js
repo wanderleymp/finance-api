@@ -1,7 +1,7 @@
 const { systemDatabase } = require('../../config/database');
 const { logger } = require('../../middlewares/logger');
 const IPersonRepository = require('./interfaces/person-repository.interface');
-const PersonResponseDTO = require('./dto/person-response.dto');
+const { PersonResponseDTO } = require('./dto/person-response.dto');
 
 class PersonRepository extends IPersonRepository {
     constructor() {
@@ -10,44 +10,100 @@ class PersonRepository extends IPersonRepository {
         this.tableName = 'persons';
     }
 
-    async findAll(filters = {}, page = 1, limit = 10) {
+    async findAll(filters = {}, page = 1, limit = 10, order = {}) {
         try {
             const offset = (page - 1) * limit;
             let query = `
-                SELECT 
-                    person_id,
-                    full_name,
-                    birth_date,
-                    person_type,
-                    fantasy_name,
-                    created_at,
-                    updated_at
-                FROM ${this.tableName}
+                SELECT DISTINCT
+                    p.person_id,
+                    p.full_name,
+                    p.birth_date,
+                    p.person_type,
+                    p.fantasy_name,
+                    p.created_at,
+                    p.updated_at
+                FROM ${this.tableName} p
+                LEFT JOIN person_documents pd ON pd.person_id = p.person_id
                 WHERE 1=1
             `;
             const params = [];
             let paramCount = 1;
 
-            if (filters.name) {
-                query += ` AND (full_name ILIKE $${paramCount} OR fantasy_name ILIKE $${paramCount})`;
-                params.push(`%${filters.name}%`);
+            // Filtro por nome ou nome fantasia
+            if (filters.search) {
+                query += ` AND (
+                    p.full_name ILIKE $${paramCount} 
+                    OR p.fantasy_name ILIKE $${paramCount}
+                    OR pd.document_value ILIKE $${paramCount}
+                )`;
+                params.push(`%${filters.search}%`);
                 paramCount++;
             }
 
+            // Filtro por tipo de pessoa
             if (filters.type) {
-                query += ` AND person_type = $${paramCount}`;
+                query += ` AND p.person_type = $${paramCount}`;
                 params.push(filters.type);
                 paramCount++;
             }
 
-            // Adiciona ordenação e paginação
-            query += ` ORDER BY created_at DESC LIMIT $${paramCount} OFFSET $${paramCount + 1}`;
+            // Filtro por documento
+            if (filters.document) {
+                query += ` AND pd.document_value = $${paramCount}`;
+                params.push(filters.document);
+                paramCount++;
+            }
+
+            // Ordenação
+            const orderField = order.field || 'created_at';
+            const orderDirection = order.direction || 'DESC';
+            const validFields = ['full_name', 'fantasy_name', 'created_at', 'updated_at', 'birth_date'];
+            const validDirections = ['ASC', 'DESC'];
+            
+            if (!validFields.includes(orderField)) {
+                throw new Error('Campo de ordenação inválido');
+            }
+            if (!validDirections.includes(orderDirection)) {
+                throw new Error('Direção de ordenação inválida');
+            }
+
+            query += ` ORDER BY p.${orderField} ${orderDirection}`;
+
+            // Paginação
+            query += ` LIMIT $${paramCount} OFFSET $${paramCount + 1}`;
             params.push(limit, offset);
 
+            // Executa a query principal
             const result = await this.pool.query(query, params);
-            return result.rows.map(row => PersonResponseDTO.fromDatabase(row));
+
+            // Conta o total de registros
+            const countQuery = `
+                SELECT COUNT(DISTINCT p.person_id) as total
+                FROM ${this.tableName} p
+                LEFT JOIN person_documents pd ON pd.person_id = p.person_id
+                WHERE 1=1
+                ${filters.search ? ' AND (p.full_name ILIKE $1 OR p.fantasy_name ILIKE $1 OR pd.document_value ILIKE $1)' : ''}
+                ${filters.type ? ` AND p.person_type = $${filters.search ? '2' : '1'}` : ''}
+                ${filters.document ? ` AND pd.document_value = $${filters.search && filters.type ? '3' : filters.search || filters.type ? '2' : '1'}` : ''}
+            `;
+            const countParams = [];
+            if (filters.search) countParams.push(`%${filters.search}%`);
+            if (filters.type) countParams.push(filters.type);
+            if (filters.document) countParams.push(filters.document);
+            
+            const countResult = await this.pool.query(countQuery, countParams);
+            const total = parseInt(countResult.rows[0].total);
+
+            return {
+                data: result.rows.map(row => PersonResponseDTO.fromDatabase(row)),
+                pagination: {
+                    total,
+                    page: parseInt(page),
+                    limit: parseInt(limit)
+                }
+            };
         } catch (error) {
-            logger.error('Erro ao buscar pessoas', { error: error.message, filters });
+            logger.error('Erro ao buscar pessoas', { error: error.message, filters, page, limit, order });
             throw error;
         }
     }
