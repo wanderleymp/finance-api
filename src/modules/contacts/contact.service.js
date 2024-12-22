@@ -153,9 +153,9 @@ class ContactService {
     async create(data) {
         try {
             const result = await this.contactRepository.create({
-                contact_value: data.value,
-                contact_name: data.name,
-                contact_type: data.type
+                contact_value: data.value || data.contact_value,
+                contact_name: data.name || data.contact_name,
+                contact_type: data.type || data.contact_type
             });
 
             // Invalida cache de listagem
