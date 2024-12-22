@@ -67,9 +67,17 @@ async function release() {
         }
         console.log(`Release version will be: ${releaseVersion}`);
 
-        // 3. Build e teste da imagem Docker
-        console.log('Building Docker image...');
-        exec(`docker build --platform linux/amd64 -t wanderleymp/finance-api:${releaseVersion} .`);
+        // 3. Verificar se o Docker está rodando
+        try {
+            execSync('docker info', { stdio: 'ignore' });
+            // Se chegou aqui, o Docker está rodando
+            console.log('Building Docker image...');
+            exec(`docker build --platform linux/amd64 -t wanderleymp/finance-api:${releaseVersion} .`);
+            console.log('Pushing Docker image...');
+            exec(`docker push wanderleymp/finance-api:${releaseVersion}`);
+        } catch (error) {
+            console.warn('Docker não está rodando. Pulando etapas de Docker...');
+        }
 
         // 4. Se chegou até aqui, podemos atualizar a versão e criar as tags
         console.log(`Updating version to ${releaseVersion}...`);
@@ -84,22 +92,18 @@ async function release() {
         console.log('Pushing to remote...');
         exec('git push origin develop');
 
-        // 7. Push da imagem Docker
-        console.log('Pushing Docker image...');
-        exec(`docker push wanderleymp/finance-api:${releaseVersion}`);
-
-        // 8. Criar e push da tag
+        // 7. Criar e push da tag
         console.log('Creating git tag...');
         exec(`git tag -a v${releaseVersion} -m "Release version ${releaseVersion}"`);
         exec('git push origin --tags');
 
-        // 9. Preparar próxima versão de desenvolvimento
+        // 8. Preparar próxima versão de desenvolvimento
         const nextVersion = getNextVersion(releaseVersion);
         console.log(`Preparing next development version: ${nextVersion}...`);
         updateVersion(nextVersion);
         updateChangelog(nextVersion);
 
-        // 10. Commit da próxima versão
+        // 9. Commit da próxima versão
         exec('git add package.json CHANGELOG.md');
         exec(`git commit -m "chore: prepare for next development version ${nextVersion}"`);
         exec('git push origin develop');
