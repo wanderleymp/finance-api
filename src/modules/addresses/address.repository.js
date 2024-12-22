@@ -144,39 +144,6 @@ class AddressRepository extends IAddressRepository {
         }
     }
 
-    async findMainAddressByPersonId(personId) {
-        try {
-            const query = `
-                SELECT 
-                    address_id as id,
-                    person_id,
-                    street,
-                    number,
-                    complement,
-                    neighborhood,
-                    city,
-                    state,
-                    postal_code,
-                    country,
-                    reference,
-                    ibge,
-                    created_at,
-                    updated_at
-                FROM ${this.tableName}
-                WHERE person_id = $1
-                LIMIT 1
-            `;
-            const result = await this.pool.query(query, [personId]);
-            return result.rows[0] ? AddressResponseDTO.fromDatabase(result.rows[0]) : null;
-        } catch (error) {
-            logger.error('Erro ao buscar endereço principal da pessoa', {
-                error: error.message,
-                personId
-            });
-            throw error;
-        }
-    }
-
     async create(data) {
         try {
             const query = `

@@ -10,10 +10,22 @@ class AddressSchema {
         neighborhood: Joi.string().trim().max(100).required(),
         city: Joi.string().trim().max(100).required(),
         state: Joi.string().trim().length(2).uppercase().required(),
-        postal_code: Joi.string().trim().regex(/^\d{5}-\d{3}$/).required(),
+        postal_code: Joi.string().trim().custom((value, helpers) => {
+            // Remove todos os caracteres não numéricos
+            const cleanedPostalCode = value.replace(/\D/g, '');
+            
+            // Verifica se tem 8 dígitos
+            if (cleanedPostalCode.length !== 8) {
+                return helpers.error('any.invalid');
+            }
+            
+            // Formata para o padrão 12345-678
+            return `${cleanedPostalCode.slice(0, 5)}-${cleanedPostalCode.slice(5)}`;
+        }).required(),
         country: Joi.string().trim().default('Brasil').optional(),
         reference: Joi.string().trim().max(255).optional().allow(null),
         ibge: Joi.string().trim().max(20).optional().allow(null),
+        external_id: Joi.any().optional().allow(null),
         is_main: Joi.boolean().optional().default(false)
     });
 

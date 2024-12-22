@@ -1,5 +1,6 @@
 const { logger } = require('../../middlewares/logger');
 const AddressService = require('./address.service');
+const cepService = require('./cep.service');
 const { handleResponse, handleError } = require('../../utils/responseHandler');
 
 class AddressController {
@@ -18,7 +19,7 @@ class AddressController {
                 parseInt(limit)
             );
 
-            return handleResponse(result, res);
+            return handleResponse(res, result);
         } catch (error) {
             logger.error('Erro ao buscar endereços', {
                 error: error.message,
@@ -31,19 +32,19 @@ class AddressController {
     async findById(req, res) {
         try {
             const { id } = req.params;
+            
+            logger.info('Buscando endereço por ID', { id });
 
-            const address = await this.addressService.findById(parseInt(id));
+            const address = await this.addressService.findById(id);
 
-            if (!address) {
-                return handleError(new Error('Endereço não encontrado'), res, 404);
-            }
-
-            return handleResponse(address, res);
+            // Retorna o endereço diretamente sem envolver paginação
+            return res.status(200).json(address);
         } catch (error) {
             logger.error('Erro ao buscar endereço por ID', {
                 error: error.message,
-                params: req.params
+                id: req.params.id
             });
+
             return handleError(error, res);
         }
     }
@@ -54,7 +55,7 @@ class AddressController {
 
             const addresses = await this.addressService.findByPersonId(parseInt(personId));
 
-            return handleResponse(addresses, res);
+            return handleResponse(res, addresses);
         } catch (error) {
             logger.error('Erro ao buscar endereços da pessoa', {
                 error: error.message,
@@ -64,23 +65,34 @@ class AddressController {
         }
     }
 
-    async findMainAddressByPersonId(req, res) {
+    async findByCep(req, res) {
         try {
-            const { personId } = req.params;
+            const { cep } = req.params;
+            
+            logger.info('Iniciando consulta de CEP', { cep });
 
-            const mainAddress = await this.addressService.findMainAddressByPersonId(parseInt(personId));
+            const address = await cepService.findAddressByCep(cep);
 
-            if (!mainAddress) {
-                return handleError(new Error('Endereço principal não encontrado'), res, 404);
+            return handleResponse(res, address);
+        } catch (error) {
+            logger.error('Erro na consulta de CEP', {
+                error: error.message,
+                cep: req.params.cep
+            });
+
+            // Verifica o tipo de erro e retorna uma resposta apropriada
+            if (error.statusCode) {
+                return res.status(error.statusCode).json({
+                    message: error.message,
+                    code: error.statusCode
+                });
             }
 
-            return handleResponse(mainAddress, res);
-        } catch (error) {
-            logger.error('Erro ao buscar endereço principal da pessoa', {
-                error: error.message,
-                params: req.params
+            // Erro genérico
+            return res.status(500).json({
+                message: 'Erro ao consultar CEP',
+                details: error.message
             });
-            return handleError(error, res);
         }
     }
 
@@ -90,13 +102,21 @@ class AddressController {
 
             const newAddress = await this.addressService.create(addressData, req);
 
-            return handleResponse(newAddress, res, 201);
+            return handleResponse(res, newAddress, 201);
         } catch (error) {
-            logger.error('Erro ao criar endereço', {
-                error: error.message,
-                body: req.body
+            if (error.code === '23505') {
+                // Erro de chave única
+                return res.status(400).json({
+                    message: 'Endereço já cadastrado para esta pessoa',
+                    details: 'Um endereço com os mesmos dados principais já existe'
+                });
+            }
+            // Outros erros
+            console.error('Erro ao criar endereço:', error);
+            return res.status(500).json({
+                message: 'Erro interno ao processar endereço',
+                details: error.message
             });
-            return handleError(error, res);
         }
     }
 
@@ -111,7 +131,7 @@ class AddressController {
                 req
             );
 
-            return handleResponse(updatedAddress, res);
+            return handleResponse(res, updatedAddress);
         } catch (error) {
             logger.error('Erro ao atualizar endereço', {
                 error: error.message,
@@ -131,7 +151,7 @@ class AddressController {
                 req
             );
 
-            return handleResponse(deletedAddress, res);
+            return handleResponse(res, deletedAddress);
         } catch (error) {
             logger.error('Erro ao deletar endereço', {
                 error: error.message,

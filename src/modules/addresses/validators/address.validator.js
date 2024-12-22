@@ -16,13 +16,6 @@ class AddressValidator {
         }
     }
 
-    static validatePostalCode(postalCode) {
-        const regex = /^\d{5}-\d{3}$/;
-        if (!regex.test(postalCode)) {
-            throw new ValidationError('Código postal inválido');
-        }
-    }
-
     static validateState(state) {
         const brazilianStates = [
             'AC', 'AL', 'AP', 'AM', 'BA', 'CE', 'DF', 'ES', 'GO', 

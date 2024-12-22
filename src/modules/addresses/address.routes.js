@@ -26,9 +26,9 @@ module.exports = (addressController) => {
         (req, res) => addressController.findByPersonId(req, res)
     );
 
-    // Buscar endereço principal de uma pessoa
-    router.get('/person/:personId/main', 
-        (req, res) => addressController.findMainAddressByPersonId(req, res)
+    // Buscar endereço por CEP
+    router.get('/cep/:cep', 
+        (req, res) => addressController.findByCep(req, res)
     );
 
     // Criar novo endereço

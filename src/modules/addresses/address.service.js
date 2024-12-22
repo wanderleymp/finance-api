@@ -4,6 +4,7 @@ const cacheService = require('../../services/cacheService');
 const AddressValidator = require('./validators/address.validator');
 const CreateAddressDTO = require('./dto/create-address.dto');
 const UpdateAddressDTO = require('./dto/update-address.dto');
+const cepService = require('./cep.service');
 
 class AddressService {
     constructor({ 
@@ -58,41 +59,13 @@ class AddressService {
         }
     }
 
-    async findById(id) {
+    async findById(id, req = {}) {
         try {
-            const cacheKey = `address:${id}`;
-            
-            // Tenta buscar do cache
-            let cachedAddress;
-            try {
-                cachedAddress = await this.cacheService.get(cacheKey);
-            } catch (cacheError) {
-                logger.warn('Falha ao buscar do cache', { 
-                    error: cacheError.message,
-                    cacheKey 
-                });
-            }
-
-            if (cachedAddress) {
-                logger.info('Retornando endereço do cache', { cacheKey });
-                return cachedAddress;
-            }
-
+            // Consulta direta sem paginação
             const address = await this.addressRepository.findById(id);
             
             if (!address) {
-                logger.warn('Endereço não encontrado', { id });
-                return null;
-            }
-
-            // Salva no cache, ignorando erros
-            try {
-                await this.cacheService.set(cacheKey, address);
-            } catch (cacheError) {
-                logger.warn('Falha ao salvar no cache', { 
-                    error: cacheError.message,
-                    cacheKey 
-                });
+                throw new ValidationError('Endereço não encontrado', 404);
             }
 
             return address;
@@ -101,6 +74,7 @@ class AddressService {
                 error: error.message,
                 id
             });
+
             throw error;
         }
     }
@@ -147,54 +121,36 @@ class AddressService {
         }
     }
 
-    async findMainAddressByPersonId(personId) {
-        try {
-            const cacheKey = `person:${personId}:main_address`;
-            
-            // Tenta buscar do cache
-            let cachedMainAddress;
+    async enrichAddressWithIbge(addressData) {
+        // Se já tem IBGE, não precisa enriquecer
+        if (addressData.ibge) return addressData;
+
+        // Se tem CEP, tenta buscar IBGE
+        if (addressData.postal_code) {
             try {
-                cachedMainAddress = await this.cacheService.get(cacheKey);
-            } catch (cacheError) {
-                logger.warn('Falha ao buscar do cache', { 
-                    error: cacheError.message,
-                    cacheKey 
+                const cepDetails = await cepService.findAddressByCep(addressData.postal_code);
+                
+                // Atualiza apenas o campo IBGE
+                addressData.ibge = cepDetails.ibge;
+            } catch (error) {
+                // Log do erro, mas não impede a criação do endereço
+                logger.warn('Erro ao buscar IBGE pelo CEP', {
+                    cep: addressData.postal_code,
+                    error: error.message
                 });
             }
-
-            if (cachedMainAddress) {
-                logger.info('Retornando endereço principal da pessoa do cache', { cacheKey });
-                return cachedMainAddress;
-            }
-
-            const mainAddress = await this.addressRepository.findMainAddressByPersonId(personId);
-            
-            // Salva no cache, ignorando erros
-            if (mainAddress) {
-                try {
-                    await this.cacheService.set(cacheKey, mainAddress);
-                } catch (cacheError) {
-                    logger.warn('Falha ao salvar no cache', { 
-                        error: cacheError.message,
-                        cacheKey 
-                    });
-                }
-            }
-
-            return mainAddress;
-        } catch (error) {
-            logger.error('Erro ao buscar endereço principal da pessoa', {
-                error: error.message,
-                personId
-            });
-            throw error;
         }
+
+        return addressData;
     }
 
     async create(addressData, req = {}) {
         try {
+            // Enriquece o endereço com IBGE antes de salvar
+            const enrichedAddressData = await this.enrichAddressWithIbge(addressData);
+
             // Valida e transforma os dados
-            const createDTO = new CreateAddressDTO(addressData);
+            const createDTO = new CreateAddressDTO(enrichedAddressData);
             const { error } = createDTO.validate(require('./schemas/address.schema'));
             
             if (error) {
@@ -205,17 +161,8 @@ class AddressService {
                 throw new Error(error.message);
             }
 
-            // Valida estado e código postal
+            // Valida estado
             AddressValidator.validateState(createDTO.state);
-            AddressValidator.validatePostalCode(createDTO.postal_code);
-
-            // Verifica se já existe endereço principal para a pessoa
-            const existingMainAddress = await this.findMainAddressByPersonId(createDTO.person_id);
-            
-            // Se não existir endereço principal, define o novo como principal
-            if (!existingMainAddress) {
-                createDTO.is_main = true;
-            }
 
             // Cria o endereço
             const newAddress = await this.addressRepository.create(createDTO);
@@ -240,6 +187,9 @@ class AddressService {
 
     async update(id, addressData, req = {}) {
         try {
+            // Enriquece o endereço com IBGE antes de atualizar
+            const enrichedAddressData = await this.enrichAddressWithIbge(addressData);
+
             // Primeiro, verifica se o endereço existe
             const existingAddress = await this.findById(id);
             
@@ -249,7 +199,7 @@ class AddressService {
             }
 
             // Valida e transforma os dados
-            const updateDTO = new UpdateAddressDTO(addressData);
+            const updateDTO = new UpdateAddressDTO(enrichedAddressData);
             const { error } = updateDTO.validate(require('./schemas/address.schema'));
             
             if (error) {
