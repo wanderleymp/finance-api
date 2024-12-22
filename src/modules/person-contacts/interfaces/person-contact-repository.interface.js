@@ -1,47 +1,36 @@
 class IPersonContactRepository {
     /**
+     * Lista todos os person-contacts com paginação
+     */
+    async findAll(page, limit, filters) {
+        throw new Error('Método não implementado');
+    }
+
+    /**
+     * Busca um person-contact pelo ID
+     */
+    async findById(id) {
+        throw new Error('Método não implementado');
+    }
+
+    /**
      * Busca contatos de uma pessoa
-     * @param {number} personId - ID da pessoa
-     * @returns {Promise<Array>} Lista de contatos
      */
     async findByPersonId(personId) {
         throw new Error('Método não implementado');
     }
 
     /**
-     * Busca contato principal de uma pessoa
-     * @param {number} personId - ID da pessoa
-     * @returns {Promise<Object|null>} Contato principal ou null
+     * Cria uma nova associação entre pessoa e contato
      */
-    async findMainContactByPersonId(personId) {
+    async create(data) {
         throw new Error('Método não implementado');
     }
 
     /**
-     * Cria um novo contato para uma pessoa
-     * @param {Object} contactData - Dados do contato
-     * @returns {Promise<Object>} Contato criado
+     * Remove uma associação entre pessoa e contato
      */
-    async create(contactData) {
-        throw new Error('Método não implementado');
-    }
-
-    /**
-     * Atualiza um contato
-     * @param {number} contactId - ID do contato
-     * @param {Object} contactData - Dados atualizados
-     * @returns {Promise<Object>} Contato atualizado
-     */
-    async update(contactId, contactData) {
-        throw new Error('Método não implementado');
-    }
-
-    /**
-     * Remove um contato
-     * @param {number} contactId - ID do contato
-     * @returns {Promise<Object>} Contato removido
-     */
-    async delete(contactId) {
+    async delete(id) {
         throw new Error('Método não implementado');
     }
 }

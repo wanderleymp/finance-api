@@ -1,9 +1,6 @@
 const { Router } = require('express');
 const PersonContactController = require('./person-contact.controller');
-const authMiddleware = require('../../middlewares/authMiddleware');
-const { validateRequest } = require('../../middlewares/validationMiddleware');
-const CreatePersonContactDTO = require('./dto/create-person-contact.dto');
-const UpdatePersonContactDTO = require('./dto/update-person-contact.dto');
+const { authMiddleware } = require('../../middlewares/auth');
 
 class PersonContactRoutes {
     constructor(personContactController = new PersonContactController()) {
@@ -13,33 +10,31 @@ class PersonContactRoutes {
     }
 
     setupRoutes() {
-        // Busca contatos de uma pessoa
+        // Lista todos os person-contacts com paginação
+        this.router.get('/',
+            authMiddleware,
+            this.personContactController.findAll.bind(this.personContactController)
+        );
+
+        // Busca um person-contact específico
+        this.router.get('/:id',
+            authMiddleware,
+            this.personContactController.findById.bind(this.personContactController)
+        );
+
+        // Lista contatos de uma pessoa com paginação
         this.router.get('/person/:personId', 
             authMiddleware,
             this.personContactController.findByPersonId.bind(this.personContactController)
         );
 
-        // Busca contato principal de uma pessoa
-        this.router.get('/person/:personId/main', 
+        // Cria um novo person-contact
+        this.router.post('/:personId/contact/:contactId', 
             authMiddleware,
-            this.personContactController.findMainContactByPersonId.bind(this.personContactController)
-        );
-
-        // Cria um novo contato
-        this.router.post('/', 
-            authMiddleware,
-            validateRequest(CreatePersonContactDTO.schema),
             this.personContactController.create.bind(this.personContactController)
         );
 
-        // Atualiza um contato
-        this.router.put('/:id', 
-            authMiddleware,
-            validateRequest(UpdatePersonContactDTO.schema),
-            this.personContactController.update.bind(this.personContactController)
-        );
-
-        // Remove um contato
+        // Remove um person-contact
         this.router.delete('/:id', 
             authMiddleware,
             this.personContactController.delete.bind(this.personContactController)

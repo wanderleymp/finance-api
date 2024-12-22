@@ -1,8 +1,6 @@
 const { logger } = require('../../middlewares/logger');
 const PersonContactRepository = require('./person-contact.repository');
 const CacheService = require('../../services/cacheService');
-const CreatePersonContactDTO = require('./dto/create-person-contact.dto');
-const UpdatePersonContactDTO = require('./dto/update-person-contact.dto');
 
 class PersonContactService {
     constructor({ 
@@ -14,30 +12,90 @@ class PersonContactService {
     }
 
     /**
-     * Busca contatos de uma pessoa
-     * @param {number} personId - ID da pessoa
-     * @returns {Promise<Array>} Lista de contatos
+     * Lista todos os person-contacts com paginação
      */
-    async findByPersonId(personId) {
+    async findAll(page = 1, limit = 10, filters = {}) {
         try {
-            const cacheKey = `person-contacts:${personId}`;
+            const cacheKey = `person-contacts:list:${JSON.stringify({page, limit, filters})}`;
             
             // Tenta buscar do cache
-            const cachedContacts = await this.cacheService.get(cacheKey);
-            if (cachedContacts) {
-                return cachedContacts;
+            const cachedResult = await this.cacheService.get(cacheKey);
+            if (cachedResult) {
+                return cachedResult;
             }
 
-            const contacts = await this.personContactRepository.findByPersonId(personId);
+            const result = await this.personContactRepository.findAll(page, limit, filters);
+
+            // Salva no cache por 5 minutos
+            await this.cacheService.set(cacheKey, result, 300);
+
+            return result;
+        } catch (error) {
+            logger.error('Erro ao listar person-contacts', {
+                error: error.message,
+                page,
+                limit,
+                filters
+            });
+            throw error;
+        }
+    }
+
+    /**
+     * Busca um person-contact específico
+     */
+    async findById(id) {
+        try {
+            const cacheKey = `person-contacts:${id}`;
+            
+            // Tenta buscar do cache
+            const cachedResult = await this.cacheService.get(cacheKey);
+            if (cachedResult) {
+                return cachedResult;
+            }
+
+            const result = await this.personContactRepository.findById(id);
+
+            if (result) {
+                // Salva no cache por 1 hora
+                await this.cacheService.set(cacheKey, result, 3600);
+            }
+
+            return result;
+        } catch (error) {
+            logger.error('Erro ao buscar person-contact', {
+                error: error.message,
+                id
+            });
+            throw error;
+        }
+    }
+
+    /**
+     * Lista contatos de uma pessoa com paginação
+     */
+    async findByPersonId(personId, page = 1, limit = 10) {
+        try {
+            const cacheKey = `person-contacts:person:${personId}:${page}:${limit}`;
+            
+            // Tenta buscar do cache
+            const cachedResult = await this.cacheService.get(cacheKey);
+            if (cachedResult) {
+                return cachedResult;
+            }
+
+            const result = await this.personContactRepository.findByPersonId(personId, page, limit);
 
             // Salva no cache por 1 hora
-            await this.cacheService.set(cacheKey, contacts, 3600);
+            await this.cacheService.set(cacheKey, result, 3600);
 
-            return contacts;
+            return result;
         } catch (error) {
             logger.error('Erro ao buscar contatos da pessoa', {
                 error: error.message,
-                personId
+                personId,
+                page,
+                limit
             });
             throw error;
         }
@@ -76,33 +134,26 @@ class PersonContactService {
     }
 
     /**
-     * Cria um novo contato para uma pessoa
-     * @param {Object} contactData - Dados do contato
-     * @param {Object} req - Objeto de requisição (opcional)
-     * @returns {Promise<Object>} Contato criado
+     * Cria uma nova associação entre pessoa e contato
      */
-    async create(contactData, req = {}) {
+    async create(data) {
         try {
-            // Valida dados
-            const validatedData = CreatePersonContactDTO.validate(contactData);
-
-            const newContact = await this.personContactRepository.create(validatedData);
-
-            // Limpa cache de contatos da pessoa
-            await this.cacheService.delete(`person-contacts:${validatedData.person_id}`);
-            await this.cacheService.delete(`person-main-contact:${validatedData.person_id}`);
-
-            logger.info('Contato criado', { 
-                contactId: newContact.id, 
-                personId: validatedData.person_id,
-                userContext: req.user?.id 
+            const result = await this.personContactRepository.create({
+                person_id: data.person_id,
+                contact_id: data.contact_id
             });
 
-            return newContact;
+            // Invalida caches
+            await Promise.all([
+                this.cacheService.del('person-contacts:list:*'),
+                this.cacheService.del(`person-contacts:person:${data.person_id}:*`)
+            ]);
+
+            return result;
         } catch (error) {
-            logger.error('Erro ao criar contato', {
+            logger.error('Erro ao criar person-contact', {
                 error: error.message,
-                contactData
+                data
             });
             throw error;
         }
@@ -118,12 +169,12 @@ class PersonContactService {
     async update(contactId, contactData, req = {}) {
         try {
             // Valida dados
-            const validatedData = UpdatePersonContactDTO.validate(contactData);
+            const validatedData = contactData;
 
             const updatedContact = await this.personContactRepository.update(contactId, validatedData);
 
             // Limpa cache de contatos da pessoa
-            await this.cacheService.delete(`person-contacts:${updatedContact.person_id}`);
+            await this.cacheService.delete(`person-contacts:${updatedContact.person_id}:*`);
             await this.cacheService.delete(`person-main-contact:${updatedContact.person_id}`);
 
             logger.info('Contato atualizado', { 
@@ -144,36 +195,29 @@ class PersonContactService {
     }
 
     /**
-     * Remove um contato
-     * @param {number} contactId - ID do contato
-     * @param {Object} req - Objeto de requisição (opcional)
-     * @returns {Promise<Object>} Contato removido
+     * Remove uma associação entre pessoa e contato
      */
-    async delete(contactId, req = {}) {
+    async delete(id) {
         try {
-            const contactToDelete = await this.personContactRepository.findById(contactId);
-
-            if (!contactToDelete) {
-                throw new Error('Contato não encontrado');
+            const personContact = await this.personContactRepository.findById(id);
+            if (!personContact) {
+                return null;
             }
 
-            const deletedContact = await this.personContactRepository.delete(contactId);
+            const result = await this.personContactRepository.delete(id);
 
-            // Limpa cache de contatos da pessoa
-            await this.cacheService.delete(`person-contacts:${contactToDelete.person_id}`);
-            await this.cacheService.delete(`person-main-contact:${contactToDelete.person_id}`);
+            // Invalida caches
+            await Promise.all([
+                this.cacheService.del('person-contacts:list:*'),
+                this.cacheService.del(`person-contacts:person:${personContact.person_id}:*`),
+                this.cacheService.del(`person-contacts:${id}`)
+            ]);
 
-            logger.info('Contato removido', { 
-                contactId, 
-                personId: contactToDelete.person_id,
-                userContext: req.user?.id 
-            });
-
-            return deletedContact;
+            return result;
         } catch (error) {
-            logger.error('Erro ao remover contato', {
+            logger.error('Erro ao deletar person-contact', {
                 error: error.message,
-                contactId
+                id
             });
             throw error;
         }

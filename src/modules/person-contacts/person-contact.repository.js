@@ -10,203 +10,175 @@ class PersonContactRepository extends IPersonContactRepository {
     }
 
     /**
-     * Busca contatos de uma pessoa
-     * @param {number} personId - ID da pessoa
-     * @returns {Promise<Array>} Lista de contatos
+     * Lista todos os person-contacts com paginação
      */
-    async findByPersonId(personId) {
+    async findAll(page = 1, limit = 10, filters = {}) {
         try {
+            const offset = (page - 1) * limit;
+            const values = [limit, offset];
+            let whereClause = '';
+            
+            if (filters.person_id) {
+                whereClause = 'WHERE person_id = $3';
+                values.push(filters.person_id);
+            }
+
             const query = `
-                SELECT * FROM ${this.tableName}
-                WHERE person_id = $1
-                ORDER BY is_main DESC, created_at DESC
+                SELECT pc.*, p.full_name, c.contact_value, c.contact_type, c.contact_name
+                FROM ${this.tableName} pc
+                JOIN persons p ON p.person_id = pc.person_id
+                JOIN contacts c ON c.contact_id = pc.contact_id
+                ${whereClause}
+                ORDER BY pc.created_at DESC
+                LIMIT $1 OFFSET $2
             `;
 
-            const result = await this.pool.query(query, [personId]);
-            return result.rows;
+            const countQuery = `
+                SELECT COUNT(*) as total
+                FROM ${this.tableName}
+                ${whereClause}
+            `;
+
+            const [result, count] = await Promise.all([
+                this.pool.query(query, values),
+                this.pool.query(countQuery, whereClause ? [filters.person_id] : [])
+            ]);
+
+            return {
+                data: result.rows,
+                pagination: {
+                    total: parseInt(count.rows[0].total),
+                    page: parseInt(page),
+                    limit: parseInt(limit),
+                    pages: Math.ceil(parseInt(count.rows[0].total) / limit)
+                }
+            };
+        } catch (error) {
+            logger.error('Erro ao listar person-contacts', {
+                error: error.message,
+                page,
+                limit,
+                filters
+            });
+            throw error;
+        }
+    }
+
+    /**
+     * Busca um person-contact pelo ID
+     */
+    async findById(id) {
+        try {
+            const query = `
+                SELECT pc.*, p.full_name, c.contact_value, c.contact_type, c.contact_name
+                FROM ${this.tableName} pc
+                JOIN persons p ON p.person_id = pc.person_id
+                JOIN contacts c ON c.contact_id = pc.contact_id
+                WHERE pc.person_contact_id = $1
+            `;
+
+            const result = await this.pool.query(query, [id]);
+            return result.rows[0];
+        } catch (error) {
+            logger.error('Erro ao buscar person-contact por ID', {
+                error: error.message,
+                id
+            });
+            throw error;
+        }
+    }
+
+    /**
+     * Busca contatos de uma pessoa com paginação
+     */
+    async findByPersonId(personId, page = 1, limit = 10) {
+        try {
+            const offset = (page - 1) * limit;
+            const values = [personId, limit, offset];
+
+            const query = `
+                SELECT pc.*, c.contact_value, c.contact_type, c.contact_name
+                FROM ${this.tableName} pc
+                JOIN contacts c ON c.contact_id = pc.contact_id
+                WHERE pc.person_id = $1
+                ORDER BY pc.created_at DESC
+                LIMIT $2 OFFSET $3
+            `;
+
+            const countQuery = `
+                SELECT COUNT(*) as total
+                FROM ${this.tableName}
+                WHERE person_id = $1
+            `;
+
+            const [result, count] = await Promise.all([
+                this.pool.query(query, values),
+                this.pool.query(countQuery, [personId])
+            ]);
+
+            return {
+                data: result.rows,
+                pagination: {
+                    total: parseInt(count.rows[0].total),
+                    page: parseInt(page),
+                    limit: parseInt(limit),
+                    pages: Math.ceil(parseInt(count.rows[0].total) / limit)
+                }
+            };
         } catch (error) {
             logger.error('Erro ao buscar contatos da pessoa', {
                 error: error.message,
-                personId
+                personId,
+                page,
+                limit
             });
             throw error;
         }
     }
 
     /**
-     * Busca contato principal de uma pessoa
-     * @param {number} personId - ID da pessoa
-     * @returns {Promise<Object|null>} Contato principal ou null
+     * Cria uma nova associação entre pessoa e contato
      */
-    async findMainContactByPersonId(personId) {
+    async create(data) {
         try {
             const query = `
-                SELECT * FROM ${this.tableName}
-                WHERE person_id = $1 AND is_main = true
-                LIMIT 1
-            `;
-
-            const result = await this.pool.query(query, [personId]);
-            return result.rows[0] || null;
-        } catch (error) {
-            logger.error('Erro ao buscar contato principal da pessoa', {
-                error: error.message,
-                personId
-            });
-            throw error;
-        }
-    }
-
-    /**
-     * Cria um novo contato para uma pessoa
-     * @param {Object} contactData - Dados do contato
-     * @returns {Promise<Object>} Contato criado
-     */
-    async create(contactData) {
-        try {
-            // Se definir como principal, remove principal anterior
-            if (contactData.is_main) {
-                await this.clearMainContact(contactData.person_id);
-            }
-
-            const query = `
-                INSERT INTO ${this.tableName} (
-                    person_id, 
-                    type, 
-                    contact, 
-                    is_main
-                ) VALUES (
-                    $1, $2, $3, $4
-                ) RETURNING *
-            `;
-
-            const values = [
-                contactData.person_id,
-                contactData.type,
-                contactData.contact,
-                contactData.is_main || false
-            ];
-
-            const result = await this.pool.query(query, values);
-            return result.rows[0];
-        } catch (error) {
-            logger.error('Erro ao criar contato', {
-                error: error.message,
-                contactData
-            });
-            throw error;
-        }
-    }
-
-    /**
-     * Atualiza um contato
-     * @param {number} contactId - ID do contato
-     * @param {Object} contactData - Dados atualizados
-     * @returns {Promise<Object>} Contato atualizado
-     */
-    async update(contactId, contactData) {
-        try {
-            // Se definir como principal, remove principal anterior
-            if (contactData.is_main) {
-                const currentContact = await this.findById(contactId);
-                await this.clearMainContact(currentContact.person_id);
-            }
-
-            const query = `
-                UPDATE ${this.tableName}
-                SET 
-                    type = COALESCE($1, type),
-                    contact = COALESCE($2, contact),
-                    is_main = COALESCE($3, is_main),
-                    updated_at = NOW()
-                WHERE id = $4
+                INSERT INTO ${this.tableName} (person_id, contact_id)
+                VALUES ($1, $2)
                 RETURNING *
             `;
 
-            const values = [
-                contactData.type || null,
-                contactData.contact || null,
-                contactData.is_main !== undefined ? contactData.is_main : null,
-                contactId
-            ];
+            const result = await this.pool.query(query, [
+                data.person_id,
+                data.contact_id
+            ]);
 
-            const result = await this.pool.query(query, values);
             return result.rows[0];
         } catch (error) {
-            logger.error('Erro ao atualizar contato', {
+            logger.error('Erro ao criar person-contact', {
                 error: error.message,
-                contactId,
-                contactData
+                data
             });
             throw error;
         }
     }
 
     /**
-     * Remove um contato
-     * @param {number} contactId - ID do contato
-     * @returns {Promise<Object>} Contato removido
+     * Remove uma associação entre pessoa e contato
      */
-    async delete(contactId) {
+    async delete(id) {
         try {
             const query = `
                 DELETE FROM ${this.tableName}
-                WHERE id = $1
+                WHERE person_contact_id = $1
                 RETURNING *
             `;
 
-            const result = await this.pool.query(query, [contactId]);
-            return result.rows[0] || null;
+            const result = await this.pool.query(query, [id]);
+            return result.rows[0];
         } catch (error) {
-            logger.error('Erro ao remover contato', {
+            logger.error('Erro ao deletar person-contact', {
                 error: error.message,
-                contactId
-            });
-            throw error;
-        }
-    }
-
-    /**
-     * Limpa contato principal de uma pessoa
-     * @param {number} personId - ID da pessoa
-     * @private
-     */
-    async clearMainContact(personId) {
-        try {
-            const query = `
-                UPDATE ${this.tableName}
-                SET is_main = false
-                WHERE person_id = $1 AND is_main = true
-            `;
-
-            await this.pool.query(query, [personId]);
-        } catch (error) {
-            logger.error('Erro ao limpar contato principal', {
-                error: error.message,
-                personId
-            });
-            throw error;
-        }
-    }
-
-    /**
-     * Busca contato por ID
-     * @param {number} contactId - ID do contato
-     * @returns {Promise<Object|null>} Contato ou null
-     */
-    async findById(contactId) {
-        try {
-            const query = `
-                SELECT * FROM ${this.tableName}
-                WHERE id = $1
-            `;
-
-            const result = await this.pool.query(query, [contactId]);
-            return result.rows[0] || null;
-        } catch (error) {
-            logger.error('Erro ao buscar contato por ID', {
-                error: error.message,
-                contactId
+                id
             });
             throw error;
         }

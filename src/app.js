@@ -18,6 +18,7 @@ const paymentMethodRoutes = require('./modules/payment-methods/payment-method.mo
 const userRoutes = require('./modules/users/user.routes');
 const addressRoutes = require('./modules/addresses/address.module');
 const ContactModule = require('./modules/contacts/contact.module');
+const PersonContactModule = require('./modules/person-contacts/person-contact.module');
 
 const app = express();
 
@@ -86,6 +87,7 @@ app.use('/payment-methods', paymentMethodRoutes);
 app.use('/users', userRoutes);
 app.use('/addresses', addressRoutes);
 ContactModule.register(app);
+PersonContactModule.registerRoutes(app);
 
 // Rota 404 para capturar requisições não encontradas
 app.use((req, res) => {
@@ -100,7 +102,7 @@ app.use((req, res) => {
     });
 });
 
-// Tratamento de erros global
+// Middleware de tratamento de erros (ÚLTIMO, depois de tudo)
 app.use(errorHandler);
 
 module.exports = app;

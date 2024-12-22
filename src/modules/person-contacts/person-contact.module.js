@@ -10,7 +10,7 @@ class PersonContactModule {
     }
 
     registerRoutes(app) {
-        app.use('/api/person-contacts', this.routes.getRouter());
+        app.use('/person-contacts', this.routes.getRouter());
     }
 }
 
