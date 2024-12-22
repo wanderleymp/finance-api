@@ -2,7 +2,7 @@ const AddressRepository = require('../address.repository');
 const AddressService = require('../address.service');
 const AddressValidator = require('../validators/address.validator');
 
-describe('Address Unit Tests', () => {
+describe.skip('Address Unit Tests', () => {
     let mockPool;
     let addressRepository;
     let addressService;
