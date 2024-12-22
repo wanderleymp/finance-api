@@ -22,6 +22,7 @@ const ContactModule = require('./modules/contacts/contact.module');
 const PersonContactModule = require('./modules/person-contacts/person-contact.module');
 const PersonDocumentModule = require('./modules/person-documents/person-document.module');
 const PersonModule = require('./modules/persons/person.module');
+const ItemModule = require('./modules/items/item.module');
 
 const app = express();
 
@@ -102,6 +103,7 @@ ContactModule.register(app);
 PersonContactModule.registerRoutes(app);
 PersonDocumentModule.register(app);
 PersonModule.register(app);
+ItemModule.register(app);
 
 // Rota 404 para capturar requisições não encontradas
 app.use((req, res) => {

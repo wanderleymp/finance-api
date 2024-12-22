@@ -2,7 +2,7 @@
   "name": "finance-api",
   "version": "1.0.8",
   "description": "RESTful API para gerenciamento financeiro",
-  "main": "src/index.js",
+  "main": "src/app.js",
   "scripts": {
     "start": "node src/server.js",
     "dev": "kill -9 $(lsof -t -i:3000) 2>/dev/null || true && clear && nodemon src/server.js",
