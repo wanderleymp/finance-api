@@ -12,9 +12,9 @@ class ContactController {
             const { page = 1, limit = 10, ...filters } = req.query;
 
             const result = await this.contactService.findAll(
-                filters, 
                 parseInt(page), 
-                parseInt(limit)
+                parseInt(limit),
+                filters
             );
 
             return handleResponse(res, result);
@@ -30,7 +30,6 @@ class ContactController {
     async findById(req, res) {
         try {
             const { id } = req.params;
-
             const contact = await this.contactService.findById(parseInt(id));
 
             if (!contact) {
@@ -41,7 +40,7 @@ class ContactController {
         } catch (error) {
             logger.error('Erro ao buscar contato por ID', {
                 error: error.message,
-                params: req.params
+                id: req.params.id
             });
             return handleError(res, error);
         }
@@ -50,14 +49,13 @@ class ContactController {
     async findByPersonId(req, res) {
         try {
             const { personId } = req.params;
-
             const contacts = await this.contactService.findByPersonId(parseInt(personId));
 
             return handleResponse(res, contacts);
         } catch (error) {
-            logger.error('Erro ao buscar contatos da pessoa', {
+            logger.error('Erro ao buscar contatos por pessoa', {
                 error: error.message,
-                params: req.params
+                personId: req.params.personId
             });
             return handleError(res, error);
         }

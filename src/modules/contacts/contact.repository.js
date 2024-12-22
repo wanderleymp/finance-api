@@ -4,7 +4,7 @@ const ContactResponseDTO = require('./dto/contact-response.dto');
 
 class ContactRepository extends BaseRepository {
     constructor() {
-        super('contacts', 'id');
+        super('contacts', 'contact_id');
     }
 
     async findAll(page = 1, limit = 10, filters = {}) {
@@ -54,13 +54,13 @@ class ContactRepository extends BaseRepository {
             const query = `
                 SELECT c.*
                 FROM contacts c
-                INNER JOIN person_contacts pc ON c.id = pc.contact_id
+                INNER JOIN person_contacts pc ON c.contact_id = pc.contact_id
                 WHERE pc.person_id = $1
                 ORDER BY c.created_at DESC
             `;
             
-            const result = await this.query(query, [personId]);
-            return result.map(ContactResponseDTO.fromDatabase);
+            const result = await this.pool.query(query, [personId]);
+            return result.rows.map(ContactResponseDTO.fromDatabase);
         } catch (error) {
             logger.error('Erro ao buscar contatos por pessoa', {
                 error: error.message,

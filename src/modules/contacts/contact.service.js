@@ -2,8 +2,6 @@ const { logger } = require('../../middlewares/logger');
 const ContactRepository = require('./contact.repository');
 const cacheService = require('../../services/cacheService');
 const ContactValidator = require('./validators/contact.validator');
-const CreateContactDTO = require('./dto/create-contact.dto');
-const UpdateContactDTO = require('./dto/update-contact.dto');
 const { ValidationError } = require('../../utils/errors');
 
 class ContactService {
@@ -54,13 +52,9 @@ class ContactService {
                 filters
             );
 
-            logger.debug('Service findAll - result:', {
-                result
-            });
-
-            // Salva no cache com TTL reduzido
+            // Salva no cache por 5 minutos
             try {
-                await this.cacheService.set(cacheKey, result, 300); // 5 minutos
+                await this.cacheService.set(cacheKey, result, 300);
             } catch (cacheError) {
                 logger.warn('Falha ao salvar no cache', { 
                     error: cacheError.message,
@@ -72,9 +66,7 @@ class ContactService {
         } catch (error) {
             logger.error('Erro ao buscar contatos', {
                 error: error.message,
-                filters,
-                page,
-                limit
+                query: filters
             });
             throw error;
         }
@@ -82,18 +74,13 @@ class ContactService {
 
     async findById(id) {
         try {
-            logger.debug('Service findById - params:', {
-                id
-            });
-
-            const cacheKey = `contact:${id}`;
+            const cacheKey = `contacts:${id}`;
             
-            // Tenta buscar do cache
             try {
-                const cachedContact = await this.cacheService.get(cacheKey);
-                if (cachedContact) {
+                const cachedResult = await this.cacheService.get(cacheKey);
+                if (cachedResult) {
                     logger.info('Retornando contato do cache', { cacheKey });
-                    return cachedContact;
+                    return cachedResult;
                 }
             } catch (cacheError) {
                 logger.warn('Falha ao buscar do cache', { 
@@ -102,27 +89,20 @@ class ContactService {
                 });
             }
 
-            const contact = await this.contactRepository.findById(id);
+            const result = await this.contactRepository.findById(id);
             
-            if (!contact) {
-                throw new ValidationError('Contato não encontrado', 404);
+            if (result) {
+                try {
+                    await this.cacheService.set(cacheKey, result, 3600);
+                } catch (cacheError) {
+                    logger.warn('Falha ao salvar no cache', { 
+                        error: cacheError.message,
+                        cacheKey 
+                    });
+                }
             }
 
-            // Salva no cache
-            try {
-                await this.cacheService.set(cacheKey, contact, 3600); // 1 hora
-            } catch (cacheError) {
-                logger.warn('Falha ao salvar no cache', { 
-                    error: cacheError.message,
-                    cacheKey 
-                });
-            }
-
-            logger.debug('Service findById - result:', {
-                contact
-            });
-
-            return contact;
+            return result;
         } catch (error) {
             logger.error('Erro ao buscar contato por ID', {
                 error: error.message,
@@ -134,18 +114,13 @@ class ContactService {
 
     async findByPersonId(personId) {
         try {
-            logger.debug('Service findByPersonId - params:', {
-                personId
-            });
-
-            const cacheKey = `person:${personId}:contacts`;
+            const cacheKey = `contacts:person:${personId}`;
             
-            // Tenta buscar do cache
             try {
-                const cachedContacts = await this.cacheService.get(cacheKey);
-                if (cachedContacts) {
+                const cachedResult = await this.cacheService.get(cacheKey);
+                if (cachedResult) {
                     logger.info('Retornando contatos da pessoa do cache', { cacheKey });
-                    return cachedContacts;
+                    return cachedResult;
                 }
             } catch (cacheError) {
                 logger.warn('Falha ao buscar do cache', { 
@@ -154,11 +129,10 @@ class ContactService {
                 });
             }
 
-            const contacts = await this.contactRepository.findByPersonId(personId);
+            const result = await this.contactRepository.findByPersonId(personId);
             
-            // Salva no cache
             try {
-                await this.cacheService.set(cacheKey, contacts, 1800); // 30 minutos
+                await this.cacheService.set(cacheKey, result, 1800);
             } catch (cacheError) {
                 logger.warn('Falha ao salvar no cache', { 
                     error: cacheError.message,
@@ -166,13 +140,9 @@ class ContactService {
                 });
             }
 
-            logger.debug('Service findByPersonId - result:', {
-                contacts
-            });
-
-            return contacts;
+            return result;
         } catch (error) {
-            logger.error('Erro ao buscar contatos da pessoa', {
+            logger.error('Erro ao buscar contatos por pessoa', {
                 error: error.message,
                 personId
             });
@@ -180,172 +150,59 @@ class ContactService {
         }
     }
 
-    async findMainContactByPersonId(personId) {
+    async create(data) {
         try {
-            logger.debug('Service findMainContactByPersonId - params:', {
-                personId
+            const result = await this.contactRepository.create({
+                contact_value: data.value,
+                contact_name: data.name,
+                contact_type: data.type
             });
 
-            const cacheKey = `person:${personId}:main_contact`;
-            
-            // Tenta buscar do cache
+            // Invalida cache de listagem
             try {
-                const cachedContact = await this.cacheService.get(cacheKey);
-                if (cachedContact) {
-                    logger.info('Retornando contato principal do cache', { cacheKey });
-                    return cachedContact;
-                }
-            } catch (cacheError) {
-                logger.warn('Falha ao buscar do cache', { 
-                    error: cacheError.message,
-                    cacheKey 
-                });
-            }
-
-            const contact = await this.contactRepository.findMainContactByPersonId(personId);
-            
-            // Salva no cache
-            try {
-                await this.cacheService.set(cacheKey, contact, 1800); // 30 minutos
-            } catch (cacheError) {
-                logger.warn('Falha ao salvar no cache', { 
-                    error: cacheError.message,
-                    cacheKey 
-                });
-            }
-
-            logger.debug('Service findMainContactByPersonId - result:', {
-                contact
-            });
-
-            return contact;
-        } catch (error) {
-            logger.error('Erro ao buscar contato principal da pessoa', {
-                error: error.message,
-                personId
-            });
-            throw error;
-        }
-    }
-
-    async create(contactData) {
-        try {
-            logger.debug('Service create - params:', {
-                contactData
-            });
-
-            // Valida os dados
-            const createDTO = new CreateContactDTO(contactData);
-            const validationResult = await ContactValidator.validateCreate(createDTO);
-
-            if (!validationResult.isValid) {
-                throw new ValidationError('Dados inválidos', 400, validationResult.errors);
-            }
-
-            // Verifica se já existe um contato principal para a pessoa
-            if (createDTO.is_main) {
-                await this.unsetMainContact(createDTO.person_id);
-            }
-
-            // Cria o contato
-            const newContact = await this.contactRepository.create(createDTO);
-
-            // Invalida caches relacionados
-            try {
-                await Promise.all([
-                    this.cacheService.delete(`person:${createDTO.person_id}:contacts`),
-                    this.cacheService.delete(`person:${createDTO.person_id}:main_contact`)
-                ]);
+                await this.cacheService.del('contacts:list:*');
             } catch (cacheError) {
                 logger.warn('Falha ao invalidar cache', { 
-                    error: cacheError.message,
-                    personId: createDTO.person_id 
+                    error: cacheError.message
                 });
             }
 
-            logger.debug('Service create - result:', {
-                newContact
-            });
-
-            logger.info('Contato criado com sucesso', { 
-                contactId: newContact.id,
-                personId: createDTO.person_id 
-            });
-
-            return newContact;
+            return result;
         } catch (error) {
             logger.error('Erro ao criar contato', {
                 error: error.message,
-                contactData
+                data
             });
             throw error;
         }
     }
 
-    async update(id, contactData) {
+    async update(id, data) {
         try {
-            logger.debug('Service update - params:', {
-                id,
-                contactData
+            const result = await this.contactRepository.update(id, {
+                contact_value: data.value,
+                contact_name: data.name,
+                contact_type: data.type
             });
 
-            // Busca o contato existente
-            const existingContact = await this.findById(id);
-            
-            if (!existingContact) {
-                throw new ValidationError('Contato não encontrado', 404);
+            if (result) {
+                // Invalida caches
+                try {
+                    await this.cacheService.del(`contacts:${id}`);
+                    await this.cacheService.del('contacts:list:*');
+                } catch (cacheError) {
+                    logger.warn('Falha ao invalidar cache', { 
+                        error: cacheError.message
+                    });
+                }
             }
 
-            // Valida os dados
-            const updateDTO = new UpdateContactDTO({
-                ...existingContact,
-                ...contactData
-            });
-
-            const validationResult = await ContactValidator.validateUpdate(updateDTO);
-
-            if (!validationResult.isValid) {
-                throw new ValidationError('Dados inválidos', 400, validationResult.errors);
-            }
-
-            // Se está definindo como principal, remove o principal anterior
-            if (updateDTO.is_main && !existingContact.is_main) {
-                await this.unsetMainContact(existingContact.person_id);
-            }
-
-            // Atualiza o contato
-            const updatedContact = await this.contactRepository.update(id, updateDTO);
-
-            // Invalida caches relacionados
-            try {
-                await Promise.all([
-                    this.cacheService.delete(`contact:${id}`),
-                    this.cacheService.delete(`person:${existingContact.person_id}:contacts`),
-                    this.cacheService.delete(`person:${existingContact.person_id}:main_contact`)
-                ]);
-            } catch (cacheError) {
-                logger.warn('Falha ao invalidar cache', { 
-                    error: cacheError.message,
-                    contactId: id,
-                    personId: existingContact.person_id 
-                });
-            }
-
-            logger.debug('Service update - result:', {
-                updatedContact
-            });
-
-            logger.info('Contato atualizado com sucesso', { 
-                contactId: id,
-                personId: existingContact.person_id 
-            });
-
-            return updatedContact;
+            return result;
         } catch (error) {
             logger.error('Erro ao atualizar contato', {
                 error: error.message,
                 id,
-                contactData
+                data
             });
             throw error;
         }
@@ -353,72 +210,25 @@ class ContactService {
 
     async delete(id) {
         try {
-            logger.debug('Service delete - params:', {
-                id
-            });
+            const result = await this.contactRepository.delete(id);
 
-            // Primeiro, verifica se o contato existe
-            const existingContact = await this.findById(id);
-            
-            if (!existingContact) {
-                throw new ValidationError('Contato não encontrado', 404);
+            if (result) {
+                // Invalida caches
+                try {
+                    await this.cacheService.del(`contacts:${id}`);
+                    await this.cacheService.del('contacts:list:*');
+                } catch (cacheError) {
+                    logger.warn('Falha ao invalidar cache', { 
+                        error: cacheError.message
+                    });
+                }
             }
 
-            // Não permite deletar o contato principal
-            if (existingContact.is_main) {
-                throw new ValidationError('Não é possível excluir o contato principal', 400);
-            }
-
-            // Deleta o contato
-            const deletedContact = await this.contactRepository.delete(id);
-
-            // Invalida caches relacionados
-            try {
-                await Promise.all([
-                    this.cacheService.delete(`contact:${id}`),
-                    this.cacheService.delete(`person:${existingContact.person_id}:contacts`),
-                    this.cacheService.delete(`person:${existingContact.person_id}:main_contact`)
-                ]);
-            } catch (cacheError) {
-                logger.warn('Falha ao invalidar cache', { 
-                    error: cacheError.message,
-                    contactId: id,
-                    personId: existingContact.person_id 
-                });
-            }
-
-            logger.debug('Service delete - result:', {
-                deletedContact
-            });
-
-            logger.info('Contato deletado com sucesso', { 
-                contactId: id,
-                personId: existingContact.person_id 
-            });
-
-            return deletedContact;
+            return result;
         } catch (error) {
             logger.error('Erro ao deletar contato', {
                 error: error.message,
                 id
-            });
-            throw error;
-        }
-    }
-
-    async unsetMainContact(personId) {
-        try {
-            const query = `
-                UPDATE ${this.contactRepository.tableName}
-                SET is_main = false
-                WHERE person_id = $1 AND is_main = true
-            `;
-
-            await this.contactRepository.pool.query(query, [personId]);
-        } catch (error) {
-            logger.error('Erro ao remover contato principal', {
-                error: error.message,
-                personId
             });
             throw error;
         }
