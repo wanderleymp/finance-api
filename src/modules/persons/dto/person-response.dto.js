@@ -1,12 +1,10 @@
 class PersonResponseDTO {
     constructor(data) {
-        this.id = data.id;
-        this.name = data.name;
-        this.document = data.document;
-        this.email = data.email;
+        this.id = data.person_id;
+        this.name = data.full_name;
+        this.fantasy_name = data.fantasy_name;
         this.birth_date = data.birth_date;
-        this.type = data.type;
-        this.is_active = data.is_active;
+        this.type = data.person_type;
         this.created_at = data.created_at;
         this.updated_at = data.updated_at;
         this.addresses = data.addresses || [];
@@ -17,11 +15,9 @@ class PersonResponseDTO {
         return {
             id: this.id,
             name: this.name,
-            document: this.document,
-            email: this.email,
+            fantasy_name: this.fantasy_name,
             birth_date: this.birth_date,
             type: this.type,
-            is_active: this.is_active,
             created_at: this.created_at,
             updated_at: this.updated_at,
             addresses: this.addresses,
@@ -31,13 +27,11 @@ class PersonResponseDTO {
 
     static fromDatabase(data) {
         return new PersonResponseDTO({
-            id: data.id,
-            name: data.name,
-            document: data.document,
-            email: data.email,
+            person_id: data.person_id,
+            full_name: data.full_name,
+            fantasy_name: data.fantasy_name,
             birth_date: data.birth_date,
-            type: data.type,
-            is_active: data.is_active,
+            person_type: data.person_type,
             created_at: data.created_at,
             updated_at: data.updated_at,
             addresses: data.addresses,

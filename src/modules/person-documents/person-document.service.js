@@ -3,7 +3,7 @@ const PersonRepository = require('../persons/person.repository');
 const { validateDocument } = require('../../utils/documentValidator');
 const { ValidationError } = require('../../utils/errors');
 const { logger } = require('../../middlewares/logger');
-const { redisClient } = require('../../config/redis');
+const redisWrapper = require('../../config/redis');
 
 class PersonDocumentService {
     constructor(
@@ -27,11 +27,14 @@ class PersonDocumentService {
 
     async findById(id) {
         try {
-            const cacheKey = `${this.cachePrefix}${id}`;
-            const cachedDocument = await redisClient.get(cacheKey);
-            
-            if (cachedDocument) {
-                return JSON.parse(cachedDocument);
+            // Tenta usar o cache apenas se o Redis estiver habilitado e conectado
+            if (redisWrapper.enabled && redisWrapper.connected) {
+                const cacheKey = `${this.cachePrefix}${id}`;
+                const cachedDocument = await redisWrapper.client.get(cacheKey);
+                
+                if (cachedDocument) {
+                    return JSON.parse(cachedDocument);
+                }
             }
 
             const document = await this.documentRepo.findById(id);
@@ -39,7 +42,12 @@ class PersonDocumentService {
                 throw new ValidationError('Documento não encontrado', 404);
             }
 
-            await redisClient.setex(cacheKey, this.cacheTTL, JSON.stringify(document));
+            // Salva no cache apenas se o Redis estiver habilitado e conectado
+            if (redisWrapper.enabled && redisWrapper.connected) {
+                const cacheKey = `${this.cachePrefix}${id}`;
+                await redisWrapper.client.setex(cacheKey, this.cacheTTL, JSON.stringify(document));
+            }
+
             return document;
         } catch (error) {
             logger.error('Erro ao buscar documento por ID', { error, id });
@@ -160,7 +168,9 @@ class PersonDocumentService {
 
     async invalidateCache(id) {
         try {
-            await redisClient.del(`${this.cachePrefix}${id}`);
+            if (redisWrapper.enabled && redisWrapper.connected) {
+                await redisWrapper.client.del(`${this.cachePrefix}${id}`);
+            }
         } catch (error) {
             logger.error('Erro ao invalidar cache do documento', { error, id });
         }
@@ -168,10 +178,12 @@ class PersonDocumentService {
 
     async invalidateListCache(personId) {
         try {
-            const pattern = `${this.cachePrefix}list:${personId}:*`;
-            const keys = await redisClient.keys(pattern);
-            if (keys.length > 0) {
-                await redisClient.del(keys);
+            if (redisWrapper.enabled && redisWrapper.connected) {
+                const pattern = `${this.cachePrefix}list:${personId}:*`;
+                const keys = await redisWrapper.client.keys(pattern);
+                if (keys.length > 0) {
+                    await redisWrapper.client.del(keys);
+                }
             }
         } catch (error) {
             logger.error('Erro ao invalidar cache de listagem', { error, personId });

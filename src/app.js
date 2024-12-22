@@ -6,6 +6,7 @@ const swaggerSpec = require('./config/swagger');
 const { errorHandler } = require('./middlewares/errorHandler');
 const { authMiddleware } = require('./middlewares/auth');
 const { logger } = require('./middlewares/logger');
+const redisWrapper = require('./config/redis');
 const path = require('path');
 
 // Importando rotas dos módulos
@@ -38,6 +39,15 @@ app.use((req, res, next) => {
 // Configurações básicas
 app.use(cors());
 app.use(express.json());
+
+// Inicializa conexão com Redis
+redisWrapper.connect().then(connected => {
+    if (connected) {
+        logger.info('Redis conectado e pronto para uso');
+    } else {
+        logger.warn('Redis não está disponível, sistema operará sem cache');
+    }
+});
 
 // Configuração do Swagger UI
 const swaggerUiOptions = {

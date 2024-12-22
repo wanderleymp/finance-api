@@ -15,13 +15,11 @@ class PersonRepository extends IPersonRepository {
             const offset = (page - 1) * limit;
             let query = `
                 SELECT 
-                    id,
-                    name,
-                    document,
-                    email,
+                    person_id,
+                    full_name,
                     birth_date,
-                    type,
-                    is_active,
+                    person_type,
+                    fantasy_name,
                     created_at,
                     updated_at
                 FROM ${this.tableName}
@@ -31,51 +29,25 @@ class PersonRepository extends IPersonRepository {
             let paramCount = 1;
 
             if (filters.name) {
-                query += ` AND name ILIKE $${paramCount}`;
+                query += ` AND (full_name ILIKE $${paramCount} OR fantasy_name ILIKE $${paramCount})`;
                 params.push(`%${filters.name}%`);
                 paramCount++;
             }
 
-            if (filters.document) {
-                query += ` AND document = $${paramCount}`;
-                params.push(filters.document);
-                paramCount++;
-            }
-
             if (filters.type) {
-                query += ` AND type = $${paramCount}`;
+                query += ` AND person_type = $${paramCount}`;
                 params.push(filters.type);
                 paramCount++;
             }
 
-            if (filters.is_active !== undefined) {
-                query += ` AND is_active = $${paramCount}`;
-                params.push(filters.is_active);
-                paramCount++;
-            }
-
-            const countQuery = query.replace('*', 'COUNT(*) as total');
+            // Adiciona ordenação e paginação
             query += ` ORDER BY created_at DESC LIMIT $${paramCount} OFFSET $${paramCount + 1}`;
             params.push(limit, offset);
 
-            const [dataResult, countResult] = await Promise.all([
-                this.pool.query(query, params),
-                this.pool.query(countQuery, params.slice(0, -2))
-            ]);
-
-            return {
-                data: dataResult.rows.map(PersonResponseDTO.fromDatabase),
-                total: parseInt(countResult.rows[0].total),
-                page,
-                limit
-            };
+            const result = await this.pool.query(query, params);
+            return result.rows.map(row => PersonResponseDTO.fromDatabase(row));
         } catch (error) {
-            logger.error('Erro ao buscar pessoas', {
-                error: error.message,
-                filters,
-                page,
-                limit
-            });
+            logger.error('Erro ao buscar pessoas', { error: error.message, filters });
             throw error;
         }
     }
@@ -84,17 +56,15 @@ class PersonRepository extends IPersonRepository {
         try {
             const query = `
                 SELECT 
-                    id,
-                    name,
-                    document,
-                    email,
+                    person_id,
+                    full_name,
                     birth_date,
-                    type,
-                    is_active,
+                    person_type,
+                    fantasy_name,
                     created_at,
                     updated_at
                 FROM ${this.tableName}
-                WHERE id = $1
+                WHERE person_id = $1
             `;
             const result = await this.pool.query(query, [id]);
             return result.rows[0] ? PersonResponseDTO.fromDatabase(result.rows[0]) : null;
@@ -111,13 +81,11 @@ class PersonRepository extends IPersonRepository {
         try {
             const query = `
                 SELECT 
-                    id,
-                    name,
-                    document,
-                    email,
+                    person_id,
+                    full_name,
                     birth_date,
-                    type,
-                    is_active,
+                    person_type,
+                    fantasy_name,
                     created_at,
                     updated_at
                 FROM ${this.tableName}
@@ -138,13 +106,11 @@ class PersonRepository extends IPersonRepository {
         try {
             const query = `
                 SELECT 
-                    p.id,
-                    p.name,
-                    p.document,
-                    p.email,
+                    p.person_id,
+                    p.full_name,
                     p.birth_date,
-                    p.type,
-                    p.is_active,
+                    p.person_type,
+                    p.fantasy_name,
                     p.created_at,
                     p.updated_at,
                     json_agg(DISTINCT jsonb_build_object(
@@ -165,10 +131,10 @@ class PersonRepository extends IPersonRepository {
                         'is_main', c.is_main
                     )) as contacts
                 FROM ${this.tableName} p
-                LEFT JOIN addresses a ON a.person_id = p.id
-                LEFT JOIN person_contacts c ON c.person_id = p.id
-                WHERE p.id = $1
-                GROUP BY p.id
+                LEFT JOIN addresses a ON a.person_id = p.person_id
+                LEFT JOIN person_contacts c ON c.person_id = p.person_id
+                WHERE p.person_id = $1
+                GROUP BY p.person_id
             `;
             const result = await this.pool.query(query, [id]);
             
@@ -192,22 +158,20 @@ class PersonRepository extends IPersonRepository {
         try {
             const query = `
                 INSERT INTO ${this.tableName} (
-                    name, 
-                    document, 
-                    email, 
+                    full_name, 
                     birth_date, 
-                    type,
+                    person_type,
+                    fantasy_name,
                     is_active
                 ) VALUES (
-                    $1, $2, $3, $4, $5, $6
+                    $1, $2, $3, $4, $5
                 ) RETURNING *
             `;
             const values = [
-                data.name,
-                data.document,
-                data.email,
+                data.full_name,
                 data.birth_date,
-                data.type,
+                data.person_type,
+                data.fantasy_name,
                 data.is_active
             ];
 
@@ -235,7 +199,7 @@ class PersonRepository extends IPersonRepository {
             const query = `
                 UPDATE ${this.tableName}
                 SET ${updateFields.join(', ')}, updated_at = NOW()
-                WHERE id = $1
+                WHERE person_id = $1
                 RETURNING *
             `;
 
@@ -262,7 +226,7 @@ class PersonRepository extends IPersonRepository {
         try {
             const query = `
                 DELETE FROM ${this.tableName}
-                WHERE id = $1
+                WHERE person_id = $1
                 RETURNING *
             `;
             const result = await this.pool.query(query, [id]);
