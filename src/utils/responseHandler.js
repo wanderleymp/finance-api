@@ -5,12 +5,7 @@ function handleResponse(res, data, statusCode = 200) {
         console.error('Invalid response object:', res);
         throw new Error('Invalid response object');
     }
-    return res.status(statusCode).json({
-        data: data,
-        total: data.total || null,
-        page: data.page || 1,
-        limit: data.limit || 10
-    });
+    return res.status(statusCode).json(data);
 }
 
 function handleError(res, error, statusCode = 500) {
