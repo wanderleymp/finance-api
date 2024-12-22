@@ -1,7 +1,7 @@
 const express = require('express');
 const { authMiddleware } = require('../../middlewares/auth');
 const { validateSchema } = require('../../utils/validateSchema');
-const { createDocumentSchema, updateDocumentSchema } = require('./schemas/person-document.schema');
+const { createPersonDocumentSchema, updatePersonDocumentSchema } = require('./schemas/person-document.schema');
 
 /**
  * @param {PersonDocumentController} controller 
@@ -29,7 +29,7 @@ module.exports = (controller) => {
     
     // Cria um novo documento para uma pessoa
     router.post('/:personId', 
-        (req, res, next) => validateSchema(createDocumentSchema, req.body)
+        (req, res, next) => validateSchema(createPersonDocumentSchema, req.body)
             .then(validatedData => {
                 req.body = validatedData;
                 next();
@@ -40,7 +40,7 @@ module.exports = (controller) => {
     
     // Atualiza um documento
     router.put('/:id', 
-        (req, res, next) => validateSchema(updateDocumentSchema, req.body)
+        (req, res, next) => validateSchema(updatePersonDocumentSchema, req.body)
             .then(validatedData => {
                 req.body = validatedData;
                 next();

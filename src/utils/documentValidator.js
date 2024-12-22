@@ -112,6 +112,8 @@ function validateDocument(type, value) {
         default:
             throw new ValidationError('Tipo de documento inválido');
     }
+
+    return true;
 }
 
 module.exports = {

@@ -1,17 +1,6 @@
 const Joi = require('joi');
 
 const createPersonDocumentSchema = Joi.object({
-    person_id: Joi.number()
-        .integer()
-        .positive()
-        .required()
-        .messages({
-            'any.required': 'O ID da pessoa é obrigatório',
-            'number.base': 'O ID da pessoa deve ser um número',
-            'number.integer': 'O ID da pessoa deve ser um número inteiro',
-            'number.positive': 'O ID da pessoa deve ser um número positivo'
-        }),
-
     document_type: Joi.string()
         .valid('CPF', 'CNPJ', 'RG', 'IE')
         .required()

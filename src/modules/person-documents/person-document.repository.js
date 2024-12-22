@@ -125,7 +125,7 @@ class PersonDocumentRepository {
                 SELECT pd.*, p.full_name as person_name
                 FROM ${this.table} pd
                 LEFT JOIN persons p ON p.person_id = pd.person_id
-                WHERE pd.type = $1 AND pd.person_id = $2
+                WHERE pd.document_type = $1 AND pd.person_id = $2
             `;
 
             const result = await this.pool.query(query, [type, personId]);

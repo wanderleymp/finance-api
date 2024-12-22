@@ -77,13 +77,13 @@ class PersonDocumentService {
             }
 
             // Valida o número do documento
-            if (!validateDocument(documentData.number, documentData.type)) {
+            if (!validateDocument(documentData.document_type, documentData.document_value)) {
                 throw new ValidationError('Número de documento inválido');
             }
 
             // Verifica se já existe um documento do mesmo tipo para a pessoa
             const existingDocument = await this.documentRepo.findByTypeAndPerson(
-                documentData.type,
+                documentData.document_type,
                 personId
             );
 
@@ -114,9 +114,9 @@ class PersonDocumentService {
             }
 
             // Se o tipo do documento foi alterado, valida se já existe outro do mesmo tipo
-            if (documentData.type && documentData.type !== document.type) {
+            if (documentData.document_type && documentData.document_type !== document.document_type) {
                 const existingDocument = await this.documentRepo.findByTypeAndPerson(
-                    documentData.type,
+                    documentData.document_type,
                     document.person_id
                 );
 
@@ -126,9 +126,9 @@ class PersonDocumentService {
             }
 
             // Se o número do documento foi alterado, valida o novo número
-            if (documentData.number) {
-                const type = documentData.type || document.type;
-                if (!validateDocument(documentData.number, type)) {
+            if (documentData.document_value) {
+                const type = documentData.document_type || document.document_type;
+                if (!validateDocument(type, documentData.document_value)) {
                     throw new ValidationError('Número de documento inválido');
                 }
             }
