@@ -296,7 +296,7 @@ class PersonService {
             const newPerson = await this.personRepository.create(createDTO);
 
             // Limpa cache relacionado
-            await this.cacheService.delete('persons:list:*');
+            await this.cacheService.del('persons:list:*');
             
             logger.info('Pessoa criada com sucesso', { 
                 personId: newPerson.id 
@@ -358,9 +358,9 @@ class PersonService {
 
             // Limpa cache relacionado
             await Promise.all([
-                this.cacheService.delete(`person:${id}`),
-                this.cacheService.delete(`person:details:${id}`),
-                this.cacheService.delete('persons:list:*')
+                this.cacheService.del(`person:${id}`),
+                this.cacheService.del(`person:details:${id}`),
+                this.cacheService.del('persons:list:*')
             ]);
 
             logger.info('Pessoa atualizada com sucesso', { 
@@ -413,7 +413,7 @@ class PersonService {
             const newAddress = await this.personRepository.addAddress(personId, addressData);
 
             // Limpa cache de detalhes da pessoa
-            await this.cacheService.delete(`person:details:${personId}`);
+            await this.cacheService.del(`person:details:${personId}`);
 
             logger.info('Endereço adicionado à pessoa', { 
                 personId, 
@@ -453,7 +453,7 @@ class PersonService {
             const newContact = await this.personRepository.addContact(personId, contactData);
 
             // Limpa cache de detalhes da pessoa
-            await this.cacheService.delete(`person:details:${personId}`);
+            await this.cacheService.del(`person:details:${personId}`);
 
             logger.info('Contato adicionado à pessoa', { 
                 personId, 
@@ -477,7 +477,7 @@ class PersonService {
 
             if (removedAddress) {
                 // Limpa cache de detalhes da pessoa
-                await this.cacheService.delete(`person:details:${removedAddress.person_id}`);
+                await this.cacheService.del(`person:details:${removedAddress.person_id}`);
 
                 logger.info('Endereço removido', { 
                     addressId, 
@@ -501,7 +501,7 @@ class PersonService {
 
             if (removedContact) {
                 // Limpa cache de detalhes da pessoa
-                await this.cacheService.delete(`person:details:${removedContact.person_id}`);
+                await this.cacheService.del(`person:details:${removedContact.person_id}`);
 
                 logger.info('Contato removido', { 
                     contactId, 

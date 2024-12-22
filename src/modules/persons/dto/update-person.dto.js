@@ -2,12 +2,11 @@ const { updatePersonSchema } = require('../schemas/person.schema');
 
 class UpdatePersonDTO {
     constructor(data) {
-        this.name = data.name;
-        this.document = data.document;
-        this.email = data.email;
+        this.full_name = data.full_name;
+        this.fantasy_name = data.fantasy_name;
         this.birth_date = data.birth_date;
-        this.type = data.type;
-        this.is_active = data.is_active;
+        this.person_type = data.person_type;
+        this.active = data.active;
     }
 
     validate() {
@@ -17,12 +16,11 @@ class UpdatePersonDTO {
     toJSON() {
         const json = {};
         
-        if (this.name !== undefined) json.name = this.name;
-        if (this.document !== undefined) json.document = this.document;
-        if (this.email !== undefined) json.email = this.email;
+        if (this.full_name !== undefined) json.full_name = this.full_name;
+        if (this.fantasy_name !== undefined) json.fantasy_name = this.fantasy_name;
         if (this.birth_date !== undefined) json.birth_date = this.birth_date;
-        if (this.type !== undefined) json.type = this.type;
-        if (this.is_active !== undefined) json.is_active = this.is_active;
+        if (this.person_type !== undefined) json.person_type = this.person_type;
+        if (this.active !== undefined) json.active = this.active;
 
         return json;
     }
