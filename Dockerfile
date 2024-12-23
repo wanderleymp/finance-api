@@ -6,10 +6,10 @@ RUN apt-get update && apt-get install -y \
     python3 \
     make \
     g++ \
+    curl \
     && rm -rf /var/lib/apt/lists/*
 
-# Set Node.js configurations
-ENV NODE_OPTIONS="--max-old-space-size=512"
+# Set environment variables
 ENV NODE_ENV=development
 ENV HUSKY=0
 ENV CI=true
@@ -39,4 +39,4 @@ HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
     CMD curl -f http://localhost:3000/health || exit 1
 
 # Command to run the application with proper garbage collection settings
-CMD ["node", "--expose-gc", "--gc-global", "src/server.js"]
+CMD ["node", "--max-old-space-size=512", "--expose-gc", "--gc-global", "src/server.js"]
