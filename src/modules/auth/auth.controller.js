@@ -1,11 +1,14 @@
 const AuthService = require('./auth.service');
 const { LoginDTO } = require('./dto/login.dto');
 const { logger } = require('../../middlewares/logger');
+const { handleResponse, handleError } = require('../../utils/responseHandler');
 
 class AuthController {
-    static authService = new AuthService();
+    constructor(service) {
+        this.service = service;
+    }
 
-    static async login(req, res) {
+    async login(req, res) {
         try {
             const loginDto = new LoginDTO({
                 username: req.body.username,
@@ -22,7 +25,7 @@ class AuthController {
                 userAgent: req.get('user-agent')
             });
 
-            const result = await AuthController.authService.login(
+            const result = await this.service.login(
                 loginDto.username,
                 loginDto.password,
                 loginDto.twoFactorToken,
@@ -30,38 +33,31 @@ class AuthController {
                 req.get('user-agent')
             );
 
-            res.json(result);
+            handleResponse(res, result);
         } catch (error) {
             logger.error('Login error', { error });
-            res.status(401).json({
-                error: 'Invalid credentials'
-            });
+            handleError(res, error);
         }
     }
 
-    static async refreshToken(req, res) {
+    async refreshToken(req, res) {
         try {
             const { refreshToken } = req.body;
-            const result = await AuthController.authService.refreshToken(refreshToken);
-            res.json(result);
+            const result = await this.service.refreshToken(refreshToken);
+            handleResponse(res, result);
         } catch (error) {
             logger.error('Refresh token error', { error });
-            res.status(401).json({
-                error: 'Invalid refresh token'
-            });
+            handleError(res, error);
         }
     }
 
-    static async logout(req, res) {
+    async logout(req, res) {
         try {
-            const { refreshToken } = req.body;
-            await AuthController.authService.logout(refreshToken);
-            res.json({ message: 'Logged out successfully' });
+            await this.service.logout(req.user.userId);
+            handleResponse(res, null, 204);
         } catch (error) {
             logger.error('Logout error', { error });
-            res.status(400).json({
-                error: 'Invalid logout request'
-            });
+            handleError(res, error);
         }
     }
 }

@@ -1,29 +1,47 @@
-const express = require('express');
-const AuthController = require('./auth.controller');
-const { validateRequest } = require('../../middlewares/requestValidator');
+const { Router } = require('express');
+const { validateSchema } = require('../../utils/validateSchema');
+const AuthSchema = require('./schemas/auth.schema');
 const { authMiddleware } = require('../../middlewares/auth');
-const authSchema = require('./schemas/auth.schema');
-const rateLimiter = require('../../middlewares/security/rateLimiter');
 
-const router = express.Router();
+class AuthRoutes {
+    constructor(controller) {
+        this.router = Router();
+        this.controller = controller;
+        this.setupRoutes();
+    }
 
-// Rotas públicas (não requerem autenticação)
-router.post('/login',
-    rateLimiter.loginLimiter,
-    validateRequest(authSchema.login),
-    AuthController.login
-);
+    setupRoutes() {
+        // Rotas públicas
+        this.router
+            .post('/login', 
+                (req, res, next) => validateSchema(AuthSchema.login, req.body)
+                    .then(validatedData => {
+                        req.body = validatedData;
+                        next();
+                    })
+                    .catch(next),
+                this.controller.login.bind(this.controller)
+            )
+            .post('/refresh', 
+                (req, res, next) => validateSchema(AuthSchema.refresh, req.body)
+                    .then(validatedData => {
+                        req.body = validatedData;
+                        next();
+                    })
+                    .catch(next),
+                this.controller.refreshToken.bind(this.controller)
+            );
 
-router.post('/refresh',
-    validateRequest(authSchema.refresh),
-    AuthController.refreshToken
-);
+        // Rotas protegidas
+        this.router.post('/logout', 
+            authMiddleware,
+            this.controller.logout.bind(this.controller)
+        );
+    }
 
-// Rotas que requerem autenticação
-router.post('/logout',
-    authMiddleware,
-    validateRequest(authSchema.logout),
-    AuthController.logout
-);
+    getRouter() {
+        return this.router;
+    }
+}
 
-module.exports = router;
+module.exports = AuthRoutes;

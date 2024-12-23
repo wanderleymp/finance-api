@@ -1,97 +1,78 @@
 const userService = require('./user.service');
 const { logger } = require('../../middlewares/logger');
+const { handleResponse, handleError } = require('../../utils/responseHandler');
 
 class UserController {
+    constructor(service) {
+        this.service = service;
+    }
+
+    async findAll(req, res) {
+        try {
+            const { page = 1, limit = 10, ...filters } = req.query;
+
+            // Converte active para booleano se presente
+            if (filters.active !== undefined) {
+                filters.active = filters.active === 'true';
+            }
+
+            const result = await this.service.list(
+                filters,
+                parseInt(page),
+                parseInt(limit)
+            );
+
+            handleResponse(res, 200, result);
+        } catch (error) {
+            handleError(res, error);
+        }
+    }
+
+    async findById(req, res) {
+        try {
+            const user = await this.service.findById(req.params.id);
+            handleResponse(res, 200, user);
+        } catch (error) {
+            handleError(res, error);
+        }
+    }
+
     async create(req, res) {
         try {
-            const user = await userService.create(req.body);
-            res.status(201).json({
-                message: 'User created successfully',
-                data: user
-            });
+            const user = await this.service.create(req.body);
+            handleResponse(res, 201, user);
         } catch (error) {
-            logger.error('Error creating user', { error: error.message });
-            res.status(400).json({
-                message: error.message
-            });
+            handleError(res, error);
         }
     }
 
     async update(req, res) {
         try {
-            const user = await userService.update(req.params.id, req.body);
-            res.status(200).json({
-                message: 'User updated successfully',
-                data: user
-            });
+            const user = await this.service.update(req.params.id, req.body);
+            handleResponse(res, 200, user);
         } catch (error) {
-            logger.error('Error updating user', { error: error.message });
-            res.status(400).json({
-                message: error.message
-            });
+            handleError(res, error);
         }
     }
 
     async delete(req, res) {
         try {
-            await userService.delete(req.params.id);
-            res.status(204).send();
+            await this.service.delete(req.params.id);
+            handleResponse(res, 204);
         } catch (error) {
-            logger.error('Error deleting user', { error: error.message });
-            res.status(400).json({
-                message: error.message
-            });
-        }
-    }
-
-    async getById(req, res) {
-        try {
-            const user = await userService.findById(req.params.id);
-            if (!user) {
-                return res.status(404).json({
-                    message: 'User not found'
-                });
-            }
-            res.status(200).json({
-                data: user
-            });
-        } catch (error) {
-            logger.error('Error getting user', { error: error.message });
-            res.status(400).json({
-                message: error.message
-            });
-        }
-    }
-
-    async list(req, res) {
-        try {
-            const result = await userService.list(req.query);
-            res.status(200).json(result);
-        } catch (error) {
-            logger.error('Error listing users', { error: error.message });
-            res.status(400).json({
-                message: error.message
-            });
+            handleError(res, error);
         }
     }
 
     async refreshToken(req, res) {
         try {
             const { refreshToken } = req.body;
-            const result = await userService.refreshToken(refreshToken);
-            res.status(200).json(result);
+            const result = await this.service.refreshToken(refreshToken);
+            handleResponse(res, 200, result);
         } catch (error) {
-            logger.error('Error refreshing token', { error: error.message });
-            if (error.name === 'JsonWebTokenError' || error.name === 'TokenExpiredError') {
-                return res.status(401).json({
-                    message: 'Invalid or expired refresh token'
-                });
-            }
-            res.status(400).json({
-                message: error.message
-            });
+            handleError(res, error);
         }
     }
 }
 
-module.exports = new UserController();
+module.exports = UserController;

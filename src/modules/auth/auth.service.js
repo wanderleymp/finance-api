@@ -1,22 +1,21 @@
 const bcrypt = require('bcrypt');
 const IAuthService = require('./interfaces/IAuthService');
-const LoginAuditRepository = require('./repositories/loginAudit.repository');
 const { AuthResponseDTO } = require('./dto/login.dto');
-const UserService = require('../user/user.service');
 const { logger } = require('../../middlewares/logger');
 const redis = require('../../config/redis');
 const JwtService = require('../../config/jwt');
 
 class AuthService extends IAuthService {
-    constructor() {
+    constructor({ loginAuditRepository, userService }) {
         super();
-        this.loginAuditRepository = new LoginAuditRepository();
+        this.loginAuditRepository = loginAuditRepository;
+        this.userService = userService;
     }
 
     async login(username, password, twoFactorToken = null, ip, userAgent) {
         try {
             // Buscar usuário primeiro
-            const user = await UserService.findByUsername(username);
+            const user = await this.userService.findByUsername(username);
             if (!user) {
                 await this.loginAuditRepository.create({
                     username,
@@ -64,12 +63,12 @@ class AuthService extends IAuthService {
                 // TODO: Implementar validação do token 2FA
             }
 
-            // Gerar tokens usando o JwtService
+            // Gerar tokens
             const accessToken = JwtService.generateToken({ userId: user.user_id });
             const refreshToken = JwtService.generateRefreshToken({ userId: user.user_id });
 
-            // Atualizar refresh token no banco
-            await UserService.updateRefreshToken(user.user_id, refreshToken);
+            // Atualizar refresh token do usuário
+            await this.userService.updateRefreshToken(user.user_id, refreshToken);
 
             // Registrar login bem-sucedido
             await this.loginAuditRepository.create({
@@ -96,22 +95,6 @@ class AuthService extends IAuthService {
         }
     }
 
-    async logout(userId) {
-        try {
-            // Invalidar refresh token
-            await UserService.updateRefreshToken(userId, null);
-
-            // Invalidar token no Redis se estiver configurado
-            if (redis.isEnabled()) {
-                const key = `user:${userId}:token`;
-                await redis.client.del(key);
-            }
-        } catch (error) {
-            logger.error('Logout error', { error: error.message, userId });
-            throw error;
-        }
-    }
-
     async refreshToken(refreshToken) {
         try {
             // Verificar refresh token
@@ -121,7 +104,7 @@ class AuthService extends IAuthService {
             }
 
             // Buscar usuário e verificar se o refresh token está ativo
-            const user = await UserService.findById(decoded.userId);
+            const user = await this.userService.findById(decoded.userId);
             if (!user || user.refresh_token !== refreshToken) {
                 throw new Error('Invalid refresh token');
             }
@@ -131,7 +114,7 @@ class AuthService extends IAuthService {
             const newRefreshToken = JwtService.generateRefreshToken({ userId: decoded.userId });
 
             // Atualizar refresh token no banco
-            await UserService.updateRefreshToken(decoded.userId, newRefreshToken);
+            await this.userService.updateRefreshToken(decoded.userId, newRefreshToken);
 
             return {
                 accessToken,
@@ -140,6 +123,24 @@ class AuthService extends IAuthService {
             };
         } catch (error) {
             logger.error('Refresh token error', { error: error.message });
+            throw error;
+        }
+    }
+
+    async logout(userId) {
+        try {
+            // Remover refresh token do usuário
+            await this.userService.updateRefreshToken(userId, null);
+
+            // Se redis estiver habilitado, adicionar token à blacklist
+            if (redis.isEnabled()) {
+                const key = `blacklist:${userId}`;
+                await redis.set(key, 'true', 'EX', process.env.JWT_EXPIRATION);
+            }
+
+            return true;
+        } catch (error) {
+            logger.error('Logout error', { error });
             throw error;
         }
     }

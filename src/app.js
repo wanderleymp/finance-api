@@ -10,9 +10,8 @@ const redisWrapper = require('./config/redis');
 const path = require('path');
 
 // Importando rotas dos módulos
-const authRoutes = require('./modules/auth/auth.routes');
-const boletoRoutes = require('./modules/boletos/boleto.routes');
 const healthRoutes = require('./modules/health/health.routes');
+const boletoRoutes = require('./modules/boletos/boleto.routes');
 const movementRoutes = require('./modules/movements/movement.module');
 const movementPaymentRoutes = require('./modules/movement-payments/movement-payment.module');
 const paymentMethodRoutes = require('./modules/payment-methods/payment-method.module');
@@ -23,11 +22,32 @@ const PersonDocumentModule = require('./modules/person-documents/person-document
 const PersonModule = require('./modules/persons/person.module');
 const ItemModule = require('./modules/items/item.module');
 const MovementItemModule = require('./modules/movement-items/movement-item.module');
-const UserModule = require('./modules/user/user.module');
 
 const app = express();
 
-// Middleware de log (PRIMEIRO, antes de tudo)
+// Configurações do Swagger UI
+const swaggerUiOptions = {
+    explorer: true,
+    swaggerOptions: {
+        urls: [
+            {
+                url: '/api-docs.json',
+                name: 'Specification'
+            }
+        ]
+    }
+};
+
+// Configuração do Redis
+(async () => {
+    try {
+        await redisWrapper.connect();
+    } catch (error) {
+        logger.warn('Redis não está disponível, sistema operará sem cache', { error: error.message });
+    }
+})();
+
+// Middleware de logging para todas as requisições
 app.use((req, res, next) => {
     logger.info('Nova requisição recebida', {
         method: req.method,
@@ -40,55 +60,26 @@ app.use((req, res, next) => {
 });
 
 // Configurações básicas
-app.set('trust proxy', 'loopback'); // Confia apenas no proxy local
-
-// Configuração do CORS
-const corsOptions = {
-    origin: process.env.NODE_ENV === 'development' 
-        ? ['http://localhost:3000', 'https://*.bolt.new', 'https://*.stackblitz.com'] 
-        : process.env.CORS_ORIGIN?.split(',') || ['http://localhost:3000'],
-    methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
-    allowedHeaders: ['Content-Type', 'Authorization'],
-    credentials: true
-};
-
-app.use(cors(corsOptions));
+app.use(cors());
+app.use(helmet());
 app.use(express.json());
+app.use(express.urlencoded({ extended: true }));
 
-// Inicializa conexão com Redis
-redisWrapper.connect().then(connected => {
-    if (connected) {
-        logger.info('Redis conectado e pronto para uso');
-    } else {
-        logger.warn('Redis não está disponível, sistema operará sem cache');
+// Servir arquivos estáticos
+app.use('/static', express.static(path.join(__dirname, 'public')));
+
+// Middleware de logging para dados da requisição
+app.use((req, res, next) => {
+    if (req.body && Object.keys(req.body).length > 0) {
+        logger.info('Validando requisição', {
+            property: 'body',
+            requestData: req.body
+        });
     }
+    next();
 });
 
-// Configuração do Swagger UI
-const swaggerUiOptions = {
-    explorer: true,
-    customSiteTitle: "Finance API Documentation",
-    swaggerOptions: {
-        persistAuthorization: true
-    }
-};
-
-// Configuração do Helmet (com configurações seguras para o Swagger UI)
-app.use(helmet({
-    contentSecurityPolicy: {
-        directives: {
-            defaultSrc: ["'self'"],
-            scriptSrc: ["'self'", "'unsafe-inline'", "'unsafe-eval'"],
-            styleSrc: ["'self'", "'unsafe-inline'"],
-            imgSrc: ["'self'", "data:", "https:"],
-            fontSrc: ["'self'", "data:"],
-        },
-    },
-    crossOriginEmbedderPolicy: false,
-    crossOriginResourcePolicy: false
-}));
-
-// Rota para o Swagger JSON
+// Setup do Swagger
 app.get('/api-docs.json', (req, res) => {
     res.setHeader('Content-Type', 'application/json');
     res.send(swaggerSpec);
@@ -99,13 +90,19 @@ app.use('/api-docs', swaggerUi.serve);
 app.get('/api-docs', swaggerUi.setup(swaggerSpec, swaggerUiOptions));
 
 // Rotas públicas
-app.use('/auth', authRoutes);
 app.use('/health', healthRoutes);
+
+// Registra módulos
+const authModule = require('./modules/auth/auth.module');
+authModule.register(app);
 
 // Middleware de autenticação
 app.use(authMiddleware);
 
-// Rotas autenticadas
+// Registra outros módulos (que precisam de autenticação)
+const userModule = require('./modules/user/user.module');
+userModule.register(app);
+
 app.use('/boletos', boletoRoutes);
 app.use('/movements', movementRoutes);
 app.use('/movement-payments', movementPaymentRoutes);
@@ -121,17 +118,14 @@ ItemModule.register(app);
 const movementItemModule = new MovementItemModule();
 app.use(movementItemModule.getRouter());
 
-// Registra o módulo de usuário
-UserModule.register(app);
-
 // Rota 404 para capturar requisições não encontradas
 app.use((req, res, next) => {
-    res.status(404).json({
-        message: 'Rota não encontrada'
-    });
+    const error = new Error('Not Found');
+    error.status = 404;
+    next(error);
 });
 
-// Middleware de tratamento de erros (ÚLTIMO, depois de tudo)
+// Middleware de tratamento de erros
 app.use(errorHandler);
 
 module.exports = app;

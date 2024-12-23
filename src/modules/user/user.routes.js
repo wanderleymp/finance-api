@@ -1,19 +1,63 @@
-const express = require('express');
-const router = express.Router();
-const UserController = require("./user.controller");
-const { userValidator } = require('./validators/user.validator');
+const { Router } = require('express');
+const { validateSchema } = require('../../utils/validateSchema');
+const UserSchema = require('./schemas/user.schema');
 const { authMiddleware } = require('../../middlewares/auth');
 
-// Rotas públicas
-router.post('/refresh', userValidator.refresh, UserController.refreshToken);
+class UserRoutes {
+    constructor(controller) {
+        this.router = Router();
+        this.controller = controller;
+        this.setupRoutes();
+    }
 
-// Rotas protegidas
-router.use(authMiddleware);
+    setupRoutes() {
+        // Rota pública
+        this.router.post('/refresh', 
+            (req, res, next) => validateSchema(UserSchema.refresh, req.body)
+                .then(validatedData => {
+                    req.body = validatedData;
+                    next();
+                })
+                .catch(next),
+            this.controller.refreshToken.bind(this.controller)
+        );
 
-router.post('/', userValidator.create, UserController.create);
-router.get('/', userValidator.list, UserController.list);
-router.get('/:id', userValidator.getById, UserController.getById);
-router.put('/:id', userValidator.update, UserController.update);
-router.delete('/:id', userValidator.delete, UserController.delete);
+        // Rotas protegidas
+        this.router.use(authMiddleware);
 
-module.exports = router;
+        this.router
+            .get('/', 
+                this.controller.findAll.bind(this.controller)
+            )
+            .get('/:id', 
+                this.controller.findById.bind(this.controller)
+            )
+            .post('/', 
+                (req, res, next) => validateSchema(UserSchema.create, req.body)
+                    .then(validatedData => {
+                        req.body = validatedData;
+                        next();
+                    })
+                    .catch(next),
+                this.controller.create.bind(this.controller)
+            )
+            .put('/:id', 
+                (req, res, next) => validateSchema(UserSchema.update, req.body)
+                    .then(validatedData => {
+                        req.body = validatedData;
+                        next();
+                    })
+                    .catch(next),
+                this.controller.update.bind(this.controller)
+            )
+            .delete('/:id', 
+                this.controller.delete.bind(this.controller)
+            );
+    }
+
+    getRouter() {
+        return this.router;
+    }
+}
+
+module.exports = UserRoutes;
