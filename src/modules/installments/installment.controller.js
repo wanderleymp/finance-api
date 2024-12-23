@@ -24,8 +24,8 @@ class InstallmentController {
             });
 
             const result = await this.service.listInstallments(
-                parseInt(page), 
-                parseInt(limit), 
+                parseInt(page) || 1, 
+                parseInt(limit) || 10, 
                 filters
             );
 

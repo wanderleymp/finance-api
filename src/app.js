@@ -22,6 +22,7 @@ const PersonDocumentModule = require('./modules/person-documents/person-document
 const PersonModule = require('./modules/persons/person.module');
 const ItemModule = require('./modules/items/item.module');
 const MovementItemModule = require('./modules/movement-items/movement-item.module');
+const InstallmentModule = require('./modules/installments/installment.module');
 
 const app = express();
 
@@ -116,7 +117,9 @@ ItemModule.register(app);
 
 // Registra o módulo de itens de movimentação
 const movementItemModule = new MovementItemModule();
-app.use(movementItemModule.getRouter());
+app.use('/movement-items', movementItemModule.getRouter());
+
+InstallmentModule.register(app);
 
 // Rota 404 para capturar requisições não encontradas
 app.use((req, res, next) => {
