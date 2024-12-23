@@ -4,8 +4,8 @@
   "description": "RESTful API para gerenciamento financeiro",
   "main": "src/app.js",
   "scripts": {
-    "start": "node --expose-gc --gc-global --max-old-space-size=512 src/server.js",
-    "dev": "nodemon --expose-gc --gc-global --max-old-space-size=512 src/server.js",
+    "start": "node --expose-gc --gc-global src/server.js",
+    "dev": "nodemon --expose-gc --gc-global src/server.js",
     "test": "jest",
     "test:watch": "jest --watch",
     "test:coverage": "jest --coverage",

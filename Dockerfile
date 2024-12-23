@@ -9,7 +9,7 @@ RUN apt-get update && apt-get install -y \
     && rm -rf /var/lib/apt/lists/*
 
 # Set Node.js configurations
-ENV NODE_OPTIONS="--max-old-space-size=512 --gc-interval=100"
+ENV NODE_OPTIONS="--max-old-space-size=512"
 ENV NODE_ENV=development
 
 # Create app directory
