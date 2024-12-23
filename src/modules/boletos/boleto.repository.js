@@ -38,13 +38,13 @@ class BoletoRepository extends BaseRepository {
             }
 
             if (filters.start_date) {
-                conditions.push(`b.generated_at >= $${paramCount}`);
+                conditions.push(`i.due_date >= $${paramCount}`);
                 queryParams.push(filters.start_date);
                 paramCount++;
             }
 
             if (filters.end_date) {
-                conditions.push(`b.generated_at <= $${paramCount}`);
+                conditions.push(`i.due_date <= $${paramCount}`);
                 queryParams.push(filters.end_date);
                 paramCount++;
             }
