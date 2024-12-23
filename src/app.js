@@ -16,7 +16,6 @@ const healthRoutes = require('./modules/health/health.routes');
 const movementRoutes = require('./modules/movements/movement.module');
 const movementPaymentRoutes = require('./modules/movement-payments/movement-payment.module');
 const paymentMethodRoutes = require('./modules/payment-methods/payment-method.module');
-const userRoutes = require('./modules/users/user.routes');
 const addressRoutes = require('./modules/addresses/address.module');
 const ContactModule = require('./modules/contacts/contact.module');
 const PersonContactModule = require('./modules/person-contacts/person-contact.module');
@@ -24,6 +23,7 @@ const PersonDocumentModule = require('./modules/person-documents/person-document
 const PersonModule = require('./modules/persons/person.module');
 const ItemModule = require('./modules/items/item.module');
 const MovementItemModule = require('./modules/movement-items/movement-item.module');
+const UserModule = require('./modules/user/user.module');
 
 const app = express();
 
@@ -110,7 +110,6 @@ app.use('/boletos', boletoRoutes);
 app.use('/movements', movementRoutes);
 app.use('/movement-payments', movementPaymentRoutes);
 app.use('/payment-methods', paymentMethodRoutes);
-app.use('/users', userRoutes);
 app.use('/addresses', addressRoutes);
 ContactModule.register(app);
 PersonContactModule.registerRoutes(app);
@@ -122,15 +121,12 @@ ItemModule.register(app);
 const movementItemModule = new MovementItemModule();
 app.use(movementItemModule.getRouter());
 
+// Registra o módulo de usuário
+UserModule.register(app);
+
 // Rota 404 para capturar requisições não encontradas
-app.use((req, res) => {
-    logger.warn('Rota não encontrada', {
-        method: req.method,
-        url: req.url,
-        path: req.path
-    });
-    res.status(404).json({ 
-        status: 'error',
+app.use((req, res, next) => {
+    res.status(404).json({
         message: 'Rota não encontrada'
     });
 });

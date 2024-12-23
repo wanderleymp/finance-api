@@ -2,138 +2,192 @@
 
 ## Estratégias Gerais de Teste
 
-### 1. Mocking
+### 1. Estrutura de Diretórios
+```
+src/
+  modules/
+    module-name/
+      __tests__/
+        module.unit.test.js     # Testes unitários
+        module.service.test.js  # Testes de serviço
+        module.integration.test.js # Testes de integração
+```
+
+### 2. Pool de Banco de Dados para Testes
+- Usar o mock pool configurado em `src/config/test-database.js`
+- Nunca conectar diretamente ao banco de dados em testes unitários
+- Usar queries parametrizadas para prevenir SQL injection
+
+```javascript
+// Exemplo de uso do pool mockado
+const { mockPool, clearPoolMocks } = require('../../../config/test-database');
+
+jest.mock('../../../config/database', () => ({
+    systemDatabase: mockPool
+}));
+
+beforeEach(() => {
+    clearPoolMocks();
+});
+```
+
+### 3. Mocking
 - Sempre use mocks para dependências externas
 - Utilize `jest.fn()` para criar funções mock
 - Use `jest.mock()` para substituir módulos inteiros
+- Mock do Redis para testes de cache/tokens
+- Mock do logger para evitar logs em testes
 
-### 2. Estrutura de Testes
+### 4. DTOs nos Testes
+- Usar DTOs para validar entrada e saída de dados
+- Testar conversões de DTO
+- Verificar remoção de campos sensíveis
+
+### 5. Estrutura de Testes
 ```javascript
-const ModuleService = require('../module.service');
-const { ValidationError } = require('../../utils/errors');
-
-// Mocks de Dependências
-const mockRepository = {
-    create: jest.fn(),
-    findById: jest.fn(),
-    update: jest.fn(),
-    delete: jest.fn()
-};
-
-const mockCacheService = {
-    generateKey: jest.fn(),
-    getOrSet: jest.fn(),
-    delete: jest.fn()
-};
-
-jest.mock('../module.repository', () => {
-    return jest.fn().mockImplementation(() => mockRepository);
-});
-
-jest.mock('../../services/cache.service', () => {
-    return jest.fn().mockImplementation(() => mockCacheService);
-});
-
-describe('ModuleService', () => {
-    let moduleService;
+describe('ModuleName', () => {
+    let service;
+    let repository;
 
     beforeEach(() => {
-        jest.clearAllMocks();
-        moduleService = new ModuleService();
+        // Setup
     });
 
-    // Testes de Criação
-    describe('create', () => {
-        const mockData = { /* dados de exemplo */ };
+    describe('método', () => {
+        it('deve fazer algo específico', async () => {
+            // Arrange
+            const mockData = {};
+            mockPool.query
+                .mockResolvedValueOnce({ rows: [] })  // Primeira query
+                .mockResolvedValueOnce({ rows: [] }); // Segunda query
 
-        it('deve criar com sucesso', async () => {
-            const mockCreatedItem = { id: 1, ...mockData };
-            mockRepository.create.mockResolvedValue(mockCreatedItem);
+            // Act
+            const result = await service.method(mockData);
 
-            const result = await moduleService.create(mockData);
-
-            expect(result).toEqual(mockCreatedItem);
-            expect(mockRepository.create).toHaveBeenCalledWith(mockData);
-        });
-
-        it('deve lançar erro de validação', async () => {
-            const invalidData = { /* dados inválidos */ };
-
-            await expect(
-                moduleService.create(invalidData)
-            ).rejects.toThrow(ValidationError);
-        });
-    });
-
-    // Testes de Busca
-    describe('findById', () => {
-        it('deve encontrar item por ID', async () => {
-            const mockItem = { id: 1, /* outros campos */ };
-            
-            mockCacheService.generateKey.mockReturnValue('module:detail:1');
-            mockCacheService.getOrSet.mockImplementation((key, fn) => fn());
-            mockRepository.findById.mockResolvedValue(mockItem);
-
-            const result = await moduleService.findById(1);
-
-            expect(result).toEqual(mockItem);
-            expect(mockRepository.findById).toHaveBeenCalledWith(1);
-        });
-
-        it('deve lançar erro quando não encontrado', async () => {
-            mockRepository.findById.mockResolvedValue(null);
-
-            await expect(
-                moduleService.findById(999)
-            ).rejects.toThrow(ValidationError);
-        });
-    });
-
-    // Testes de Atualização
-    describe('update', () => {
-        it('deve atualizar com sucesso', async () => {
-            const updateData = { /* campos para atualizar */ };
-            const mockUpdatedItem = { id: 1, ...updateData };
-
-            mockRepository.update.mockResolvedValue(mockUpdatedItem);
-
-            const result = await moduleService.update(1, updateData);
-
-            expect(result).toEqual(mockUpdatedItem);
-            expect(mockRepository.update).toHaveBeenCalledWith(1, updateData);
-        });
-
-        it('deve lançar erro de validação', async () => {
-            const invalidUpdateData = { /* dados inválidos */ };
-
-            await expect(
-                moduleService.update(1, invalidUpdateData)
-            ).rejects.toThrow(ValidationError);
-        });
-    });
-
-    // Testes de Deleção
-    describe('delete', () => {
-        it('deve deletar com sucesso', async () => {
-            const mockDeletedItem = { id: 1 };
-            mockRepository.delete.mockResolvedValue(mockDeletedItem);
-
-            const result = await moduleService.delete(1);
-
-            expect(result).toEqual(mockDeletedItem);
-            expect(mockRepository.delete).toHaveBeenCalledWith(1);
-        });
-
-        it('deve lançar erro ao deletar item não encontrado', async () => {
-            mockRepository.delete.mockResolvedValue(null);
-
-            await expect(
-                moduleService.delete(999)
-            ).rejects.toThrow(ValidationError);
+            // Assert
+            expect(result).toBeDefined();
+            expect(mockPool.query).toHaveBeenCalledTimes(2);
         });
     });
 });
 ```
+
+### 6. Padrões de Query
+```javascript
+// No Repository
+const query = {
+    text: 'SELECT * FROM table WHERE id = $1',
+    values: [id]
+};
+const { rows } = await this.db.query(query);
+
+// No Teste
+mockPool.query
+    .mockResolvedValueOnce({ rows: [{ id: 1 }] });
+```
+
+### 7. Boas Práticas
+- Sempre limpe os mocks entre testes (clearPoolMocks)
+- Use dados realistas nos mocks
+- Teste casos de erro
+- Verifique número de chamadas às queries
+- Teste validações de entrada
+- Teste transformações de dados
+- Mantenha testes independentes
+- Use nomes descritivos para os testes
+
+### 8. Testes de Integração
+- Usar supertest para testes de API
+- Configurar banco de teste separado
+- Limpar dados entre testes
+- Testar fluxos completos
+
+### 9. Cobertura de Testes
+- Manter cobertura mínima de 80%
+- Testar todos os caminhos possíveis
+- Incluir casos de erro
+- Testar validações
+- Testar transformações
+
+### 10. Segurança
+- Testar validações de entrada
+- Verificar sanitização de dados
+- Testar autenticação/autorização
+- Verificar proteção contra SQL injection
+- Testar rate limiting
+
+## Exemplos
+
+### Teste de Serviço com Pool Mock
+```javascript
+const UserService = require('../user.service');
+const { mockPool, clearPoolMocks } = require('../../../config/test-database');
+
+jest.mock('../../../config/database', () => ({
+    systemDatabase: mockPool
+}));
+
+describe('UserService', () => {
+    beforeEach(() => {
+        clearPoolMocks();
+    });
+
+    it('should create user', async () => {
+        mockPool.query
+            .mockResolvedValueOnce({ rows: [{ id: 1 }] })      // INSERT
+            .mockResolvedValueOnce({ rows: [{ id: 1, ... }] }); // SELECT
+
+        const result = await service.create(mockData);
+        expect(mockPool.query).toHaveBeenCalledTimes(2);
+    });
+});
+```
+
+### Teste de Repository com Queries Parametrizadas
+```javascript
+class UserRepository {
+    async findById(id) {
+        const query = {
+            text: 'SELECT * FROM users WHERE id = $1',
+            values: [id]
+        };
+        const { rows } = await this.db.query(query);
+        return rows[0];
+    }
+}
+```
+
+## Roadmap de Testes
+
+### Fase 1: Configuração
+- [x] Configurar Jest
+- [x] Configurar pool de teste
+- [x] Criar helpers de teste
+- [x] Definir padrões de mock
+
+### Fase 2: Testes Unitários
+- [ ] Implementar testes de DTOs
+- [ ] Implementar testes de serviços
+- [ ] Implementar testes de repositórios
+- [ ] Implementar testes de validadores
+
+### Fase 3: Testes de Integração
+- [ ] Configurar ambiente de teste
+- [ ] Implementar testes de API
+- [ ] Implementar testes de fluxos completos
+- [ ] Implementar testes de autenticação
+
+### Fase 4: Testes de Performance
+- [ ] Configurar testes de carga
+- [ ] Implementar benchmarks
+- [ ] Testar limites do sistema
+- [ ] Otimizar baseado nos resultados
+
+### Fase 5: Testes de Segurança
+- [ ] Implementar testes de penetração
+- [ ] Verificar vulnerabilidades comuns
+- [ ] Testar proteções de dados
+- [ ] Validar conformidade com padrões
 
 ## Princípios Importantes
 1. **Isolamento**: Cada teste deve ser independente

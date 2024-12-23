@@ -6,6 +6,8 @@
 3. [Padrões de Código](#padrões-de-código)
 4. [Testes](#testes)
 5. [Documentação](#documentação)
+6. [Banco de Dados](#banco-de-dados)
+7. [Segurança](#segurança)
 
 ## Estrutura do Projeto
 
@@ -20,6 +22,9 @@ finance-api/
 │   └── server.js        # Entrada da aplicação
 ├── scripts/             # Scripts de utilidade
 └── docs/               # Documentação
+    ├── DEVELOPMENT_GUIDE.md    # Este guia
+    ├── crud-test-implementation.md  # Guia de implementação de testes
+    └── api/            # Documentação da API
 ```
 
 ## Criando Novos Módulos
@@ -50,121 +55,86 @@ modules/product/
 ├── schemas/
 │   └── product.schema.js
 ├── __tests__/
-│   └── product.unit.test.js
+│   ├── product.unit.test.js
+│   ├── product.service.test.js
+│   └── product.integration.test.js
 ├── product.controller.js
 ├── product.service.js
 ├── product.repository.js
-├── product.routes.js
-└── product.module.js
+└── product.routes.js
 ```
-
-### Checklist Pós-Criação
-
-1. **Database**
-   - [ ] Criar migration para a tabela
-   - [ ] Definir índices necessários
-   - [ ] Adicionar constraints de FK se necessário
-
-2. **Interfaces**
-   - [ ] Definir métodos em IService
-   - [ ] Definir métodos em IRepository
-   - [ ] Documentar parâmetros e retornos
-
-3. **DTOs**
-   - [ ] Implementar CreateDTO
-   - [ ] Implementar UpdateDTO
-   - [ ] Implementar ResponseDTO
-   - [ ] Adicionar validações
-
-4. **Validação**
-   - [ ] Definir schemas Joi
-   - [ ] Adicionar regras de negócio
-   - [ ] Validar tipos de dados
-
-5. **Repository**
-   - [ ] Implementar queries SQL
-   - [ ] Adicionar índices necessários
-   - [ ] Implementar tratamento de erros
-   - [ ] Documentar queries complexas
-
-6. **Service**
-   - [ ] Implementar lógica de negócio
-   - [ ] Adicionar validações
-   - [ ] Implementar cache se necessário
-   - [ ] Documentar regras complexas
-
-7. **Controller**
-   - [ ] Implementar endpoints
-   - [ ] Adicionar tratamento de erros
-   - [ ] Documentar respostas
-   - [ ] Validar permissões
-
-8. **Testes**
-   - [ ] Criar testes unitários
-   - [ ] Criar testes de integração
-   - [ ] Testar casos de erro
-   - [ ] Testar validações
-
-9. **Documentação**
-   - [ ] Documentar API (Swagger)
-   - [ ] Atualizar README se necessário
-   - [ ] Documentar regras de negócio
-   - [ ] Adicionar exemplos de uso
-
-10. **Segurança**
-    - [ ] Validar permissões
-    - [ ] Sanitizar inputs
-    - [ ] Validar rate limiting
-    - [ ] Verificar SQL injection
-
-11. **Performance**
-    - [ ] Implementar cache
-    - [ ] Otimizar queries
-    - [ ] Adicionar índices
-    - [ ] Paginar resultados
 
 ## Padrões de Código
 
 ### Nomenclatura
-- **Arquivos**: kebab-case (exemplo: `user-profile.service.js`)
-- **Classes**: PascalCase (exemplo: `UserProfileService`)
-- **Métodos**: camelCase (exemplo: `findByEmail`)
-- **Variáveis**: camelCase (exemplo: `userEmail`)
-- **Constantes**: SNAKE_CASE (exemplo: `MAX_LOGIN_ATTEMPTS`)
+- **Arquivos**: kebab-case (ex: `create-user.dto.js`)
+- **Classes**: PascalCase (ex: `UserService`)
+- **Métodos/Funções**: camelCase (ex: `findById`)
+- **Variáveis**: camelCase (ex: `userId`)
+- **Constantes**: UPPER_SNAKE_CASE (ex: `MAX_CONNECTIONS`)
 
-### Estrutura de Arquivos
-- Um arquivo por classe/componente
-- Importações organizadas por tipo
-- Exports no final do arquivo
-- Documentação JSDoc para funções públicas
-
-### Tratamento de Erros
-- Usar classes de erro customizadas
-- Logar erros com contexto
-- Retornar mensagens amigáveis ao usuário
-- Manter stack trace em desenvolvimento
-
-### Async/Await
-- Usar try/catch em operações assíncronas
-- Evitar callbacks aninhados
-- Usar Promise.all para operações paralelas
-- Tratar timeouts adequadamente
+### Estrutura de Classes
+- Usar classes ES6
+- Implementar interfaces quando aplicável
+- Métodos públicos primeiro, privados depois
+- Documentar métodos com JSDoc
 
 ## Testes
 
-### Unitários
-- Um arquivo de teste por componente
-- Usar mocks para dependências
-- Testar casos de sucesso e erro
-- Manter cobertura acima de 80%
+### Guia de Implementação
+Consulte o guia completo em [crud-test-implementation.md](./crud-test-implementation.md)
 
-### Integração
-- Testar fluxos completos
-- Usar banco de dados de teste
-- Limpar dados entre testes
-- Testar endpoints com dados reais
+### Estrutura de Testes
+```
+__tests__/
+├── module.unit.test.js      # Testes unitários
+├── module.service.test.js   # Testes de serviço
+└── module.integration.test.js # Testes de integração
+```
+
+### Pool de Banco para Testes
+- Usar mock pool de `src/config/test-database.js`
+- Nunca conectar diretamente ao banco em testes
+- Usar queries parametrizadas
+
+### Padrões de Teste
+```javascript
+// Exemplo de teste com mock pool
+const { mockPool, clearPoolMocks } = require('../../../config/test-database');
+
+jest.mock('../../../config/database', () => ({
+    systemDatabase: mockPool
+}));
+
+describe('ModuleTest', () => {
+    beforeEach(() => {
+        clearPoolMocks();
+    });
+
+    it('should do something', async () => {
+        // Arrange
+        mockPool.query.mockResolvedValueOnce({ rows: [] });
+
+        // Act
+        const result = await method();
+
+        // Assert
+        expect(mockPool.query).toHaveBeenCalledTimes(1);
+    });
+});
+```
+
+### Cobertura Mínima
+- Unitários: 80%
+- Integração: 60%
+- Total: 75%
 
 ## Documentação
+
+### Código
+- Usar JSDoc para documentar classes e métodos
+- Incluir exemplos de uso quando relevante
+- Documentar todos os parâmetros e retornos
 
 ### API
 - Usar Swagger/OpenAPI
@@ -172,8 +142,45 @@ modules/product/
 - Incluir exemplos de request/response
 - Documentar códigos de erro
 
-### Código
-- Usar JSDoc para funções públicas
-- Documentar regras de negócio complexas
-- Manter README atualizado
-- Documentar configurações necessárias
+## Banco de Dados
+
+### Queries
+- Usar queries parametrizadas
+- Evitar SQL injection
+- Documentar queries complexas
+- Usar transações quando necessário
+
+### Pool de Conexões
+- Configurar limites adequados
+- Monitorar conexões ativas
+- Fechar conexões corretamente
+
+## Segurança
+
+### Autenticação
+- Usar JWT para tokens
+- Implementar refresh tokens
+- Validar todas as entradas
+- Sanitizar dados sensíveis
+
+### Proteção de Dados
+- Nunca expor senhas ou tokens
+- Usar HTTPS em produção
+- Implementar rate limiting
+- Validar permissões de acesso
+
+## Contribuindo
+
+### Antes de Começar
+1. Leia este guia completamente
+2. Verifique o [crud-test-implementation.md](./crud-test-implementation.md)
+3. Siga os padrões estabelecidos
+4. Escreva testes para novo código
+5. Documente suas mudanças
+
+### Pull Requests
+1. Criar branch feature/fix
+2. Seguir padrões de commit
+3. Incluir testes
+4. Atualizar documentação
+5. Solicitar review

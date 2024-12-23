@@ -26,6 +26,24 @@ async function validateRequest(req, property, schema) {
     }
 }
 
+/**
+ * Retorna um middleware para validação de uma propriedade específica da requisição
+ * @param {string} property - Propriedade da requisição a ser validada (body, params, query)
+ * @param {object} schema - Schema Joi para validação
+ * @returns {function} Middleware de validação
+ */
+function validate(property, schema) {
+    return async (req, res, next) => {
+        try {
+            await validateRequest(req, property, schema);
+            next();
+        } catch (error) {
+            next(error);
+        }
+    };
+}
+
 module.exports = {
-    validateRequest
+    validateRequest,
+    validate
 };

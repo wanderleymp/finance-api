@@ -1,0 +1,226 @@
+openapi: 3.0.0
+tags:
+  - name: User
+    description: Operações relacionadas a User
+
+paths:
+  /users:
+    get:
+      tags:
+        - User
+      summary: Lista todos os users
+      description: Retorna uma lista paginada de users
+      parameters:
+        - in: query
+          name: page
+          schema:
+            type: integer
+            default: 1
+          description: Número da página
+        - in: query
+          name: limit
+          schema:
+            type: integer
+            default: 10
+          description: Itens por página
+      responses:
+        '200':
+          description: Lista de users
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/User'
+                  pagination:
+                    type: object
+                    properties:
+                      total: 
+                        type: integer
+                      page:
+                        type: integer
+                      limit:
+                        type: integer
+        '401':
+          description: Não autorizado
+        '500':
+          description: Erro interno do servidor
+    
+    post:
+      tags:
+        - User
+      summary: Cria um novo user
+      description: Cria um novo user com os dados fornecidos
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateUser'
+      responses:
+        '201':
+          description: User criado com sucesso
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/User'
+        '400':
+          description: Dados inválidos
+        '401':
+          description: Não autorizado
+        '500':
+          description: Erro interno do servidor
+
+  /users/{id}:
+    get:
+      tags:
+        - User
+      summary: Busca um user por ID
+      description: Retorna um único user pelo ID
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: integer
+          description: ID do user
+      responses:
+        '200':
+          description: User encontrado
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/User'
+        '404':
+          description: User não encontrado
+        '401':
+          description: Não autorizado
+        '500':
+          description: Erro interno do servidor
+
+    put:
+      tags:
+        - User
+      summary: Atualiza um user
+      description: Atualiza um user existente pelo ID
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: integer
+          description: ID do user
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdateUser'
+      responses:
+        '200':
+          description: User atualizado com sucesso
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/User'
+        '400':
+          description: Dados inválidos
+        '404':
+          description: User não encontrado
+        '401':
+          description: Não autorizado
+        '500':
+          description: Erro interno do servidor
+
+    delete:
+      tags:
+        - User
+      summary: Remove um user
+      description: Remove um user existente pelo ID
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: integer
+          description: ID do user
+      responses:
+        '204':
+          description: User removido com sucesso
+        '404':
+          description: User não encontrado
+        '401':
+          description: Não autorizado
+        '500':
+          description: Erro interno do servidor
+
+  /users/refresh:
+    post:
+      tags:
+        - User
+      summary: Atualiza o token de acesso
+      description: Gera um novo token de acesso usando o refresh token
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                refreshToken:
+                  type: string
+                  description: Refresh token válido
+              required:
+                - refreshToken
+      responses:
+        '200':
+          description: Novo token gerado com sucesso
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  accessToken:
+                    type: string
+                    description: Novo token de acesso
+                  refreshToken:
+                    type: string
+                    description: Novo refresh token
+                  expiresIn:
+                    type: integer
+                    description: Tempo de expiração em segundos
+        '401':
+          description: Refresh token inválido ou expirado
+        '500':
+          description: Erro interno do servidor
+
+components:
+  schemas:
+    User:
+      type: object
+      properties:
+        id:
+          type: integer
+          description: ID único do user
+        # TODO: Adicionar outras propriedades
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+
+    CreateUser:
+      type: object
+      properties:
+        # TODO: Adicionar propriedades necessárias para criação
+      required:
+        # TODO: Adicionar campos obrigatórios
+
+    UpdateUser:
+      type: object
+      properties:
+        # TODO: Adicionar propriedades que podem ser atualizadas

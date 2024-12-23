@@ -5,7 +5,7 @@
   "main": "src/app.js",
   "scripts": {
     "start": "node --expose-gc --gc-global src/server.js",
-    "dev": "nodemon --expose-gc --gc-global src/server.js",
+    "dev": "clear && kill -9 $(lsof -t -i:3000) || true && nodemon --expose-gc --gc-global src/server.js",
     "test": "jest",
     "test:watch": "jest --watch",
     "test:coverage": "jest --coverage",
