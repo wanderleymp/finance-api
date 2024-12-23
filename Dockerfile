@@ -1,5 +1,8 @@
 # Use official Node.js LTS image
-FROM node:14
+FROM node:18-alpine
+
+# Install build dependencies
+RUN apk add --no-cache python3 make g++ gcc
 
 # Create app directory
 WORKDIR /app
@@ -8,7 +11,7 @@ WORKDIR /app
 COPY package*.json ./
 
 # Install dependencies
-RUN npm install
+RUN npm ci
 
 # Copy the rest of the application code
 COPY . .

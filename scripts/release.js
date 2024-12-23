@@ -72,9 +72,9 @@ async function release() {
             execSync('docker info', { stdio: 'ignore' });
             // Se chegou aqui, o Docker está rodando
             console.log('Building Docker image...');
-            exec(`docker build --platform linux/amd64 -t wanderleymp/finance-api:${releaseVersion} .`);
+            exec(`docker build --platform linux/amd64 -t wanderleymp/finance-api:develop .`);
             console.log('Pushing Docker image...');
-            exec(`docker push wanderleymp/finance-api:${releaseVersion}`);
+            exec(`docker push wanderleymp/finance-api:develop`);
         } catch (error) {
             console.warn('Docker não está rodando. Pulando etapas de Docker...');
         }
