@@ -40,8 +40,19 @@ app.use((req, res, next) => {
 });
 
 // Configurações básicas
-app.set('trust proxy', true);
-app.use(cors());
+app.set('trust proxy', 'loopback'); // Confia apenas no proxy local
+
+// Configuração do CORS
+const corsOptions = {
+    origin: process.env.NODE_ENV === 'development' 
+        ? ['http://localhost:3000', 'https://*.bolt.new', 'https://*.stackblitz.com'] 
+        : process.env.CORS_ORIGIN?.split(',') || ['http://localhost:3000'],
+    methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
+    allowedHeaders: ['Content-Type', 'Authorization'],
+    credentials: true
+};
+
+app.use(cors(corsOptions));
 app.use(express.json());
 
 // Inicializa conexão com Redis
