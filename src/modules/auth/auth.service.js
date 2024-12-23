@@ -10,7 +10,7 @@ const redis = require('../../config/redis');
 class AuthService extends IAuthService {
     constructor() {
         super();
-        this.userService = UserService;
+        this.userService = new UserService();
         this.loginAuditRepository = new LoginAuditRepository();
     }
 
@@ -146,4 +146,4 @@ class AuthService extends IAuthService {
     }
 }
 
-module.exports = new AuthService();
+module.exports = AuthService;

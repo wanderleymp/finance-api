@@ -1,12 +1,12 @@
 const bcrypt = require('bcrypt');
 const IUserService = require('./interfaces/IUserService');
-const userRepository = require('./user.repository');
+const UserRepository = require('./user.repository');
 const { logger } = require('../../middlewares/logger');
 
 class UserService extends IUserService {
     constructor() {
         super();
-        this.repository = userRepository;
+        this.repository = new UserRepository();
     }
 
     async findById(id) {
@@ -77,4 +77,4 @@ class UserService extends IUserService {
     }
 }
 
-module.exports = new UserService();
+module.exports = UserService;

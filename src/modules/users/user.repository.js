@@ -214,4 +214,4 @@ class UserRepository extends IUserRepository {
     }
 }
 
-module.exports = new UserRepository();
+module.exports = UserRepository;
