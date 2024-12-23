@@ -1,19 +1,13 @@
 const { logger } = require('../../middlewares/logger');
-const IMovementService = require('./interfaces/IMovementService');
+const { createMovementSchema } = require('./validators/movement.validator');
+const { ValidationError } = require('../../utils/errors');
 
 class MovementController {
-    /**
-     * @param {Object} params
-     * @param {IMovementService} params.movementService Serviço de movimentos
-     */
     constructor({ movementService }) {
         this.service = movementService;
     }
 
-    /**
-     * Lista movimentos
-     */
-    async index(req, res, next) {
+    async index(req, res) {
         try {
             const { page = 1, limit = 10, ...filters } = req.query;
             
@@ -31,21 +25,19 @@ class MovementController {
 
             return res.json(result);
         } catch (error) {
-            logger.error('Erro ao listar movimentos:', {
+            logger.error('Controller: Erro ao listar movimentos', {
                 error: error.message,
-                stack: error.stack,
-                page: req.query.page,
-                limit: req.query.limit,
-                filters: req.query
+                error_stack: error.stack,
+                query: req.query
             });
-            next(error);
+            return res.status(500).json({
+                success: false,
+                error: 'Erro interno no servidor'
+            });
         }
     }
 
-    /**
-     * Busca movimento por ID
-     */
-    async show(req, res, next) {
+    async show(req, res) {
         try {
             const id = parseInt(req.params.id);
             const detailed = req.query.detailed === 'true';
@@ -58,37 +50,57 @@ class MovementController {
             const result = await this.service.getMovementById(id, detailed);
             return res.json(result);
         } catch (error) {
-            logger.error('Erro ao buscar movimento por ID:', {
+            logger.error('Controller: Erro ao buscar movimento', {
                 error: error.message,
-                stack: error.stack,
-                id: req.params.id,
-                detailed: req.query.detailed
+                error_stack: error.stack,
+                id: req.params.id
             });
-            next(error);
+            return res.status(500).json({
+                success: false,
+                error: 'Erro interno no servidor'
+            });
         }
     }
 
-    /**
-     * Cria novo movimento
-     */
-    async create(req, res, next) {
+    async create(req, res) {
         try {
-            const data = req.body;
-            
-            logger.info('Controller: Criando movimento', { data });
+            logger.info('Controller: Criando movimento', { data: req.body });
 
-            const movement = await this.service.create(data);
+            // Validar e aplicar defaults
+            const { value, error } = createMovementSchema.validate(req.body, { 
+                abortEarly: false,
+                stripUnknown: true
+            });
 
-            return res.status(201).json(movement);
+            if (error) {
+                throw new ValidationError('Erro de validação', error.details);
+            }
+
+            const result = await this.service.create(value);
+            return res.json(result);
         } catch (error) {
-            next(error);
+            logger.error('Controller: Erro ao criar movimento', {
+                error: error.message,
+                error_stack: error.stack,
+                data: req.body
+            });
+
+            if (error instanceof ValidationError) {
+                return res.status(400).json({
+                    success: false,
+                    error: error.message,
+                    details: error.details
+                });
+            }
+
+            return res.status(500).json({
+                success: false,
+                error: 'Erro interno no servidor'
+            });
         }
     }
 
-    /**
-     * Atualiza movimento
-     */
-    async update(req, res, next) {
+    async update(req, res) {
         try {
             const { id } = req.params;
             const data = req.body;
@@ -96,34 +108,43 @@ class MovementController {
             logger.info('Controller: Atualizando movimento', { id, data });
 
             const movement = await this.service.update(parseInt(id), data);
-
             return res.json(movement);
         } catch (error) {
-            next(error);
+            logger.error('Controller: Erro ao atualizar movimento', {
+                error: error.message,
+                error_stack: error.stack,
+                id: req.params.id,
+                data: req.body
+            });
+            return res.status(500).json({
+                success: false,
+                error: 'Erro interno no servidor'
+            });
         }
     }
 
-    /**
-     * Remove movimento
-     */
-    async delete(req, res, next) {
+    async delete(req, res) {
         try {
             const { id } = req.params;
             
             logger.info('Controller: Removendo movimento', { id });
 
             await this.service.delete(parseInt(id));
-
             return res.status(204).send();
         } catch (error) {
-            next(error);
+            logger.error('Controller: Erro ao remover movimento', {
+                error: error.message,
+                error_stack: error.stack,
+                id: req.params.id
+            });
+            return res.status(500).json({
+                success: false,
+                error: 'Erro interno no servidor'
+            });
         }
     }
 
-    /**
-     * Atualiza status do movimento
-     */
-    async updateStatus(req, res, next) {
+    async updateStatus(req, res) {
         try {
             const { id } = req.params;
             const { status } = req.body;
@@ -131,10 +152,18 @@ class MovementController {
             logger.info('Controller: Atualizando status do movimento', { id, status });
 
             const movement = await this.service.updateStatus(parseInt(id), status);
-
             return res.json(movement);
         } catch (error) {
-            next(error);
+            logger.error('Controller: Erro ao atualizar status do movimento', {
+                error: error.message,
+                error_stack: error.stack,
+                id: req.params.id,
+                status: req.body.status
+            });
+            return res.status(500).json({
+                success: false,
+                error: 'Erro interno no servidor'
+            });
         }
     }
 }

@@ -152,13 +152,20 @@ class BaseRepository {
      */
     async create(data) {
         try {
-            logger.debug('BaseRepository create - input:', {
+            logger.info('BaseRepository create - input:', {
                 data,
                 tableName: this.tableName
             });
 
-            const columns = Object.keys(data);
-            const values = Object.values(data);
+            // Remover campos undefined ou null
+            const cleanData = Object.fromEntries(
+                Object.entries(data)
+                    .filter(([_, value]) => value !== undefined && value !== null)
+            );
+
+            // Construir a query dinamicamente
+            const columns = Object.keys(cleanData);
+            const values = Object.values(cleanData);
             const placeholders = values.map((_, index) => `$${index + 1}`);
 
             const query = `
@@ -167,18 +174,13 @@ class BaseRepository {
                 RETURNING *
             `;
 
-            logger.debug('BaseRepository create - query:', {
+            logger.info('BaseRepository create - query:', {
                 query,
                 values
             });
 
-            const result = await this.pool.query(query, values);
-
-            logger.debug('BaseRepository create - result:', {
-                result: result.rows[0]
-            });
-
-            return result.rows[0];
+            const { rows } = await this.pool.query(query, values);
+            return rows[0];
         } catch (error) {
             logger.error('BaseRepository - Erro ao criar registro', {
                 error: error.message,

@@ -50,6 +50,16 @@ class MockCacheService {
     async clear() {
         return this.cache.clear();
     }
+
+    async keys(pattern) {
+        // No mock service, just return an empty array since we don't need pattern matching
+        return [];
+    }
+
+    async deletePattern(pattern) {
+        // No-op in mock service
+        return true;
+    }
 }
 
 module.exports = new MockCacheService();

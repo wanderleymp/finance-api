@@ -1,9 +1,11 @@
 const BaseRepository = require('../../repositories/base/BaseRepository');
 const { logger } = require('../../middlewares/logger');
+const { systemDatabase } = require('../../config/database');
 
 class MovementPaymentRepository extends BaseRepository {
     constructor() {
         super('movement_payments', 'payment_id');
+        this.pool = systemDatabase.pool;
     }
 
     /**
@@ -142,13 +144,18 @@ class MovementPaymentRepository extends BaseRepository {
                 RETURNING *
             `;
 
-            const { rows } = await this.pool.query(query, [
+            const values = [
                 data.movement_id,
                 data.payment_method_id,
                 data.total_amount,
-                data.status || 'Pendente'
-            ]);
+                data.status || 'PENDING'
+            ];
 
+            logger.info('Repository: Criando movimento_payment', {
+                values
+            });
+
+            const { rows } = await this.pool.query(query, values);
             return rows[0];
         } catch (error) {
             logger.error('Erro ao criar pagamento', {

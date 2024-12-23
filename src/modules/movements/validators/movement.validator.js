@@ -30,12 +30,14 @@ const listMovementsSchema = Joi.object({
 });
 
 const createMovementSchema = Joi.object({
-    movement_date: Joi.string().pattern(/^\d{4}-\d{2}-\d{2}$/).required(),
-    description: Joi.string().required(),
-    value: Joi.number().required(),
-    movement_type_id: Joi.number().integer().required(),
-    movement_status_id: Joi.number().integer().required(),
     person_id: Joi.number().integer().required(),
+    total_amount: Joi.number().required(),
+    movement_type_id: Joi.number().integer().required(),
+    movement_status_id: Joi.number().integer().default(2),
+    license_id: Joi.number().integer().default(1),
+    movement_date: Joi.string().pattern(/^\d{4}-\d{2}-\d{2}$/).default(() => new Date().toISOString().split('T')[0]),
+    description: Joi.string().default((parent) => `Movimento ${parent.movement_type_id} - ${new Date().toISOString()}`),
+    payment_method_id: Joi.number().integer(),
     observation: Joi.string().allow('', null)
 }).custom((value, helpers) => {
     const date = new Date(value.movement_date);
@@ -50,10 +52,11 @@ const createMovementSchema = Joi.object({
 const updateMovementSchema = Joi.object({
     movement_date: Joi.string().pattern(/^\d{4}-\d{2}-\d{2}$/),
     description: Joi.string(),
-    value: Joi.number(),
+    total_amount: Joi.number(),
     movement_type_id: Joi.number().integer(),
     movement_status_id: Joi.number().integer(),
     person_id: Joi.number().integer(),
+    license_id: Joi.number().integer(),
     observation: Joi.string().allow('', null)
 }).custom((value, helpers) => {
     if (value.movement_date) {

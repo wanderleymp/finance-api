@@ -3,8 +3,13 @@ const PaginationHelper = require('../utils/paginationHelper');
 const { ValidationError } = require('../utils/errors');
 const { logger } = require('../middlewares/logger');
 const { handleDatabaseError } = require('../utils/errorHandler');
+const { systemDatabase } = require('../config/database');
 
 class PaymentMethodsService {
+  constructor() {
+    this.pool = systemDatabase.pool;
+  }
+
   async create(paymentMethodData) {
     try {
       // Validações de negócio
@@ -175,4 +180,4 @@ class PaymentMethodsService {
   }
 }
 
-module.exports = new PaymentMethodsService();
+module.exports = PaymentMethodsService;

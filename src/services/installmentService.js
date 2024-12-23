@@ -1,3 +1,4 @@
+const { systemDatabase } = require('../config/database');
 const installmentRepository = require('../repositories/installmentRepository');
 const PaginationHelper = require('../utils/paginationHelper');
 const { ValidationError } = require('../utils/errors');
@@ -6,6 +7,10 @@ const BoletoService = require('./boletoService');
 const PaymentMethodsRepository = require('../repositories/paymentMethodsRepository');
 
 class InstallmentService {
+  constructor() {
+    this.pool = systemDatabase.pool;
+  }
+
   async listInstallments(page = 1, limit = 10, filters = {}) {
     try {
       const { page: validPage, limit: validLimit } = PaginationHelper.validateParams(page, limit);
@@ -71,44 +76,50 @@ class InstallmentService {
     }
   }
 
-  async createInstallment(installmentData) {
+  async create(data) {
     try {
-      // Validações de negócio
-      logger.info('Attempting to create installment with data:', installmentData);
-      
-      // Validate required fields
-      const requiredFields = ['payment_id', 'installment_number', 'due_date', 'amount', 'balance', 'status', 'expected_date'];
-      const missingFields = requiredFields.filter(field => !installmentData[field]);
-      
-      if (missingFields.length > 0) {
-        logger.error('Missing required fields:', missingFields);
-        throw new ValidationError(`Missing required fields: ${missingFields.join(', ')}`);
-      }
+      logger.info('Service: Criando installment', { data });
 
       // Criar installment
-      const newInstallment = await installmentRepository.createInstallment(installmentData);
-      
-      // Criar boleto após criar a installment
-      const boletoService = new BoletoService();
-      const boletoData = {
-        installment_id: newInstallment.installment_id,
-        boleto_number: `${installmentData.payment_id}-${installmentData.installment_number}`,
-        amount: installmentData.amount,
-        due_date: installmentData.due_date
-      };
+      const installment = await installmentRepository.create(data);
+      logger.info('Service: Installment criado', { installment });
 
-      await boletoService.createBoleto(boletoData);
+      // Buscar o movimento_payment para ver o tipo do movimento
+      const query = `
+        SELECT m.movement_type_id
+        FROM movements m
+        JOIN movement_payments mp ON mp.movement_id = m.movement_id
+        WHERE mp.payment_id = $1
+      `;
 
-      logger.info('Installment criada com boleto', {
-        installmentId: newInstallment.installment_id
-      });
+      const { rows } = await this.pool.query(query, [data.payment_id]);
+      const movementType = rows[0]?.movement_type_id;
 
-      return newInstallment;
+      logger.info('Service: Tipo do movimento encontrado', { movementType });
+
+      // Se for tipo 1 ou 3, criar boleto
+      if (movementType === 1 || movementType === 3) {
+        const boleto = await BoletoService.create({
+          installment_id: installment.installment_id,
+          amount: data.amount,
+          due_date: data.due_date,
+          status: 'PENDING'
+        });
+
+        logger.info('Service: Boleto criado', { boleto });
+
+        return {
+          ...installment,
+          boleto
+        };
+      }
+
+      return installment;
     } catch (error) {
-      logger.error('Erro ao criar installment com boleto', {
-        installmentData,
-        errorMessage: error.message,
-        errorStack: error.stack
+      logger.error('Service: Erro ao criar installment', {
+        error: error.message,
+        error_stack: error.stack,
+        data
       });
       throw error;
     }
@@ -197,6 +208,30 @@ class InstallmentService {
       throw new Error('account_entry_id inválido');
     }
   }
+
+  /**
+   * Busca o tipo do movimento associado a uma parcela
+   */
+  async getMovementTypeFromInstallment(installmentId) {
+    try {
+      const query = `
+        SELECT m.movement_type_id
+        FROM installments i
+        JOIN movement_payments mp ON mp.payment_id = i.payment_id
+        JOIN movements m ON m.movement_id = mp.movement_id
+        WHERE i.installment_id = $1
+      `;
+      
+      const result = await this.pool.query(query, [installmentId]);
+      return result.rows[0]?.movement_type_id;
+    } catch (error) {
+      logger.error('Erro ao buscar tipo do movimento da parcela', {
+        installmentId,
+        error: error.message
+      });
+      return null;
+    }
+  }
 }
 
-module.exports = new InstallmentService();
+module.exports = InstallmentService;

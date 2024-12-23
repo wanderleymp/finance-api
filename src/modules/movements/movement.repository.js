@@ -15,6 +15,8 @@ class MovementRepository extends BaseRepository {
 
     async findAll(page = 1, limit = 10, filters = {}) {
         try {
+            logger.info('Repository: Buscando movimentos', { page, limit, filters });
+
             const queryParams = [];
             const conditions = [];
             let paramCount = 1;
@@ -68,6 +70,8 @@ class MovementRepository extends BaseRepository {
 
             // Adiciona parâmetros de paginação
             queryParams.push(limit, offset);
+
+            logger.info('Repository: Executando queries', { query, countQuery, queryParams });
 
             // Executa as queries
             const [resultQuery, countResult] = await Promise.all([
@@ -202,6 +206,8 @@ class MovementRepository extends BaseRepository {
                 }
             }
 
+            logger.info('Repository: Resultado da busca', { movements, total, totalPages });
+
             return {
                 data: movements,
                 pagination: {
@@ -212,8 +218,9 @@ class MovementRepository extends BaseRepository {
                 }
             };
         } catch (error) {
-            logger.error('Erro ao buscar movimentos', {
+            logger.error('Repository: Erro ao buscar movimentos', {
                 error: error.message,
+                error_stack: error.stack,
                 page,
                 limit,
                 filters
@@ -224,12 +231,16 @@ class MovementRepository extends BaseRepository {
 
     async findById(id) {
         try {
+            logger.info('Repository: Buscando movimento por ID', { id });
+
             const query = `
                 SELECT 
                     m.*
                 FROM movements m
                 WHERE m.movement_id = $1
             `;
+
+            logger.info('Repository: Executando query', { query, id });
 
             const { rows } = await this.pool.query(query, [id]);
             const movement = rows[0];
@@ -255,10 +266,13 @@ class MovementRepository extends BaseRepository {
                 }
             }
 
+            logger.info('Repository: Resultado da busca por ID', { movement });
+
             return movement;
         } catch (error) {
-            logger.error('Erro ao buscar registro por ID', {
+            logger.error('Repository: Erro ao buscar registro por ID', {
                 error: error.message,
+                error_stack: error.stack,
                 tableName: this.tableName,
                 id
             });

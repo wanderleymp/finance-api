@@ -10,31 +10,23 @@ const IMovementService = require('./interfaces/IMovementService');
 const MovementResponseDTO = require('./dto/movement-response.dto');
 
 class MovementService extends IMovementService {
-    constructor({ movementRepository, cacheService }) {
+    constructor({ 
+        movementRepository, 
+        cacheService
+    }) {
         super();
         
-        // Inicializa os repositórios
-        const personRepository = new PersonRepository();
-        const movementTypeRepository = new MovementTypeRepository();
-        const movementStatusRepository = new MovementStatusRepository();
-        const movementPaymentRepository = new MovementPaymentRepository();
-        const installmentRepository = new InstallmentRepository();
-
         // Inicializa o repositório principal
-        this.movementRepository = movementRepository || new MovementRepository(
-            personRepository,
-            movementTypeRepository,
-            movementStatusRepository
-        );
+        this.movementRepository = movementRepository;
+        
+        // Inicializa os outros repositórios
+        this.movementPaymentRepository = new MovementPaymentRepository();
+        this.movementTypeRepository = new MovementTypeRepository();
+        this.movementStatusRepository = new MovementStatusRepository();
+        this.installmentRepository = new InstallmentRepository();
+        this.personRepository = new PersonRepository();
 
-        // Atribui os outros repositórios
-        this.personRepository = personRepository;
-        this.movementTypeRepository = movementTypeRepository;
-        this.movementStatusRepository = movementStatusRepository;
-        this.movementPaymentRepository = movementPaymentRepository;
-        this.installmentRepository = installmentRepository;
-
-        // Configura o cache
+        // Inicializa o cache
         this.cacheService = cacheService;
         this.cachePrefix = 'movements';
         this.cacheTTL = {
@@ -267,11 +259,28 @@ class MovementService extends IMovementService {
         try {
             logger.info('Service: Criando novo movimento', { data });
 
-            // Validações específicas
-            this.validateMovementData(data);
+            // Separar dados do movimento e do pagamento
+            const { payment_method_id, ...movementData } = data;
 
             // Criar movimento
-            const movement = await this.movementRepository.create(data);
+            const movement = await this.movementRepository.create(movementData);
+            logger.info('Service: Movimento criado', { movement });
+
+            // Se tiver payment_method_id, criar o movimento_payment
+            if (payment_method_id) {
+                logger.info('Service: Criando movimento_payment', {
+                    movement_id: movement.movement_id,
+                    payment_method_id,
+                    total_amount: data.total_amount
+                });
+
+                await this.movementPaymentRepository.create({
+                    movement_id: movement.movement_id,
+                    payment_method_id,
+                    total_amount: data.total_amount,
+                    status: 'PENDING'
+                });
+            }
 
             // Invalidar cache
             await this.invalidateCache();
@@ -280,6 +289,7 @@ class MovementService extends IMovementService {
         } catch (error) {
             logger.error('Service: Erro ao criar movimento', {
                 error: error.message,
+                error_stack: error.stack,
                 data
             });
             throw error;
@@ -404,26 +414,26 @@ class MovementService extends IMovementService {
             if (!data.description) {
                 throw new ValidationError('Descrição é obrigatória');
             }
-            if (!data.type || !['INCOME', 'EXPENSE'].includes(data.type)) {
-                throw new ValidationError('Tipo inválido');
-            }
-            if (!data.value || data.value <= 0) {
+            if (!data.total_amount || data.total_amount <= 0) {
                 throw new ValidationError('Valor deve ser maior que zero');
-            }
-            if (!data.due_date) {
-                throw new ValidationError('Data de vencimento é obrigatória');
             }
             if (!data.person_id) {
                 throw new ValidationError('Pessoa é obrigatória');
             }
+            if (!data.movement_type_id) {
+                throw new ValidationError('Tipo de movimento é obrigatório');
+            }
+            if (!data.movement_status_id) {
+                throw new ValidationError('Status do movimento é obrigatório');
+            }
+            if (!data.license_id) {
+                throw new ValidationError('Licença é obrigatória');
+            }
         }
 
         // Validações para campos específicos em update
-        if (data.value !== undefined && data.value <= 0) {
+        if (data.total_amount !== undefined && data.total_amount <= 0) {
             throw new ValidationError('Valor deve ser maior que zero');
-        }
-        if (data.type !== undefined && !['INCOME', 'EXPENSE'].includes(data.type)) {
-            throw new ValidationError('Tipo inválido');
         }
         if (data.description !== undefined && data.description.length < 3) {
             throw new ValidationError('Descrição deve ter no mínimo 3 caracteres');

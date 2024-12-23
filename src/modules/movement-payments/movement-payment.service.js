@@ -2,6 +2,8 @@ const { logger } = require('../../middlewares/logger');
 const { ValidationError } = require('../../utils/errors');
 const IMovementPaymentService = require('./interfaces/IMovementPaymentService');
 const { MovementPaymentResponseDTO } = require('./dto/movement-payment.dto');
+const PaymentMethodsService = require('../../services/paymentMethodsService');
+const InstallmentService = require('../../services/installmentService');
 
 class MovementPaymentService extends IMovementPaymentService {
     /**
@@ -18,6 +20,10 @@ class MovementPaymentService extends IMovementPaymentService {
             list: 300, // 5 minutos
             detail: 600 // 10 minutos
         };
+
+        // Inicializa outros serviços necessários
+        this.paymentMethodsService = new PaymentMethodsService({});
+        this.installmentService = new InstallmentService();
     }
 
     /**
@@ -94,15 +100,45 @@ class MovementPaymentService extends IMovementPaymentService {
      */
     async create(data) {
         try {
-            logger.info('Serviço: Criando pagamento', { data });
+            logger.info('Service: Criando movimento_payment', { data });
 
-            const result = await this.repository.create(data);
-            await this.cacheService.invalidatePrefix(this.cachePrefix);
+            // Criar payment
+            const payment = await this.repository.create(data);
+            logger.info('Service: Movimento_payment criado', { payment });
 
-            return new MovementPaymentResponseDTO(result);
+            // Buscar o payment method para ver o número de parcelas
+            const paymentMethod = await this.paymentMethodsService.findById(data.payment_method_id);
+            logger.info('Service: Payment method encontrado', { paymentMethod });
+
+            // Criar installments
+            const installmentAmount = data.total_amount / (paymentMethod.installments || 1);
+            const installments = [];
+
+            for (let i = 0; i < (paymentMethod.installments || 1); i++) {
+                const dueDate = new Date();
+                dueDate.setMonth(dueDate.getMonth() + i);
+
+                const installment = await this.installmentService.create({
+                    payment_id: payment.payment_id,
+                    installment_number: i + 1,
+                    amount: installmentAmount,
+                    due_date: dueDate.toISOString().split('T')[0],
+                    status: 'PENDING'
+                });
+
+                installments.push(installment);
+            }
+
+            logger.info('Service: Installments criados', { installments });
+
+            return {
+                ...payment,
+                installments
+            };
         } catch (error) {
-            logger.error('Erro ao criar pagamento no serviço', {
+            logger.error('Service: Erro ao criar movimento_payment', {
                 error: error.message,
+                error_stack: error.stack,
                 data
             });
             throw error;
