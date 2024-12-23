@@ -158,6 +158,10 @@ router.use('/persons/cnpjs', personCnpjRoutes);
 - Facilita manutenção e extensão de rotas
 - Melhora a separação de responsabilidades
 
+## Desenvolvimento
+
+Para guias detalhados sobre desenvolvimento, incluindo como criar novos módulos e seguir os padrões do projeto, consulte nosso [Guia de Desenvolvimento](docs/DEVELOPMENT_GUIDE.md).
+
 ## Funcionalidades
 
 - Gerenciamento de pessoas

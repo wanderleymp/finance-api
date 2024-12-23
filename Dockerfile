@@ -34,9 +34,9 @@ USER node
 # Expose the port the app runs on
 EXPOSE 3000
 
-# Health check
-HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
-    CMD curl -f http://localhost:3000/health || exit 1
+# Health check - aumentado o intervalo e timeout para reduzir sobrecarga
+HEALTHCHECK --interval=60s --timeout=30s --start-period=30s --retries=3 \
+    CMD curl -f http://localhost:3000/health/system || exit 1
 
 # Command to run the application with proper garbage collection settings
 CMD ["node", "--max-old-space-size=512", "--expose-gc", "--gc-global", "src/server.js"]

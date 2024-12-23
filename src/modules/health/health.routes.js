@@ -1,13 +1,18 @@
 const express = require('express');
+const healthController = require('./health.controller');
 const cacheService = require('../../services/cacheService');
 const { logger } = require('../../middlewares/logger');
 
 const router = express.Router();
 
-// Rota básica de health check
-router.get('/', (req, res) => {
-    res.json({ status: 'OK' });
-});
+// Rota completa de health check com todas as métricas
+router.get('/', healthController.check);
+
+// Rota específica para checar bancos de dados
+router.get('/databases', healthController.checkDatabases);
+
+// Rota específica para métricas do sistema
+router.get('/system', healthController.checkSystem);
 
 // Rota para limpar cache manualmente
 router.post('/cache/clear', async (req, res) => {
