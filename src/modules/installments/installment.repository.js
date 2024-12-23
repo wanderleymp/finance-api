@@ -1,5 +1,6 @@
 const BaseRepository = require('../../repositories/base/BaseRepository');
 const { logger } = require('../../middlewares/logger');
+const { DatabaseError } = require('../../utils/errors');
 
 class InstallmentRepository extends BaseRepository {
     constructor() {
@@ -38,79 +39,119 @@ class InstallmentRepository extends BaseRepository {
             const conditions = [];
             let paramCount = 1;
 
-            if (filters.payment_id) {
-                conditions.push(`payment_id = $${paramCount}`);
-                queryParams.push(filters.payment_id);
-                paramCount++;
-            }
-
+            // Filtros básicos
             if (filters.status) {
-                conditions.push(`status = $${paramCount}`);
+                conditions.push(`i.status = $${paramCount}`);
                 queryParams.push(filters.status);
                 paramCount++;
             }
 
+            if (filters.account_entry_id) {
+                conditions.push(`i.account_entry_id = $${paramCount}`);
+                queryParams.push(filters.account_entry_id);
+                paramCount++;
+            }
+
             if (filters.start_date) {
-                conditions.push(`due_date >= $${paramCount}`);
+                conditions.push(`i.due_date >= $${paramCount}`);
                 queryParams.push(filters.start_date);
                 paramCount++;
             }
 
             if (filters.end_date) {
-                conditions.push(`due_date <= $${paramCount}`);
+                conditions.push(`i.due_date <= $${paramCount}`);
                 queryParams.push(filters.end_date);
                 paramCount++;
             }
 
-            if (filters.account_entry_id) {
-                conditions.push(`account_entry_id = $${paramCount}`);
-                queryParams.push(filters.account_entry_id);
-                paramCount++;
-            }
+            const whereClause = conditions.length > 0 
+                ? `WHERE ${conditions.join(' AND ')}` 
+                : '';
 
-            const whereClause = conditions.length > 0 ? `WHERE ${conditions.join(' AND ')}` : '';
+            const offset = (page - 1) * limit;
 
-            const query = `
-                SELECT *
-                FROM ${this.tableName}
+            // Query base
+            let query = `
+                SELECT 
+                    i.*
+                FROM installments i
                 ${whereClause}
-                ORDER BY due_date ASC
+                ORDER BY i.due_date DESC
                 LIMIT $${paramCount} OFFSET $${paramCount + 1}
             `;
 
-            queryParams.push(limit, (page - 1) * limit);
-
+            // Query de contagem
             const countQuery = `
                 SELECT COUNT(*) as total
-                FROM ${this.tableName}
+                FROM installments i
                 ${whereClause}
             `;
 
-            const client = await this.pool.connect();
-            try {
-                const [result, countResult] = await Promise.all([
-                    client.query(query, queryParams),
-                    client.query(countQuery, queryParams.slice(0, -2))
-                ]);
+            // Adiciona parâmetros de paginação
+            queryParams.push(limit, offset);
 
-                const totalItems = parseInt(countResult.rows[0].total);
-                const totalPages = Math.ceil(totalItems / limit);
+            // Executa as queries
+            const [resultQuery, countResult] = await Promise.all([
+                this.pool.query(query, queryParams),
+                this.pool.query(countQuery, queryParams.slice(0, -2))
+            ]);
 
-                return {
-                    data: result.rows,
-                    pagination: {
-                        page: parseInt(page),
-                        limit: parseInt(limit),
-                        totalItems,
-                        totalPages
-                    }
-                };
-            } finally {
-                client.release();
+            const total = parseInt(countResult.rows[0].total);
+            const totalPages = Math.ceil(total / limit);
+
+            // Se include=boletos, busca os boletos para cada parcela
+            if (filters.include === 'boletos') {
+                const installmentIds = resultQuery.rows.map(row => row.installment_id);
+                
+                if (installmentIds.length > 0) {
+                    const boletosQuery = `
+                        SELECT 
+                            b.boleto_id,
+                            b.installment_id,
+                            b.status,
+                            b.generated_at,
+                            b.boleto_number
+                        FROM boletos b
+                        WHERE b.installment_id = ANY($1)
+                        ORDER BY b.generated_at DESC
+                    `;
+
+                    const boletosResult = await this.pool.query(boletosQuery, [installmentIds]);
+                    
+                    // Agrupa os boletos por installment_id
+                    const boletosMap = boletosResult.rows.reduce((acc, boleto) => {
+                        if (!acc[boleto.installment_id]) {
+                            acc[boleto.installment_id] = [];
+                        }
+                        acc[boleto.installment_id].push(boleto);
+                        return acc;
+                    }, {});
+
+                    // Adiciona os boletos a cada parcela
+                    resultQuery.rows = resultQuery.rows.map(installment => ({
+                        ...installment,
+                        boletos: boletosMap[installment.installment_id] || []
+                    }));
+                }
             }
+
+            return {
+                data: resultQuery.rows,
+                pagination: {
+                    total,
+                    totalPages,
+                    currentPage: page,
+                    limit
+                }
+            };
         } catch (error) {
-            logger.error('Erro ao listar parcelas', { error });
-            throw error;
+            logger.error('Erro ao buscar parcelas', {
+                error: error.message,
+                page,
+                limit,
+                filters
+            });
+            throw new DatabaseError('Erro ao buscar parcelas');
         }
     }
 

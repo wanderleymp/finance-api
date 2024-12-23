@@ -1,3 +1,12 @@
+class BoletoDTO {
+    constructor(data) {
+        this.boleto_id = data.boleto_id;
+        this.status = data.status;
+        this.generated_at = data.generated_at;
+        this.boleto_number = data.boleto_number;
+    }
+}
+
 class InstallmentResponseDTO {
     constructor(data) {
         this.installment_id = data.installment_id;
@@ -10,6 +19,11 @@ class InstallmentResponseDTO {
         this.total_installments = data.total_installments;
         this.created_at = data.created_at;
         this.updated_at = data.updated_at;
+
+        // Inclui boletos se existirem
+        if (data.boletos) {
+            this.boletos = data.boletos.map(boleto => new BoletoDTO(boleto));
+        }
     }
 }
 

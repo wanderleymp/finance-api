@@ -9,7 +9,8 @@ const installmentSchema = {
         status: Joi.string().valid('PENDING', 'PAID', 'OVERDUE').optional(),
         start_date: Joi.date().iso().optional(),
         end_date: Joi.date().iso().optional(),
-        account_entry_id: Joi.number().integer().positive().optional()
+        account_entry_id: Joi.number().integer().positive().optional(),
+        include: Joi.string().valid('boletos').optional()
     }).unknown(false),
 
     // Schema para busca por ID
