@@ -12,7 +12,7 @@ function errorHandler(err, req, res, next) {
     // Se for um erro de validação
     if (err.name === 'ValidationError') {
         return res.status(400).json({
-            error: 'Erro de validação',
+            error: err.message,
             details: err.details
         });
     }
@@ -31,15 +31,15 @@ function errorHandler(err, req, res, next) {
         });
     }
 
-    // Se for um erro de banco de dados
-    if (err.name === 'DatabaseError') {
-        return res.status(500).json({
-            error: 'Erro interno no servidor'
+    // Se for um erro de autorização
+    if (err.name === 'AuthorizationError') {
+        return res.status(403).json({
+            error: 'Acesso negado'
         });
     }
 
-    // Para outros tipos de erro
-    res.status(500).json({
+    // Erro interno do servidor
+    return res.status(500).json({
         error: 'Erro interno no servidor'
     });
 }

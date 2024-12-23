@@ -93,12 +93,16 @@ class InstallmentRepository extends BaseRepository {
                     client.query(countQuery, queryParams.slice(0, -2))
                 ]);
 
+                const totalItems = parseInt(countResult.rows[0].total);
+                const totalPages = Math.ceil(totalItems / limit);
+
                 return {
                     data: result.rows,
                     pagination: {
-                        total: parseInt(countResult.rows[0].total),
                         page: parseInt(page),
-                        limit: parseInt(limit)
+                        limit: parseInt(limit),
+                        totalItems,
+                        totalPages
                     }
                 };
             } finally {

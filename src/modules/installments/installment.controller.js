@@ -1,5 +1,4 @@
 const { logger } = require('../../middlewares/logger');
-const IInstallmentService = require('./interfaces/IInstallmentService');
 
 class InstallmentController {
     /**
@@ -43,10 +42,10 @@ class InstallmentController {
             const { id } = req.params;
             
             logger.info('Controller: Buscando parcela por ID', { id });
-
-            const installment = await this.service.getInstallmentById(parseInt(id));
-
-            return res.json(installment);
+            
+            const result = await this.service.getInstallmentById(parseInt(id));
+            
+            return res.json(result);
         } catch (error) {
             next(error);
         }
