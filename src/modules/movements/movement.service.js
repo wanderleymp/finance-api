@@ -7,17 +7,34 @@ const InstallmentRepository = require('../installments/installment.repository');
 const { logger } = require('../../middlewares/logger');
 const { ValidationError } = require('../../utils/errors');
 const IMovementService = require('./interfaces/IMovementService');
-const { MovementResponseDTO } = require('./dto/movement.dto');
+const MovementResponseDTO = require('./dto/movement-response.dto');
 
 class MovementService extends IMovementService {
     constructor({ movementRepository, cacheService }) {
         super();
-        this.movementRepository = movementRepository || new MovementRepository();
-        this.personRepository = new PersonRepository();
-        this.movementTypeRepository = new MovementTypeRepository();
-        this.movementStatusRepository = new MovementStatusRepository();
-        this.movementPaymentRepository = new MovementPaymentRepository();
-        this.installmentRepository = new InstallmentRepository();
+        
+        // Inicializa os repositórios
+        const personRepository = new PersonRepository();
+        const movementTypeRepository = new MovementTypeRepository();
+        const movementStatusRepository = new MovementStatusRepository();
+        const movementPaymentRepository = new MovementPaymentRepository();
+        const installmentRepository = new InstallmentRepository();
+
+        // Inicializa o repositório principal
+        this.movementRepository = movementRepository || new MovementRepository(
+            personRepository,
+            movementTypeRepository,
+            movementStatusRepository
+        );
+
+        // Atribui os outros repositórios
+        this.personRepository = personRepository;
+        this.movementTypeRepository = movementTypeRepository;
+        this.movementStatusRepository = movementStatusRepository;
+        this.movementPaymentRepository = movementPaymentRepository;
+        this.installmentRepository = installmentRepository;
+
+        // Configura o cache
         this.cacheService = cacheService;
         this.cachePrefix = 'movements';
         this.cacheTTL = {
@@ -217,32 +234,16 @@ class MovementService extends IMovementService {
 
             // Prepara os filtros
             const preparedFilters = this.prepareFilters(filters);
-            const detailed = filters.detailed === 'true' || filters.detailed === true;
 
             // Tenta buscar do cache
-            const cacheKey = `movements:${page}:${limit}:${JSON.stringify(preparedFilters)}:${detailed}`;
+            const cacheKey = `movements:${page}:${limit}:${JSON.stringify(preparedFilters)}`;
             const cachedData = await this.cacheService?.get(cacheKey);
             if (cachedData) {
                 return cachedData;
             }
 
             // Busca os movimentos com paginação
-            const { data: movements, total } = await this.movementRepository.findAll(page, limit, preparedFilters);
-
-            // Para cada movimento, busca os dados relacionados
-            const enrichedData = await Promise.all(movements.map(async movement => {
-                return this.findById(movement.movement_id, detailed);
-            }));
-
-            const result = {
-                data: enrichedData,
-                pagination: {
-                    page: parseInt(page),
-                    limit: parseInt(limit),
-                    total: parseInt(total),
-                    total_pages: Math.ceil(total / limit)
-                }
-            };
+            const result = await this.movementRepository.findAll(page, limit, preparedFilters);
 
             // Salva no cache
             await this.cacheService?.set(cacheKey, result, this.cacheTTL.list);

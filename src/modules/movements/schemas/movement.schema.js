@@ -6,15 +6,16 @@ const Joi = require('joi');
 const movementSchema = {
     // Schema para listagem
     listMovements: Joi.object({
-        page: Joi.string().pattern(/^[0-9]+$/).optional(),
-        limit: Joi.string().pattern(/^[0-9]+$/).optional(),
+        page: Joi.number().integer().min(1).optional(),
+        limit: Joi.number().integer().min(1).max(100).optional(),
         detailed: Joi.string().valid('true', 'false').optional(),
         status: Joi.string().valid('PENDING', 'PAID', 'CANCELED').optional(),
         type: Joi.string().valid('INCOME', 'EXPENSE').optional(),
-        person_id: Joi.string().pattern(/^[0-9]+$/).optional(),
-        start_date: Joi.string().isoDate().optional(),
-        end_date: Joi.string().isoDate().min(Joi.ref('start_date')).optional()
-    }),
+        person_id: Joi.number().integer().positive().optional(),
+        start_date: Joi.date().iso().optional(),
+        end_date: Joi.date().iso().min(Joi.ref('start_date')).optional(),
+        include: Joi.string().valid('payments', 'payments.installments', 'payments.installments.boletos').optional()
+    }).unknown(false),
 
     // Schema para busca por ID
     getMovementById: Joi.object({
