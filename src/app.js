@@ -6,12 +6,11 @@ const swaggerSpec = require('./config/swagger');
 const { errorHandler } = require('./middlewares/errorHandler');
 const { authMiddleware } = require('./middlewares/auth');
 const { logger } = require('./middlewares/logger');
-const redisWrapper = require('./config/redis');
 const path = require('path');
 
 // Importando rotas dos módulos
 const healthRoutes = require('./modules/health/health.routes');
-const boletoRoutes = require('./modules/boletos/boleto.routes');
+const boletoModule = require('./modules/boletos/boleto.module');
 const movementRoutes = require('./modules/movements/movement.module');
 const movementPaymentRoutes = require('./modules/movement-payments/movement-payment.module');
 const paymentMethodRoutes = require('./modules/payment-methods/payment-method.module');
@@ -39,15 +38,6 @@ const swaggerUiOptions = {
     }
 };
 
-// Configuração do Redis
-(async () => {
-    try {
-        await redisWrapper.connect();
-    } catch (error) {
-        logger.warn('Redis não está disponível, sistema operará sem cache', { error: error.message });
-    }
-})();
-
 // Middleware de logging para todas as requisições
 app.use((req, res, next) => {
     logger.info('Nova requisição recebida', {
@@ -64,21 +54,6 @@ app.use((req, res, next) => {
 app.use(cors());
 app.use(helmet());
 app.use(express.json());
-app.use(express.urlencoded({ extended: true }));
-
-// Servir arquivos estáticos
-app.use('/static', express.static(path.join(__dirname, 'public')));
-
-// Middleware de logging para dados da requisição
-app.use((req, res, next) => {
-    if (req.body && Object.keys(req.body).length > 0) {
-        logger.info('Validando requisição', {
-            property: 'body',
-            requestData: req.body
-        });
-    }
-    next();
-});
 
 // Setup do Swagger
 app.get('/api-docs.json', (req, res) => {
@@ -104,7 +79,7 @@ app.use(authMiddleware);
 const userModule = require('./modules/user/user.module');
 userModule.register(app);
 
-app.use('/boletos', boletoRoutes);
+boletoModule.register(app);
 app.use('/movements', movementRoutes);
 app.use('/movement-payments', movementPaymentRoutes);
 app.use('/payment-methods', paymentMethodRoutes);

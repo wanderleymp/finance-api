@@ -1,21 +1,16 @@
 const { logger } = require('../../middlewares/logger');
 const { ValidationError } = require('../../utils/errors');
-const IBoletoService = require('./interfaces/IBoletoService');
-const IBoletoRepository = require('./interfaces/IBoletoRepository');
-const ITaskService = require('../tasks/interfaces/ITaskService');
 const { BoletoResponseDTO } = require('./dto/boleto.dto');
-const cacheService = require('../../services/cache.service');
 
-class BoletoService extends IBoletoService {
-    /**
-     * @param {Object} params 
-     * @param {IBoletoRepository} params.boletoRepository Repositório de boletos
-     * @param {ITaskService} params.taskService Serviço de tasks
-     * @param {cacheService} params.cacheService Serviço de cache
-     */
-    constructor({ boletoRepository, taskService, cacheService }) {
-        super();
-        this.boletoRepository = boletoRepository;
+class BoletoService {
+    constructor({ 
+        boletoRepository, 
+        n8nService,
+        taskService,
+        cacheService 
+    }) {
+        this.repository = boletoRepository;
+        this.n8nService = n8nService;
         this.taskService = taskService;
         this.cacheService = cacheService;
         this.cachePrefix = 'boletos';
@@ -28,7 +23,7 @@ class BoletoService extends IBoletoService {
     /**
      * Lista boletos com paginação e filtros
      */
-    async listBoletos(page, limit, filters) {
+    async listBoletos(page = 1, limit = 10, filters = {}) {
         try {
             logger.info('Serviço: Listando boletos', { page, limit, filters });
             
@@ -38,22 +33,19 @@ class BoletoService extends IBoletoService {
                 ...filters
             });
 
-            const result = await this.cacheService.getOrSet(
-                cacheKey,
-                async () => {
-                    const data = await this.boletoRepository.findAll(page, limit, filters);
-                    data.data = data.data.map(boleto => new BoletoResponseDTO(boleto));
-                    return data;
-                },
-                this.cacheTTL.list
-            );
+            const cached = await this.cacheService.get(cacheKey);
+            if (cached) {
+                logger.info('Cache hit: Retornando boletos do cache');
+                return cached;
+            }
+
+            const result = await this.repository.findAll(page, limit, filters);
+            result.data = result.data.map(boleto => new BoletoResponseDTO(boleto));
             
+            await this.cacheService.set(cacheKey, result, this.cacheTTL.list);
             return result;
         } catch (error) {
-            logger.error('Erro ao listar boletos no serviço', {
-                error: error.message,
-                filters
-            });
+            logger.error('Erro ao listar boletos', { error });
             throw error;
         }
     }
@@ -64,186 +56,113 @@ class BoletoService extends IBoletoService {
     async getBoletoById(id) {
         try {
             logger.info('Serviço: Buscando boleto por ID', { id });
-            
+
             const cacheKey = this.cacheService.generateKey(`${this.cachePrefix}:detail`, { id });
+            const cached = await this.cacheService.get(cacheKey);
+            
+            if (cached) {
+                logger.info('Cache hit: Retornando boleto do cache');
+                return cached;
+            }
 
-            const boleto = await this.cacheService.getOrSet(
-                cacheKey,
-                async () => {
-                    const data = await this.boletoRepository.findById(id);
-                    if (!data) {
-                        throw new ValidationError('Boleto não encontrado');
-                    }
-                    return new BoletoResponseDTO(data);
-                },
-                this.cacheTTL.detail
-            );
-            
-            return boleto;
-        } catch (error) {
-            logger.error('Erro ao buscar boleto por ID no serviço', {
-                error: error.message,
-                boletoId: id
-            });
-            throw error;
-        }
-    }
-
-    /**
-     * Cria novo boleto
-     */
-    async createBoleto(boletoDTO) {
-        try {
-            logger.info('Serviço: Criando boleto', { boletoDTO });
-            
-            const boletoData = {
-                ...boletoDTO,
-                status: 'A Emitir'
-            };
-
-            const newBoleto = await this.boletoRepository.createBoleto(boletoData);
-            
-            // Criar tarefa assíncrona para emissão do boleto
-            await this.taskService.createTask('BOLETO_GENERATION', {
-                boleto_id: newBoleto.boleto_id
-            });
-            
-            // Invalidar cache de listagem
-            await this.cacheService.deletePattern(`${this.cachePrefix}:list:*`);
-            
-            logger.info('Boleto criado e enfileirado com sucesso', { 
-                boletoId: newBoleto.boleto_id 
-            });
-
-            return new BoletoResponseDTO(newBoleto);
-        } catch (error) {
-            logger.error('Erro ao criar boleto no serviço', {
-                error: error.message,
-                boletoDTO
-            });
-            throw error;
-        }
-    }
-
-    /**
-     * Atualiza boleto
-     */
-    async updateBoleto(id, boletoDTO) {
-        try {
-            logger.info('Serviço: Atualizando boleto', { id, boletoDTO });
-            
-            const boleto = await this.boletoRepository.findById(id);
+            const boleto = await this.repository.findById(id);
             if (!boleto) {
                 throw new ValidationError('Boleto não encontrado');
             }
 
-            // Validar se o boleto pode ser atualizado
-            if (boleto.status !== 'A Emitir') {
-                throw new ValidationError('Boleto não pode ser atualizado no status atual');
+            const result = new BoletoResponseDTO(boleto);
+            await this.cacheService.set(cacheKey, result, this.cacheTTL.detail);
+            return result;
+        } catch (error) {
+            logger.error('Erro ao buscar boleto', { error });
+            throw error;
+        }
+    }
+
+    /**
+     * Cria um novo boleto
+     */
+    async createBoleto(data) {
+        try {
+            logger.info('Serviço: Criando boleto', { data });
+
+            const boleto = await this.repository.createBoleto(data);
+            
+            // Limpa o cache de listagem
+            const cacheKey = this.cacheService.generateKey(`${this.cachePrefix}:list`);
+            await this.cacheService.del(cacheKey);
+
+            // Cria tarefa para emitir boleto no N8N
+            await this.taskService.createTask('emitir_boleto', {
+                boletoId: boleto.boleto_id
+            });
+
+            return new BoletoResponseDTO(boleto);
+        } catch (error) {
+            logger.error('Erro ao criar boleto', { error });
+            throw error;
+        }
+    }
+
+    /**
+     * Atualiza um boleto existente
+     */
+    async updateBoleto(id, data) {
+        try {
+            logger.info('Serviço: Atualizando boleto', { id, data });
+
+            const boleto = await this.repository.findById(id);
+            if (!boleto) {
+                throw new ValidationError('Boleto não encontrado');
             }
 
-            const updatedBoleto = await this.boletoRepository.update(id, boletoDTO);
-            
-            // Invalidar caches
-            await this.cacheService.deletePattern(`${this.cachePrefix}:list:*`);
-            await this.cacheService.delete(
-                this.cacheService.generateKey(`${this.cachePrefix}:detail`, { id })
-            );
+            const updatedBoleto = await this.repository.updateBoleto(id, data);
+
+            // Limpa os caches
+            await Promise.all([
+                this.cacheService.del(this.cacheService.generateKey(`${this.cachePrefix}:list`)),
+                this.cacheService.del(this.cacheService.generateKey(`${this.cachePrefix}:detail`, { id }))
+            ]);
 
             return new BoletoResponseDTO(updatedBoleto);
         } catch (error) {
-            logger.error('Erro ao atualizar boleto no serviço', {
-                error: error.message,
-                boletoId: id,
-                boletoDTO
-            });
+            logger.error('Erro ao atualizar boleto', { error });
             throw error;
         }
     }
 
     /**
-     * Emite boletos para um movimento
+     * Cancela um boleto
      */
-    async emitirBoletosMovimento(movimentoId) {
+    async cancelBoleto(id, data) {
         try {
-            logger.info('Serviço: Iniciando emissão de boletos para movimento', { movimentoId });
+            logger.info('Serviço: Cancelando boleto', { id, data });
 
-            const parcelas = await this.boletoRepository.getParcelasMovimento(movimentoId);
-            if (!parcelas || parcelas.length === 0) {
-                throw new ValidationError('Movimento não possui parcelas para emissão de boletos');
-            }
-
-            const boletos = [];
-            for (const parcela of parcelas) {
-                const boletoDTO = {
-                    installment_id: parcela.installment_id,
-                    due_date: parcela.due_date,
-                    amount: parcela.amount,
-                    payer_id: parcela.payer_id,
-                    description: `Parcela ${parcela.installment_number}/${parcela.total_installments}`
-                };
-
-                const boleto = await this.createBoleto(boletoDTO);
-                boletos.push(boleto);
-            }
-
-            // Invalidar cache de listagem
-            await this.cacheService.deletePattern(`${this.cachePrefix}:list:*`);
-
-            logger.info('Boletos emitidos com sucesso', { 
-                movimentoId,
-                quantidadeBoletos: boletos.length
-            });
-
-            return boletos;
-        } catch (error) {
-            logger.error('Erro ao emitir boletos para movimento', {
-                error: error.message,
-                movimentoId
-            });
-            throw error;
-        }
-    }
-
-    /**
-     * Cancela boleto
-     */
-    async cancelBoleto(id, reason) {
-        try {
-            logger.info('Serviço: Cancelando boleto', { id, reason });
-            
-            const boleto = await this.boletoRepository.findById(id);
+            const boleto = await this.repository.findById(id);
             if (!boleto) {
                 throw new ValidationError('Boleto não encontrado');
             }
 
-            // Validar se o boleto pode ser cancelado
-            if (boleto.status === 'Pago') {
-                throw new ValidationError('Boleto pago não pode ser cancelado');
-            }
-
-            if (boleto.status === 'Cancelado') {
-                throw new ValidationError('Boleto já está cancelado');
-            }
-
-            const canceledBoleto = await this.boletoRepository.updateStatus(
-                id, 
-                'Cancelado',
-                { reason }
-            );
-
-            // Invalidar caches
-            await this.cacheService.deletePattern(`${this.cachePrefix}:list:*`);
-            await this.cacheService.delete(
-                this.cacheService.generateKey(`${this.cachePrefix}:detail`, { id })
-            );
-
-            return new BoletoResponseDTO(canceledBoleto);
-        } catch (error) {
-            logger.error('Erro ao cancelar boleto no serviço', {
-                error: error.message,
-                boletoId: id
+            const updatedBoleto = await this.repository.updateBoleto(id, {
+                status: 'Cancelado',
+                cancellation_reason: data.reason
             });
+
+            // Limpa os caches
+            await Promise.all([
+                this.cacheService.del(this.cacheService.generateKey(`${this.cachePrefix}:list`)),
+                this.cacheService.del(this.cacheService.generateKey(`${this.cachePrefix}:detail`, { id }))
+            ]);
+
+            // Cria tarefa para cancelar boleto no N8N
+            await this.taskService.createTask('cancelar_boleto', {
+                boletoId: id,
+                reason: data.reason
+            });
+
+            return new BoletoResponseDTO(updatedBoleto);
+        } catch (error) {
+            logger.error('Erro ao cancelar boleto', { error });
             throw error;
         }
     }

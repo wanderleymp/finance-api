@@ -13,7 +13,7 @@ module.exports = (boletoController) => {
     router.use(authMiddleware);
 
     // Rotas
-    router.get('/', 
+    router.get('/',
         validateRequest(boletoSchema.listBoletos, 'query'),
         boletoController.index.bind(boletoController)
     );
@@ -38,12 +38,6 @@ module.exports = (boletoController) => {
         validateRequest(boletoSchema.cancelBoleto, 'body'),
         validateRequest(boletoSchema.getBoletoById, 'params'),
         boletoController.cancel.bind(boletoController)
-    );
-
-    router.post('/movimento/:movimentoId',
-        validateRequest(boletoSchema.emitirBoletos, 'body'),
-        validateRequest(boletoSchema.getMovimentoId, 'params'),
-        boletoController.emitirBoletos.bind(boletoController)
     );
 
     return router;

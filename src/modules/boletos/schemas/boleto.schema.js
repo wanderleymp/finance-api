@@ -7,10 +7,9 @@ const boletoSchema = {
         limit: Joi.number().integer().min(1).max(100).optional(),
         status: Joi.string().valid('A Emitir', 'Emitido', 'Cancelado', 'Pago').optional(),
         installment_id: Joi.number().integer().positive().optional(),
-        movement_id: Joi.number().integer().positive().optional(),
+        boleto_number: Joi.string().optional(),
         start_date: Joi.date().iso().optional(),
-        end_date: Joi.date().iso().optional(),
-        payer_id: Joi.number().integer().positive().optional()
+        end_date: Joi.date().iso().optional()
     }).unknown(false),
 
     // Schema para busca por ID
@@ -29,9 +28,7 @@ const boletoSchema = {
 
     // Schema para atualização
     updateBoleto: Joi.object({
-        due_date: Joi.date().iso().optional(),
-        amount: Joi.number().positive().optional(),
-        status: Joi.string().valid('A Emitir', 'Emitido', 'Cancelado').optional()
+        status: Joi.string().valid('A Emitir', 'Emitido', 'Cancelado', 'Pago').required()
     }).unknown(false),
 
     // Schema para cancelamento
