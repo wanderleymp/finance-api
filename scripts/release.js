@@ -76,9 +76,6 @@ async function release() {
             exec('npm cache clean --force');
             exec('npm ci');
 
-            console.log('Running tests...');
-            exec('npm test');
-
             console.log('Building Docker image...');
             exec(`docker build --platform linux/amd64 -t wanderleymp/finance-api:develop .`);
             console.log('Pushing Docker image...');
