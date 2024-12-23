@@ -40,6 +40,7 @@ app.use((req, res, next) => {
 });
 
 // Configurações básicas
+app.set('trust proxy', true);
 app.use(cors());
 app.use(express.json());
 

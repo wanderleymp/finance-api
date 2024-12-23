@@ -71,12 +71,22 @@ async function release() {
         try {
             execSync('docker info', { stdio: 'ignore' });
             // Se chegou aqui, o Docker está rodando
+            console.log('Cleaning node_modules and reinstalling dependencies...');
+            exec('rm -rf node_modules');
+            exec('npm cache clean --force');
+            exec('npm ci');
+
+            console.log('Running tests...');
+            exec('npm test');
+
             console.log('Building Docker image...');
             exec(`docker build --platform linux/amd64 -t wanderleymp/finance-api:develop .`);
             console.log('Pushing Docker image...');
             exec(`docker push wanderleymp/finance-api:develop`);
         } catch (error) {
-            console.warn('Docker não está rodando. Pulando etapas de Docker...');
+            console.warn('Docker não está rodando ou falha na preparação. Pulando etapas de Docker...');
+            console.error(error);
+            process.exit(1);
         }
 
         // 4. Se chegou até aqui, podemos atualizar a versão e criar as tags
