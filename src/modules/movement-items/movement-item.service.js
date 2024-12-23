@@ -8,11 +8,10 @@ class MovementItemService extends IMovementItemService {
     constructor() {
         super();
         this.repository = new MovementItemRepository();
-        this.validator = new MovementItemValidator();
     }
 
     async create(data) {
-        await this.validator.validateCreate(data);
+        await MovementItemValidator.validateCreate(data);
 
         // Calcula o total_price se não fornecido
         if (!data.total_price) {
@@ -24,7 +23,7 @@ class MovementItemService extends IMovementItemService {
     }
 
     async update(id, data) {
-        await this.validator.validateUpdate(data);
+        await MovementItemValidator.validateUpdate(data);
 
         const existingItem = await this.repository.findById(id);
         if (!existingItem) {
@@ -43,7 +42,7 @@ class MovementItemService extends IMovementItemService {
     }
 
     async findById(id) {
-        await this.validator.validateId({ id });
+        await MovementItemValidator.validateId({ id });
 
         const item = await this.repository.findById(id);
         if (!item) {
@@ -54,7 +53,7 @@ class MovementItemService extends IMovementItemService {
     }
 
     async findByMovementId(movementId) {
-        await this.validator.validateId({ id: movementId });
+        await MovementItemValidator.validateId({ id: movementId });
 
         const items = await this.repository.findByMovementId(movementId);
         return items.map(item => MovementItemDTO.fromEntity(item));
@@ -77,7 +76,7 @@ class MovementItemService extends IMovementItemService {
     }
 
     async delete(id) {
-        await this.validator.validateId({ id });
+        await MovementItemValidator.validateId({ id });
 
         const item = await this.repository.findById(id);
         if (!item) {
