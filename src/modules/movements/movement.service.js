@@ -4,6 +4,10 @@ const MovementStatusRepository = require('../movement-statuses/movement-status.r
 const InstallmentRepository = require('../installments/installment.repository');
 const PersonRepository = require('../persons/person.repository');
 const PaymentMethodRepository = require('../payment-methods/payment-method.repository');
+const BoletoService = require('../boletos/boleto.service');
+const BoletoRepository = require('../boletos/boleto.repository');
+const n8nService = require('../../services/n8n.service');
+const TaskService = require('../../services/task.service');
 const { logger } = require('../../middlewares/logger');
 const { ValidationError } = require('../../utils/errors');
 const IMovementService = require('./interfaces/IMovementService');
@@ -28,7 +32,21 @@ class MovementService extends IMovementService {
         this.cacheService = cacheService;
         this.pool = pool;
 
-        this.installmentGenerator = new InstallmentGenerator(installmentRepository);
+        // Inicializa serviços necessários para geração de boleto
+        const boletoRepository = new BoletoRepository(pool);
+        const taskService = new TaskService();
+        const boletoService = new BoletoService({ 
+            boletoRepository,
+            n8nService,
+            taskService,
+            cacheService
+        });
+
+        // Inicializa o gerador de parcelas com o serviço de boleto
+        this.installmentGenerator = new InstallmentGenerator(
+            installmentRepository,
+            boletoService
+        );
 
         this.cachePrefix = 'movements';
         this.cacheTTL = {

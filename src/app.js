@@ -94,7 +94,9 @@ ItemModule.register(app);
 const movementItemModule = new MovementItemModule();
 app.use('/movement-items', movementItemModule.getRouter());
 
-InstallmentModule.register(app);
+// Registra o módulo de parcelas
+const installmentModule = require('./modules/installments/installment.module');
+installmentModule.register(app);
 
 // Rota 404 para capturar requisições não encontradas
 app.use((req, res, next) => {

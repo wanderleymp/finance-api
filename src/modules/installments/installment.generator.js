@@ -1,8 +1,9 @@
 const { logger } = require('../../middlewares/logger');
 
 class InstallmentGenerator {
-    constructor(installmentRepository) {
+    constructor(installmentRepository, boletoService) {
         this.installmentRepository = installmentRepository;
+        this.boletoService = boletoService;
     }
 
     /**
@@ -67,6 +68,29 @@ class InstallmentGenerator {
                 try {
                     const createdInstallment = await this.installmentRepository.create(installment);
                     logger.info('Generator: Parcela criada com sucesso', { createdInstallment });
+
+                    // Se for pagamento via boleto, gera o boleto
+                    if (paymentMethod.payment_type === 'BOLETO') {
+                        try {
+                            await this.boletoService.createBoleto({
+                                installment_id: createdInstallment.installment_id,
+                                amount: createdInstallment.amount,
+                                due_date: createdInstallment.due_date
+                            });
+                            logger.info('Generator: Boleto gerado com sucesso', { 
+                                installment_id: createdInstallment.installment_id 
+                            });
+                        } catch (error) {
+                            logger.error('Generator: Erro ao gerar boleto', {
+                                error: error.message,
+                                error_stack: error.stack,
+                                installment_id: createdInstallment.installment_id
+                            });
+                            // Não lançamos o erro para não impedir a criação das outras parcelas
+                            // O boleto poderá ser gerado depois manualmente
+                        }
+                    }
+
                     installments.push(createdInstallment);
                 } catch (error) {
                     logger.error('Generator: Erro ao criar parcela individual', {
