@@ -12,6 +12,7 @@ RUN apt-get update && apt-get install -y \
 ENV NODE_OPTIONS="--max-old-space-size=512"
 ENV NODE_ENV=development
 ENV HUSKY=0
+ENV CI=true
 
 # Create app directory
 WORKDIR /app
@@ -20,7 +21,8 @@ WORKDIR /app
 COPY package*.json ./
 
 # Install dependencies
-RUN npm ci --omit=dev && \
+RUN npm pkg delete scripts.prepare && \
+    npm ci --omit=dev && \
     npm cache clean --force
 
 # Copy the rest of the application code
