@@ -148,6 +148,12 @@
 
 ## [Unreleased]
 
+## [1.0.8] - 2024-12-23
+### Added
+- Nova versão estável
+
+
+
 ## [1.0.8] - 2024-12-22
 ### Added
 - Nova versão estável
