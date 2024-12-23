@@ -1,13 +1,11 @@
 const { systemDatabase } = require('../../config/database');
 const { logger } = require('../../middlewares/logger');
-const IMovementItemRepository = require('./interfaces/IMovementItemRepository');
+const BaseRepository = require('../../repositories/base/BaseRepository');
 const MovementItemDTO = require('./dto/movement-item.dto');
 
-class MovementItemRepository extends IMovementItemRepository {
+class MovementItemRepository extends BaseRepository {
     constructor() {
-        super();
-        this.pool = systemDatabase.pool;
-        this.tableName = 'movement_items';
+        super('movement_items', 'movement_item_id');
     }
 
     async findAll(filters = {}, page = 1, limit = 10, order = {}) {
@@ -131,25 +129,32 @@ class MovementItemRepository extends IMovementItemRepository {
         }
     }
 
-    async create(data) {
+    async updateMovementTotal(movementId) {
         try {
             const query = `
-                INSERT INTO ${this.tableName}
-                (movement_id, item_id, quantity, unit_price, total_price, description)
-                VALUES ($1, $2, $3, $4, $5, $6)
-                RETURNING *
+                UPDATE movements m
+                SET total_amount = (
+                    SELECT COALESCE(SUM(total_price), 0)
+                    FROM ${this.tableName} mi
+                    WHERE mi.movement_id = $1
+                )
+                WHERE m.movement_id = $1
+                RETURNING total_amount
             `;
-            const values = [
-                data.movement_id,
-                data.item_id,
-                data.quantity,
-                data.unit_price,
-                data.total_price,
-                data.description
-            ];
+            
+            const result = await this.pool.query(query, [movementId]);
+            return result.rows[0]?.total_amount || 0;
+        } catch (error) {
+            logger.error('Erro ao atualizar total do movimento:', error);
+            throw error;
+        }
+    }
 
-            const result = await this.pool.query(query, values);
-            return MovementItemDTO.fromDatabase(result.rows[0]);
+    async create(data) {
+        try {
+            const result = await super.create(data);
+            await this.updateMovementTotal(data.movement_id);
+            return MovementItemDTO.fromDatabase(result);
         } catch (error) {
             logger.error('Erro ao criar item de movimentação:', error);
             throw error;
@@ -158,40 +163,15 @@ class MovementItemRepository extends IMovementItemRepository {
 
     async update(id, data) {
         try {
-            const fields = [];
-            const values = [];
-            let paramCount = 1;
-
-            if (data.quantity !== undefined) {
-                fields.push(`quantity = $${paramCount}`);
-                values.push(data.quantity);
-                paramCount++;
-            }
-            if (data.unit_price !== undefined) {
-                fields.push(`unit_price = $${paramCount}`);
-                values.push(data.unit_price);
-                paramCount++;
-            }
-            if (data.description !== undefined) {
-                fields.push(`description = $${paramCount}`);
-                values.push(data.description);
-                paramCount++;
+            // Busca o item atual para pegar o movement_id
+            const currentItem = await this.findById(id);
+            if (!currentItem) {
+                throw new Error('Item não encontrado');
             }
 
-            if (fields.length === 0) {
-                throw new Error('Nenhum campo para atualizar');
-            }
-
-            values.push(id);
-            const query = `
-                UPDATE ${this.tableName}
-                SET ${fields.join(', ')}
-                WHERE movement_item_id = $${paramCount}
-                RETURNING *
-            `;
-
-            const result = await this.pool.query(query, values);
-            return result.rows[0] ? MovementItemDTO.fromDatabase(result.rows[0]) : null;
+            const result = await super.update(id, data);
+            await this.updateMovementTotal(currentItem.movement_id);
+            return MovementItemDTO.fromDatabase(result);
         } catch (error) {
             logger.error('Erro ao atualizar item de movimentação:', error);
             throw error;
@@ -200,10 +180,17 @@ class MovementItemRepository extends IMovementItemRepository {
 
     async delete(id) {
         try {
-            const query = `DELETE FROM ${this.tableName} WHERE movement_item_id = $1`;
-            await this.pool.query(query, [id]);
+            // Busca o item atual para pegar o movement_id
+            const currentItem = await this.findById(id);
+            if (!currentItem) {
+                throw new Error('Item não encontrado');
+            }
+
+            const result = await super.delete(id);
+            await this.updateMovementTotal(currentItem.movement_id);
+            return MovementItemDTO.fromDatabase(result);
         } catch (error) {
-            logger.error('Erro ao excluir item de movimentação:', error);
+            logger.error('Erro ao deletar item de movimentação:', error);
             throw error;
         }
     }

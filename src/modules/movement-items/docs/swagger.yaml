@@ -1,0 +1,301 @@
+openapi: 3.0.0
+info:
+  title: Finance API - Movement Items
+  description: API para gerenciamento de itens de movimentação
+  version: 1.0.0
+
+paths:
+  /movement-items:
+    get:
+      tags:
+        - Movement Items
+      summary: Lista itens de movimentação
+      description: Retorna uma lista paginada de itens de movimentação
+      parameters:
+        - in: query
+          name: page
+          schema:
+            type: integer
+            default: 1
+          description: Número da página
+        - in: query
+          name: limit
+          schema:
+            type: integer
+            default: 10
+          description: Itens por página
+        - in: query
+          name: search
+          schema:
+            type: string
+          description: Busca por nome do item ou descrição
+        - in: query
+          name: movement_id
+          schema:
+            type: integer
+          description: ID do movimento
+      responses:
+        '200':
+          description: Lista de itens de movimentação
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  items:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/MovementItem'
+                  pagination:
+                    $ref: '#/components/schemas/Pagination'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+    
+    post:
+      tags:
+        - Movement Items
+      summary: Cria um novo item de movimentação
+      description: Adiciona um novo item a uma movimentação
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - movement_id
+                - item_id
+                - quantity
+                - unit_price
+              properties:
+                movement_id:
+                  type: integer
+                  description: ID do movimento
+                item_id:
+                  type: integer
+                  description: ID do item
+                quantity:
+                  type: number
+                  format: float
+                  description: Quantidade
+                unit_price:
+                  type: number
+                  format: float
+                  description: Preço unitário
+                description:
+                  type: string
+                  description: Descrição adicional do item
+      responses:
+        '201':
+          description: Item de movimentação criado
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MovementItem'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+
+  /movement-items/{id}:
+    get:
+      tags:
+        - Movement Items
+      summary: Busca um item de movimentação por ID
+      description: Retorna os detalhes de um item de movimentação específico
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: integer
+          description: ID do item de movimentação
+      responses:
+        '200':
+          description: Item de movimentação encontrado
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MovementItem'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+    
+    put:
+      tags:
+        - Movement Items
+      summary: Atualiza um item de movimentação
+      description: Atualiza os dados de um item de movimentação existente
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: integer
+          description: ID do item de movimentação
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                quantity:
+                  type: number
+                  format: float
+                  description: Nova quantidade
+                unit_price:
+                  type: number
+                  format: float
+                  description: Novo preço unitário
+                description:
+                  type: string
+                  description: Nova descrição
+      responses:
+        '200':
+          description: Item de movimentação atualizado
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MovementItem'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+    
+    delete:
+      tags:
+        - Movement Items
+      summary: Remove um item de movimentação
+      description: Exclui um item de movimentação existente
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: integer
+          description: ID do item de movimentação
+      responses:
+        '204':
+          description: Item de movimentação removido com sucesso
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+
+components:
+  schemas:
+    MovementItem:
+      type: object
+      properties:
+        movement_item_id:
+          type: integer
+          description: ID do item de movimentação
+        movement_id:
+          type: integer
+          description: ID do movimento
+        item_id:
+          type: integer
+          description: ID do item
+        item_name:
+          type: string
+          description: Nome do item
+        quantity:
+          type: number
+          format: float
+          description: Quantidade
+        unit_price:
+          type: number
+          format: float
+          description: Preço unitário
+        total_price:
+          type: number
+          format: float
+          description: Preço total (quantidade * preço unitário)
+        description:
+          type: string
+          description: Descrição adicional do item
+        created_at:
+          type: string
+          format: date-time
+          description: Data de criação
+        updated_at:
+          type: string
+          format: date-time
+          description: Data da última atualização
+    
+    Pagination:
+      type: object
+      properties:
+        total:
+          type: integer
+          description: Total de registros
+        page:
+          type: integer
+          description: Página atual
+        limit:
+          type: integer
+          description: Itens por página
+        totalPages:
+          type: integer
+          description: Total de páginas
+  
+  responses:
+    BadRequest:
+      description: Requisição inválida
+      content:
+        application/json:
+          schema:
+            type: object
+            properties:
+              error:
+                type: string
+                description: Mensagem de erro
+    
+    Unauthorized:
+      description: Não autorizado
+      content:
+        application/json:
+          schema:
+            type: object
+            properties:
+              error:
+                type: string
+                description: Mensagem de erro
+    
+    NotFound:
+      description: Recurso não encontrado
+      content:
+        application/json:
+          schema:
+            type: object
+            properties:
+              error:
+                type: string
+                description: Mensagem de erro
+    
+    InternalServerError:
+      description: Erro interno do servidor
+      content:
+        application/json:
+          schema:
+            type: object
+            properties:
+              error:
+                type: string
+                description: Mensagem de erro

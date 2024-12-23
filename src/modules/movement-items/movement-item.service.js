@@ -3,6 +3,7 @@ const MovementItemRepository = require('./movement-item.repository');
 const MovementItemDTO = require('./dto/movement-item.dto');
 const MovementItemValidator = require('./validators/movement-item.validator');
 const { NotFoundError } = require('../../utils/errors');
+const { systemDatabase } = require('../../config/database');
 
 class MovementItemService extends IMovementItemService {
     constructor() {
@@ -19,6 +20,10 @@ class MovementItemService extends IMovementItemService {
         }
 
         const item = await this.repository.create(data);
+        
+        // Atualiza o total do movimento
+        await this.repository.updateMovementTotal(data.movement_id);
+        
         return MovementItemDTO.fromEntity(item);
     }
 
@@ -38,6 +43,10 @@ class MovementItemService extends IMovementItemService {
         }
 
         const item = await this.repository.update(id, data);
+        
+        // Atualiza o total do movimento
+        await this.repository.updateMovementTotal(existingItem.movement_id);
+        
         return MovementItemDTO.fromEntity(item);
     }
 
@@ -84,6 +93,9 @@ class MovementItemService extends IMovementItemService {
         }
 
         await this.repository.delete(id);
+        
+        // Atualiza o total do movimento
+        await this.repository.updateMovementTotal(item.movement_id);
     }
 }
 
