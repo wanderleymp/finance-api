@@ -81,24 +81,9 @@ paths:
                           usagePercentage:
                             type: string
                             example: '46.88%'
-                      os:
-                        type: object
-                        properties:
-                          platform:
-                            type: string
-                            example: 'darwin'
-                          type:
-                            type: string
-                            example: 'Darwin'
-                          release:
-                            type: string
-                            example: '20.0.0'
-                          arch:
-                            type: string
-                            example: 'x64'
-                          uptime:
-                            type: string
-                            example: '5d 12h 30m 15s'
+                      uptime:
+                        type: string
+                        example: '5d 12h 30m 15s'
         '503':
           description: Sistema não saudável
           content:
@@ -237,3 +222,55 @@ paths:
                             example: '46.88%'
         '500':
           description: Erro ao coletar métricas do sistema
+
+  /health/cache/clear:
+    post:
+      tags:
+        - Health
+      summary: Limpa todo o cache do sistema
+      description: Remove todos os dados armazenados em cache no Redis
+      security: 
+        - bearerAuth: []  # Requer autenticação
+      responses:
+        '200':
+          description: Cache limpo com sucesso
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: string
+                    enum: [success]
+                    example: success
+                  message:
+                    type: string
+                    example: 'Cache limpo com sucesso'
+        '401':
+          description: Não autorizado
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: string
+                    enum: [error]
+                    example: error
+                  message:
+                    type: string
+                    example: 'Token não fornecido ou inválido'
+        '500':
+          description: Erro ao limpar cache
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: string
+                    enum: [error]
+                    example: error
+                  message:
+                    type: string
+                    example: 'Erro ao limpar cache'
