@@ -30,8 +30,14 @@ class AuthService extends IAuthService {
                 throw new Error('Invalid credentials');
             }
 
-            // Verificar senha
-            const isValidPassword = await bcrypt.compare(password, user.password);
+            // Verificar senha com Promise e timeout
+            const isValidPassword = await Promise.race([
+                bcrypt.compare(password, user.password),
+                new Promise((_, reject) => 
+                    setTimeout(() => reject(new Error('Password verification timeout')), 5000)
+                )
+            ]);
+
             if (!isValidPassword) {
                 await this.loginAuditRepository.create({
                     username,
@@ -53,76 +59,64 @@ class AuthService extends IAuthService {
                 userId: user.user_id
             });
 
-            // Verificar 2FA se estiver habilitado
-            if (user.enable_2fa && process.env.ENABLE_2FA === 'true') {
-                if (!twoFactorToken) {
-                    throw new Error('Two factor authentication token is required');
-                }
-                // TODO: Implementar verificação do token 2FA
-            }
-
             // Gerar tokens
             const accessToken = jwt.sign(
-                {
-                    user_id: user.user_id,
-                    username: user.username,
-                    profile_id: user.profile_id
+                { 
+                    userId: user.user_id,
+                    username: user.username
                 },
                 process.env.JWT_SECRET,
                 { expiresIn: process.env.JWT_EXPIRATION }
             );
 
             const refreshToken = jwt.sign(
-                {
-                    user_id: user.user_id,
-                    username: user.username
-                },
-                process.env.JWT_SECRET,
-                { expiresIn: process.env.REFRESH_TOKEN_EXPIRATION }
+                { userId: user.user_id },
+                process.env.JWT_REFRESH_SECRET,
+                { expiresIn: process.env.JWT_REFRESH_EXPIRATION }
             );
 
-            // Armazenar refresh token no Redis
-            await redis.set(
-                `refresh_token:${user.user_id}`,
-                refreshToken,
-                'EX',
-                7 * 24 * 60 * 60 // 7 dias
-            );
+            // Se o Redis estiver disponível, armazenar o refresh token
+            if (redis.isConnected()) {
+                await redis.client.set(
+                    `refresh_token:${user.user_id}`,
+                    refreshToken,
+                    'EX',
+                    parseInt(process.env.JWT_REFRESH_EXPIRATION)
+                );
+            }
 
             return new AuthResponseDTO({
                 accessToken,
                 refreshToken,
                 user: {
-                    user_id: user.user_id,
-                    username: user.username,
-                    profile_id: user.profile_id
+                    userId: user.user_id,
+                    username: user.username
                 }
             });
         } catch (error) {
-            logger.error('Login error', { error: error.message, username });
+            logger.error('Login error', { error: error.message, stack: error.stack });
             throw error;
         }
     }
 
     async refreshToken(token) {
         try {
-            const decoded = jwt.verify(token, process.env.JWT_SECRET);
-            const storedToken = await redis.get(`refresh_token:${decoded.user_id}`);
+            const decoded = jwt.verify(token, process.env.JWT_REFRESH_SECRET);
+            const storedToken = await redis.client.get(`refresh_token:${decoded.userId}`);
 
             if (!storedToken || storedToken !== token) {
                 throw new Error('Invalid refresh token');
             }
 
-            const user = await this.userService.findById(decoded.user_id);
+            const user = await this.userService.findById(decoded.userId);
             if (!user) {
                 throw new Error('User not found');
             }
 
             const accessToken = jwt.sign(
                 {
-                    user_id: user.user_id,
-                    username: user.username,
-                    profile_id: user.profile_id
+                    userId: user.user_id,
+                    username: user.username
                 },
                 process.env.JWT_SECRET,
                 { expiresIn: process.env.JWT_EXPIRATION }
@@ -137,8 +131,8 @@ class AuthService extends IAuthService {
 
     async logout(token) {
         try {
-            const decoded = jwt.verify(token, process.env.JWT_SECRET);
-            await redis.del(`refresh_token:${decoded.user_id}`);
+            const decoded = jwt.verify(token, process.env.JWT_REFRESH_SECRET);
+            await redis.client.del(`refresh_token:${decoded.userId}`);
         } catch (error) {
             logger.error('Logout error', { error: error.message });
             throw error;
