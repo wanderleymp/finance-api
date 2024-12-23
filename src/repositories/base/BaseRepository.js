@@ -193,6 +193,39 @@ class BaseRepository {
     }
 
     /**
+     * Cria um novo registro usando uma transação existente
+     */
+    async createWithClient(client, data) {
+        try {
+            logger.info('BaseRepository create - input:', {
+                data,
+                tableName: this.tableName
+            });
+
+            // Monta a query
+            const columns = Object.keys(data);
+            const values = Object.values(data);
+            const placeholders = values.map((_, i) => `$${i + 1}`);
+
+            const query = `
+                INSERT INTO ${this.tableName} (${columns.join(', ')})
+                VALUES (${placeholders})
+                RETURNING *
+            `;
+
+            logger.info('BaseRepository create - query:', {
+                query,
+                values
+            });
+
+            const result = await client.query(query, values);
+            return result.rows[0];
+        } catch (error) {
+            throw error;
+        }
+    }
+
+    /**
      * Atualiza um registro
      */
     async update(id, data) {

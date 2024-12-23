@@ -128,42 +128,14 @@ class MovementPaymentRepository extends BaseRepository {
     }
 
     /**
-     * Cria um novo pagamento
+     * Sobrescreve o método create do BaseRepository para adicionar created_at e updated_at
      */
     async create(data) {
-        try {
-            const query = `
-                INSERT INTO movement_payments (
-                    movement_id,
-                    payment_method_id,
-                    total_amount,
-                    status,
-                    created_at,
-                    updated_at
-                ) VALUES ($1, $2, $3, $4, NOW(), NOW())
-                RETURNING *
-            `;
-
-            const values = [
-                data.movement_id,
-                data.payment_method_id,
-                data.total_amount,
-                data.status || 'PENDING'
-            ];
-
-            logger.info('Repository: Criando movimento_payment', {
-                values
-            });
-
-            const { rows } = await this.pool.query(query, values);
-            return rows[0];
-        } catch (error) {
-            logger.error('Erro ao criar pagamento', {
-                error: error.message,
-                data
-            });
-            throw error;
-        }
+        return super.create({
+            ...data,
+            created_at: new Date(),
+            updated_at: new Date()
+        });
     }
 
     /**

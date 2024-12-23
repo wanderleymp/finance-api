@@ -7,7 +7,6 @@ const { systemDatabase } = require('../config/database');
 
 class PaymentMethodsService {
   constructor() {
-    this.pool = systemDatabase.pool;
   }
 
   async create(paymentMethodData) {

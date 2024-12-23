@@ -82,7 +82,15 @@ class InstallmentService {
             dto.validate();
 
             // Criar parcela
-            const installment = await this.repository.create(dto);
+            const installment = await this.repository.createWithClient(client, {
+                payment_id: dto.payment_id,
+                installment_number: dto.installment_number,
+                due_date: dto.due_date,
+                amount: dto.amount,
+                balance: dto.balance,
+                status: dto.status,
+                account_entry_id: dto.account_entry_id
+            });
 
             await client.query('COMMIT');
 
@@ -96,6 +104,28 @@ class InstallmentService {
             throw error;
         } finally {
             client.release();
+        }
+    }
+
+    async createInstallmentWithTransaction(client, data) {
+        try {
+            const dto = new CreateInstallmentDTO(data);
+            dto.validate();
+
+            const installment = await this.repository.createWithClient(client, {
+                payment_id: dto.payment_id,
+                installment_number: dto.installment_number,
+                due_date: dto.due_date,
+                amount: dto.amount,
+                balance: dto.balance,
+                status: dto.status,
+                account_entry_id: dto.account_entry_id
+            });
+
+            return installment;
+        } catch (error) {
+            logger.error('Erro ao criar parcela', { error });
+            throw error;
         }
     }
 

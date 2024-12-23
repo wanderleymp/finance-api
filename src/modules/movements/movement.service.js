@@ -4,15 +4,11 @@ const MovementStatusRepository = require('../movement-statuses/movement-status.r
 const InstallmentRepository = require('../installments/installment.repository');
 const PersonRepository = require('../persons/person.repository');
 const PaymentMethodRepository = require('../payment-methods/payment-method.repository');
-const BoletoService = require('../boletos/boleto.service');
-const BoletoRepository = require('../boletos/boleto.repository');
-const n8nService = require('../../services/n8n.service');
-const TaskService = require('../../services/task.service');
 const { logger } = require('../../middlewares/logger');
 const { ValidationError } = require('../../utils/errors');
 const IMovementService = require('./interfaces/IMovementService');
 const MovementResponseDTO = require('./dto/movement-response.dto');
-const InstallmentGenerator = require('../installments/installment.generator');
+const MovementPaymentService = require('../movement-payments/movement-payment.service');
 
 class MovementService extends IMovementService {
     constructor({ 
@@ -21,7 +17,8 @@ class MovementService extends IMovementService {
         pool,
         movementPaymentRepository,
         paymentMethodRepository,
-        installmentRepository
+        installmentRepository,
+        movementPaymentService
     }) {
         super();
         
@@ -31,22 +28,7 @@ class MovementService extends IMovementService {
         this.installmentRepository = installmentRepository;
         this.cacheService = cacheService;
         this.pool = pool;
-
-        // Inicializa serviços necessários para geração de boleto
-        const boletoRepository = new BoletoRepository(pool);
-        const taskService = new TaskService();
-        const boletoService = new BoletoService({ 
-            boletoRepository,
-            n8nService,
-            taskService,
-            cacheService
-        });
-
-        // Inicializa o gerador de parcelas com o serviço de boleto
-        this.installmentGenerator = new InstallmentGenerator(
-            installmentRepository,
-            boletoService
-        );
+        this.movementPaymentService = movementPaymentService;
 
         this.cachePrefix = 'movements';
         this.cacheTTL = {
@@ -276,58 +258,33 @@ class MovementService extends IMovementService {
      * Cria um novo movimento
      */
     async create(data) {
+        const client = await this.pool.connect();
         try {
+            await client.query('BEGIN');
+            
             logger.info('Service: Criando novo movimento', { data });
 
             // Separar dados do movimento e do pagamento
             const { payment_method_id, ...movementData } = data;
 
             // Criar movimento
-            const movement = await this.movementRepository.create(movementData);
+            const movement = await this.movementRepository.createWithClient(client, movementData);
             logger.info('Service: Movimento criado', { movement });
 
-            // Se tiver payment_method_id, criar o movimento_payment e as parcelas
+            await client.query('COMMIT');
+
+            // Se tiver payment_method_id, criar o movimento_payment usando a rota existente
             if (payment_method_id) {
-                logger.info('Service: Criando movimento_payment', {
+                logger.info('Service: Criando movimento_payment via createPayment', {
                     movement_id: movement.movement_id,
                     payment_method_id,
                     total_amount: data.total_amount
                 });
 
-                // Buscar configuração da forma de pagamento
-                const paymentMethod = await this.paymentMethodRepository.findById(payment_method_id);
-                if (!paymentMethod) {
-                    throw new ValidationError('Forma de pagamento não encontrada');
-                }
-
-                // Criar movimento_payment
-                const payment = await this.movementPaymentRepository.create({
-                    movement_id: movement.movement_id,
+                await this.createPayment(movement.movement_id, {
                     payment_method_id,
-                    total_amount: data.total_amount,
-                    status: 'PENDING'
+                    total_amount: data.total_amount
                 });
-
-                // Criar parcelas baseado na configuração da forma de pagamento
-                const installmentAmount = data.total_amount / paymentMethod.max_installments;
-                const installments = [];
-
-                for (let i = 1; i <= paymentMethod.max_installments; i++) {
-                    const dueDate = new Date();
-                    dueDate.setMonth(dueDate.getMonth() + i - 1);
-
-                    const installment = await this.installmentRepository.create({
-                        movement_payment_id: payment.payment_id,
-                        installment_number: i,
-                        amount: installmentAmount,
-                        due_date: dueDate.toISOString().split('T')[0],
-                        status: 'PENDING'
-                    });
-
-                    installments.push(installment);
-                }
-
-                logger.info('Service: Parcelas criadas', { installments });
             }
 
             // Invalidar cache
@@ -335,12 +292,15 @@ class MovementService extends IMovementService {
 
             return new MovementResponseDTO(movement);
         } catch (error) {
+            await client.query('ROLLBACK');
             logger.error('Service: Erro ao criar movimento', {
                 error: error.message,
                 error_stack: error.stack,
                 data
             });
             throw error;
+        } finally {
+            client.release();
         }
     }
 
@@ -520,7 +480,7 @@ class MovementService extends IMovementService {
             });
 
             // Cria o pagamento
-            const payment = await this.movementPaymentRepository.create({
+            const payment = await this.movementPaymentService.createWithTransaction(client, {
                 movement_id: movementId,
                 payment_method_id: paymentData.payment_method_id,
                 total_amount: movement.total_amount,
@@ -528,17 +488,7 @@ class MovementService extends IMovementService {
             });
 
             logger.info('Service: Pagamento criado com sucesso', { payment });
-
-            // Gera as parcelas para qualquer método de pagamento
-            logger.info('Service: Gerando parcelas para o pagamento', {
-                payment_id: payment.payment_id,
-                payment_method: paymentMethod
-            });
-
-            await this.installmentGenerator.generateInstallments(payment, paymentMethod);
             
-            logger.info('Service: Parcelas geradas com sucesso');
-
             await client.query('COMMIT');
             return payment;
 
