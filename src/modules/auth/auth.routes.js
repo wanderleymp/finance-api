@@ -1,5 +1,5 @@
 const express = require('express');
-const authController = require('./auth.controller');
+const AuthController = require('./auth.controller');
 const { validateRequest } = require('../../middlewares/requestValidator');
 const { authMiddleware } = require('../../middlewares/auth');
 const authSchema = require('./schemas/auth.schema');
@@ -11,19 +11,19 @@ const router = express.Router();
 router.post('/login',
     rateLimiter.loginLimiter,
     validateRequest(authSchema.login),
-    authController.login
+    AuthController.login
 );
 
 router.post('/refresh',
     validateRequest(authSchema.refresh),
-    authController.refreshToken
+    AuthController.refreshToken
 );
 
 // Rotas que requerem autenticação
 router.post('/logout',
     authMiddleware,
     validateRequest(authSchema.logout),
-    authController.logout
+    AuthController.logout
 );
 
 module.exports = router;

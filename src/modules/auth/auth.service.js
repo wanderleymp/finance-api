@@ -59,7 +59,7 @@ class AuthService extends IAuthService {
                 userId: user.user_id
             });
 
-            // Gerar tokens
+            // Gerar tokens usando a mesma chave secreta para ambos os tokens por enquanto
             const accessToken = jwt.sign(
                 { 
                     userId: user.user_id,
@@ -71,18 +71,23 @@ class AuthService extends IAuthService {
 
             const refreshToken = jwt.sign(
                 { userId: user.user_id },
-                process.env.JWT_REFRESH_SECRET,
-                { expiresIn: process.env.JWT_REFRESH_EXPIRATION }
+                process.env.JWT_SECRET, // Usando a mesma chave do JWT_SECRET
+                { expiresIn: process.env.REFRESH_TOKEN_EXPIRATION }
             );
 
             // Se o Redis estiver disponível, armazenar o refresh token
-            if (redis.isConnected()) {
-                await redis.client.set(
-                    `refresh_token:${user.user_id}`,
-                    refreshToken,
-                    'EX',
-                    parseInt(process.env.JWT_REFRESH_EXPIRATION)
-                );
+            if (redis.connected) {
+                try {
+                    await redis.client.set(
+                        `refresh_token:${user.user_id}`,
+                        refreshToken,
+                        'EX',
+                        parseInt(process.env.REFRESH_TOKEN_EXPIRATION) * 24 * 60 * 60 // Converter dias para segundos
+                    );
+                } catch (redisError) {
+                    logger.warn('Erro ao armazenar refresh token no Redis', { error: redisError.message });
+                    // Continua mesmo se o Redis falhar
+                }
             }
 
             return new AuthResponseDTO({
@@ -101,38 +106,48 @@ class AuthService extends IAuthService {
 
     async refreshToken(token) {
         try {
-            const decoded = jwt.verify(token, process.env.JWT_REFRESH_SECRET);
-            const storedToken = await redis.client.get(`refresh_token:${decoded.userId}`);
-
-            if (!storedToken || storedToken !== token) {
-                throw new Error('Invalid refresh token');
-            }
-
+            const decoded = jwt.verify(token, process.env.JWT_SECRET);
             const user = await this.userService.findById(decoded.userId);
+
             if (!user) {
                 throw new Error('User not found');
             }
 
             const accessToken = jwt.sign(
-                {
-                    userId: user.user_id,
-                    username: user.username
-                },
+                { userId: user.user_id, username: user.username },
                 process.env.JWT_SECRET,
                 { expiresIn: process.env.JWT_EXPIRATION }
             );
 
-            return { accessToken };
+            const refreshToken = jwt.sign(
+                { userId: user.user_id },
+                process.env.JWT_SECRET,
+                { expiresIn: process.env.REFRESH_TOKEN_EXPIRATION }
+            );
+
+            return {
+                accessToken,
+                refreshToken
+            };
         } catch (error) {
             logger.error('Token refresh error', { error: error.message });
-            throw error;
+            throw new Error('Invalid refresh token');
         }
     }
 
     async logout(token) {
         try {
-            const decoded = jwt.verify(token, process.env.JWT_REFRESH_SECRET);
-            await redis.client.del(`refresh_token:${decoded.userId}`);
+            const decoded = jwt.verify(token, process.env.JWT_SECRET);
+
+            if (redis.connected) {
+                try {
+                    await redis.client.del(`refresh_token:${decoded.userId}`);
+                } catch (redisError) {
+                    logger.warn('Erro ao remover refresh token do Redis', { error: redisError.message });
+                }
+            }
+
+            return true;
         } catch (error) {
             logger.error('Logout error', { error: error.message });
             throw error;

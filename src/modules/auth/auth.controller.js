@@ -3,16 +3,9 @@ const { LoginDTO } = require('./dto/login.dto');
 const { logger } = require('../../middlewares/logger');
 
 class AuthController {
-    constructor() {
-        this.authService = new AuthService();
-        
-        // Bind dos métodos para manter o contexto
-        this.login = this.login.bind(this);
-        this.refreshToken = this.refreshToken.bind(this);
-        this.logout = this.logout.bind(this);
-    }
+    static authService = new AuthService();
 
-    async login(req, res) {
+    static async login(req, res) {
         try {
             const loginDto = new LoginDTO({
                 username: req.body.username,
@@ -29,7 +22,7 @@ class AuthController {
                 userAgent: req.get('user-agent')
             });
 
-            const result = await this.authService.login(
+            const result = await AuthController.authService.login(
                 loginDto.username,
                 loginDto.password,
                 loginDto.twoFactorToken,
@@ -46,32 +39,31 @@ class AuthController {
         }
     }
 
-    async refreshToken(req, res) {
+    static async refreshToken(req, res) {
         try {
             const { refreshToken } = req.body;
-            const result = await this.authService.refreshToken(refreshToken);
+            const result = await AuthController.authService.refreshToken(refreshToken);
             res.json(result);
         } catch (error) {
-            logger.error('Token refresh error', { error });
+            logger.error('Refresh token error', { error });
             res.status(401).json({
                 error: 'Invalid refresh token'
             });
         }
     }
 
-    async logout(req, res) {
+    static async logout(req, res) {
         try {
             const { refreshToken } = req.body;
-            await this.authService.logout(refreshToken);
-            res.status(204).send();
+            await AuthController.authService.logout(refreshToken);
+            res.json({ message: 'Logged out successfully' });
         } catch (error) {
             logger.error('Logout error', { error });
             res.status(400).json({
-                error: 'Error during logout'
+                error: 'Invalid logout request'
             });
         }
     }
 }
 
-// Exporta uma instância da classe
-module.exports = new AuthController();
+module.exports = AuthController;
