@@ -33,6 +33,29 @@ class InstallmentRepository extends BaseRepository {
         }
     }
 
+    /**
+     * Busca parcelas de um pagamento
+     */
+    async findByPaymentId(paymentId) {
+        try {
+            const query = `
+                SELECT i.*
+                FROM installments i
+                WHERE i.payment_id = $1
+                ORDER BY i.installment_number
+            `;
+
+            const { rows } = await this.pool.query(query, [paymentId]);
+            return rows;
+        } catch (error) {
+            logger.error('Erro ao buscar parcelas do pagamento', {
+                error: error.message,
+                paymentId
+            });
+            throw error;
+        }
+    }
+
     async findAll(page = 1, limit = 10, filters = {}) {
         try {
             const queryParams = [];
@@ -163,24 +186,24 @@ class InstallmentRepository extends BaseRepository {
             const query = `
                 INSERT INTO ${this.tableName} (
                     payment_id,
+                    installment_number,
                     due_date,
                     amount,
+                    balance,
                     status,
-                    installment_number,
-                    total_installments,
-                    created_at,
-                    updated_at
-                ) VALUES ($1, $2, $3, $4, $5, $6, NOW(), NOW())
+                    account_entry_id
+                ) VALUES ($1, $2, $3, $4, $5, $6, $7)
                 RETURNING *
             `;
 
             const result = await client.query(query, [
                 data.payment_id,
+                data.installment_number,
                 data.due_date,
                 data.amount,
+                data.balance,
                 data.status,
-                data.installment_number,
-                data.total_installments
+                data.account_entry_id
             ]);
 
             await client.query('COMMIT');

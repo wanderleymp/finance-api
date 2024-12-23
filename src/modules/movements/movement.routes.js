@@ -22,6 +22,22 @@ module.exports = (controller) => {
         controller.show.bind(controller)
     );
 
+    router.get('/:id/payments',
+        controller.listPayments.bind(controller)
+    );
+
+    router.get('/:id/payments/:paymentId/installments',
+        controller.listPaymentInstallments.bind(controller)
+    );
+
+    router.post('/:id/payments',
+        controller.createPayment.bind(controller)
+    );
+
+    router.delete('/:id/payments/:paymentId',
+        controller.deletePayment.bind(controller)
+    );
+
     router.post('/', 
         validateRequest(createMovementSchema),
         controller.create.bind(controller)

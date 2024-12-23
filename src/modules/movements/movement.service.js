@@ -1,38 +1,45 @@
-const MovementRepository = require('./movement.repository');
-const PersonRepository = require('../persons/person.repository');
+const MovementPaymentRepository = require('../movement-payments/movement-payment.repository');
 const MovementTypeRepository = require('../movement-types/movement-type.repository');
 const MovementStatusRepository = require('../movement-statuses/movement-status.repository');
-const MovementPaymentRepository = require('../movement-payments/movement-payment.repository');
 const InstallmentRepository = require('../installments/installment.repository');
+const PersonRepository = require('../persons/person.repository');
+const PaymentMethodRepository = require('../payment-methods/payment-method.repository');
 const { logger } = require('../../middlewares/logger');
 const { ValidationError } = require('../../utils/errors');
 const IMovementService = require('./interfaces/IMovementService');
 const MovementResponseDTO = require('./dto/movement-response.dto');
+const InstallmentGenerator = require('../installments/installment.generator');
 
 class MovementService extends IMovementService {
     constructor({ 
         movementRepository, 
-        cacheService
+        cacheService,
+        pool,
+        movementPaymentRepository,
+        paymentMethodRepository,
+        installmentRepository
     }) {
         super();
         
-        // Inicializa o repositório principal
         this.movementRepository = movementRepository;
-        
-        // Inicializa os outros repositórios
-        this.movementPaymentRepository = new MovementPaymentRepository();
-        this.movementTypeRepository = new MovementTypeRepository();
-        this.movementStatusRepository = new MovementStatusRepository();
-        this.installmentRepository = new InstallmentRepository();
-        this.personRepository = new PersonRepository();
-
-        // Inicializa o cache
+        this.movementPaymentRepository = movementPaymentRepository;
+        this.paymentMethodRepository = paymentMethodRepository;
+        this.installmentRepository = installmentRepository;
         this.cacheService = cacheService;
+        this.pool = pool;
+
+        this.installmentGenerator = new InstallmentGenerator(installmentRepository);
+
         this.cachePrefix = 'movements';
         this.cacheTTL = {
             list: 300, // 5 minutos
             detail: 600 // 10 minutos
         };
+
+        // Inicializa os outros repositórios
+        this.movementTypeRepository = new MovementTypeRepository();
+        this.movementStatusRepository = new MovementStatusRepository();
+        this.personRepository = new PersonRepository();
     }
 
     /**
@@ -150,13 +157,13 @@ class MovementService extends IMovementService {
     /**
      * Lista movimentos com paginação e filtros
      */
-    async findAll(page = 1, limit = 10, filters = {}, detailed = false) {
+    async findAll(page = 1, limit = 10, filters = {}, includes = []) {
         try {
             logger.info('Service: Iniciando listagem de movimentos', {
                 page,
                 limit,
                 filters,
-                detailed
+                includes
             });
 
             // Valida os filtros
@@ -167,7 +174,7 @@ class MovementService extends IMovementService {
 
             // Tenta buscar do cache
             const cacheKey = this.cacheService?.generateKey(
-                `${this.cachePrefix}:${detailed ? 'detail' : 'basic'}:list`, 
+                `${this.cachePrefix}:${includes.join(',')}:list`, 
                 { page, limit, ...preparedFilters }
             );
             
@@ -182,14 +189,9 @@ class MovementService extends IMovementService {
             // Busca os movimentos básicos
             const movements = await this.movementRepository.findAll(page, limit, preparedFilters);
 
-            // Se não precisa de detalhes, retorna apenas os movimentos
-            if (!detailed) {
-                return movements;
-            }
-
             // Para cada movimento, busca os dados relacionados
             const enrichedData = await Promise.all(movements.data.map(async movement => {
-                return this.findById(movement.movement_id, true);
+                return this.findById(movement.movement_id, this.parseIncludes(includes.join(',')));
             }));
 
             const result = {
@@ -201,7 +203,7 @@ class MovementService extends IMovementService {
             await this.cacheService?.set(
                 cacheKey, 
                 result, 
-                detailed ? this.cacheTTL.detail : this.cacheTTL.list
+                this.cacheTTL.detail
             );
 
             return result;
@@ -266,7 +268,7 @@ class MovementService extends IMovementService {
             const movement = await this.movementRepository.create(movementData);
             logger.info('Service: Movimento criado', { movement });
 
-            // Se tiver payment_method_id, criar o movimento_payment
+            // Se tiver payment_method_id, criar o movimento_payment e as parcelas
             if (payment_method_id) {
                 logger.info('Service: Criando movimento_payment', {
                     movement_id: movement.movement_id,
@@ -274,12 +276,40 @@ class MovementService extends IMovementService {
                     total_amount: data.total_amount
                 });
 
-                await this.movementPaymentRepository.create({
+                // Buscar configuração da forma de pagamento
+                const paymentMethod = await this.paymentMethodRepository.findById(payment_method_id);
+                if (!paymentMethod) {
+                    throw new ValidationError('Forma de pagamento não encontrada');
+                }
+
+                // Criar movimento_payment
+                const payment = await this.movementPaymentRepository.create({
                     movement_id: movement.movement_id,
                     payment_method_id,
                     total_amount: data.total_amount,
                     status: 'PENDING'
                 });
+
+                // Criar parcelas baseado na configuração da forma de pagamento
+                const installmentAmount = data.total_amount / paymentMethod.max_installments;
+                const installments = [];
+
+                for (let i = 1; i <= paymentMethod.max_installments; i++) {
+                    const dueDate = new Date();
+                    dueDate.setMonth(dueDate.getMonth() + i - 1);
+
+                    const installment = await this.installmentRepository.create({
+                        movement_payment_id: payment.payment_id,
+                        installment_number: i,
+                        amount: installmentAmount,
+                        due_date: dueDate.toISOString().split('T')[0],
+                        status: 'PENDING'
+                    });
+
+                    installments.push(installment);
+                }
+
+                logger.info('Service: Parcelas criadas', { installments });
             }
 
             // Invalidar cache
@@ -384,6 +414,153 @@ class MovementService extends IMovementService {
                 error: error.message,
                 id,
                 status
+            });
+            throw error;
+        }
+    }
+
+    /**
+     * Busca pagamentos de um movimento
+     */
+    async findPaymentsByMovementId(id) {
+        try {
+            logger.info('Service: Buscando pagamentos do movimento', { id });
+
+            // Busca os pagamentos
+            const payments = await this.movementPaymentRepository.findByMovementId(id);
+            return payments || [];
+            
+        } catch (error) {
+            logger.error('Service: Erro ao buscar pagamentos do movimento', {
+                error: error.message,
+                id
+            });
+            throw error;
+        }
+    }
+
+    /**
+     * Busca parcelas de um pagamento específico
+     */
+    async findInstallmentsByPaymentId(movementId, paymentId) {
+        try {
+            logger.info('Service: Buscando parcelas do pagamento', { 
+                movementId,
+                paymentId 
+            });
+
+            // Primeiro verifica se o pagamento pertence ao movimento
+            const payment = await this.movementPaymentRepository.findByMovementId(movementId);
+            if (!payment || !payment.find(p => p.payment_id === paymentId)) {
+                throw new ValidationError('Pagamento não encontrado para este movimento');
+            }
+
+            // Busca as parcelas
+            const installments = await this.installmentRepository.findByPaymentId(paymentId);
+            return installments || [];
+            
+        } catch (error) {
+            logger.error('Service: Erro ao buscar parcelas do pagamento', {
+                error: error.message,
+                movementId,
+                paymentId
+            });
+            throw error;
+        }
+    }
+
+    /**
+     * Cria um novo pagamento para o movimento
+     */
+    async createPayment(movementId, paymentData) {
+        const client = await this.pool.connect();
+        try {
+            await client.query('BEGIN');
+            
+            logger.info('Service: Iniciando criação de pagamento', { 
+                movementId,
+                paymentData 
+            });
+
+            // Verifica se o movimento existe
+            const movement = await this.findById(movementId);
+            if (!movement) {
+                throw new ValidationError('Movimento não encontrado');
+            }
+
+            // Verifica se o método de pagamento existe
+            const paymentMethod = await this.paymentMethodRepository.findById(paymentData.payment_method_id);
+            if (!paymentMethod) {
+                throw new ValidationError('Método de pagamento não encontrado');
+            }
+
+            logger.info('Service: Criando pagamento', {
+                movement_id: movementId,
+                payment_method_id: paymentData.payment_method_id,
+                total_amount: movement.total_amount,
+                payment_method: paymentMethod
+            });
+
+            // Cria o pagamento
+            const payment = await this.movementPaymentRepository.create({
+                movement_id: movementId,
+                payment_method_id: paymentData.payment_method_id,
+                total_amount: movement.total_amount,
+                status: 'PENDING'
+            });
+
+            logger.info('Service: Pagamento criado com sucesso', { payment });
+
+            // Gera as parcelas para qualquer método de pagamento
+            logger.info('Service: Gerando parcelas para o pagamento', {
+                payment_id: payment.payment_id,
+                payment_method: paymentMethod
+            });
+
+            await this.installmentGenerator.generateInstallments(payment, paymentMethod);
+            
+            logger.info('Service: Parcelas geradas com sucesso');
+
+            await client.query('COMMIT');
+            return payment;
+
+        } catch (error) {
+            await client.query('ROLLBACK');
+            logger.error('Service: Erro ao criar pagamento', {
+                error: error.message,
+                movementId,
+                paymentData
+            });
+            throw error;
+        } finally {
+            client.release();
+        }
+    }
+
+    /**
+     * Remove um pagamento do movimento
+     */
+    async deletePayment(movementId, paymentId) {
+        try {
+            logger.info('Service: Removendo pagamento do movimento', { 
+                movementId,
+                paymentId 
+            });
+
+            // Verifica se o pagamento pertence ao movimento
+            const payment = await this.movementPaymentRepository.findByMovementId(movementId);
+            if (!payment || !payment.find(p => p.payment_id === paymentId)) {
+                throw new ValidationError('Pagamento não encontrado para este movimento');
+            }
+
+            // Remove o pagamento
+            await this.movementPaymentRepository.delete(paymentId);
+            
+        } catch (error) {
+            logger.error('Service: Erro ao remover pagamento', {
+                error: error.message,
+                movementId,
+                paymentId
             });
             throw error;
         }
