@@ -40,7 +40,10 @@ class BaseProcessor {
 
     // Método helper para atualizar status
     async updateTaskStatus(taskId, status, errorMessage = null) {
-        await this.taskService.updateTaskStatus(taskId, status, errorMessage);
+        await this.taskService.update(taskId, {
+            status,
+            error_message: errorMessage
+        });
     }
 }
 

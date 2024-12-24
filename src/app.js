@@ -100,7 +100,7 @@ taskTypesModule.register(app);
 taskDependenciesModule.register(app);
 taskLogsModule.register(app);
 
-// Registra o módulo de mensagens
+// Registra o módulo de mensagens (depois do módulo de tasks)
 messagesModule(app);
 
 // Rota 404 para capturar requisições não encontradas

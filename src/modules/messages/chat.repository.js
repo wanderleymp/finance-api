@@ -1,119 +1,110 @@
 const { logger } = require('../../middlewares/logger');
-const { systemDatabase } = require('../../config/database');
+const BaseRepository = require('../../repositories/base/BaseRepository');
 
-class ChatRepository {
+class ChatRepository extends BaseRepository {
     constructor() {
-        this.pool = systemDatabase.pool;
+        super('chats', 'chat_id');
     }
 
-    async createChat(personId) {
-        const query = `
-            INSERT INTO chat_chats (person_id)
+    async create(data) {
+        const client = await this.pool.connect();
+        try {
+            const query = `
+            INSERT INTO chats (person_id)
             VALUES ($1)
             RETURNING *
-        `;
-        
-        try {
-            const { rows } = await this.pool.query(query, [personId]);
-            return rows[0];
+            `;
+            const values = [data.person_id];
+
+            const result = await client.query(query, values);
+            return result.rows[0];
         } catch (error) {
-            logger.error('Erro ao criar chat', { error: error.message, personId });
+            logger.error('Erro ao criar chat', {
+                error: error.message,
+                data
+            });
             throw error;
+        } finally {
+            client.release();
         }
     }
 
-    async createMessage(chatId, direction, content, metadata = {}) {
-        const query = `
-            INSERT INTO chat_messages (chat_id, direction, content, metadata)
-            VALUES ($1, $2, $3, $4)
+    async findAll(filters = {}, page = 1, limit = 10) {
+        const client = await this.pool.connect();
+        try {
+            const offset = (page - 1) * limit;
+            let query = `
+                SELECT c.*, p.name as person_name,
+                       COUNT(*) OVER() as total_count
+                FROM chats c
+                LEFT JOIN persons p ON c.person_id = p.person_id
+                WHERE 1=1
+            `;
+            const values = [];
+            let paramCount = 1;
+
+            // Filtros
+            if (filters.person_id) {
+                query += ` AND c.person_id = $${paramCount++}`;
+                values.push(filters.person_id);
+            }
+
+            if (filters.status) {
+                query += ` AND c.status = $${paramCount++}`;
+                values.push(filters.status);
+            }
+
+            // Ordenação e paginação
+            query += `
+                ORDER BY c.created_at DESC
+                LIMIT $${paramCount++}
+                OFFSET $${paramCount++}
+            `;
+            values.push(limit, offset);
+
+            const result = await client.query(query, values);
+            return {
+                data: result.rows,
+                total: result.rows[0]?.total_count || 0,
+                page,
+                limit
+            };
+        } catch (error) {
+            logger.error('Erro ao buscar chats', {
+                error: error.message,
+                filters,
+                page,
+                limit
+            });
+            throw error;
+        } finally {
+            client.release();
+        }
+    }
+
+    async update(id, data) {
+        const client = await this.pool.connect();
+        try {
+            const query = `
+            UPDATE chats
+            SET status = $1,
+                updated_at = CURRENT_TIMESTAMP
+            WHERE chat_id = $2
             RETURNING *
-        `;
-        
-        try {
-            const { rows } = await this.pool.query(query, [chatId, direction, content, metadata]);
-            return rows[0];
-        } catch (error) {
-            logger.error('Erro ao criar mensagem', { error: error.message, chatId });
-            throw error;
-        }
-    }
+            `;
+            const values = [data.status, id];
 
-    async updateMessageStatus(messageId, status) {
-        const query = `
-            INSERT INTO chat_message_status (message_id, status)
-            VALUES ($1, $2)
-            RETURNING *
-        `;
-        
-        try {
-            const { rows } = await this.pool.query(query, [messageId, status]);
-            return rows[0];
+            const result = await client.query(query, values);
+            return result.rows[0];
         } catch (error) {
-            logger.error('Erro ao atualizar status da mensagem', { error: error.message, messageId, status });
+            logger.error('Erro ao atualizar chat', {
+                error: error.message,
+                id,
+                data
+            });
             throw error;
-        }
-    }
-
-    async findChatByPerson(personId) {
-        const query = `
-            SELECT c.*, 
-                   m.message_id as last_message_id,
-                   m.content as last_message_content,
-                   m.created_at as last_message_date
-            FROM chat_chats c
-            LEFT JOIN chat_messages m ON m.message_id = c.last_message_id
-            WHERE c.person_id = $1
-            ORDER BY c.updated_at DESC
-            LIMIT 1
-        `;
-        
-        try {
-            const { rows } = await this.pool.query(query, [personId]);
-            return rows[0];
-        } catch (error) {
-            logger.error('Erro ao buscar chat por pessoa', { error: error.message, personId });
-            throw error;
-        }
-    }
-
-    async findMessagesByChat(chatId, page = 1, limit = 20) {
-        const offset = (page - 1) * limit;
-        const query = `
-            SELECT m.*,
-                   (SELECT status 
-                    FROM chat_message_status ms 
-                    WHERE ms.message_id = m.message_id 
-                    ORDER BY ms.occurred_at DESC 
-                    LIMIT 1) as current_status
-            FROM chat_messages m
-            WHERE m.chat_id = $1
-            ORDER BY m.created_at DESC
-            LIMIT $2 OFFSET $3
-        `;
-        
-        try {
-            const { rows } = await this.pool.query(query, [chatId, limit, offset]);
-            return rows;
-        } catch (error) {
-            logger.error('Erro ao buscar mensagens do chat', { error: error.message, chatId });
-            throw error;
-        }
-    }
-
-    async updateChatLastMessage(chatId, messageId) {
-        const query = `
-            UPDATE chat_chats
-            SET last_message_id = $2
-            WHERE chat_id = $1
-            RETURNING *
-        `;
-        
-        try {
-            const { rows } = await this.pool.query(query, [chatId, messageId]);
-            return rows[0];
-        } catch (error) {
-            logger.error('Erro ao atualizar última mensagem do chat', { error: error.message, chatId, messageId });
-            throw error;
+        } finally {
+            client.release();
         }
     }
 }

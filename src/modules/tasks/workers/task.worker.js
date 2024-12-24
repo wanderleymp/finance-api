@@ -12,7 +12,7 @@ class TaskWorker {
     registerProcessor(processor) {
         const taskType = processor.getTaskType();
         this.processors.set(taskType, processor);
-        logger.info(`Processador registrado: ${taskType}`);
+        logger.info('Processador registrado:', { type: taskType });
     }
 
     getProcessor(taskType) {
@@ -45,7 +45,7 @@ class TaskWorker {
     async processBatch() {
         try {
             // Buscar tasks pendentes
-            const tasks = await this.taskService.getPendingTasks(this.batchSize);
+            const tasks = await this.taskService.findPendingTasks(this.batchSize);
             
             if (tasks.length > 0) {
                 logger.info('Processando lote de tasks', {
@@ -59,7 +59,8 @@ class TaskWorker {
             }
         } catch (error) {
             logger.error('Erro ao processar lote de tasks', {
-                error: error.message
+                error: error.message,
+                stack: error.stack
             });
         }
     }
@@ -72,21 +73,42 @@ class TaskWorker {
                 taskId: task.task_id,
                 type: task.type_name
             });
-            await this.taskService.updateTaskStatus(
-                task.task_id,
-                'FAILED',
-                `Processador não encontrado para tipo ${task.type_name}`
-            );
+            await this.taskService.update(task.task_id, {
+                status: 'failed',
+                error_message: `Processador não encontrado para tipo ${task.type_name}`
+            });
             return;
         }
 
         try {
-            await this.taskService.handleTaskExecution(task, processor);
-        } catch (error) {
-            // Erro já foi tratado em handleTaskExecution
-            logger.debug('Task falhou, erro já tratado', {
+            // Atualiza status para running
+            await this.taskService.update(task.task_id, { 
+                status: 'running'
+            });
+
+            // Processa a task
+            await processor.process(task);
+
+            // Se chegou aqui é porque deu certo
+            await this.taskService.update(task.task_id, { 
+                status: 'completed'
+            });
+
+            logger.info('Task processada com sucesso', {
                 taskId: task.task_id,
                 type: task.type_name
+            });
+        } catch (error) {
+            logger.error('Erro ao processar task', {
+                taskId: task.task_id,
+                type: task.type_name,
+                error: error.message,
+                stack: error.stack
+            });
+
+            await this.taskService.update(task.task_id, {
+                status: 'failed',
+                error_message: error.message
             });
         }
     }

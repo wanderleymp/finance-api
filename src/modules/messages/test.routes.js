@@ -2,7 +2,7 @@ const { Router } = require('express');
 const MicrosoftGraphProvider = require('./providers/microsoft-graph.provider');
 const { logger } = require('../../middlewares/logger');
 
-module.exports = () => {
+module.exports = (taskService) => {
     const router = Router();
     const emailProvider = new MicrosoftGraphProvider();
 
@@ -72,23 +72,43 @@ module.exports = () => {
         }
     });
 
-    router.post('/update-display-name', async (req, res) => {
+    router.post('/test-email-task', async (req, res) => {
         try {
-            await emailProvider.updateUserDisplayName();
-            return res.json({
-                success: true,
-                message: 'Nome de exibição atualizado com sucesso!'
-            });
-        } catch (error) {
-            logger.error('Erro ao atualizar nome de exibição', {
-                error: error.message,
-                stack: error.stack,
-                code: error.code,
-                statusCode: error.statusCode
+            const { to, subject, content } = req.body;
+
+            if (!to || !subject || !content) {
+                return res.status(400).json({
+                    error: 'Dados inválidos',
+                    details: 'Os campos to, subject e content são obrigatórios'
+                });
+            }
+
+            // Cria uma task de email
+            const task = await taskService.create({
+                type: 'email',  // Mudando para minúsculo
+                name: `Enviar email para ${to}`,
+                description: `Assunto: ${subject}`,
+                payload: { to, subject, content },
+                metadata: { type: 'TEST' }
             });
 
+            return res.json({
+                success: true,
+                message: 'Task de email criada com sucesso!',
+                details: {
+                    taskId: task.task_id,
+                    to,
+                    subject,
+                    timestamp: new Date().toISOString()
+                }
+            });
+        } catch (error) {
+            logger.error('Erro ao criar task de email', {
+                error: error.message,
+                stack: error.stack
+            });
             return res.status(500).json({
-                error: 'Erro ao atualizar nome de exibição',
+                error: 'Erro ao criar task de email',
                 details: error.message
             });
         }

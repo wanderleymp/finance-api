@@ -3,15 +3,37 @@ const TaskLogsService = require('../tasklogs/tasklogs.service');
 const TaskDependenciesService = require('../taskdependencies/taskdependencies.service');
 
 class TaskService {
-    constructor({ taskRepository, taskLogsService, taskDependenciesService }) {
+    constructor({ taskRepository, taskLogsService, taskDependenciesService, taskTypesRepository }) {
         this.repository = taskRepository;
         this.logsService = taskLogsService;
         this.dependenciesService = taskDependenciesService;
+        this.taskTypesRepository = taskTypesRepository;
+    }
+
+    async getTypeIdByName(typeName) {
+        try {
+            const result = await this.taskTypesRepository.findOne({ name: typeName });
+            if (!result) {
+                throw new Error(`Tipo de task não encontrado: ${typeName}`);
+            }
+            return result.type_id;
+        } catch (error) {
+            logger.error('Erro ao buscar tipo de task', {
+                error: error.message,
+                typeName
+            });
+            throw error;
+        }
     }
 
     async create(data) {
         try {
             logger.info('Criando task', { data });
+
+            // Converte tipo para type_id
+            if (data.type && !data.type_id) {
+                data.type_id = await this.getTypeIdByName(data.type);
+            }
 
             // Valida dependências circulares
             if (data.dependencies?.length > 0) {
@@ -78,6 +100,11 @@ class TaskService {
     async update(id, data) {
         try {
             logger.info('Atualizando task', { id, data });
+
+            // Converte tipo para type_id
+            if (data.type && !data.type_id) {
+                data.type_id = await this.getTypeIdByName(data.type);
+            }
 
             // Verifica se a task existe
             const existingTask = await this.repository.findById(id);

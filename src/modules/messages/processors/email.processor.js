@@ -1,6 +1,6 @@
-const BaseProcessor = require('../../tasks/processors/base.processor');
-const MicrosoftGraphProvider = require('../providers/microsoft-graph.provider');
 const { logger } = require('../../../middlewares/logger');
+const MicrosoftGraphProvider = require('../providers/microsoft-graph.provider');
+const BaseProcessor = require('../../tasks/processors/base.processor');
 
 class EmailProcessor extends BaseProcessor {
     constructor(taskService) {
@@ -9,7 +9,7 @@ class EmailProcessor extends BaseProcessor {
     }
 
     getTaskType() {
-        return 'EMAIL';
+        return 'email';  
     }
 
     async validatePayload(payload) {
@@ -28,11 +28,16 @@ class EmailProcessor extends BaseProcessor {
         const { to, subject, content, metadata = {} } = task.payload;
         
         try {
-            // Formata o conteúdo em HTML
-            const htmlContent = this.emailProvider.formatHtmlContent(content);
-            
+            // Valida payload
+            await this.validatePayload(task.payload);
+
             // Envia o email
-            await this.emailProvider.sendEmail(to, subject, htmlContent, metadata);
+            await this.emailProvider.sendEmail(
+                to,
+                subject,
+                content,
+                { ...metadata, taskId: task.task_id }
+            );
 
             // Atualiza status da task
             await this.updateTaskStatus(task.task_id, 'completed');
@@ -43,18 +48,46 @@ class EmailProcessor extends BaseProcessor {
                 subject,
                 metadata
             });
+
+            return {
+                success: true,
+                message: 'Email enviado com sucesso',
+                details: {
+                    to,
+                    subject,
+                    timestamp: new Date().toISOString()
+                }
+            };
         } catch (error) {
             logger.error('Erro ao processar email', {
                 taskId: task.task_id,
                 error: error.message,
+                stack: error.stack,
+                code: error.code,
+                statusCode: error.statusCode,
                 to,
                 subject
             });
-            
+
             // Atualiza status com erro
             await this.updateTaskStatus(task.task_id, 'failed', error.message);
             throw error;
         }
+    }
+
+    async handleFailure(task, error) {
+        logger.error('Falha no processamento de email', {
+            taskId: task.task_id,
+            error: error.message,
+            payload: task.payload
+        });
+
+        // Se o erro for de autenticação ou permissão, não tenta novamente
+        if (error.code === 'ErrorAccessDenied' || error.code === 'AuthenticationRequiredError') {
+            return false;
+        }
+
+        return true;
     }
 }
 

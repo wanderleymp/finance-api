@@ -91,13 +91,49 @@ class TaskRepository extends BaseRepository {
         }
     }
 
+    async findPendingTasks(limit = 10) {
+        const client = await this.pool.connect();
+        try {
+            logger.info('Buscando tasks pendentes', { limit });
+            
+            const query = `
+                SELECT t.*, tt.name as type_name
+                FROM tasks t
+                JOIN task_types tt ON t.type_id = tt.type_id
+                WHERE t.status = 'pending'
+                AND (t.scheduled_for IS NULL OR t.scheduled_for <= NOW())
+                AND NOT EXISTS (
+                    SELECT 1
+                    FROM task_dependencies td
+                    JOIN tasks dt ON td.dependency_id = dt.task_id
+                    WHERE td.task_id = t.task_id
+                    AND dt.status NOT IN ('completed')
+                )
+                ORDER BY t.priority DESC, t.created_at ASC
+                LIMIT $1
+            `;
+
+            const result = await client.query(query, [limit]);
+            return result.rows;
+        } catch (error) {
+            logger.error('Erro ao buscar tasks pendentes', {
+                error: error.message,
+                limit
+            });
+            throw error;
+        } finally {
+            client.release();
+        }
+    }
+
     async findById(id) {
         const client = await this.pool.connect();
         try {
             const query = `
-                SELECT t.*, tt.name as type_name, tt.description as type_description,
+                SELECT t.*,
+                       tt.name as type_name,
                        array_agg(DISTINCT td.dependency_id) as dependencies,
-                       json_agg(DISTINCT jsonb_build_object(
+                       json_agg(json_build_object(
                            'log_id', tl.log_id,
                            'status', tl.status,
                            'execution_time', tl.execution_time,
@@ -109,7 +145,7 @@ class TaskRepository extends BaseRepository {
                 LEFT JOIN task_dependencies td ON t.task_id = td.task_id
                 LEFT JOIN task_logs tl ON t.task_id = tl.task_id
                 WHERE t.task_id = $1
-                GROUP BY t.task_id, tt.name, tt.description
+                GROUP BY t.task_id, tt.name
             `;
             const result = await client.query(query, [id]);
             
@@ -278,37 +314,6 @@ class TaskRepository extends BaseRepository {
             logger.error('Erro ao deletar task', {
                 error: error.message,
                 id
-            });
-            throw error;
-        } finally {
-            client.release();
-        }
-    }
-
-    async findPendingTasks(limit = 10) {
-        const client = await this.pool.connect();
-        try {
-            const query = `
-                SELECT t.*
-                FROM tasks t
-                WHERE t.status = 'pending'
-                AND (t.scheduled_for IS NULL OR t.scheduled_for <= NOW())
-                AND NOT EXISTS (
-                    SELECT 1
-                    FROM task_dependencies td
-                    JOIN tasks dt ON td.dependency_id = dt.task_id
-                    WHERE td.task_id = t.task_id
-                    AND dt.status NOT IN ('success')
-                )
-                ORDER BY t.priority DESC, t.created_at ASC
-                LIMIT $1
-            `;
-            const result = await client.query(query, [limit]);
-            return result.rows;
-        } catch (error) {
-            logger.error('Erro ao buscar tasks pendentes', {
-                error: error.message,
-                limit
             });
             throw error;
         } finally {
