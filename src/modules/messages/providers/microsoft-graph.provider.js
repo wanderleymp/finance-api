@@ -1,6 +1,7 @@
 const { Client } = require('@microsoft/microsoft-graph-client');
 const { ClientSecretCredential } = require('@azure/identity');
 const { logger } = require('../../../middlewares/logger');
+const EmailTrackingService = require('../services/email-tracking.service');
 
 class MicrosoftGraphProvider {
     constructor() {
@@ -11,6 +12,7 @@ class MicrosoftGraphProvider {
             this.userEmail = process.env.MICROSOFT_EMAIL_USER;
             this.fromEmail = process.env.MICROSOFT_EMAIL_FROM;
             this.fromName = process.env.MICROSOFT_EMAIL_FROM_NAME || 'Agile Gestão - Financeiro';
+            this.emailTrackingService = new EmailTrackingService();
 
             if (!this.clientId || !this.clientSecret || !this.tenantId || !this.userEmail || !this.fromEmail) {
                 throw new Error('Configurações do Microsoft Graph incompletas. Verifique as variáveis de ambiente: MICROSOFT_CLIENT_ID, MICROSOFT_CLIENT_SECRET, MICROSOFT_TENANT_ID, MICROSOFT_EMAIL_USER, MICROSOFT_EMAIL_FROM');
@@ -105,8 +107,23 @@ class MicrosoftGraphProvider {
                 }));
             }
 
-            await this.graphClient.api('/users/' + this.userEmail + '/sendMail')
+            // Enviar email
+            const response = await this.graphClient.api('/users/' + this.userEmail + '/sendMail')
                 .post(requestBody);
+
+            // Extrair message-id da resposta
+            const messageId = response.id || `${Date.now()}`; // Fallback se não tiver ID
+
+            // Criar tracking para todos os destinatários
+            await this.emailTrackingService.createTracking(
+                messageId,
+                recipients,
+                metadata.chatMessageId,
+                {
+                    subject,
+                    originalMetadata: metadata
+                }
+            );
 
             logger.info('Email enviado com sucesso', {
                 userEmail: this.userEmail,
@@ -114,8 +131,11 @@ class MicrosoftGraphProvider {
                 to: mainRecipient,
                 cc: ccRecipients,
                 subject,
+                messageId,
                 metadata
             });
+
+            return { messageId, success: true };
         } catch (error) {
             logger.error('Erro ao enviar email', {
                 error: error.message,

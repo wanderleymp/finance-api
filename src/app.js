@@ -27,6 +27,7 @@ const taskTypesModule = require('./modules/tasktypes/tasktypes.module');
 const taskDependenciesModule = require('./modules/taskdependencies/taskdependencies.module');
 const taskLogsModule = require('./modules/tasklogs/tasklogs.module');
 const messagesModule = require('./modules/messages/chat.module');
+const MessagesModule = require('./modules/messages/messages.module');
 
 const app = express();
 
@@ -99,6 +100,30 @@ taskModule.register(app);
 taskTypesModule.register(app);
 taskDependenciesModule.register(app);
 taskLogsModule.register(app);
+
+// Inicializar módulos
+const initializeModules = async () => {
+    try {
+        // Inicializar módulo de mensagens
+        const messagesModuleInstance = new MessagesModule(app);
+        await messagesModuleInstance.initialize();
+    } catch (error) {
+        logger.error('Erro ao inicializar módulos', {
+            error: error.message,
+            stack: error.stack
+        });
+        throw error;
+    }
+};
+
+// Inicializar módulos
+initializeModules().catch(error => {
+    logger.error('Falha ao inicializar módulos', {
+        error: error.message,
+        stack: error.stack
+    });
+    process.exit(1);
+});
 
 // Registra o módulo de mensagens (depois do módulo de tasks)
 messagesModule(app);
