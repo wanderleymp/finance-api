@@ -95,11 +95,13 @@ class PersonRepository extends IPersonRepository {
             const total = parseInt(countResult.rows[0].total);
 
             return {
-                data: result.rows.map(row => PersonResponseDTO.fromDatabase(row)),
-                pagination: {
-                    total,
-                    page: parseInt(page),
-                    limit: parseInt(limit)
+                items: result.rows.map(row => PersonResponseDTO.fromDatabase(row)),
+                meta: {
+                    totalItems: total,
+                    itemCount: result.rows.length,
+                    itemsPerPage: parseInt(limit),
+                    totalPages: Math.ceil(total / parseInt(limit)),
+                    currentPage: parseInt(page)
                 }
             };
         } catch (error) {

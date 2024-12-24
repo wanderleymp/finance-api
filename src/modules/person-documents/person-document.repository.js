@@ -33,7 +33,10 @@ class PersonDocumentRepository {
 
             // Query principal com paginação
             const query = `
-                SELECT ${this.table}.*, p.full_name as person_name
+                SELECT 
+                    ${this.table}.*,
+                    p.person_id,
+                    p.full_name as person_name
                 FROM ${this.table}
                 LEFT JOIN persons p ON p.person_id = ${this.table}.person_id
                 ${whereClause}

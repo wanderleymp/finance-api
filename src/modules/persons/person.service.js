@@ -30,24 +30,26 @@ class PersonService {
             // Busca as pessoas
             const persons = await this.findAll(filters, page, limit, order);
             
-            if (!persons || !persons.data) {
+            if (!persons || !persons.items || persons.items.length === 0) {
                 return {
-                    data: [],
-                    pagination: {
-                        total: 0,
-                        page: parseInt(page),
-                        limit: parseInt(limit)
+                    items: [],
+                    meta: {
+                        totalItems: 0,
+                        itemCount: 0,
+                        itemsPerPage: parseInt(limit),
+                        totalPages: 0,
+                        currentPage: parseInt(page)
                     }
                 };
             }
 
             // Para cada pessoa, busca seus relacionamentos
             const personsWithDetails = await Promise.all(
-                persons.data.map(async (person) => {
+                persons.items.map(async (person) => {
                     const [documents, contacts, addresses] = await Promise.all([
-                        this.findDocuments(person.id),
-                        this.findContacts(person.id),
-                        this.findAddresses(person.id)
+                        this.findDocuments(person.person_id),
+                        this.findContacts(person.person_id),
+                        this.findAddresses(person.person_id)
                     ]);
 
                     // Usa o DTO de detalhes
@@ -62,8 +64,8 @@ class PersonService {
             );
 
             return {
-                data: personsWithDetails,
-                pagination: persons.pagination
+                items: personsWithDetails,
+                meta: persons.meta
             };
         } catch (error) {
             logger.error('Erro ao listar pessoas com detalhes', { error: error.message, page, limit, filters, order });
@@ -214,8 +216,15 @@ class PersonService {
             const documentService = new PersonDocumentService();
             
             const result = await documentService.findAll(1, 100, { person_id: personId });
+            
+            // Garante que o person_id está presente em cada documento
+            const documentsWithPersonId = result.data.map(doc => ({
+                ...doc,
+                person_id: personId
+            }));
+
             return {
-                data: result.data,
+                data: documentsWithPersonId,
                 meta: result.meta
             };
         } catch (error) {

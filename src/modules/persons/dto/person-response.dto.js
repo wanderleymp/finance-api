@@ -1,6 +1,6 @@
 class PersonResponseDTO {
     constructor(data) {
-        this.id = data.person_id;
+        this.person_id = data.person_id;
         this.full_name = data.full_name;
         this.fantasy_name = data.fantasy_name;
         this.birth_date = data.birth_date;
@@ -11,7 +11,7 @@ class PersonResponseDTO {
 
     toJSON() {
         return {
-            id: this.id,
+            person_id: this.person_id,
             full_name: this.full_name,
             fantasy_name: this.fantasy_name,
             birth_date: this.birth_date,
