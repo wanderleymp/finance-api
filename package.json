@@ -29,6 +29,8 @@
   "author": "Sua Equipe",
   "license": "MIT",
   "dependencies": {
+    "@azure/identity": "^4.0.1",
+    "@microsoft/microsoft-graph-client": "^3.0.7",
     "@types/speakeasy": "^2.0.10",
     "amqplib": "^0.10.5",
     "awilix": "^8.0.1",

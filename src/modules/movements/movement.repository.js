@@ -153,7 +153,11 @@ class MovementRepository extends BaseRepository {
                                             b.installment_id,
                                             b.status,
                                             b.generated_at,
-                                            b.boleto_number
+                                            b.boleto_number,
+                                            b.boleto_url,
+                                            b.codigo_barras,
+                                            b.linha_digitavel,
+                                            b.pix_copia_e_cola
                                         FROM boletos b
                                         WHERE b.installment_id = ANY($1)
                                         ORDER BY b.generated_at DESC

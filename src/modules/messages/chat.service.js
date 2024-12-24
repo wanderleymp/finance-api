@@ -1,11 +1,14 @@
 const { logger } = require('../../middlewares/logger');
 const ChatRepository = require('./chat.repository');
 const TaskService = require('../tasks/task.service');
+const TaskRepository = require('../tasks/task.repository');
 
 class ChatService {
     constructor() {
         this.chatRepository = new ChatRepository();
-        this.taskService = new TaskService();
+        this.taskService = new TaskService({ 
+            taskRepository: new TaskRepository() 
+        });
     }
 
     async findOrCreateChat(personId) {

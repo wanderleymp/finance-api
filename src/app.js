@@ -23,11 +23,10 @@ const ItemModule = require('./modules/items/item.module');
 const MovementItemModule = require('./modules/movement-items/movement-item.module');
 const InstallmentModule = require('./modules/installments/installment.module');
 const taskModule = require('./modules/tasks/task.module');
-
-// Importando módulos auxiliares de tasks
 const taskTypesModule = require('./modules/tasktypes/tasktypes.module');
 const taskDependenciesModule = require('./modules/taskdependencies/taskdependencies.module');
 const taskLogsModule = require('./modules/tasklogs/tasklogs.module');
+const messagesModule = require('./modules/messages/chat.module');
 
 const app = express();
 
@@ -100,6 +99,9 @@ taskModule.register(app);
 taskTypesModule.register(app);
 taskDependenciesModule.register(app);
 taskLogsModule.register(app);
+
+// Registra o módulo de mensagens
+messagesModule(app);
 
 // Rota 404 para capturar requisições não encontradas
 app.use((req, res, next) => {
