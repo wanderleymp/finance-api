@@ -25,19 +25,6 @@ const InstallmentModule = require('./modules/installments/installment.module');
 
 const app = express();
 
-// Configurações do Swagger UI
-const swaggerUiOptions = {
-    explorer: true,
-    swaggerOptions: {
-        urls: [
-            {
-                url: '/api-docs.json',
-                name: 'Specification'
-            }
-        ]
-    }
-};
-
 // Middleware de logging para todas as requisições
 app.use((req, res, next) => {
     logger.info('Nova requisição recebida', {
@@ -52,7 +39,12 @@ app.use((req, res, next) => {
 
 // Configurações básicas
 app.use(cors());
-app.use(helmet());
+app.use(
+    helmet({
+        contentSecurityPolicy: false,
+        crossOriginEmbedderPolicy: false
+    })
+);
 app.use(express.json());
 
 // Setup do Swagger
@@ -62,8 +54,7 @@ app.get('/api-docs.json', (req, res) => {
 });
 
 // Setup do Swagger UI
-app.use('/api-docs', swaggerUi.serve);
-app.get('/api-docs', swaggerUi.setup(swaggerSpec, swaggerUiOptions));
+app.use('/api-docs', swaggerUi.serve, swaggerUi.setup(swaggerSpec));
 
 // Rotas públicas
 app.use('/health', healthRoutes);
