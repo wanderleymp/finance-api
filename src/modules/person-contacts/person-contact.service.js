@@ -153,23 +153,63 @@ class PersonContactService {
     }
 
     /**
+     * Busca um vínculo específico entre pessoa e contato
+     */
+    async findByPersonAndContact(personId, contactId, { client } = {}) {
+        try {
+            const cacheKey = `person-contacts:person:${personId}:contact:${contactId}`;
+            
+            // Se estamos em uma transação, não usa cache
+            if (client) {
+                return await this.personContactRepository.findByPersonAndContact(personId, contactId, { client });
+            }
+
+            // Tenta buscar do cache
+            const cachedResult = await this.cacheService.get(cacheKey);
+            if (cachedResult) {
+                return cachedResult;
+            }
+
+            const result = await this.personContactRepository.findByPersonAndContact(personId, contactId);
+
+            if (result) {
+                // Converte para DTO
+                const dto = PersonContactResponseDTO.fromDatabase(result);
+
+                // Salva no cache por 1 hora
+                await this.cacheService.set(cacheKey, dto, 3600);
+
+                return dto;
+            }
+
+            return null;
+        } catch (error) {
+            logger.error('Erro ao buscar vínculo pessoa-contato', {
+                error: error.message,
+                personId,
+                contactId
+            });
+            throw error;
+        }
+    }
+
+    /**
      * Cria uma nova associação entre pessoa e contato
      */
-    async create(data) {
+    async create(data, { client } = {}) {
         try {
-            const result = await this.personContactRepository.create({
-                person_id: data.person_id,
-                contact_id: data.contact_id
-            });
+            const result = await this.personContactRepository.create(data, { client });
 
             // Converte para DTO
             const dto = PersonContactResponseDTO.fromDatabase(result);
 
-            // Invalida caches
-            await Promise.all([
-                this.cacheService.del('person-contacts:list:*'),
-                this.cacheService.del(`person-contacts:person:${data.person_id}:*`)
-            ]);
+            // Se não estamos em uma transação, invalida os caches
+            if (!client) {
+                await Promise.all([
+                    this.cacheService.del('person-contacts:list:*'),
+                    this.cacheService.del(`person-contacts:person:${data.person_id}:*`)
+                ]);
+            }
 
             return dto;
         } catch (error) {

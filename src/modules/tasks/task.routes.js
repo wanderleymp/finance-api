@@ -2,11 +2,13 @@ const { Router } = require('express');
 const TaskController = require('./task.controller');
 const TaskService = require('./task.service');
 const TaskRepository = require('./repositories/task.repository');
-const TaskLogsService = require('../tasklogs/tasklogs.service');
+const TaskLogsService = require('./services/task-logs.service');
+const TaskLogsController = require('./controllers/task-logs.controller');
 const TaskDependenciesService = require('../taskdependencies/taskdependencies.service');
 const { authMiddleware } = require('../../middlewares/auth');
 const { validateSchema } = require('../../utils/validateSchema');
 const TaskSchema = require('./schemas/task.schema');
+const TaskLogsSchema = require('./schemas/task-logs.schema');
 
 class TaskRoutes {
     constructor() {
@@ -25,6 +27,7 @@ class TaskRoutes {
         });
         
         this.taskController = new TaskController(taskService);
+        this.taskLogsController = new TaskLogsController(taskLogsService);
         this.setupRoutes();
     }
 
@@ -69,6 +72,18 @@ class TaskRoutes {
             )
             .post('/:id/process',
                 this.taskController.processTask.bind(this.taskController)
+            );
+
+        // Rotas de logs
+        this.router
+            .get('/logs',
+                (req, res, next) => validateSchema(TaskLogsSchema.query, req.query)
+                    .then(() => next())
+                    .catch(next),
+                this.taskLogsController.findLogs.bind(this.taskLogsController)
+            )
+            .get('/logs/:id',
+                this.taskLogsController.findLogById.bind(this.taskLogsController)
             );
     }
 

@@ -53,6 +53,9 @@ class PersonRoutes {
             .post('/cnpj',
                 this.personController.createOrUpdateFromCnpj.bind(this.personController)
             )
+            .post('/:id/contacts',
+                this.personController.addContact.bind(this.personController)
+            )
             .put('/:id', 
                 (req, res, next) => validateSchema(updatePersonSchema, req.body)
                     .then(validatedData => {

@@ -179,17 +179,51 @@ class PersonContactRepository extends IPersonContactRepository {
     }
 
     /**
+     * Busca um vínculo específico entre pessoa e contato
+     */
+    async findByPersonAndContact(personId, contactId, { client } = {}) {
+        try {
+            const query = `
+                SELECT 
+                    pc.person_contact_id,
+                    pc.person_id,
+                    pc.contact_id,
+                    pc.created_at,
+                    c.contact_value,
+                    c.contact_type,
+                    c.contact_name
+                FROM ${this.tableName} pc
+                JOIN contacts c ON c.contact_id = pc.contact_id
+                WHERE pc.person_id = $1 AND pc.contact_id = $2
+            `;
+
+            const pool = client || this.pool;
+            const result = await pool.query(query, [personId, contactId]);
+
+            return result.rows[0] || null;
+        } catch (error) {
+            logger.error('Erro ao buscar vínculo pessoa-contato', {
+                error: error.message,
+                personId,
+                contactId
+            });
+            throw error;
+        }
+    }
+
+    /**
      * Cria uma nova associação entre pessoa e contato
      */
-    async create(data) {
+    async create(data, { client } = {}) {
         try {
             const query = `
                 WITH inserted AS (
                     INSERT INTO ${this.tableName} (person_id, contact_id)
                     VALUES ($1, $2)
-                    RETURNING contact_id, created_at
+                    RETURNING person_contact_id, contact_id, created_at
                 )
                 SELECT 
+                    i.person_contact_id,
                     i.contact_id,
                     i.created_at,
                     c.contact_value,
@@ -199,7 +233,8 @@ class PersonContactRepository extends IPersonContactRepository {
                 JOIN contacts c ON c.contact_id = i.contact_id
             `;
 
-            const result = await this.pool.query(query, [
+            const pool = client || this.pool;
+            const result = await pool.query(query, [
                 data.person_id,
                 data.contact_id
             ]);

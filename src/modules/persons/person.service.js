@@ -1,19 +1,27 @@
 const { logger } = require('../../middlewares/logger');
 const PersonRepository = require('./person.repository');
 const AddressService = require('../addresses/address.service');
+const ContactService = require('../contacts/contact.service');
+const PersonContactService = require('../person-contacts/person-contact.service');
 const CnpjService = require('../../services/cnpjService');
 const CacheService = require('../../services/cacheService');
 const PersonValidator = require('./validators/person.validator');
 const CreatePersonDTO = require('./dto/create-person.dto');
 const UpdatePersonDTO = require('./dto/update-person.dto');
+const { systemDatabase } = require('../../config/database');
 
 class PersonService {
     constructor({ 
         personRepository = new PersonRepository(), 
-        cacheService = CacheService 
+        cacheService = CacheService,
+        contactService = new ContactService(),
+        personContactService = new PersonContactService()
     } = {}) {
         this.personRepository = personRepository;
         this.cacheService = cacheService;
+        this.contactService = contactService;
+        this.personContactService = personContactService;
+        this.pool = systemDatabase.pool;
     }
 
     async findAll(filters = {}, page = 1, limit = 10, order = {}) {
@@ -462,42 +470,87 @@ class PersonService {
     }
 
     async addContact(personId, contactData) {
+        const client = await this.pool.connect();
+        
         try {
+            await client.query('BEGIN');
+
             // Verifica se a pessoa existe
             const person = await this.findById(personId);
             if (!person) {
                 throw new Error('Pessoa não encontrada');
             }
 
-            // Valida dados do contato
-            if (!contactData.type || !contactData.contact) {
-                throw new Error('Dados de contato incompletos');
+            let contactId = contactData.contact_id;
+            let contact;
+
+            // Se não tem contact_id, procura ou cria o contato
+            if (!contactId) {
+                if (!contactData.value || !contactData.type) {
+                    throw new Error('Dados de contato incompletos. Forneça value e type ou um contact_id existente');
+                }
+
+                // Procura contato existente com mesmo valor e tipo
+                contact = await this.contactService.findByValueAndType(
+                    contactData.value,
+                    contactData.type,
+                    { client }
+                );
+
+                // Se não existe, cria novo contato
+                if (!contact) {
+                    contact = await this.contactService.create({
+                        name: contactData.name,
+                        value: contactData.value,
+                        type: contactData.type
+                    }, { client });
+                }
+                
+                contactId = contact.id;
             }
 
-            // Valida tipo de contato
-            const validContactTypes = ['phone', 'email', 'whatsapp', 'telegram'];
-            if (!validContactTypes.includes(contactData.type)) {
-                throw new Error(`Tipo de contato inválido. Tipos válidos: ${validContactTypes.join(', ')}`);
+            // Verifica se já existe vínculo
+            const existingLink = await this.personContactService.findByPersonAndContact(
+                personId,
+                contactId,
+                { client }
+            );
+
+            if (existingLink) {
+                await client.query('ROLLBACK');
+                return existingLink;
             }
 
-            const newContact = await this.personRepository.addContact(personId, contactData);
+            // Cria o vínculo person-contact
+            const personContact = await this.personContactService.create({
+                person_id: personId,
+                contact_id: contactId,
+                description: contactData.description
+            }, { client });
 
-            // Limpa cache de detalhes da pessoa
+            await client.query('COMMIT');
+
+            // Limpa cache
             await this.cacheService.del(`person:details:${personId}`);
 
-            logger.info('Contato adicionado à pessoa', { 
-                personId, 
-                contactId: newContact.id 
+            logger.info('Contato vinculado à pessoa com sucesso', {
+                personId,
+                contactId,
+                personContactId: personContact.id
             });
 
-            return newContact;
+            return personContact;
+
         } catch (error) {
-            logger.error('Erro ao adicionar contato à pessoa', {
+            await client.query('ROLLBACK');
+            logger.error('Erro ao vincular contato à pessoa', {
                 error: error.message,
                 personId,
                 contactData
             });
             throw error;
+        } finally {
+            client.release();
         }
     }
 
