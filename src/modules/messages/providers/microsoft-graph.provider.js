@@ -79,8 +79,14 @@ class MicrosoftGraphProvider {
                 message: {
                     subject,
                     body: {
-                        contentType: 'text',
-                        content
+                        contentType: 'html',
+                        content: content
+                    },
+                    from: {
+                        emailAddress: {
+                            address: this.fromEmail,
+                            name: this.fromName
+                        }
                     },
                     toRecipients: [{
                         emailAddress: {
@@ -99,11 +105,7 @@ class MicrosoftGraphProvider {
                 }));
             }
 
-            // Log para debug
-            logger.info('Enviando email com payload:', JSON.stringify(requestBody));
-
-            await this.graphClient
-                .api(`/users/${this.userEmail}/sendMail`)
+            await this.graphClient.api('/users/' + this.userEmail + '/sendMail')
                 .post(requestBody);
 
             logger.info('Email enviado com sucesso', {
@@ -116,9 +118,8 @@ class MicrosoftGraphProvider {
             });
         } catch (error) {
             logger.error('Erro ao enviar email', {
-                error,
-                userEmail: this.userEmail,
-                fromEmail: this.fromEmail,
+                error: error.message,
+                stack: error.stack,
                 to,
                 subject,
                 metadata
