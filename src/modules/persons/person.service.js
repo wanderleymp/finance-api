@@ -181,27 +181,41 @@ class PersonService {
 
     async findPersonWithDetails(id) {
         try {
-            // Verifica se a pessoa existe
+            const cacheKey = `person:details:${id}`;
+            
+            // Tenta buscar do cache
+            const cachedPerson = await this.cacheService.get(cacheKey);
+            if (cachedPerson) {
+                logger.info('Retornando pessoa com detalhes do cache', { id });
+                return cachedPerson;
+            }
+
+            // Busca a pessoa
             const person = await this.findById(id);
             if (!person) {
                 throw new Error('Pessoa não encontrada');
             }
 
-            // Busca os relacionamentos
+            // Busca relacionamentos em paralelo
             const [documents, contacts, addresses] = await Promise.all([
-                this.findDocuments(id),
-                this.findContacts(id),
-                this.findAddresses(id)
+                this.findDocuments(person.person_id),
+                this.findContacts(person.person_id),
+                this.findAddresses(person.person_id)
             ]);
 
             // Usa o DTO de detalhes
             const { PersonDetailsResponseDTO } = require('./dto/person-response.dto');
-            return PersonDetailsResponseDTO.fromDatabase({
+            const result = PersonDetailsResponseDTO.fromDatabase({
                 ...person,
                 documents: documents.items,
                 contacts: contacts.items,
                 addresses: addresses.items
             });
+
+            // Salva no cache por 2 minutos
+            await this.cacheService.set(cacheKey, result, 120);
+
+            return result;
         } catch (error) {
             logger.error('Erro ao buscar detalhes da pessoa', {
                 error: error.message,
