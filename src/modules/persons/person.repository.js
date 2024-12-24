@@ -158,6 +158,34 @@ class PersonRepository extends IPersonRepository {
         }
     }
 
+    async findByCnpj(cnpj) {
+        try {
+            const query = `
+                SELECT DISTINCT
+                    p.person_id,
+                    p.full_name,
+                    p.birth_date,
+                    p.person_type,
+                    p.fantasy_name,
+                    p.created_at,
+                    p.updated_at
+                FROM ${this.tableName} p
+                INNER JOIN person_documents pd ON pd.person_id = p.person_id
+                WHERE pd.document_type = 'CNPJ'
+                AND pd.document_value = $1
+            `;
+
+            const { rows } = await this.pool.query(query, [cnpj]);
+            return rows[0] ? new PersonResponseDTO(rows[0]) : null;
+        } catch (error) {
+            logger.error('Repository: Erro ao buscar pessoa por CNPJ', {
+                cnpj,
+                error: error.message
+            });
+            throw error;
+        }
+    }
+
     async findPersonWithDetails(id) {
         try {
             const query = `

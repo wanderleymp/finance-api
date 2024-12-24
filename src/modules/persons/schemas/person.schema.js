@@ -17,6 +17,7 @@ const createPersonSchema = Joi.object({
     fantasy_name: Joi.string()
         .trim()
         .max(255)
+        .allow('')
         .optional()
         .messages({
             'string.max': 'O nome fantasia deve ter no máximo 255 caracteres'
@@ -56,6 +57,7 @@ const updatePersonSchema = Joi.object({
     fantasy_name: Joi.string()
         .trim()
         .max(255)
+        .allow('')
         .optional()
         .messages({
             'string.max': 'O nome fantasia deve ter no máximo 255 caracteres'

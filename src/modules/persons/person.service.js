@@ -567,134 +567,51 @@ class PersonService {
         }
     }
 
-    async createOrUpdateFromCnpj(cnpj, license_id, req) {
+    async createOrUpdateFromCnpj(cnpj) {
         try {
-            // Valida e busca os dados do CNPJ
+            logger.info('Service: Iniciando criação/atualização de pessoa por CNPJ', { cnpj });
+
+            // Busca dados do CNPJ
             const cnpjData = await CnpjService.findByCnpj(cnpj);
-            logger.info('Dados do CNPJ obtidos', { 
-                cnpj: cnpjData.cnpj,
-                razao_social: cnpjData.razao_social
-            });
+            logger.info('Service: Dados do CNPJ obtidos', { cnpjData });
 
-            // Limpa o CNPJ para busca e armazenamento
-            const cleanCnpj = cnpj.replace(/[^\d]/g, '');
-
-            // Busca pessoa pelo documento
-            const PersonDocumentService = require('../person-documents/person-document.service');
-            const documentService = new PersonDocumentService();
-
-            // Busca todos os documentos do tipo CNPJ
-            const documents = await documentService.findAll(1, 100, {
+            // Prepara os dados da pessoa
+            const personData = {
+                full_name: cnpjData.razao_social,
+                fantasy_name: cnpjData.fantasia || '',
+                person_type: 'PJ',
                 document_type: 'CNPJ',
-                document_value: cleanCnpj
-            });
-
-            let person;
-
-            if (documents && documents.data && documents.data.length > 0) {
-                // Se encontrou documento, atualiza a pessoa
-                const document = documents.data[0];
-                person = await this.findById(document.person_id);
-                if (!person) {
-                    throw new Error('Pessoa não encontrada');
+                document_value: cnpjData.cnpj,
+                email: cnpjData.email,
+                phone: cnpjData.telefone,
+                address: {
+                    street: cnpjData.endereco.logradouro,
+                    number: cnpjData.endereco.numero,
+                    complement: cnpjData.endereco.complemento,
+                    district: cnpjData.endereco.bairro,
+                    city: cnpjData.endereco.cidade,
+                    state: cnpjData.endereco.estado,
+                    zip_code: cnpjData.endereco.cep,
+                    ibge_code: cnpjData.endereco.ibge
                 }
+            };
 
-                const updateData = {
-                    full_name: cnpjData.razao_social,
-                    birth_date: cnpjData.data_abertura,
-                    fantasy_name: cnpjData.fantasia,
-                    person_type: 'PJ'
-                };
+            // Busca pessoa existente pelo CNPJ
+            const existingPerson = await this.findByCnpj(cnpjData.cnpj);
 
-                person = await this.update(person.id, updateData);
-                logger.info('Pessoa atualizada com sucesso', { personId: person.id });
-
-                // Busca endereço existente
-                const AddressService = require('../addresses/address.service');
-                const addressService = new AddressService();
-
-                const existingAddresses = await addressService.findByPersonId(person.id);
-
-                // Mapeia os dados do endereço
-                const addressData = {
-                    person_id: person.id,
-                    street: cnpjData.endereco.logradouro || 'Não informado',
-                    number: cnpjData.endereco.numero || 'S/N',
-                    complement: cnpjData.endereco.complemento || null,
-                    neighborhood: cnpjData.endereco.bairro || 'Não informado',
-                    city: cnpjData.endereco.cidade || 'Não informado',
-                    state: cnpjData.endereco.estado || 'XX',
-                    postal_code: cnpjData.endereco.cep ? cnpjData.endereco.cep.replace(/[^\d]/g, '') : '',
-                    country: 'Brasil',
-                    ibge: null // Forçando o IBGE como null para que o AddressService busque pelo CEP
-                };
-
-                // Garante que o CEP está no formato correto
-                if (addressData.postal_code) {
-                    addressData.postal_code = addressData.postal_code.replace(/[^\d]/g, '');
-                }
-
-                // Atualiza ou cria o endereço
-                if (existingAddresses && existingAddresses.length > 0) {
-                    await addressService.update(existingAddresses[0].id, addressData);
-                    logger.info('Endereço atualizado com sucesso', { personId: person.id });
-                } else {
-                    await addressService.create(addressData);
-                    logger.info('Endereço criado com sucesso', { personId: person.id });
-                }
-
-            } else {
-                // Se não encontrou, cria uma nova pessoa
-                const createData = {
-                    full_name: cnpjData.razao_social,
-                    fantasy_name: cnpjData.fantasia,
-                    birth_date: cnpjData.data_abertura,
-                    person_type: 'PJ'
-                };
-
-                person = await this.create(createData);
-                logger.info('Pessoa criada com sucesso', { personId: person.id });
-
-                // Cria o documento para a pessoa
-                await documentService.create(person.id, {
-                    document_type: 'CNPJ',
-                    document_value: cleanCnpj
+            if (existingPerson) {
+                logger.info('Service: Atualizando pessoa existente', { 
+                    person_id: existingPerson.person_id 
                 });
-                logger.info('Documento criado com sucesso', { personId: person.id, documentType: 'CNPJ' });
-
-                // Adiciona o endereço
-                const AddressService = require('../addresses/address.service');
-                const addressService = new AddressService();
-
-                // Mapeia os dados do endereço
-                const addressData = {
-                    person_id: person.id,
-                    street: cnpjData.endereco.logradouro || 'Não informado',
-                    number: cnpjData.endereco.numero || 'S/N',
-                    complement: cnpjData.endereco.complemento || null,
-                    neighborhood: cnpjData.endereco.bairro || 'Não informado',
-                    city: cnpjData.endereco.cidade || 'Não informado',
-                    state: cnpjData.endereco.estado || 'XX',
-                    postal_code: cnpjData.endereco.cep ? cnpjData.endereco.cep.replace(/[^\d]/g, '') : '',
-                    country: 'Brasil',
-                    ibge: null // Forçando o IBGE como null para que o AddressService busque pelo CEP
-                };
-
-                // Garante que o CEP está no formato correto
-                if (addressData.postal_code) {
-                    addressData.postal_code = addressData.postal_code.replace(/[^\d]/g, '');
-                }
-
-                // Cria o endereço
-                await addressService.create(addressData);
-                logger.info('Endereço criado com sucesso', { personId: person.id });
+                return await this.update(existingPerson.person_id, personData);
             }
 
-            return person;
+            logger.info('Service: Criando nova pessoa');
+            return await this.create(personData);
         } catch (error) {
-            logger.error('Erro ao criar/atualizar pessoa por CNPJ', {
-                error: error.message,
-                cnpj
+            logger.error('Service: Erro ao criar/atualizar pessoa por CNPJ', { 
+                cnpj, 
+                error: error.message 
             });
             throw error;
         }
