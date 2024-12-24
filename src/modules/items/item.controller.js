@@ -10,28 +10,32 @@ class ItemController {
 
     async findAll(req, res) {
         try {
-            const { page = 1, limit = 10, ...filters } = req.query;
+            const filters = {};
+            const page = parseInt(req.query.page) || 1;
+            const limit = parseInt(req.query.limit) || 10;
             
-            // Converte preço para objeto de comparação se necessário
-            if (filters.min_price || filters.max_price) {
+            // Filtros
+            if (req.query.code) filters.code = req.query.code;
+            if (req.query.name) filters.name = req.query.name;
+            if (req.query.search) filters.search = req.query.search;
+            
+            // Preço
+            if (req.query.min_price || req.query.max_price) {
                 filters.price = {};
-                if (filters.min_price) filters.price.$gte = parseFloat(filters.min_price);
-                if (filters.max_price) filters.price.$lte = parseFloat(filters.max_price);
-                delete filters.min_price;
-                delete filters.max_price;
+                if (req.query.min_price) filters.price.$gte = parseFloat(req.query.min_price);
+                if (req.query.max_price) filters.price.$lte = parseFloat(req.query.max_price);
             }
 
-            // Converte active para booleano se presente
-            if (filters.active !== undefined) {
-                filters.active = filters.active === 'true';
+            // Status
+            if (req.query.active !== undefined) {
+                filters.active = req.query.active === 'true';
             }
 
-            const result = await this.service.findAll(
-                filters,
-                parseInt(page),
-                parseInt(limit)
-            );
-            
+            // Ordenação
+            filters.orderBy = req.query.orderBy || 'name';
+            filters.orderDirection = (req.query.orderDirection || 'ASC').toUpperCase();
+
+            const result = await this.service.findAll(filters, page, limit);
             return handleResponse(res, result);
         } catch (error) {
             logger.error('Erro ao listar items', { error });
@@ -43,7 +47,6 @@ class ItemController {
         try {
             const { id } = req.params;
             const result = await this.service.findById(parseInt(id));
-            
             return handleResponse(res, result);
         } catch (error) {
             logger.error('Erro ao buscar item por ID', { error });
@@ -65,7 +68,6 @@ class ItemController {
         try {
             const { id } = req.params;
             const result = await this.service.update(parseInt(id), req.body);
-            
             return handleResponse(res, result);
         } catch (error) {
             logger.error('Erro ao atualizar item', { error });
@@ -76,11 +78,10 @@ class ItemController {
     async delete(req, res) {
         try {
             const { id } = req.params;
-            const result = await this.service.delete(parseInt(id));
-            
-            return handleResponse(res, result);
+            await this.service.delete(parseInt(id));
+            return handleResponse(res, null, 204);
         } catch (error) {
-            logger.error('Erro ao remover item', { error });
+            logger.error('Erro ao deletar item', { error });
             return handleError(res, error);
         }
     }

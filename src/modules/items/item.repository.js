@@ -52,6 +52,12 @@ class ItemRepository extends BaseRepository {
                 values.push(filters.active);
             }
 
+            // Ordenação padrão por name se não especificado
+            const validFields = ['code', 'name', 'price', 'created_at'];
+            const orderBy = validFields.includes(filters.orderBy) ? filters.orderBy : 'name';
+            const orderDirection = ['ASC', 'DESC'].includes(filters.orderDirection) ? filters.orderDirection : 'ASC';
+            query += ` ORDER BY ${orderBy} ${orderDirection}`;
+
             // Adiciona paginação
             query += ` LIMIT $${paramCount++} OFFSET $${paramCount++}`;
             values.push(limit, offset);

@@ -11,7 +11,9 @@ const ItemSchema = {
         }).optional(),
         active: Joi.boolean().optional(),
         page: Joi.number().integer().min(1).optional(),
-        limit: Joi.number().integer().min(1).max(100).optional()
+        limit: Joi.number().integer().min(1).max(100).optional(),
+        orderBy: Joi.string().valid('code', 'name', 'price', 'created_at').optional(),
+        orderDirection: Joi.string().valid('ASC', 'DESC').optional()
     }).unknown(false),
 
     findById: Joi.object({
