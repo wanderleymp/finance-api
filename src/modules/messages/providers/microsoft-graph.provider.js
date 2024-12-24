@@ -36,7 +36,7 @@ class MicrosoftGraphProvider {
             );
 
             // Inicializar cliente do Graph
-            this.client = Client.initWithMiddleware({
+            this.graphClient = Client.initWithMiddleware({
                 authProvider: {
                     getAccessToken: async () => {
                         try {
@@ -67,60 +67,61 @@ class MicrosoftGraphProvider {
         }
     }
 
-    async sendEmail(to, subject, content, metadata = {}) {
+    async sendMail(to, subject, content, metadata = {}) {
         try {
-            // Validações básicas
-            if (!to) throw new Error('O campo "to" é obrigatório');
-            if (!subject) throw new Error('O campo "subject" é obrigatório');
-            if (!content) throw new Error('O campo "content" é obrigatório');
+            // Garantir que temos um array de objetos com email
+            const recipients = Array.isArray(to) ? to : [{ email: to }];
+            
+            const mainRecipient = recipients[0].email;
+            const ccRecipients = recipients.slice(1).map(r => r.email);
 
-            const message = {
-                subject,
-                body: {
-                    contentType: "HTML",
-                    content: this.formatHtmlContent(content)
+            const requestBody = {
+                message: {
+                    subject,
+                    body: {
+                        contentType: 'text',
+                        content
+                    },
+                    toRecipients: [{
+                        emailAddress: {
+                            address: mainRecipient
+                        }
+                    }]
                 },
-                toRecipients: [{
-                    emailAddress: {
-                        address: to
-                    }
-                }],
-                from: {
-                    emailAddress: {
-                        address: this.fromEmail,
-                        name: this.fromName
-                    }
-                }
+                saveToSentItems: true
             };
 
-            // Usando o endpoint do usuário que tem acesso à caixa compartilhada
-            await this.client.api(`/users/${this.userEmail}/sendMail`)
-                .post({
-                    message,
-                    saveToSentItems: true
-                });
+            if (ccRecipients.length > 0) {
+                requestBody.message.ccRecipients = ccRecipients.map(email => ({
+                    emailAddress: {
+                        address: email
+                    }
+                }));
+            }
 
-            logger.info('Email enviado com sucesso', { 
+            // Log para debug
+            logger.info('Enviando email com payload:', JSON.stringify(requestBody));
+
+            await this.graphClient
+                .api(`/users/${this.userEmail}/sendMail`)
+                .post(requestBody);
+
+            logger.info('Email enviado com sucesso', {
                 userEmail: this.userEmail,
                 fromEmail: this.fromEmail,
-                to, 
+                to: mainRecipient,
+                cc: ccRecipients,
                 subject,
-                metadata,
-                timestamp: new Date().toISOString()
+                metadata
             });
-
-            return true;
         } catch (error) {
-            logger.error('Erro ao enviar email', { 
-                error: error.message, 
-                stack: error.stack,
-                code: error.code,
-                statusCode: error.statusCode,
+            logger.error('Erro ao enviar email', {
+                error,
                 userEmail: this.userEmail,
                 fromEmail: this.fromEmail,
-                to, 
+                to,
                 subject,
-                metadata 
+                metadata
             });
             throw error;
         }

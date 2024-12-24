@@ -72,36 +72,36 @@ module.exports = (taskService) => {
         }
     });
 
+    // Rota de teste para envio de email via task
     router.post('/test-email-task', async (req, res) => {
         try {
-            const { to, subject, content } = req.body;
+            const recipients = [
+                {
+                    person_contact_id: 159,
+                    email: 'wanderley@agilegestao.com'
+                },
+                {
+                    person_contact_id: 255,
+                    email: 'wanderleywm@hotmail.com'
+                }
+            ];
 
-            if (!to || !subject || !content) {
-                return res.status(400).json({
-                    error: 'Dados inválidos',
-                    details: 'Os campos to, subject e content são obrigatórios'
-                });
-            }
+            // Formata o nome da task com os emails
+            const recipientEmails = recipients.map(r => r.email).join(', ');
 
-            // Cria uma task de email
             const task = await taskService.create({
-                type: 'email',  // Mudando para minúsculo
-                name: `Enviar email para ${to}`,
-                description: `Assunto: ${subject}`,
-                payload: { to, subject, content },
+                type: 'email',
+                name: `Enviar email para ${recipientEmails}`,
+                description: 'Assunto: Teste de Email via Task',
+                payload: {
+                    to: recipients,
+                    subject: 'Teste de Email via Task',
+                    content: 'Este é um email de teste enviado através de uma task.\n\nSe você recebeu este email, a integração com tasks está funcionando corretamente!'
+                },
                 metadata: { type: 'TEST' }
             });
 
-            return res.json({
-                success: true,
-                message: 'Task de email criada com sucesso!',
-                details: {
-                    taskId: task.task_id,
-                    to,
-                    subject,
-                    timestamp: new Date().toISOString()
-                }
-            });
+            res.json(task);
         } catch (error) {
             logger.error('Erro ao criar task de email', {
                 error: error.message,
