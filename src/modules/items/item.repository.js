@@ -7,86 +7,77 @@ class ItemRepository extends BaseRepository {
     }
 
     async findAll(filters = {}, page = 1, limit = 10) {
+        const client = await this.pool.connect();
         try {
-            // Prepara os filtros
-            const queryParams = [];
-            const conditions = ['deleted_at IS NULL'];
+            const offset = (page - 1) * limit;
+
+            // Constrói a query base
+            let query = `
+                SELECT i.*, COUNT(*) OVER() as total_count
+                FROM items i
+                WHERE 1=1
+            `;
+            const values = [];
             let paramCount = 1;
 
-            // Filtros dinâmicos
+            // Adiciona filtros
             if (filters.code) {
-                conditions.push(`code ILIKE $${paramCount}`);
-                queryParams.push(`%${filters.code}%`);
-                paramCount++;
+                query += ` AND code = $${paramCount++}`;
+                values.push(filters.code);
             }
 
             if (filters.name) {
-                conditions.push(`name ILIKE $${paramCount}`);
-                queryParams.push(`%${filters.name}%`);
-                paramCount++;
+                query += ` AND name = $${paramCount++}`;
+                values.push(filters.name);
+            }
+
+            if (filters.search) {
+                query += ` AND name ILIKE $${paramCount++}`;
+                values.push(`%${filters.search}%`);
             }
 
             if (filters.price) {
-                if (filters.price.$gte !== undefined) {
-                    conditions.push(`price >= $${paramCount}`);
-                    queryParams.push(filters.price.$gte);
-                    paramCount++;
+                if (filters.price.$gte) {
+                    query += ` AND price >= $${paramCount++}`;
+                    values.push(filters.price.$gte);
                 }
-                if (filters.price.$lte !== undefined) {
-                    conditions.push(`price <= $${paramCount}`);
-                    queryParams.push(filters.price.$lte);
-                    paramCount++;
+                if (filters.price.$lte) {
+                    query += ` AND price <= $${paramCount++}`;
+                    values.push(filters.price.$lte);
                 }
             }
 
             if (filters.active !== undefined) {
-                conditions.push(`active = $${paramCount}`);
-                queryParams.push(filters.active);
-                paramCount++;
+                query += ` AND active = $${paramCount++}`;
+                values.push(filters.active);
             }
 
-            // Garante que page e limit são números
-            const parsedPage = parseInt(page) || 1;
-            const parsedLimit = parseInt(limit) || 10;
-            const offset = (parsedPage - 1) * parsedLimit;
+            // Adiciona paginação
+            query += ` LIMIT $${paramCount++} OFFSET $${paramCount++}`;
+            values.push(limit, offset);
 
-            // Query para buscar os dados
-            const query = `
-                SELECT item_id, code, name, description, price, active, created_at, updated_at
-                FROM ${this.tableName}
-                WHERE ${conditions.join(' AND ')}
-                ORDER BY item_id DESC
-                LIMIT $${paramCount} OFFSET $${paramCount + 1}
-            `;
+            const result = await client.query(query, values);
 
-            // Query para contar o total
-            const countQuery = `
-                SELECT COUNT(*) as total
-                FROM ${this.tableName}
-                WHERE ${conditions.join(' AND ')}
-            `;
-
-            // Executa as queries
-            const [data, countResult] = await Promise.all([
-                this.pool.query(query, [...queryParams, parsedLimit, offset]),
-                this.pool.query(countQuery, queryParams)
-            ]);
-
-            const total = parseInt(countResult.rows[0].total);
-            const totalPages = Math.ceil(total / parsedLimit);
+            const totalCount = result.rows[0]?.total_count || 0;
+            const totalPages = Math.ceil(totalCount / limit);
 
             return {
-                data: data.rows,
+                data: result.rows.map(row => {
+                    delete row.total_count;
+                    return row;
+                }),
                 pagination: {
-                    total,
+                    total: parseInt(totalCount),
                     totalPages,
-                    page: parsedPage,
-                    limit: parsedLimit
+                    currentPage: page,
+                    limit
                 }
             };
         } catch (error) {
-            logger.error('Erro ao buscar items', { error });
+            logger.error('Repository: Erro ao listar items', { error });
             throw error;
+        } finally {
+            client.release();
         }
     }
 

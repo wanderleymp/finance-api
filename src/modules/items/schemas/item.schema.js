@@ -4,6 +4,7 @@ const ItemSchema = {
     findAll: Joi.object({
         code: Joi.string().max(50).optional(),
         name: Joi.string().max(255).optional(),
+        search: Joi.string().max(255).optional(),
         price: Joi.object({
             $gte: Joi.number().positive().optional(),
             $lte: Joi.number().positive().optional()
