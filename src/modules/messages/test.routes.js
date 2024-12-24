@@ -72,5 +72,27 @@ module.exports = () => {
         }
     });
 
+    router.post('/update-display-name', async (req, res) => {
+        try {
+            await emailProvider.updateUserDisplayName();
+            return res.json({
+                success: true,
+                message: 'Nome de exibição atualizado com sucesso!'
+            });
+        } catch (error) {
+            logger.error('Erro ao atualizar nome de exibição', {
+                error: error.message,
+                stack: error.stack,
+                code: error.code,
+                statusCode: error.statusCode
+            });
+
+            return res.status(500).json({
+                error: 'Erro ao atualizar nome de exibição',
+                details: error.message
+            });
+        }
+    });
+
     return router;
 };

@@ -8,10 +8,12 @@ class MicrosoftGraphProvider {
             this.clientId = process.env.MICROSOFT_CLIENT_ID;
             this.clientSecret = process.env.MICROSOFT_CLIENT_SECRET;
             this.tenantId = process.env.MICROSOFT_TENANT_ID;
+            this.userEmail = process.env.MICROSOFT_EMAIL_USER;
             this.fromEmail = process.env.MICROSOFT_EMAIL_FROM;
+            this.fromName = process.env.MICROSOFT_EMAIL_FROM_NAME || 'Agile Gestão - Financeiro';
 
-            if (!this.clientId || !this.clientSecret || !this.tenantId || !this.fromEmail) {
-                throw new Error('Configurações do Microsoft Graph incompletas. Verifique as variáveis de ambiente: MICROSOFT_CLIENT_ID, MICROSOFT_CLIENT_SECRET, MICROSOFT_TENANT_ID, MICROSOFT_EMAIL_FROM');
+            if (!this.clientId || !this.clientSecret || !this.tenantId || !this.userEmail || !this.fromEmail) {
+                throw new Error('Configurações do Microsoft Graph incompletas. Verifique as variáveis de ambiente: MICROSOFT_CLIENT_ID, MICROSOFT_CLIENT_SECRET, MICROSOFT_TENANT_ID, MICROSOFT_EMAIL_USER, MICROSOFT_EMAIL_FROM');
             }
 
             this.initializeClient();
@@ -52,7 +54,9 @@ class MicrosoftGraphProvider {
             });
 
             logger.info('Microsoft Graph client inicializado com sucesso', {
-                fromEmail: this.fromEmail
+                userEmail: this.userEmail,
+                fromEmail: this.fromEmail,
+                fromName: this.fromName
             });
         } catch (error) {
             logger.error('Erro ao inicializar Microsoft Graph client', { 
@@ -71,30 +75,34 @@ class MicrosoftGraphProvider {
             if (!content) throw new Error('O campo "content" é obrigatório');
 
             const message = {
-                message: {
-                    subject,
-                    body: {
-                        contentType: 'HTML',
-                        content: this.formatHtmlContent(content)
-                    },
-                    toRecipients: [{
-                        emailAddress: {
-                            address: to
-                        }
-                    }],
-                    from: {
-                        emailAddress: {
-                            address: this.fromEmail
-                        }
-                    }
+                subject,
+                body: {
+                    contentType: "HTML",
+                    content: this.formatHtmlContent(content)
                 },
-                saveToSentItems: true
+                toRecipients: [{
+                    emailAddress: {
+                        address: to
+                    }
+                }],
+                from: {
+                    emailAddress: {
+                        address: this.fromEmail,
+                        name: this.fromName
+                    }
+                }
             };
 
-            await this.client.api(`/users/${this.fromEmail}/sendMail`)
-                .post(message);
+            // Usando o endpoint do usuário que tem acesso à caixa compartilhada
+            await this.client.api(`/users/${this.userEmail}/sendMail`)
+                .post({
+                    message,
+                    saveToSentItems: true
+                });
 
             logger.info('Email enviado com sucesso', { 
+                userEmail: this.userEmail,
+                fromEmail: this.fromEmail,
                 to, 
                 subject,
                 metadata,
@@ -108,6 +116,8 @@ class MicrosoftGraphProvider {
                 stack: error.stack,
                 code: error.code,
                 statusCode: error.statusCode,
+                userEmail: this.userEmail,
+                fromEmail: this.fromEmail,
                 to, 
                 subject,
                 metadata 
