@@ -78,16 +78,47 @@ class ChatService {
             
             // Cria task específica para mensagem de faturamento
             await this.taskService.createTask({
-                type: 'BILLING_MESSAGE',
+                type: 'EMAIL',
                 priority: 'high',
                 payload: {
-                    personId,
-                    chatId: chat.chat_id,
-                    billingData
+                    to: billingData.email,
+                    subject: `Fatura #${billingData.invoiceNumber}`,
+                    content: `Olá ${billingData.personName},
+
+Sua fatura #${billingData.invoiceNumber} foi gerada:
+
+Valor: ${billingData.amount}
+Vencimento: ${billingData.dueDate}
+Documento: ${billingData.documentNumber}
+
+Para pagar agora, acesse: ${billingData.paymentLink}
+
+Caso já tenha efetuado o pagamento, por favor desconsidere esta mensagem.
+
+Atenciosamente,
+Equipe Financeiro`,
+                    metadata: {
+                        type: 'BILLING',
+                        chatId: chat.chat_id,
+                        invoiceNumber: billingData.invoiceNumber
+                    }
                 }
             });
 
-            logger.info('Task de mensagem de faturamento criada', { 
+            // Registra a mensagem no chat
+            await this.chatRepository.createMessage(
+                chat.chat_id,
+                'OUTBOUND',
+                `Fatura #${billingData.invoiceNumber} enviada por email`,
+                {
+                    type: 'BILLING',
+                    invoiceNumber: billingData.invoiceNumber,
+                    amount: billingData.amount,
+                    dueDate: billingData.dueDate
+                }
+            );
+
+            logger.info('Task de email de faturamento criada', { 
                 personId, 
                 chatId: chat.chat_id,
                 invoiceNumber: billingData.invoiceNumber 
