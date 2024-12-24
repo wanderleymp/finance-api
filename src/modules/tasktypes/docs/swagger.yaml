@@ -1,0 +1,226 @@
+openapi: 3.0.0
+tags:
+  - name: TaskTypes
+    description: Operações relacionadas a TaskTypes
+
+paths:
+  /tasktypess:
+    get:
+      tags:
+        - TaskTypes
+      summary: Lista todos os tasktypess
+      description: Retorna uma lista paginada de tasktypess
+      parameters:
+        - in: query
+          name: page
+          schema:
+            type: integer
+            default: 1
+          description: Número da página
+        - in: query
+          name: limit
+          schema:
+            type: integer
+            default: 10
+          description: Itens por página
+      responses:
+        '200':
+          description: Lista de tasktypess
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/TaskTypes'
+                  pagination:
+                    type: object
+                    properties:
+                      total: 
+                        type: integer
+                      page:
+                        type: integer
+                      limit:
+                        type: integer
+        '401':
+          description: Não autorizado
+        '500':
+          description: Erro interno do servidor
+    
+    post:
+      tags:
+        - TaskTypes
+      summary: Cria um novo tasktypes
+      description: Cria um novo tasktypes com os dados fornecidos
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateTaskTypes'
+      responses:
+        '201':
+          description: TaskTypes criado com sucesso
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TaskTypes'
+        '400':
+          description: Dados inválidos
+        '401':
+          description: Não autorizado
+        '500':
+          description: Erro interno do servidor
+
+  /tasktypess/{id}:
+    get:
+      tags:
+        - TaskTypes
+      summary: Busca um tasktypes por ID
+      description: Retorna um único tasktypes pelo ID
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: integer
+          description: ID do tasktypes
+      responses:
+        '200':
+          description: TaskTypes encontrado
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TaskTypes'
+        '404':
+          description: TaskTypes não encontrado
+        '401':
+          description: Não autorizado
+        '500':
+          description: Erro interno do servidor
+
+    put:
+      tags:
+        - TaskTypes
+      summary: Atualiza um tasktypes
+      description: Atualiza um tasktypes existente pelo ID
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: integer
+          description: ID do tasktypes
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdateTaskTypes'
+      responses:
+        '200':
+          description: TaskTypes atualizado com sucesso
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TaskTypes'
+        '400':
+          description: Dados inválidos
+        '404':
+          description: TaskTypes não encontrado
+        '401':
+          description: Não autorizado
+        '500':
+          description: Erro interno do servidor
+
+    delete:
+      tags:
+        - TaskTypes
+      summary: Remove um tasktypes
+      description: Remove um tasktypes existente pelo ID
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: integer
+          description: ID do tasktypes
+      responses:
+        '204':
+          description: TaskTypes removido com sucesso
+        '404':
+          description: TaskTypes não encontrado
+        '401':
+          description: Não autorizado
+        '500':
+          description: Erro interno do servidor
+
+  /tasktypess/refresh:
+    post:
+      tags:
+        - TaskTypes
+      summary: Atualiza o token de acesso
+      description: Gera um novo token de acesso usando o refresh token
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                refreshToken:
+                  type: string
+                  description: Refresh token válido
+              required:
+                - refreshToken
+      responses:
+        '200':
+          description: Novo token gerado com sucesso
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  accessToken:
+                    type: string
+                    description: Novo token de acesso
+                  refreshToken:
+                    type: string
+                    description: Novo refresh token
+                  expiresIn:
+                    type: integer
+                    description: Tempo de expiração em segundos
+        '401':
+          description: Refresh token inválido ou expirado
+        '500':
+          description: Erro interno do servidor
+
+components:
+  schemas:
+    TaskTypes:
+      type: object
+      properties:
+        id:
+          type: integer
+          description: ID único do tasktypes
+        # TODO: Adicionar outras propriedades
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+
+    CreateTaskTypes:
+      type: object
+      properties:
+        # TODO: Adicionar propriedades necessárias para criação
+      required:
+        # TODO: Adicionar campos obrigatórios
+
+    UpdateTaskTypes:
+      type: object
+      properties:
+        # TODO: Adicionar propriedades que podem ser atualizadas

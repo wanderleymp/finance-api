@@ -1,24 +1,23 @@
+const TaskDependenciesService = require('./taskdependencies.service');
+const taskDependenciesSchema = require('./schemas/taskdependencies.schema');
 const { logger } = require('../../middlewares/logger');
+const { validateSchema } = require('../../utils/validateSchema');
 
-class TaskController {
-    constructor(taskService) {
-        this.service = taskService;
+class TaskDependenciesController {
+    constructor(taskDependenciesService) {
+        this.service = taskDependenciesService;
     }
 
     async create(req, res) {
         try {
-            const result = await this.service.create(req.body);
+            const validatedData = await validateSchema(taskDependenciesSchema.create, req.body);
+            const result = await this.service.create(validatedData);
             return res.status(201).json(result);
         } catch (error) {
-            logger.error('Erro ao criar task', {
+            logger.error('Erro ao criar dependência de task', {
                 error: error.message,
                 body: req.body
             });
-
-            if (error.message.includes('circular')) {
-                return res.status(400).json({ error: error.message });
-            }
-
             return res.status(500).json({ error: 'Erro interno do servidor' });
         }
     }
@@ -33,7 +32,7 @@ class TaskController {
             );
             return res.json(result);
         } catch (error) {
-            logger.error('Erro ao listar tasks', {
+            logger.error('Erro ao listar dependências de task', {
                 error: error.message,
                 query: req.query
             });
@@ -44,84 +43,78 @@ class TaskController {
     async findById(req, res) {
         try {
             const result = await this.service.findById(req.params.id);
+            if (!result) {
+                return res.status(404).json({ error: 'Dependência de task não encontrada' });
+            }
             return res.json(result);
         } catch (error) {
-            logger.error('Erro ao buscar task', {
+            logger.error('Erro ao buscar dependência de task', {
                 error: error.message,
                 id: req.params.id
             });
-            if (error.message.includes('não encontrada')) {
-                return res.status(404).json({ error: error.message });
-            }
             return res.status(500).json({ error: 'Erro interno do servidor' });
         }
     }
 
     async update(req, res) {
         try {
-            const result = await this.service.update(req.params.id, req.body);
+            const validatedData = await validateSchema(taskDependenciesSchema.update, req.body);
+            const result = await this.service.update(req.params.id, validatedData);
+            if (!result) {
+                return res.status(404).json({ error: 'Dependência de task não encontrada' });
+            }
             return res.json(result);
         } catch (error) {
-            logger.error('Erro ao atualizar task', {
+            logger.error('Erro ao atualizar dependência de task', {
                 error: error.message,
                 id: req.params.id,
                 body: req.body
             });
-            if (error.message.includes('não encontrada')) {
-                return res.status(404).json({ error: error.message });
-            }
             return res.status(500).json({ error: 'Erro interno do servidor' });
         }
     }
 
     async delete(req, res) {
         try {
-            await this.service.delete(req.params.id);
+            const result = await this.service.delete(req.params.id);
+            if (!result) {
+                return res.status(404).json({ error: 'Dependência de task não encontrada' });
+            }
             return res.status(204).send();
         } catch (error) {
-            logger.error('Erro ao deletar task', {
+            logger.error('Erro ao deletar dependência de task', {
                 error: error.message,
                 id: req.params.id
             });
-            if (error.message.includes('não encontrada')) {
-                return res.status(404).json({ error: error.message });
-            }
-            if (error.message.includes('dependem')) {
-                return res.status(400).json({ error: error.message });
-            }
             return res.status(500).json({ error: 'Erro interno do servidor' });
         }
     }
 
-    async findPendingTasks(req, res) {
+    async findByTaskId(req, res) {
         try {
-            const { limit = 10 } = req.query;
-            const result = await this.service.findPendingTasks(parseInt(limit));
+            const result = await this.service.findByTaskId(req.params.taskId);
             return res.json(result);
         } catch (error) {
-            logger.error('Erro ao buscar tasks pendentes', {
+            logger.error('Erro ao buscar dependências da task', {
                 error: error.message,
-                query: req.query
+                taskId: req.params.taskId
             });
             return res.status(500).json({ error: 'Erro interno do servidor' });
         }
     }
 
-    async processTask(req, res) {
+    async findDependentTasks(req, res) {
         try {
-            await this.service.processTask(req.params.id);
-            return res.status(200).json({ message: 'Task processada com sucesso' });
+            const result = await this.service.findDependentTasks(req.params.taskId);
+            return res.json(result);
         } catch (error) {
-            logger.error('Erro ao processar task', {
+            logger.error('Erro ao buscar tasks dependentes', {
                 error: error.message,
-                id: req.params.id
+                taskId: req.params.taskId
             });
-            if (error.message.includes('não encontrada')) {
-                return res.status(404).json({ error: error.message });
-            }
             return res.status(500).json({ error: 'Erro interno do servidor' });
         }
     }
 }
 
-module.exports = TaskController;
+module.exports = TaskDependenciesController;

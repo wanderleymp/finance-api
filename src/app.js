@@ -24,6 +24,11 @@ const MovementItemModule = require('./modules/movement-items/movement-item.modul
 const InstallmentModule = require('./modules/installments/installment.module');
 const taskModule = require('./modules/tasks/task.module');
 
+// Importando módulos auxiliares de tasks
+const taskTypesModule = require('./modules/tasktypes/tasktypes.module');
+const taskDependenciesModule = require('./modules/taskdependencies/taskdependencies.module');
+const taskLogsModule = require('./modules/tasklogs/tasklogs.module');
+
 const app = express();
 
 // Middleware de logging para todas as requisições
@@ -80,7 +85,6 @@ ContactModule.register(app);
 PersonContactModule.registerRoutes(app);
 PersonDocumentModule.register(app);
 PersonModule.register(app);
-taskModule.register(app);
 ItemModule.register(app);
 
 // Registra o módulo de itens de movimentação
@@ -90,6 +94,12 @@ app.use('/movement-items', movementItemModule.getRouter());
 // Registra o módulo de parcelas
 const installmentModule = require('./modules/installments/installment.module');
 installmentModule.register(app);
+
+// Registra o módulo de tasks e seus auxiliares
+taskModule.register(app);
+taskTypesModule.register(app);
+taskDependenciesModule.register(app);
+taskLogsModule.register(app);
 
 // Rota 404 para capturar requisições não encontradas
 app.use((req, res, next) => {

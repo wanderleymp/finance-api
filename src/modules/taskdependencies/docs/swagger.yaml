@@ -1,0 +1,226 @@
+openapi: 3.0.0
+tags:
+  - name: TaskDependencies
+    description: Operações relacionadas a TaskDependencies
+
+paths:
+  /taskdependenciess:
+    get:
+      tags:
+        - TaskDependencies
+      summary: Lista todos os taskdependenciess
+      description: Retorna uma lista paginada de taskdependenciess
+      parameters:
+        - in: query
+          name: page
+          schema:
+            type: integer
+            default: 1
+          description: Número da página
+        - in: query
+          name: limit
+          schema:
+            type: integer
+            default: 10
+          description: Itens por página
+      responses:
+        '200':
+          description: Lista de taskdependenciess
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/TaskDependencies'
+                  pagination:
+                    type: object
+                    properties:
+                      total: 
+                        type: integer
+                      page:
+                        type: integer
+                      limit:
+                        type: integer
+        '401':
+          description: Não autorizado
+        '500':
+          description: Erro interno do servidor
+    
+    post:
+      tags:
+        - TaskDependencies
+      summary: Cria um novo taskdependencies
+      description: Cria um novo taskdependencies com os dados fornecidos
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateTaskDependencies'
+      responses:
+        '201':
+          description: TaskDependencies criado com sucesso
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TaskDependencies'
+        '400':
+          description: Dados inválidos
+        '401':
+          description: Não autorizado
+        '500':
+          description: Erro interno do servidor
+
+  /taskdependenciess/{id}:
+    get:
+      tags:
+        - TaskDependencies
+      summary: Busca um taskdependencies por ID
+      description: Retorna um único taskdependencies pelo ID
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: integer
+          description: ID do taskdependencies
+      responses:
+        '200':
+          description: TaskDependencies encontrado
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TaskDependencies'
+        '404':
+          description: TaskDependencies não encontrado
+        '401':
+          description: Não autorizado
+        '500':
+          description: Erro interno do servidor
+
+    put:
+      tags:
+        - TaskDependencies
+      summary: Atualiza um taskdependencies
+      description: Atualiza um taskdependencies existente pelo ID
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: integer
+          description: ID do taskdependencies
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdateTaskDependencies'
+      responses:
+        '200':
+          description: TaskDependencies atualizado com sucesso
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TaskDependencies'
+        '400':
+          description: Dados inválidos
+        '404':
+          description: TaskDependencies não encontrado
+        '401':
+          description: Não autorizado
+        '500':
+          description: Erro interno do servidor
+
+    delete:
+      tags:
+        - TaskDependencies
+      summary: Remove um taskdependencies
+      description: Remove um taskdependencies existente pelo ID
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: integer
+          description: ID do taskdependencies
+      responses:
+        '204':
+          description: TaskDependencies removido com sucesso
+        '404':
+          description: TaskDependencies não encontrado
+        '401':
+          description: Não autorizado
+        '500':
+          description: Erro interno do servidor
+
+  /taskdependenciess/refresh:
+    post:
+      tags:
+        - TaskDependencies
+      summary: Atualiza o token de acesso
+      description: Gera um novo token de acesso usando o refresh token
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                refreshToken:
+                  type: string
+                  description: Refresh token válido
+              required:
+                - refreshToken
+      responses:
+        '200':
+          description: Novo token gerado com sucesso
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  accessToken:
+                    type: string
+                    description: Novo token de acesso
+                  refreshToken:
+                    type: string
+                    description: Novo refresh token
+                  expiresIn:
+                    type: integer
+                    description: Tempo de expiração em segundos
+        '401':
+          description: Refresh token inválido ou expirado
+        '500':
+          description: Erro interno do servidor
+
+components:
+  schemas:
+    TaskDependencies:
+      type: object
+      properties:
+        id:
+          type: integer
+          description: ID único do taskdependencies
+        # TODO: Adicionar outras propriedades
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+
+    CreateTaskDependencies:
+      type: object
+      properties:
+        # TODO: Adicionar propriedades necessárias para criação
+      required:
+        # TODO: Adicionar campos obrigatórios
+
+    UpdateTaskDependencies:
+      type: object
+      properties:
+        # TODO: Adicionar propriedades que podem ser atualizadas

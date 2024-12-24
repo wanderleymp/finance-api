@@ -1,0 +1,226 @@
+openapi: 3.0.0
+tags:
+  - name: TaskLogs
+    description: Operações relacionadas a TaskLogs
+
+paths:
+  /tasklogss:
+    get:
+      tags:
+        - TaskLogs
+      summary: Lista todos os tasklogss
+      description: Retorna uma lista paginada de tasklogss
+      parameters:
+        - in: query
+          name: page
+          schema:
+            type: integer
+            default: 1
+          description: Número da página
+        - in: query
+          name: limit
+          schema:
+            type: integer
+            default: 10
+          description: Itens por página
+      responses:
+        '200':
+          description: Lista de tasklogss
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/TaskLogs'
+                  pagination:
+                    type: object
+                    properties:
+                      total: 
+                        type: integer
+                      page:
+                        type: integer
+                      limit:
+                        type: integer
+        '401':
+          description: Não autorizado
+        '500':
+          description: Erro interno do servidor
+    
+    post:
+      tags:
+        - TaskLogs
+      summary: Cria um novo tasklogs
+      description: Cria um novo tasklogs com os dados fornecidos
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateTaskLogs'
+      responses:
+        '201':
+          description: TaskLogs criado com sucesso
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TaskLogs'
+        '400':
+          description: Dados inválidos
+        '401':
+          description: Não autorizado
+        '500':
+          description: Erro interno do servidor
+
+  /tasklogss/{id}:
+    get:
+      tags:
+        - TaskLogs
+      summary: Busca um tasklogs por ID
+      description: Retorna um único tasklogs pelo ID
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: integer
+          description: ID do tasklogs
+      responses:
+        '200':
+          description: TaskLogs encontrado
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TaskLogs'
+        '404':
+          description: TaskLogs não encontrado
+        '401':
+          description: Não autorizado
+        '500':
+          description: Erro interno do servidor
+
+    put:
+      tags:
+        - TaskLogs
+      summary: Atualiza um tasklogs
+      description: Atualiza um tasklogs existente pelo ID
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: integer
+          description: ID do tasklogs
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdateTaskLogs'
+      responses:
+        '200':
+          description: TaskLogs atualizado com sucesso
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TaskLogs'
+        '400':
+          description: Dados inválidos
+        '404':
+          description: TaskLogs não encontrado
+        '401':
+          description: Não autorizado
+        '500':
+          description: Erro interno do servidor
+
+    delete:
+      tags:
+        - TaskLogs
+      summary: Remove um tasklogs
+      description: Remove um tasklogs existente pelo ID
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: integer
+          description: ID do tasklogs
+      responses:
+        '204':
+          description: TaskLogs removido com sucesso
+        '404':
+          description: TaskLogs não encontrado
+        '401':
+          description: Não autorizado
+        '500':
+          description: Erro interno do servidor
+
+  /tasklogss/refresh:
+    post:
+      tags:
+        - TaskLogs
+      summary: Atualiza o token de acesso
+      description: Gera um novo token de acesso usando o refresh token
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                refreshToken:
+                  type: string
+                  description: Refresh token válido
+              required:
+                - refreshToken
+      responses:
+        '200':
+          description: Novo token gerado com sucesso
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  accessToken:
+                    type: string
+                    description: Novo token de acesso
+                  refreshToken:
+                    type: string
+                    description: Novo refresh token
+                  expiresIn:
+                    type: integer
+                    description: Tempo de expiração em segundos
+        '401':
+          description: Refresh token inválido ou expirado
+        '500':
+          description: Erro interno do servidor
+
+components:
+  schemas:
+    TaskLogs:
+      type: object
+      properties:
+        id:
+          type: integer
+          description: ID único do tasklogs
+        # TODO: Adicionar outras propriedades
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+
+    CreateTaskLogs:
+      type: object
+      properties:
+        # TODO: Adicionar propriedades necessárias para criação
+      required:
+        # TODO: Adicionar campos obrigatórios
+
+    UpdateTaskLogs:
+      type: object
+      properties:
+        # TODO: Adicionar propriedades que podem ser atualizadas
