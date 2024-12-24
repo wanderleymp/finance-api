@@ -19,7 +19,7 @@ class PersonDocumentRepository {
                 whereClause = 'WHERE ' + Object.entries(filters)
                     .map(([key, value]) => {
                         values.push(value);
-                        return `pd.${key} = $${paramCount++}`;
+                        return `${this.table}.${key} = $${paramCount++}`;
                     })
                     .join(' AND ');
             }
@@ -27,17 +27,17 @@ class PersonDocumentRepository {
             // Query para contar o total de registros
             const countQuery = `
                 SELECT COUNT(*) as total
-                FROM ${this.table} pd
+                FROM ${this.table}
                 ${whereClause}
             `;
 
             // Query principal com paginação
             const query = `
-                SELECT pd.*, p.full_name as person_name
-                FROM ${this.table} pd
-                LEFT JOIN persons p ON p.person_id = pd.person_id
+                SELECT ${this.table}.*, p.full_name as person_name
+                FROM ${this.table}
+                LEFT JOIN persons p ON p.person_id = ${this.table}.person_id
                 ${whereClause}
-                ORDER BY pd.person_document_id DESC
+                ORDER BY ${this.table}.person_document_id DESC
                 LIMIT $${paramCount++} OFFSET $${paramCount}
             `;
 
@@ -65,10 +65,10 @@ class PersonDocumentRepository {
     async findById(id) {
         try {
             const query = `
-                SELECT pd.*, p.full_name as person_name
-                FROM ${this.table} pd
-                LEFT JOIN persons p ON p.person_id = pd.person_id
-                WHERE pd.person_document_id = $1
+                SELECT ${this.table}.*, p.full_name as person_name
+                FROM ${this.table}
+                LEFT JOIN persons p ON p.person_id = ${this.table}.person_id
+                WHERE ${this.table}.person_document_id = $1
             `;
 
             const result = await this.pool.query(query, [id]);
@@ -92,11 +92,11 @@ class PersonDocumentRepository {
 
             // Query principal com paginação
             const query = `
-                SELECT pd.*, p.full_name as person_name
-                FROM ${this.table} pd
-                LEFT JOIN persons p ON p.person_id = pd.person_id
-                WHERE pd.person_id = $1
-                ORDER BY pd.person_document_id DESC
+                SELECT ${this.table}.*, p.full_name as person_name
+                FROM ${this.table}
+                LEFT JOIN persons p ON p.person_id = ${this.table}.person_id
+                WHERE ${this.table}.person_id = $1
+                ORDER BY ${this.table}.person_document_id DESC
                 LIMIT $2 OFFSET $3
             `;
 
@@ -122,10 +122,10 @@ class PersonDocumentRepository {
     async findByTypeAndPerson(type, personId) {
         try {
             const query = `
-                SELECT pd.*, p.full_name as person_name
-                FROM ${this.table} pd
-                LEFT JOIN persons p ON p.person_id = pd.person_id
-                WHERE pd.document_type = $1 AND pd.person_id = $2
+                SELECT ${this.table}.*, p.full_name as person_name
+                FROM ${this.table}
+                LEFT JOIN persons p ON p.person_id = ${this.table}.person_id
+                WHERE ${this.table}.document_type = $1 AND ${this.table}.person_id = $2
             `;
 
             const result = await this.pool.query(query, [type, personId]);
@@ -161,13 +161,13 @@ class PersonDocumentRepository {
             const columns = Object.keys(data);
             const values = Object.values(data);
             const setClause = columns
-                .map((col, i) => `${col} = $${i + 1}`)
+                .map((col, i) => `${this.table}.${col} = $${i + 1}`)
                 .join(', ');
 
             const query = `
                 UPDATE ${this.table}
                 SET ${setClause}
-                WHERE person_document_id = $${values.length + 1}
+                WHERE ${this.table}.person_document_id = $${values.length + 1}
                 RETURNING *
             `;
 
@@ -183,7 +183,7 @@ class PersonDocumentRepository {
         try {
             const query = `
                 DELETE FROM ${this.table}
-                WHERE person_document_id = $1
+                WHERE ${this.table}.person_document_id = $1
                 RETURNING *
             `;
 

@@ -90,7 +90,7 @@ class PersonService {
 
     async findById(id) {
         try {
-            const cacheKey = `person:${id}`;
+            const cacheKey = `person:details:${id}`;
             
             // Tenta buscar do cache
             const cachedPerson = await this.cacheService.get(cacheKey);
@@ -99,22 +99,25 @@ class PersonService {
                 return cachedPerson;
             }
 
+            // Se não estiver no cache, busca do banco
             const person = await this.personRepository.findById(id);
-            
             if (!person) {
-                logger.warn('Pessoa não encontrada', { id });
                 return null;
             }
+
+            // Busca os endereços da pessoa
+            const addressService = new AddressService();
+            const addresses = await addressService.findByPersonId(person.id);
+
+            // Adiciona os endereços à pessoa
+            person.addresses = addresses;
 
             // Salva no cache
             await this.cacheService.set(cacheKey, person, 3600); // 1 hora
 
             return person;
         } catch (error) {
-            logger.error('Erro ao buscar pessoa por ID', {
-                error: error.message,
-                id
-            });
+            logger.error('Erro ao buscar pessoa por ID', { error: error.message, id });
             throw error;
         }
     }
@@ -441,11 +444,7 @@ class PersonService {
                 throw new Error('Pessoa não encontrada');
             }
 
-            // Valida dados do endereço
-            if (!addressData.street || !addressData.number || !addressData.city || !addressData.state || !addressData.zip_code) {
-                throw new Error('Dados de endereço incompletos');
-            }
-
+            // Adiciona o endereço
             const newAddress = await this.personRepository.addAddress(personId, addressData);
 
             // Limpa cache de detalhes da pessoa
@@ -502,6 +501,36 @@ class PersonService {
                 error: error.message,
                 personId,
                 contactData
+            });
+            throw error;
+        }
+    }
+
+    async addDocument(personId, documentData) {
+        try {
+            // Verifica se a pessoa existe
+            const person = await this.findById(personId);
+            if (!person) {
+                throw new Error('Pessoa não encontrada');
+            }
+
+            // Adiciona o documento
+            const newDocument = await this.personRepository.addDocument(personId, documentData);
+
+            // Limpa cache de detalhes da pessoa
+            await this.cacheService.del(`person:details:${personId}`);
+
+            logger.info('Documento adicionado à pessoa', { 
+                personId, 
+                documentId: newDocument.id 
+            });
+
+            return newDocument;
+        } catch (error) {
+            logger.error('Erro ao adicionar documento à pessoa', {
+                error: error.message,
+                personId,
+                documentData
             });
             throw error;
         }
@@ -575,39 +604,85 @@ class PersonService {
             const cnpjData = await CnpjService.findByCnpj(cnpj);
             logger.info('Service: Dados do CNPJ obtidos', { cnpjData });
 
+            // Busca pessoa existente pelo CNPJ usando o serviço de documentos
+            const PersonDocumentService = require('../person-documents/person-document.service');
+            const personDocumentService = new PersonDocumentService();
+
+            // Busca por CNPJ
+            let existingPerson;
+            const existingDocument = await personDocumentService.findByDocumentValue('CNPJ', cnpjData.cnpj);
+            if (existingDocument) {
+                // Busca direto do banco, sem cache
+                existingPerson = await this.personRepository.findById(existingDocument.person_id);
+            } else {
+                // Se não encontrou por CNPJ, busca por razão social direto do banco
+                const personsByName = await this.personRepository.findAll({ full_name: cnpjData.razao_social });
+                if (personsByName?.data?.length) {
+                    existingPerson = personsByName.data[0];
+                }
+            }
+
             // Prepara os dados da pessoa
             const personData = {
                 full_name: cnpjData.razao_social,
                 fantasy_name: cnpjData.fantasia || '',
                 person_type: 'PJ',
-                document_type: 'CNPJ',
-                document_value: cnpjData.cnpj,
-                email: cnpjData.email,
-                phone: cnpjData.telefone,
-                address: {
-                    street: cnpjData.endereco.logradouro,
-                    number: cnpjData.endereco.numero,
-                    complement: cnpjData.endereco.complemento,
-                    district: cnpjData.endereco.bairro,
-                    city: cnpjData.endereco.cidade,
-                    state: cnpjData.endereco.estado,
-                    zip_code: cnpjData.endereco.cep,
-                    ibge_code: cnpjData.endereco.ibge
-                }
+                birth_date: cnpjData.data_abertura
             };
 
-            // Busca pessoa existente pelo CNPJ
-            const existingPerson = await this.findByCnpj(cnpjData.cnpj);
-
+            let person;
             if (existingPerson) {
                 logger.info('Service: Atualizando pessoa existente', { 
-                    person_id: existingPerson.person_id 
+                    person_id: existingPerson.id 
                 });
-                return await this.update(existingPerson.person_id, personData);
+                // Atualiza direto no banco
+                person = await this.personRepository.update(existingPerson.id, personData);
+                
+                // Adiciona o documento CNPJ se não existir
+                if (!existingDocument) {
+                    logger.info('Service: Adicionando documento CNPJ à pessoa existente', { 
+                        person_id: person.id,
+                        cnpj: cnpjData.cnpj
+                    });
+                    await personDocumentService.create(person.id, {
+                        document_type: 'CNPJ',
+                        document_value: cnpjData.cnpj
+                    });
+                }
+            } else {
+                logger.info('Service: Criando nova pessoa');
+                // Cria direto no banco
+                person = await this.personRepository.create(personData);
+
+                // Adiciona o documento para nova pessoa
+                logger.info('Service: Adicionando documento CNPJ à nova pessoa', { 
+                    person_id: person.id,
+                    cnpj: cnpjData.cnpj
+                });
+                await personDocumentService.create(person.id, {
+                    document_type: 'CNPJ',
+                    document_value: cnpjData.cnpj
+                });
             }
 
-            logger.info('Service: Criando nova pessoa');
-            return await this.create(personData);
+            // Adiciona o endereço
+            const addressData = {
+                person_id: person.id,
+                street: cnpjData.endereco.logradouro,
+                number: cnpjData.endereco.numero,
+                complement: cnpjData.endereco.complemento,
+                neighborhood: cnpjData.endereco.bairro,
+                city: cnpjData.endereco.cidade,
+                state: cnpjData.endereco.estado,
+                postal_code: cnpjData.endereco.cep,
+                country: 'Brasil',
+                reference: null,
+                ibge: cnpjData.endereco.ibge
+            };
+
+            await this.addAddress(person.id, addressData);
+
+            return person;
         } catch (error) {
             logger.error('Service: Erro ao criar/atualizar pessoa por CNPJ', { 
                 cnpj, 

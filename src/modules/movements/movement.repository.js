@@ -34,6 +34,12 @@ class MovementRepository extends BaseRepository {
                 paramCount++;
             }
 
+            if (filters.movement_type_id) {
+                conditions.push(`m.movement_type_id = $${paramCount}`);
+                queryParams.push(filters.movement_type_id);
+                paramCount++;
+            }
+
             if (filters.start_date) {
                 conditions.push(`m.movement_date >= $${paramCount}`);
                 queryParams.push(filters.start_date);

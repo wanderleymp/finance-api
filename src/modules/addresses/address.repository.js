@@ -4,7 +4,7 @@ const { logger } = require('../../middlewares/logger');
 
 class AddressRepository extends BaseRepository {
     constructor() {
-        super('person_addresses', 'address_id');
+        super('person_addresses', 'id');
     }
 
     async findAll(page = 1, limit = 10, filters = {}) {

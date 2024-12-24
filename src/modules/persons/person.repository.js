@@ -1,7 +1,7 @@
 const { systemDatabase } = require('../../config/database');
 const { logger } = require('../../middlewares/logger');
 const IPersonRepository = require('./interfaces/person-repository.interface');
-const { PersonResponseDTO } = require('./dto/person-response.dto');
+const { PersonResponseDTO, PersonDetailsResponseDTO } = require('./dto/person-response.dto');
 
 class PersonRepository extends IPersonRepository {
     constructor() {
@@ -332,38 +332,25 @@ class PersonRepository extends IPersonRepository {
      */
     async addAddress(personId, addressData) {
         try {
-            const query = `
-                INSERT INTO addresses (
-                    person_id, 
-                    street, 
-                    number, 
-                    complement, 
-                    neighborhood, 
-                    city, 
-                    state, 
-                    zip_code,
-                    is_main
-                ) VALUES (
-                    $1, $2, $3, $4, $5, $6, $7, $8, $9
-                ) RETURNING *
-            `;
+            logger.info('Repository: Adicionando endereço à pessoa', { personId, addressData });
 
-            const values = [
-                personId,
-                addressData.street,
-                addressData.number,
-                addressData.complement || null,
-                addressData.neighborhood,
-                addressData.city,
-                addressData.state,
-                addressData.zip_code,
-                addressData.is_main || false
-            ];
+            const AddressRepository = require('../addresses/address.repository');
+            const addressRepository = new AddressRepository();
 
-            const result = await this.pool.query(query, values);
-            return result.rows[0];
+            // Adiciona o person_id ao endereço
+            addressData.person_id = personId;
+
+            // Cria o endereço
+            const newAddress = await addressRepository.create(addressData);
+
+            logger.info('Repository: Endereço adicionado à pessoa', { 
+                personId, 
+                addressId: newAddress.id 
+            });
+
+            return newAddress;
         } catch (error) {
-            logger.error('Erro ao adicionar endereço à pessoa', {
+            logger.error('Repository: Erro ao adicionar endereço à pessoa', {
                 error: error.message,
                 personId,
                 addressData
@@ -405,6 +392,41 @@ class PersonRepository extends IPersonRepository {
                 error: error.message,
                 personId,
                 contactData
+            });
+            throw error;
+        }
+    }
+
+    /**
+     * Adiciona um documento a uma pessoa
+     * @param {number} personId - ID da pessoa
+     * @param {Object} documentData - Dados do documento
+     * @returns {Promise<Object>}
+     */
+    async addDocument(personId, documentData) {
+        try {
+            logger.info('Repository: Adicionando documento à pessoa', { personId, documentData });
+
+            const DocumentRepository = require('../documents/document.repository');
+            const documentRepository = new DocumentRepository();
+
+            // Adiciona o person_id ao documento
+            documentData.person_id = personId;
+
+            // Cria o documento
+            const newDocument = await documentRepository.create(documentData);
+
+            logger.info('Repository: Documento adicionado à pessoa', { 
+                personId, 
+                documentId: newDocument.id 
+            });
+
+            return newDocument;
+        } catch (error) {
+            logger.error('Repository: Erro ao adicionar documento à pessoa', {
+                error: error.message,
+                personId,
+                documentData
             });
             throw error;
         }

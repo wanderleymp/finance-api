@@ -134,47 +134,15 @@ class AddressService {
 
     async findByPersonId(personId) {
         try {
-            logger.debug('Service findByPersonId - params:', {
-                personId
-            });
+            logger.info('Service: Buscando endereços da pessoa', { personId });
 
-            const cacheKey = `person:${personId}:addresses`;
-            
-            // Tenta buscar do cache
-            try {
-                const cachedAddresses = await this.cacheService.get(cacheKey);
-                if (cachedAddresses) {
-                    logger.info('Retornando endereços da pessoa do cache', { cacheKey });
-                    return cachedAddresses;
-                }
-            } catch (cacheError) {
-                logger.warn('Falha ao buscar do cache', { 
-                    error: cacheError.message,
-                    cacheKey 
-                });
-            }
+            const addresses = await this.addressRepository.findAll(1, 100, { person_id: personId });
 
-            const addresses = await this.addressRepository.findByPersonId(personId);
-            
-            // Salva no cache
-            try {
-                await this.cacheService.set(cacheKey, addresses, 1800); // 30 minutos
-            } catch (cacheError) {
-                logger.warn('Falha ao salvar no cache', { 
-                    error: cacheError.message,
-                    cacheKey 
-                });
-            }
-
-            logger.debug('Service findByPersonId - result:', {
-                addresses
-            });
-
-            return addresses;
+            return addresses.data;
         } catch (error) {
-            logger.error('Erro ao buscar endereços da pessoa', {
-                error: error.message,
-                personId
+            logger.error('Service: Erro ao buscar endereços da pessoa', { 
+                error: error.message, 
+                personId 
             });
             throw error;
         }

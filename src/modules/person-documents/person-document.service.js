@@ -69,23 +69,51 @@ class PersonDocumentService {
         }
     }
 
+    async findByDocumentValue(type, value) {
+        try {
+            const documents = await this.findAll(1, 1, {
+                document_type: type,
+                document_value: value
+            });
+            return documents.data[0];
+        } catch (error) {
+            logger.error('Erro ao buscar documento por valor', { error, type, value });
+            throw error;
+        }
+    }
+
     async create(personId, documentData) {
         try {
+            logger.info('Service: Iniciando criação de documento', { personId, documentData });
+            
+            if (!personId) {
+                throw new ValidationError('ID da pessoa é obrigatório');
+            }
+
             const person = await this.personRepo.findById(personId);
             if (!person) {
                 throw new ValidationError('Pessoa não encontrada', 404);
             }
+            logger.info('Service: Pessoa encontrada', { person });
+
+            // Se recebeu o personId junto com documentData, remove
+            if (documentData.person_id) {
+                delete documentData.person_id;
+            }
 
             // Valida o número do documento
+            logger.info('Service: Validando documento', { type: documentData.document_type, value: documentData.document_value });
             if (!validateDocument(documentData.document_type, documentData.document_value)) {
                 throw new ValidationError('Número de documento inválido');
             }
+            logger.info('Service: Documento validado com sucesso');
 
             // Verifica se já existe um documento do mesmo tipo para a pessoa
             const existingDocument = await this.documentRepo.findByTypeAndPerson(
                 documentData.document_type,
                 personId
             );
+            logger.info('Service: Verificação de documento existente', { existingDocument });
 
             if (existingDocument) {
                 throw new ValidationError('Já existe um documento deste tipo para esta pessoa');
@@ -95,6 +123,7 @@ class PersonDocumentService {
                 ...documentData,
                 person_id: personId
             });
+            logger.info('Service: Documento criado com sucesso', { newDocument });
 
             // Invalida o cache de listagem
             await this.invalidateListCache(personId);
