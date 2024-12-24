@@ -29,8 +29,8 @@ class PersonContactService {
 
             // Converte para DTO
             const dtoResult = {
-                data: result.data.map(item => PersonContactResponseDTO.fromDatabase(item)),
-                pagination: result.pagination
+                items: result.items.map(item => PersonContactResponseDTO.fromDatabase(item)),
+                meta: result.meta
             };
 
             // Salva no cache por 5 minutos
@@ -96,8 +96,8 @@ class PersonContactService {
 
             // Converte para DTO
             const dtoResult = {
-                data: result.data.map(item => PersonContactResponseDTO.fromDatabase(item)),
-                pagination: result.pagination
+                items: result.items.map(item => PersonContactResponseDTO.fromDatabase(item)),
+                meta: result.meta
             };
 
             // Salva no cache por 1 hora

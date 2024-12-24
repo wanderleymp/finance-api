@@ -80,18 +80,17 @@ class BaseRepository {
             const totalPages = Math.ceil(totalItems / parsedLimit);
 
             const result = {
-                data: data.rows,
-                pagination: {
-                    page: parsedPage,
-                    limit: parsedLimit,
+                items: data.rows,
+                meta: {
                     totalItems,
-                    totalPages
+                    itemCount: data.rows.length,
+                    itemsPerPage: parsedLimit,
+                    totalPages,
+                    currentPage: parsedPage
                 }
             };
 
-            logger.debug('BaseRepository findAll - result:', {
-                result
-            });
+            logger.debug('BaseRepository findAll - result:', result);
 
             return result;
         } catch (error) {

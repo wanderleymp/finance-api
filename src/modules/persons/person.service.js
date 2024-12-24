@@ -56,9 +56,9 @@ class PersonService {
                     const { PersonDetailsResponseDTO } = require('./dto/person-response.dto');
                     return PersonDetailsResponseDTO.fromDatabase({
                         ...person,
-                        documents: documents.data,
-                        contacts: contacts.data,
-                        addresses: addresses.data
+                        documents: documents.items,
+                        contacts: contacts.items,
+                        addresses: addresses.items
                     });
                 })
             );
@@ -190,9 +190,9 @@ class PersonService {
             const { PersonDetailsResponseDTO } = require('./dto/person-response.dto');
             return PersonDetailsResponseDTO.fromDatabase({
                 ...person,
-                documents: documents.data,
-                contacts: contacts.data,
-                addresses: addresses.data
+                documents: documents.items,
+                contacts: contacts.items,
+                addresses: addresses.items
             });
         } catch (error) {
             logger.error('Erro ao buscar detalhes da pessoa', {
@@ -216,17 +216,7 @@ class PersonService {
             const documentService = new PersonDocumentService();
             
             const result = await documentService.findAll(1, 100, { person_id: personId });
-            
-            // Garante que o person_id está presente em cada documento
-            const documentsWithPersonId = result.data.map(doc => ({
-                ...doc,
-                person_id: personId
-            }));
-
-            return {
-                data: documentsWithPersonId,
-                meta: result.meta
-            };
+            return result;
         } catch (error) {
             logger.error('Erro ao buscar documentos da pessoa', {
                 error: error.message,
@@ -249,10 +239,7 @@ class PersonService {
             const contactService = new PersonContactService();
             
             const result = await contactService.findAll(1, 100, { person_id: personId });
-            return {
-                data: result.data,
-                meta: result.meta
-            };
+            return result;
         } catch (error) {
             logger.error('Erro ao buscar contatos da pessoa', {
                 error: error.message,
@@ -275,10 +262,7 @@ class PersonService {
             const addressService = new AddressService();
             
             const result = await addressService.findAll(1, 100, { person_id: personId });
-            return {
-                data: result.data,
-                meta: result.meta
-            };
+            return result;
         } catch (error) {
             logger.error('Erro ao buscar endereços da pessoa', {
                 error: error.message,
@@ -685,10 +669,10 @@ class PersonService {
 
                 // Adiciona o documento para nova pessoa
                 logger.info('Service: Adicionando documento CNPJ à nova pessoa', { 
-                    person_id: person.id,
+                    person_id: person.person_id,
                     cnpj: cnpjData.cnpj
                 });
-                const document = await personDocumentService.create(person.id, {
+                const document = await personDocumentService.create(person.person_id, {
                     document_type: 'CNPJ',
                     document_value: cnpjData.cnpj
                 });
@@ -711,12 +695,12 @@ class PersonService {
                 };
 
                 // Tenta adicionar o endereço, se já existir vai retornar o existente
-                const address = await this.addAddress(person.id, addressData);
+                const address = await this.addAddress(person.person_id, addressData);
                 logger.info('Service: Endereço adicionado/atualizado', { address });
             }
 
             // Limpa cache
-            await this.cacheService.del(`person:details:${person.id}`);
+            await this.cacheService.del(`person:details:${person.person_id}`);
 
             return person;
         } catch (error) {

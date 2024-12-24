@@ -29,41 +29,47 @@ class PersonContactRepository extends IPersonContactRepository {
             // Adiciona parâmetros de paginação
             queryParams.push(limit, offset);
 
+            // Query para buscar os dados
             const query = `
                 SELECT 
+                    pc.person_contact_id,
+                    pc.person_id,
                     pc.contact_id,
-                    pc.created_at,
                     c.contact_value,
                     c.contact_type,
                     c.contact_name
                 FROM ${this.tableName} pc
                 JOIN contacts c ON c.contact_id = pc.contact_id
                 ${whereClause}
-                ORDER BY pc.created_at DESC
+                ORDER BY pc.contact_id DESC
                 LIMIT $${paramCount} OFFSET $${paramCount + 1}
             `;
 
+            // Query para contar o total
             const countQuery = `
                 SELECT COUNT(*) as total
                 FROM ${this.tableName} pc
+                JOIN contacts c ON c.contact_id = pc.contact_id
                 ${whereClause}
             `;
 
-            // Para a query de contagem, usamos apenas os parâmetros do WHERE
-            const countParams = filters.person_id ? [filters.person_id] : [];
-
-            const [result, count] = await Promise.all([
-                this.pool.query(query, queryParams),
-                this.pool.query(countQuery, countParams)
+            // Executa as queries
+            const [data, countResult] = await Promise.all([
+                this.pool.query(query, [...queryParams]),
+                this.pool.query(countQuery, queryParams.slice(0, -2))
             ]);
 
+            const totalItems = parseInt(countResult.rows[0].total);
+            const totalPages = Math.ceil(totalItems / limit);
+
             return {
-                data: result.rows,
-                pagination: {
-                    total: parseInt(count.rows[0].total),
-                    page: parseInt(page),
-                    limit: parseInt(limit),
-                    pages: Math.ceil(parseInt(count.rows[0].total) / limit)
+                items: data.rows,
+                meta: {
+                    totalItems,
+                    itemCount: data.rows.length,
+                    itemsPerPage: limit,
+                    totalPages,
+                    currentPage: page
                 }
             };
         } catch (error) {

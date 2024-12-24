@@ -31,32 +31,35 @@ class PersonDocumentRepository {
                 ${whereClause}
             `;
 
-            // Query principal com paginação
+            // Query para buscar os dados
             const query = `
-                SELECT 
-                    ${this.table}.*,
-                    p.person_id,
-                    p.full_name as person_name
+                SELECT ${this.table}.*
                 FROM ${this.table}
-                LEFT JOIN persons p ON p.person_id = ${this.table}.person_id
                 ${whereClause}
-                ORDER BY ${this.table}.person_document_id DESC
-                LIMIT $${paramCount++} OFFSET $${paramCount}
+                ORDER BY person_document_id DESC
+                LIMIT $${paramCount++} OFFSET $${paramCount++}
             `;
 
+            // Adiciona parâmetros de paginação
             values.push(limit, offset);
 
-            const [countResult, dataResult] = await Promise.all([
-                this.pool.query(countQuery, values.slice(0, -2)),
-                this.pool.query(query, values)
+            // Executa as queries
+            const [data, countResult] = await Promise.all([
+                this.pool.query(query, values),
+                this.pool.query(countQuery, values.slice(0, -2)) // Remove os parâmetros de paginação
             ]);
 
+            const totalItems = parseInt(countResult.rows[0].total);
+            const totalPages = Math.ceil(totalItems / limit);
+
             return {
-                data: dataResult.rows,
-                pagination: {
-                    total: parseInt(countResult.rows[0].total),
-                    page: parseInt(page),
-                    limit: parseInt(limit)
+                items: data.rows,
+                meta: {
+                    totalItems,
+                    itemCount: data.rows.length,
+                    itemsPerPage: limit,
+                    totalPages,
+                    currentPage: page
                 }
             };
         } catch (error) {

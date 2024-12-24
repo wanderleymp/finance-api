@@ -138,7 +138,7 @@ class AddressService {
 
             const addresses = await this.addressRepository.findAll(1, 100, { person_id: personId });
 
-            return addresses.data;
+            return addresses.items;
         } catch (error) {
             logger.error('Service: Erro ao buscar endereços da pessoa', { 
                 error: error.message, 
