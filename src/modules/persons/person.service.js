@@ -18,24 +18,7 @@ class PersonService {
 
     async findAll(filters = {}, page = 1, limit = 10, order = {}) {
         try {
-            const cacheKey = `persons:list:${JSON.stringify(filters)}:page:${page}:limit:${limit}:order:${JSON.stringify(order)}`;
-            
-            // Tenta buscar do cache
-            const cachedPersons = await this.cacheService.get(cacheKey);
-            if (cachedPersons) {
-                logger.info('Retornando pessoas do cache', { cacheKey });
-                return cachedPersons;
-            }
-
-            // Se não estiver no cache, busca do banco
-            const result = await this.personRepository.findAll(filters, page, limit, order);
-
-            // Salva no cache
-            if (result && result.data) {
-                await this.cacheService.set(cacheKey, result, 3600); // 1 hora
-            }
-
-            return result;
+            return await this.personRepository.findAll(filters, page, limit, order);
         } catch (error) {
             logger.error('Erro ao listar pessoas', { error: error.message, page, limit, filters, order });
             throw error;
@@ -90,32 +73,7 @@ class PersonService {
 
     async findById(id) {
         try {
-            const cacheKey = `person:details:${id}`;
-            
-            // Tenta buscar do cache
-            const cachedPerson = await this.cacheService.get(cacheKey);
-            if (cachedPerson) {
-                logger.info('Retornando pessoa do cache', { cacheKey });
-                return cachedPerson;
-            }
-
-            // Se não estiver no cache, busca do banco
-            const person = await this.personRepository.findById(id);
-            if (!person) {
-                return null;
-            }
-
-            // Busca os endereços da pessoa
-            const addressService = new AddressService();
-            const addresses = await addressService.findByPersonId(person.id);
-
-            // Adiciona os endereços à pessoa
-            person.addresses = addresses;
-
-            // Salva no cache
-            await this.cacheService.set(cacheKey, person, 3600); // 1 hora
-
-            return person;
+            return await this.personRepository.findById(id);
         } catch (error) {
             logger.error('Erro ao buscar pessoa por ID', { error: error.message, id });
             throw error;
@@ -444,6 +402,50 @@ class PersonService {
                 throw new Error('Pessoa não encontrada');
             }
 
+            // Verifica se já existe um endereço igual
+            const AddressService = require('../addresses/address.service');
+            const addressService = new AddressService();
+            const existingAddresses = await addressService.findByPersonId(personId);
+
+            // Limpa o CEP para comparação
+            const cleanPostalCode = addressData.postal_code?.replace(/[^\d]/g, '');
+
+            // Verifica se já existe um endereço com os mesmos dados
+            const existingAddress = existingAddresses.find(address => {
+                // Normaliza os dados para comparação
+                const existingPostalCode = address.postal_code?.replace(/[^\d]/g, '');
+                const existingStreet = address.street?.trim().toUpperCase();
+                const newStreet = addressData.street?.trim().toUpperCase();
+                const existingNumber = String(address.number).trim();
+                const newNumber = String(addressData.number).trim();
+                const existingComplement = address.complement?.trim().toUpperCase() || '';
+                const newComplement = addressData.complement?.trim().toUpperCase() || '';
+                const existingNeighborhood = address.neighborhood?.trim().toUpperCase();
+                const newNeighborhood = addressData.neighborhood?.trim().toUpperCase();
+                const existingCity = address.city?.trim().toUpperCase();
+                const newCity = addressData.city?.trim().toUpperCase();
+                const existingState = address.state?.trim().toUpperCase();
+                const newState = addressData.state?.trim().toUpperCase();
+
+                // Compara todos os campos normalizados
+                return existingStreet === newStreet &&
+                    existingNumber === newNumber &&
+                    existingComplement === newComplement &&
+                    existingNeighborhood === newNeighborhood &&
+                    existingCity === newCity &&
+                    existingState === newState &&
+                    existingPostalCode === cleanPostalCode;
+            });
+
+            // Se já existe um endereço igual, retorna ele
+            if (existingAddress) {
+                logger.info('Endereço já existe para a pessoa', { 
+                    personId, 
+                    addressId: existingAddress.id 
+                });
+                return existingAddress;
+            }
+
             // Adiciona o endereço
             const newAddress = await this.personRepository.addAddress(personId, addressData);
 
@@ -611,14 +613,30 @@ class PersonService {
             // Busca por CNPJ
             let existingPerson;
             const existingDocument = await personDocumentService.findByDocumentValue('CNPJ', cnpjData.cnpj);
+            logger.info('Service: Verificação de documento existente', { existingDocument });
+
             if (existingDocument) {
                 // Busca direto do banco, sem cache
                 existingPerson = await this.personRepository.findById(existingDocument.person_id);
+                logger.info('Service: Pessoa encontrada por documento', { existingPerson });
             } else {
                 // Se não encontrou por CNPJ, busca por razão social direto do banco
                 const personsByName = await this.personRepository.findAll({ full_name: cnpjData.razao_social });
-                if (personsByName?.data?.length) {
+                logger.info('Service: Pessoas encontradas por nome', { 
+                    razao_social: cnpjData.razao_social,
+                    total: personsByName?.data?.length || 0,
+                    persons: personsByName?.data || []
+                });
+
+                // Só usa a pessoa encontrada se tiver exatamente uma
+                if (personsByName?.data?.length === 1) {
                     existingPerson = personsByName.data[0];
+                    logger.info('Service: Pessoa encontrada por nome', { existingPerson });
+                } else if (personsByName?.data?.length > 1) {
+                    logger.warn('Service: Múltiplas pessoas encontradas com o mesmo nome, ignorando busca por nome', {
+                        razao_social: cnpjData.razao_social,
+                        total: personsByName.data.length
+                    });
                 }
             }
 
@@ -627,7 +645,8 @@ class PersonService {
                 full_name: cnpjData.razao_social,
                 fantasy_name: cnpjData.fantasia || '',
                 person_type: 'PJ',
-                birth_date: cnpjData.data_abertura
+                birth_date: cnpjData.data_abertura,
+                active: true
             };
 
             let person;
@@ -644,10 +663,11 @@ class PersonService {
                         person_id: person.id,
                         cnpj: cnpjData.cnpj
                     });
-                    await personDocumentService.create(person.id, {
+                    const document = await personDocumentService.create(person.id, {
                         document_type: 'CNPJ',
                         document_value: cnpjData.cnpj
                     });
+                    logger.info('Service: Documento CNPJ adicionado', { document });
                 }
             } else {
                 logger.info('Service: Criando nova pessoa');
@@ -659,28 +679,35 @@ class PersonService {
                     person_id: person.id,
                     cnpj: cnpjData.cnpj
                 });
-                await personDocumentService.create(person.id, {
+                const document = await personDocumentService.create(person.id, {
                     document_type: 'CNPJ',
                     document_value: cnpjData.cnpj
                 });
+                logger.info('Service: Documento CNPJ adicionado', { document });
             }
 
             // Adiciona o endereço
-            const addressData = {
-                person_id: person.id,
-                street: cnpjData.endereco.logradouro,
-                number: cnpjData.endereco.numero,
-                complement: cnpjData.endereco.complemento,
-                neighborhood: cnpjData.endereco.bairro,
-                city: cnpjData.endereco.cidade,
-                state: cnpjData.endereco.estado,
-                postal_code: cnpjData.endereco.cep,
-                country: 'Brasil',
-                reference: null,
-                ibge: cnpjData.endereco.ibge
-            };
+            if (cnpjData.endereco) {
+                const addressData = {
+                    street: cnpjData.endereco.logradouro,
+                    number: cnpjData.endereco.numero,
+                    complement: cnpjData.endereco.complemento,
+                    neighborhood: cnpjData.endereco.bairro,
+                    city: cnpjData.endereco.cidade,
+                    state: cnpjData.endereco.estado,
+                    postal_code: cnpjData.endereco.cep,
+                    country: 'Brasil',
+                    reference: null,
+                    ibge: cnpjData.endereco.ibge
+                };
 
-            await this.addAddress(person.id, addressData);
+                // Tenta adicionar o endereço, se já existir vai retornar o existente
+                const address = await this.addAddress(person.id, addressData);
+                logger.info('Service: Endereço adicionado/atualizado', { address });
+            }
+
+            // Limpa cache
+            await this.cacheService.del(`person:details:${person.id}`);
 
             return person;
         } catch (error) {
