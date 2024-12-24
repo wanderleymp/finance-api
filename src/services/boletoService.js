@@ -1,7 +1,9 @@
-const logger = require('../middlewares/logger').logger;
+const { logger } = require('../middlewares/logger');
 const { ValidationError } = require('../utils/errors');
-const boletoRepository = require('../repositories/boletoRepository');
-const TasksService = require('./tasksService');
+const BoletoRepository = require('../modules/boletos/boleto.repository');
+const MovementRepository = require('../modules/movements/movement.repository');
+const TaskService = require('../modules/tasks/services/task.service');
+const n8nService = require('./n8n.service');
 const axios = require('axios');
 
 class BoletoService {
@@ -14,10 +16,10 @@ class BoletoService {
                 status: 'A Emitir'
             };
 
-            const newBoleto = await boletoRepository.createBoleto(defaultBoletoData);
+            const newBoleto = await BoletoRepository.createBoleto(defaultBoletoData);
             
             // Criar tarefa assíncrona para emissão do boleto
-            await TasksService.createTask('BOLETO', newBoleto.boleto_id, {
+            await TaskService.createTask('BOLETO', newBoleto.boleto_id, {
                 boleto_id: newBoleto.boleto_id
             });
             
@@ -40,7 +42,7 @@ class BoletoService {
             logger.info('Iniciando emissão de boletos para movimento', { movimentoId });
 
             // Buscar parcelas do movimento
-            const parcelas = await boletoRepository.getParcelasMovimento(movimentoId);
+            const parcelas = await BoletoRepository.getParcelasMovimento(movimentoId);
             if (!parcelas || parcelas.length === 0) {
                 throw new ValidationError('Movimento não possui parcelas para emissão de boletos');
             }
@@ -77,7 +79,7 @@ class BoletoService {
 
     async getBoletoById(boletoId) {
         try {
-            const boleto = await boletoRepository.getBoletoById(boletoId);
+            const boleto = await BoletoRepository.getBoletoById(boletoId);
             if (!boleto) {
                 throw new ValidationError('Boleto não encontrado');
             }
@@ -99,7 +101,7 @@ class BoletoService {
             });
 
             // Gerar JSON do boleto
-            const dadosBoleto = await boletoRepository.getDadosBoleto(boleto.installment_id);
+            const dadosBoleto = await BoletoRepository.getDadosBoleto(boleto.installment_id);
             if (!dadosBoleto) {
                 throw new ValidationError('Dados para geração de boleto não encontrados');
             }
@@ -147,7 +149,7 @@ class BoletoService {
                 }
 
                 // Atualizar status do boleto
-                await boletoRepository.updateBoletoStatus(boleto.boleto_id, 'Emitido');
+                await BoletoRepository.updateBoletoStatus(boleto.boleto_id, 'Emitido');
 
                 logger.info('Boleto emitido com sucesso via N8N', { 
                     boletoId: boleto.boleto_id,
@@ -180,7 +182,7 @@ class BoletoService {
     async listBoletos(page, limit, filters) {
         try {
             logger.info('Listando boletos', { page, limit, filters });
-            return await boletoRepository.findAll(page, limit, filters);
+            return await BoletoRepository.findAll(page, limit, filters);
         } catch (error) {
             logger.error('Erro ao listar boletos', {
                 errorMessage: error.message,
@@ -197,7 +199,7 @@ class BoletoService {
             logger.info('Processando fila de boletos');
 
             // Buscar tarefas pendentes do tipo BOLETO
-            const tasks = await TasksService.getPendingTasks(10);
+            const tasks = await TaskService.getPendingTasks(10);
             if (!tasks || tasks.length === 0) {
                 logger.info('Nenhuma tarefa pendente encontrada');
                 return;
@@ -215,7 +217,7 @@ class BoletoService {
                         }
 
                         await this.emitirBoletoN8N(boleto);
-                        await TasksService.updateTaskStatus(task.task_id, 'completed');
+                        await TaskService.updateTaskStatus(task.task_id, 'completed');
 
                         logger.info('Tarefa processada com sucesso', { 
                             taskId: task.task_id,
@@ -227,7 +229,7 @@ class BoletoService {
                         taskId: task.task_id,
                         error: error.message
                     });
-                    await TasksService.updateTaskStatus(task.task_id, 'failed', error.message);
+                    await TaskService.updateTaskStatus(task.task_id, 'failed', error.message);
                 }
             }
         } catch (error) {

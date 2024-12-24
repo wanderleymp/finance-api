@@ -1,169 +1,116 @@
 # Sistema de Tasks
 
 ## Visão Geral
-O sistema de tasks é responsável pelo processamento assíncrono de operações no sistema. Ele permite que operações longas ou que podem falhar sejam executadas em background, com suporte a retentativas e monitoramento.
 
-## Estrutura do Módulo
-```
-/modules/tasks/
-  /controllers/
-    - task.controller.js       # Endpoints REST
-  /services/
-    - task.service.js         # Lógica de negócio
-  /repositories/
-    - task.repository.js      # Acesso ao banco
-  /processors/
-    - base.processor.js       # Classe base para processadores
-    - message.processor.js    # Processador de mensagens
-    - boleto.processor.js     # Processador de boletos
-    - nfse.processor.js       # Processador de NFSe
-  /workers/
-    - task.worker.js         # Worker principal
-  /schemas/
-    - task.schema.js         # Schemas de validação
-  /interfaces/
-    - processor.interface.js  # Interface para processadores
-  /dto/
-    - task.dto.js            # DTOs para tasks
-  - task.module.js           # Configuração do módulo
-```
+O sistema de tasks é responsável por gerenciar e executar tarefas assíncronas na aplicação. Ele foi projetado seguindo os princípios de modularidade, extensibilidade e confiabilidade.
 
-## Modelo de Dados
+## Arquitetura
 
-### Tasks
-```sql
--- Tipos de Tasks
-CREATE TABLE task_types (
-    type_id SERIAL PRIMARY KEY,
-    name VARCHAR(50) UNIQUE NOT NULL,    -- MESSAGE_SEND, BOLETO_EMIT, etc
-    description TEXT,
-    created_at TIMESTAMP DEFAULT NOW()
-);
+### Componentes Principais
 
--- Tasks
-CREATE TABLE tasks (
-    task_id SERIAL PRIMARY KEY,
-    type_id INTEGER NOT NULL REFERENCES task_types(type_id),
-    status VARCHAR(20) NOT NULL,         -- PENDING, PROCESSING, COMPLETED, FAILED
-    priority INTEGER DEFAULT 0,          -- Prioridade de execução
-    retries INTEGER DEFAULT 0,           -- Número de tentativas
-    max_retries INTEGER DEFAULT 3,       -- Máximo de tentativas
-    payload JSONB,                       -- Dados da task
-    result JSONB,                        -- Resultado da execução
-    error_message TEXT,                  -- Mensagem de erro se falhou
-    scheduled_for TIMESTAMP,             -- Agendamento
-    started_at TIMESTAMP,                -- Início do processamento
-    completed_at TIMESTAMP,              -- Fim do processamento
-    created_at TIMESTAMP DEFAULT NOW(),
-    updated_at TIMESTAMP,
-    CONSTRAINT valid_status CHECK (status IN ('PENDING', 'PROCESSING', 'COMPLETED', 'FAILED'))
-);
+1. **TaskModule**
+   - Ponto central de configuração e inicialização
+   - Gerencia ciclo de vida dos componentes
+   - Registra processadores disponíveis
 
--- Histórico de Execução
-CREATE TABLE task_executions (
-    execution_id SERIAL PRIMARY KEY,
-    task_id INTEGER NOT NULL REFERENCES tasks(task_id),
-    status VARCHAR(20) NOT NULL,
-    started_at TIMESTAMP NOT NULL,
-    completed_at TIMESTAMP,
-    error_message TEXT,
-    metadata JSONB                       -- Dados adicionais da execução
-);
+2. **TaskService**
+   - Interface de alto nível para criar e gerenciar tasks
+   - Gerencia estado e ciclo de vida das tasks
+   - Coordena processamento e retry
+
+3. **TaskRepository**
+   - Persistência de tasks e execuções
+   - Gerenciamento de estado
+   - Queries otimizadas
+
+4. **TaskWorker**
+   - Processamento assíncrono de tasks
+   - Gerenciamento de concorrência
+   - Tratamento de falhas
+
+5. **Processadores**
+   - BaseProcessor: Interface comum
+   - Implementações específicas:
+     - BoletoProcessor
+     - NFSeProcessor
+     - MessageProcessor
+
+6. **Monitoramento**
+   - Métricas detalhadas (Prometheus)
+   - Sistema de alertas
+   - Dashboards operacionais
+
+### Fluxo de Dados
+
+```mermaid
+graph TD
+    A[API] --> B[TaskService]
+    B --> C[TaskRepository]
+    D[TaskWorker] --> C
+    D --> E[Processors]
+    E --> F[External Services]
+    G[Monitor] --> C
+    G --> H[Alerts]
 ```
 
-## Componentes Principais
+## Tipos de Tasks
 
-### 1. Task Service
-Responsável pela lógica de negócio das tasks:
-- Criação de tasks
-- Consulta de status
-- Gerenciamento de execução
-- Tratamento de falhas
+### 1. Boletos
+- Emissão de boletos
+- Integração com N8N
+- Retry automático em caso de falha
 
-### 2. Task Worker
-Responsável pelo processamento das tasks:
-- Execução em background
-- Processamento em lotes
-- Gerenciamento de concorrência
-- Coleta de métricas
-
-### 3. Processors
-Implementam a lógica específica para cada tipo de task:
-- Validação de payload
-- Processamento da operação
+### 2. NFSe
+- Emissão de notas fiscais
+- Validação de credenciais
 - Tratamento de erros específicos
-- Políticas de retry
 
-## Fluxos
-
-### 1. Criação de Task
-1. Serviço solicita criação de task
-2. TaskService valida tipo e payload
-3. Task é criada com status PENDING
-4. Task é agendada se necessário
-
-### 2. Processamento de Task
-1. Worker busca tasks pendentes
-2. Atualiza status para PROCESSING
-3. Executa processor específico
-4. Registra resultado ou erro
-5. Atualiza métricas
-
-### 3. Tratamento de Falhas
-1. Erro é capturado
-2. Processor específico trata erro
-3. Verifica política de retry
-4. Atualiza status e contadores
-5. Registra no histórico
+### 3. Mensagens
+- Envio multi-canal
+- Retry inteligente
+- Notificação de falhas críticas
 
 ## Monitoramento
 
-### 1. Métricas
-- Taxa de sucesso/falha por tipo
-- Tempo de processamento
-- Tamanho da fila
-- Distribuição de status
+### Métricas Coletadas
 
-### 2. Alertas
-- Tasks com muitas falhas
-- Fila muito grande
-- Tasks travadas
-- Erros críticos
+1. **Contadores**
+   - Tasks criadas
+   - Tasks completadas
+   - Tasks falhas
+   - Retentativas
 
-## Roadmap de Implementação
+2. **Gauges**
+   - Tasks pendentes
+   - Tasks em processamento
 
-### Fase 1: Estrutura Base
-1. Criar estrutura do módulo
-2. Implementar migrations
-3. Configurar worker base
-4. Implementar TaskService básico
+3. **Histogramas**
+   - Tempo de processamento
+   - Tempo em fila
 
-### Fase 2: Processadores
-1. Definir interface base
-2. Migrar processadores existentes
-3. Implementar novos processadores
-4. Adicionar validações
+### Alertas
 
-### Fase 3: Monitoramento
-1. Implementar métricas
-2. Criar dashboards
-3. Configurar alertas
-4. Melhorar logs
+1. **Operacionais**
+   - Alto número de tasks pendentes
+   - Taxa de falha elevada
+   - Tempo de processamento alto
 
-### Fase 4: Otimizações
-1. Adicionar priorização
-2. Implementar rate limiting
-3. Melhorar concorrência
-4. Otimizar queries
+2. **Críticos**
+   - Sobrecarga do sistema
+   - Falhas persistentes
+   - Erros de integração
 
-## Uso do Sistema
+## Uso
 
-### Criando uma Task
+### Criar Task
+
 ```javascript
-// Em qualquer serviço
-await taskService.createTask('SEND_MESSAGE', {
-    message_id: 123,
-    channel: 'whatsapp'
+const taskService = require('./modules/tasks/task.service');
+
+// Criar task de boleto
+await taskService.createTask('BOLETO', {
+    boleto_id: 123,
+    empresa_id: 456
 }, {
     priority: 1,
     scheduledFor: new Date('2024-12-25'),
@@ -171,30 +118,56 @@ await taskService.createTask('SEND_MESSAGE', {
 });
 ```
 
-### Implementando um Processor
-```javascript
-class MessageProcessor extends BaseProcessor {
-    getTaskType() {
-        return 'SEND_MESSAGE';
-    }
+### Implementar Novo Processor
 
-    async validatePayload(payload) {
-        // Validar dados necessários
+```javascript
+const BaseProcessor = require('./processors/base.processor');
+
+class CustomProcessor extends BaseProcessor {
+    getTaskType() {
+        return 'CUSTOM';
     }
 
     async process(task) {
-        // Implementar lógica de envio
+        // Implementação específica
     }
 
-    async handleFailure(task, error) {
-        // Tratamento específico de falhas
+    async canRetry(task) {
+        return task.retries < 3;
     }
 }
 ```
 
-## Considerações de Segurança
-1. Validação de payload
-2. Sanitização de dados
-3. Rate limiting
-4. Monitoramento de recursos
-5. Auditoria de execução
+## Melhores Práticas
+
+1. **Criação de Tasks**
+   - Defina prioridade apropriada
+   - Configure retry adequadamente
+   - Valide payload antes de criar
+
+2. **Processamento**
+   - Trate erros específicos
+   - Implemente retry inteligente
+   - Mantenha idempotência
+
+3. **Monitoramento**
+   - Configure alertas relevantes
+   - Monitore tendências
+   - Ajuste thresholds conforme necessário
+
+## Roadmap
+
+1. **Curto Prazo**
+   - Implementar rate limiting
+   - Melhorar logging
+   - Adicionar mais métricas
+
+2. **Médio Prazo**
+   - Implementar dead letter queue
+   - Adicionar suporte a scheduled tasks
+   - Melhorar dashboards
+
+3. **Longo Prazo**
+   - Distribuir processamento
+   - Implementar priorização dinâmica
+   - Adicionar ML para previsão de falhas

@@ -22,6 +22,7 @@ const PersonModule = require('./modules/persons/person.module');
 const ItemModule = require('./modules/items/item.module');
 const MovementItemModule = require('./modules/movement-items/movement-item.module');
 const InstallmentModule = require('./modules/installments/installment.module');
+const taskModule = require('./modules/tasks/task.module');
 
 const app = express();
 
@@ -79,6 +80,7 @@ ContactModule.register(app);
 PersonContactModule.registerRoutes(app);
 PersonDocumentModule.register(app);
 PersonModule.register(app);
+taskModule.register(app);
 ItemModule.register(app);
 
 // Registra o módulo de itens de movimentação

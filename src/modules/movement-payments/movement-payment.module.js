@@ -1,11 +1,13 @@
 const MovementPaymentController = require('./movement-payment.controller');
 const MovementPaymentService = require('./movement-payment.service');
 const MovementPaymentRepository = require('./movement-payment.repository');
+const MovementRepository = require('../movements/movement.repository');
+const PaymentMethodRepository = require('../payment-methods/payment-method.repository');
 const InstallmentRepository = require('../installments/installment.repository');
 const BoletoService = require('../boletos/boleto.service');
 const BoletoRepository = require('../boletos/boleto.repository');
-const TaskService = require('../tasks/task.service');
-const TaskRepository = require('../../repositories/taskRepository');
+const TaskService = require('../tasks/services/task.service');
+const TaskRepository = require('../tasks/repositories/task.repository');
 const n8nService = require('../../services/n8n.service');
 const cacheService = require('../../services/cache.service');
 const { systemDatabase } = require('../../config/database');

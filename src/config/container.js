@@ -3,16 +3,22 @@ const { logger } = require('../middlewares/logger');
 const cacheService = require('../services/cache.service');
 
 // Repositories
-const BoletoRepository = require('../repositories/boletoRepository');
-const InstallmentRepository = require('../repositories/installmentRepository');
-const MovementRepository = require('../repositories/movementRepository');
-const TaskRepository = require('../repositories/taskRepository');
+const PersonRepository = require('../modules/persons/person.repository');
+const MovementRepository = require('../modules/movements/movement.repository');
+const MovementTypeRepository = require('../modules/movement-types/movement-type.repository');
+const MovementStatusRepository = require('../modules/movement-statuses/movement-status.repository');
+const MovementPaymentRepository = require('../modules/movement-payments/movement-payment.repository');
+const PaymentMethodRepository = require('../modules/payment-methods/payment-method.repository');
+const InstallmentRepository = require('../modules/installments/installment.repository');
+const BoletoRepository = require('../modules/boletos/boleto.repository');
+const TaskRepository = require('../modules/tasks/repositories/task.repository');
 
 // Services
+const MovementPaymentService = require('../modules/movement-payments/movement-payment.service');
 const BoletoService = require('../modules/boletos/boleto.service');
 const InstallmentService = require('../modules/installments/installment.service');
+const TaskService = require('../modules/tasks/services/task.service');
 const MovementService = require('../modules/movements/movement.service');
-const TaskService = require('../modules/tasks/task.service');
 
 // Controllers
 const BoletoController = require('../modules/boletos/boleto.controller');
@@ -34,16 +40,22 @@ container.register({
     cacheService: asValue(cacheService),
 
     // Repositories
-    boletoRepository: asClass(BoletoRepository).singleton(),
-    installmentRepository: asClass(InstallmentRepository).singleton(),
+    personRepository: asClass(PersonRepository).singleton(),
     movementRepository: asClass(MovementRepository).singleton(),
+    movementTypeRepository: asClass(MovementTypeRepository).singleton(),
+    movementStatusRepository: asClass(MovementStatusRepository).singleton(),
+    movementPaymentRepository: asClass(MovementPaymentRepository).singleton(),
+    paymentMethodRepository: asClass(PaymentMethodRepository).singleton(),
+    installmentRepository: asClass(InstallmentRepository).singleton(),
+    boletoRepository: asClass(BoletoRepository).singleton(),
     taskRepository: asClass(TaskRepository).singleton(),
 
     // Services
+    movementPaymentService: asClass(MovementPaymentService).singleton(),
     boletoService: asClass(BoletoService).singleton(),
     installmentService: asClass(InstallmentService).singleton(),
-    movementService: asClass(MovementService).singleton(),
     taskService: asClass(TaskService).singleton(),
+    movementService: asClass(MovementService).singleton(),
 
     // Controllers
     boletoController: asClass(BoletoController).singleton(),
