@@ -15,16 +15,30 @@ class PersonContactRepository extends IPersonContactRepository {
     async findAll(page = 1, limit = 10, filters = {}) {
         try {
             const offset = (page - 1) * limit;
-            let whereClause = '';
+            let whereConditions = [];
             const queryParams = [];
             let paramCount = 1;
 
             // Constrói a cláusula WHERE
             if (filters.person_id) {
-                whereClause = `WHERE pc.person_id = $${paramCount}`;
+                whereConditions.push(`pc.person_id = $${paramCount}`);
                 queryParams.push(filters.person_id);
                 paramCount++;
             }
+
+            if (filters.search) {
+                whereConditions.push(`(
+                    c.contact_name ILIKE $${paramCount}
+                    OR c.contact_value ILIKE $${paramCount}
+                    OR c.contact_type ILIKE $${paramCount}
+                )`);
+                queryParams.push(`%${filters.search}%`);
+                paramCount++;
+            }
+
+            const whereClause = whereConditions.length > 0 
+                ? 'WHERE ' + whereConditions.join(' AND ')
+                : '';
 
             // Adiciona parâmetros de paginação
             queryParams.push(limit, offset);

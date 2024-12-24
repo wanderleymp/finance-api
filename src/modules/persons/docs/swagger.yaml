@@ -227,6 +227,23 @@ paths:
           schema:
             type: integer
           description: ID da pessoa
+        - in: query
+          name: page
+          schema:
+            type: integer
+            default: 1
+          description: Número da página
+        - in: query
+          name: limit
+          schema:
+            type: integer
+            default: 10
+          description: Itens por página
+        - in: query
+          name: search
+          schema:
+            type: string
+          description: Busca por nome do contato, valor do contato ou tipo de contato
       responses:
         '200':
           description: Lista de contatos

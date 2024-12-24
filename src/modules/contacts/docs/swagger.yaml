@@ -1,0 +1,192 @@
+openapi: 3.0.0
+paths:
+  /contacts:
+    get:
+      tags:
+        - Contatos
+      summary: Lista todos os contatos
+      parameters:
+        - in: query
+          name: page
+          schema:
+            type: integer
+            default: 1
+          description: Número da página
+        - in: query
+          name: limit
+          schema:
+            type: integer
+            default: 10
+          description: Itens por página
+        - in: query
+          name: search
+          schema:
+            type: string
+          description: Busca por nome do contato ou valor do contato
+        - in: query
+          name: type
+          schema:
+            type: string
+            enum: [EMAIL, PHONE, WHATSAPP]
+          description: Filtrar por tipo de contato
+      responses:
+        '200':
+          description: Lista de contatos
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  items:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/Contact'
+                  meta:
+                    $ref: '#/components/schemas/PaginationMeta'
+
+    post:
+      tags:
+        - Contatos
+      summary: Cria um novo contato
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateContact'
+      responses:
+        '201':
+          description: Contato criado com sucesso
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Contact'
+
+  /contacts/{id}:
+    get:
+      tags:
+        - Contatos
+      summary: Obtém um contato pelo ID
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: integer
+          description: ID do contato
+      responses:
+        '200':
+          description: Contato encontrado
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Contact'
+
+    put:
+      tags:
+        - Contatos
+      summary: Atualiza um contato
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: integer
+          description: ID do contato
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdateContact'
+      responses:
+        '200':
+          description: Contato atualizado com sucesso
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Contact'
+
+    delete:
+      tags:
+        - Contatos
+      summary: Remove um contato
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: integer
+          description: ID do contato
+      responses:
+        '204':
+          description: Contato removido com sucesso
+
+components:
+  schemas:
+    Contact:
+      type: object
+      properties:
+        contact_id:
+          type: integer
+          description: ID do contato
+        contact_type:
+          type: string
+          enum: [EMAIL, PHONE, WHATSAPP]
+          description: Tipo do contato
+        contact_value:
+          type: string
+          description: Valor do contato
+        contact_name:
+          type: string
+          description: Nome do contato
+
+    CreateContact:
+      type: object
+      required:
+        - contact_type
+        - contact_value
+      properties:
+        contact_type:
+          type: string
+          enum: [EMAIL, PHONE, WHATSAPP]
+          description: Tipo do contato
+        contact_value:
+          type: string
+          description: Valor do contato
+        contact_name:
+          type: string
+          description: Nome do contato
+
+    UpdateContact:
+      type: object
+      properties:
+        contact_type:
+          type: string
+          enum: [EMAIL, PHONE, WHATSAPP]
+          description: Tipo do contato
+        contact_value:
+          type: string
+          description: Valor do contato
+        contact_name:
+          type: string
+          description: Nome do contato
+
+    PaginationMeta:
+      type: object
+      properties:
+        totalItems:
+          type: integer
+          description: Total de itens
+        itemCount:
+          type: integer
+          description: Quantidade de itens na página atual
+        itemsPerPage:
+          type: integer
+          description: Itens por página
+        totalPages:
+          type: integer
+          description: Total de páginas
+        currentPage:
+          type: integer
+          description: Página atual
