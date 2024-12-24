@@ -7,10 +7,12 @@ const InstallmentResponseDTO = require('./dto/installment-response.dto');
 class InstallmentService {
     constructor({ 
         installmentRepository, 
-        cacheService
+        cacheService,
+        boletoService
     } = {}) {
         this.repository = installmentRepository;
         this.cacheService = cacheService;
+        this.boletoService = boletoService;
         this.cachePrefix = 'installments';
         this.cacheTTL = {
             list: 300, // 5 minutos
@@ -160,6 +162,47 @@ class InstallmentService {
             throw error;
         } finally {
             client.release();
+        }
+    }
+
+    async generateBoleto(installmentId) {
+        try {
+            logger.info('Service: Gerando boleto para parcela', { installmentId });
+
+            // 1. Buscar parcela
+            const installment = await this.repository.findById(installmentId);
+            if (!installment) {
+                throw new ValidationError('Parcela não encontrada');
+            }
+
+            // 2. Buscar dados do movimento/pagamento
+            const payment = await this.repository.findPaymentByInstallmentId(installmentId);
+            if (!payment) {
+                throw new ValidationError('Pagamento não encontrado');
+            }
+
+            // 3. Gerar boleto
+            const boletoData = {
+                installment_id: installmentId,
+                due_date: installment.due_date,
+                amount: installment.amount,
+                payer_id: payment.person_id,
+                description: payment.description,
+                status: 'A_EMITIR'
+            };
+
+            logger.info('Service: Criando boleto', { boletoData });
+
+            const boleto = await this.boletoService.createBoleto(boletoData);
+
+            return boleto;
+        } catch (error) {
+            logger.error('Service: Erro ao gerar boleto', {
+                error: error.message,
+                error_stack: error.stack,
+                installmentId
+            });
+            throw error;
         }
     }
 }

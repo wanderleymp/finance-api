@@ -246,6 +246,38 @@ class InstallmentRepository extends BaseRepository {
             client.release();
         }
     }
+
+    async findPaymentByInstallmentId(installmentId) {
+        try {
+            const query = `
+                SELECT 
+                    p.*,
+                    m.description,
+                    m.person_id
+                FROM installments i
+                JOIN movement_payments p ON p.payment_id = i.payment_id
+                JOIN movements m ON m.movement_id = p.movement_id
+                WHERE i.installment_id = $1
+            `;
+
+            logger.info('Repository: Buscando pagamento por ID da parcela', { installmentId });
+
+            const result = await this.pool.query(query, [installmentId]);
+
+            if (result.rows.length === 0) {
+                return null;
+            }
+
+            return result.rows[0];
+        } catch (error) {
+            logger.error('Repository: Erro ao buscar pagamento por ID da parcela', {
+                error: error.message,
+                error_stack: error.stack,
+                installmentId
+            });
+            throw error;
+        }
+    }
 }
 
 module.exports = InstallmentRepository;

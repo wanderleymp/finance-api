@@ -127,6 +127,34 @@ class MovementPaymentRepository extends BaseRepository {
         }
     }
 
+    async findMovementById(movementId) {
+        try {
+            const query = `
+                SELECT 
+                    m.*
+                FROM movements m
+                WHERE m.movement_id = $1
+            `;
+
+            logger.info('Repository: Buscando movimento por ID', { id: movementId });
+
+            const result = await this.pool.query(query, [movementId]);
+
+            if (result.rows.length === 0) {
+                return null;
+            }
+
+            return result.rows[0];
+        } catch (error) {
+            logger.error('Repository: Erro ao buscar movimento por ID', {
+                error: error.message,
+                error_stack: error.stack,
+                movementId
+            });
+            throw error;
+        }
+    }
+
     /**
      * Sobrescreve o método create do BaseRepository para adicionar created_at e updated_at
      */

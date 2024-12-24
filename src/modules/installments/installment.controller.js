@@ -50,6 +50,28 @@ class InstallmentController {
             next(error);
         }
     }
+
+    /**
+     * Gera boleto para parcela
+     */
+    async generateBoleto(req, res, next) {
+        try {
+            const { id } = req.params;
+
+            logger.info('Controller: Gerando boleto para parcela', { id });
+
+            const boleto = await this.service.generateBoleto(id);
+
+            return res.status(201).json(boleto);
+        } catch (error) {
+            logger.error('Controller: Erro ao gerar boleto', {
+                error: error.message,
+                error_stack: error.stack,
+                id: req.params.id
+            });
+            next(error);
+        }
+    }
 }
 
 module.exports = InstallmentController;

@@ -23,5 +23,10 @@ module.exports = (installmentController) => {
         installmentController.show.bind(installmentController)
     );
 
+    router.post('/:id/boletos',
+        validateRequest(installmentSchema.generateBoleto, 'params'),
+        installmentController.generateBoleto.bind(installmentController)
+    );
+
     return router;
 };

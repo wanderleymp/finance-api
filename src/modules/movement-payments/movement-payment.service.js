@@ -192,16 +192,24 @@ class MovementPaymentService extends IMovementPaymentService {
             const paymentMethod = await this.paymentMethodsService.findById(data.payment_method_id);
             logger.info('Service: Payment method encontrado', { paymentMethod });
 
+            // Buscar o movimento para pegar o person_id
+            const movement = await this.repository.findMovementById(data.movement_id);
+            logger.info('Service: Movimento encontrado', { movement });
+
             // Gerar parcelas
             let installments = [];
-            if (paymentMethod.type === 'BOLETO') {
+            if (paymentMethod.data.payment_document_type_id === 1) {
                 // Se for boleto, usa o InstallmentGenerator que já cuida da criação do boleto
-                installments = await this.installmentGenerator.generateInstallmentsWithTransaction(client, payment, paymentMethod);
+                installments = await this.installmentGenerator.generateInstallmentsWithTransaction(client, {
+                    ...payment,
+                    person_id: movement.person_id,
+                    description: movement.description
+                }, paymentMethod);
             } else {
                 // Para outros métodos de pagamento, usa o InstallmentService
-                const installmentAmount = data.total_amount / (paymentMethod.max_installments || 1);
+                const installmentAmount = data.total_amount / (paymentMethod.data.installment_count || 1);
                 
-                for (let i = 1; i <= (paymentMethod.max_installments || 1); i++) {
+                for (let i = 1; i <= (paymentMethod.data.installment_count || 1); i++) {
                     const dueDate = new Date();
                     dueDate.setMonth(dueDate.getMonth() + i - 1);
 
