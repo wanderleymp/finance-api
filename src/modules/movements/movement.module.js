@@ -14,6 +14,7 @@ const TaskService = require('../tasks/task.service');
 const TaskRepository = require('../../repositories/taskRepository');
 const n8nService = require('../../services/n8n.service');
 const CacheService = require('../../services/cache.service');
+const express = require('express');
 const { systemDatabase } = require('../../config/database');
 
 // Instancia os repositórios
@@ -49,16 +50,25 @@ const movementPaymentService = new MovementPaymentService({
 const service = new MovementService({ 
     movementRepository: repository,
     cacheService,
-    pool: systemDatabase.pool,
-    movementPaymentRepository,
+    movementPaymentService,
+    personRepository,
+    movementTypeRepository,
+    movementStatusRepository,
     paymentMethodRepository,
-    installmentRepository,
-    movementPaymentService
+    installmentRepository
 });
 
+// Instancia o controller
 const controller = new MovementController({ movementService: service });
 
-// Importa as rotas e passa o controller
-const routes = require('./movement.routes')(controller);
+// Configura as rotas
+const router = express.Router();
+const movementRoutes = require('./movement.routes')(controller);
+const movementItemRoutes = require('./movement-items.routes')();
 
-module.exports = routes;
+router.use('/', [
+    movementRoutes,
+    movementItemRoutes
+]);
+
+module.exports = router;

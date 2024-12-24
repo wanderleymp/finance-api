@@ -1,0 +1,166 @@
+openapi: 3.0.0
+paths:
+  /movements/{movementId}/movement-items:
+    get:
+      tags:
+        - Itens do Movimento
+      summary: Lista todos os itens de um movimento
+      parameters:
+        - in: path
+          name: movementId
+          required: true
+          schema:
+            type: integer
+          description: ID do movimento
+        - in: query
+          name: page
+          schema:
+            type: integer
+            default: 1
+          description: Número da página
+        - in: query
+          name: limit
+          schema:
+            type: integer
+            default: 10
+          description: Itens por página
+        - in: query
+          name: search
+          schema:
+            type: string
+          description: Busca por nome do item ou descrição
+        - in: query
+          name: orderField
+          schema:
+            type: string
+            enum: [movement_item_id, item_name, quantity, unit_price, total_price, created_at]
+            default: movement_item_id
+          description: Campo para ordenação
+        - in: query
+          name: orderDirection
+          schema:
+            type: string
+            enum: [ASC, DESC]
+            default: DESC
+          description: Direção da ordenação
+      responses:
+        '200':
+          description: Lista de itens do movimento
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  items:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/MovementItem'
+                  meta:
+                    $ref: '#/components/schemas/PaginationMeta'
+
+    post:
+      tags:
+        - Itens do Movimento
+      summary: Adiciona um novo item ao movimento
+      parameters:
+        - in: path
+          name: movementId
+          required: true
+          schema:
+            type: integer
+          description: ID do movimento
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateMovementItem'
+      responses:
+        '201':
+          description: Item adicionado com sucesso
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MovementItem'
+
+components:
+  schemas:
+    MovementItem:
+      type: object
+      properties:
+        movement_item_id:
+          type: integer
+          description: ID do item do movimento
+        movement_id:
+          type: integer
+          description: ID do movimento
+        item_id:
+          type: integer
+          description: ID do item
+        item_name:
+          type: string
+          description: Nome do item
+        description:
+          type: string
+          description: Descrição adicional do item
+        quantity:
+          type: number
+          format: float
+          description: Quantidade
+        unit_price:
+          type: number
+          format: float
+          description: Preço unitário
+        total_price:
+          type: number
+          format: float
+          description: Preço total (quantidade * preço unitário)
+        created_at:
+          type: string
+          format: date-time
+          description: Data de criação
+        updated_at:
+          type: string
+          format: date-time
+          description: Data de atualização
+
+    CreateMovementItem:
+      type: object
+      required:
+        - item_id
+        - quantity
+        - unit_price
+      properties:
+        item_id:
+          type: integer
+          description: ID do item
+        description:
+          type: string
+          description: Descrição adicional do item
+        quantity:
+          type: number
+          format: float
+          description: Quantidade
+        unit_price:
+          type: number
+          format: float
+          description: Preço unitário
+
+    PaginationMeta:
+      type: object
+      properties:
+        totalItems:
+          type: integer
+          description: Total de itens
+        itemCount:
+          type: integer
+          description: Quantidade de itens na página atual
+        itemsPerPage:
+          type: integer
+          description: Itens por página
+        totalPages:
+          type: integer
+          description: Total de páginas
+        currentPage:
+          type: integer
+          description: Página atual

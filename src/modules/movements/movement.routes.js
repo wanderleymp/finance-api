@@ -6,6 +6,7 @@ const {
     updateMovementSchema,
     updateStatusSchema
 } = require('./validators/movement.validator');
+const movementItemRoutes = require('./movement-items.routes');
 
 /**
  * @param {MovementController} controller 
@@ -13,6 +14,7 @@ const {
 module.exports = (controller) => {
     const router = Router();
 
+    // Rotas de movimento
     router.get('/', 
         validateRequest(listMovementsSchema, 'query'),
         controller.index.bind(controller)
@@ -56,6 +58,9 @@ module.exports = (controller) => {
         validateRequest(updateStatusSchema),
         controller.updateStatus.bind(controller)
     );
+
+    // Adiciona rotas de items
+    router.use('/', movementItemRoutes());
 
     return router;
 };
