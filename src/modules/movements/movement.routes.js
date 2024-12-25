@@ -17,6 +17,14 @@ module.exports = (controller) => {
 
     // Middleware de log para todas as rotas
     router.use((req, res, next) => {
+        console.log('ROTA RECEBIDA:', {
+            method: req.method,
+            path: req.path,
+            body: req.body,
+            params: req.params,
+            query: req.query,
+            headers: req.headers
+        });
         logger.info('Requisição recebida', {
             method: req.method,
             path: req.path,

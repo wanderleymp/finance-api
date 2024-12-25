@@ -12,11 +12,35 @@ class TaskService {
 
     async getTypeIdByName(typeName) {
         try {
-            const result = await this.taskTypesRepository.findOne({ name: typeName });
-            if (!result) {
+            logger.info('TaskService: Buscando ID do tipo de task', { 
+                typeName 
+            });
+
+            // Hardcoded mapping for task types
+            const taskTypeMap = {
+                'email': 3,
+                'boleto': 1,
+                'nfse': 2,
+                'backup': 4,
+                'sync': 5
+            };
+
+            if (!taskTypeMap[typeName]) {
+                logger.warn('Tipo de task não encontrado', {
+                    typeName,
+                    availableTypes: Object.keys(taskTypeMap)
+                });
                 throw new Error(`Tipo de task não encontrado: ${typeName}`);
             }
-            return result.type_id;
+
+            const typeId = taskTypeMap[typeName];
+
+            logger.debug('TaskService: Tipo de task encontrado', { 
+                typeName,
+                typeId 
+            });
+
+            return typeId;
         } catch (error) {
             logger.error('Erro ao buscar tipo de task', {
                 error: error.message,
@@ -28,38 +52,72 @@ class TaskService {
 
     async create(data) {
         try {
-            logger.info('Criando task', { data });
+            logger.info('TaskService: Iniciando criação de task', { 
+                taskType: data.type,
+                payload: data.payload
+            });
 
-            // Converte tipo para type_id
-            if (data.type && !data.type_id) {
-                data.type_id = await this.getTypeIdByName(data.type);
-            }
+            // Busca o tipo de task
+            const taskTypeId = await this.getTypeIdByName(data.type);
 
-            // Valida dependências circulares
-            if (data.dependencies?.length > 0) {
-                const hasCycle = await this.dependenciesService.checkCircularDependency(
-                    null,
-                    data.dependencies
-                );
-                if (hasCycle) {
-                    throw new Error('Dependência circular detectada');
+            logger.debug('TaskService: Tipo de task encontrado', { 
+                taskType: data.type,
+                taskTypeId 
+            });
+
+            // Gera um nome para a task baseado no tipo e payload
+            const generateTaskName = (type, payload) => {
+                switch (type) {
+                    case 'email':
+                        return `Email para ${payload.to || 'destinatário'}`;
+                    case 'boleto':
+                        return `Boleto ${payload.documentNumber || 'sem número'}`;
+                    case 'nfse':
+                        return `NFSE ${payload.serviceDescription || 'sem descrição'}`;
+                    case 'backup':
+                        return `Backup ${new Date().toISOString().split('T')[0]}`;
+                    case 'sync':
+                        return `Sincronização ${payload.entityType || 'geral'}`;
+                    default:
+                        return `Task ${type} ${new Date().getTime()}`;
                 }
-            }
+            };
 
-            const task = await this.repository.create(data);
+            // Prepara dados da task
+            const taskData = {
+                type_id: taskTypeId,
+                name: generateTaskName(data.type, data.payload),
+                status: 'pending',
+                payload: JSON.stringify(data.payload),
+                created_at: new Date(),
+                updated_at: new Date()
+            };
+
+            logger.debug('TaskService: Dados da task preparados', { taskData });
+
+            // Cria task
+            const result = await this.repository.create(taskData);
+
+            logger.info('TaskService: Task criada com sucesso', { 
+                taskId: result.task_id,
+                taskType: data.type,
+                taskName: taskData.name
+            });
 
             // Cria log inicial
             await this.logsService.create({
-                task_id: task.task_id,
+                task_id: result.task_id,
                 status: 'pending',
                 metadata: { action: 'create' }
             });
 
-            return task;
+            return result;
         } catch (error) {
-            logger.error('Erro ao criar task', {
+            logger.error('TaskService: Erro ao criar task', {
                 error: error.message,
-                data
+                errorStack: error.stack,
+                taskType: data.type,
+                payload: data.payload
             });
             throw error;
         }

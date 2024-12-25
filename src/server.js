@@ -44,4 +44,16 @@ async function startServer() {
     }
 }
 
+app.use((req, res, next) => {
+    console.log('GLOBAL MIDDLEWARE: Requisição recebida', {
+        method: req.method,
+        path: req.path,
+        headers: req.headers,
+        body: req.body,
+        params: req.params,
+        query: req.query
+    });
+    next();
+});
+
 startServer();

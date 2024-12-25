@@ -35,8 +35,19 @@ class BillingMessageService {
      */
     async processBillingMessage(movement, person, contacts) {
         try {
+            logger.info('BillingMessageService: Iniciando processamento de mensagem', {
+                movementId: movement.id,
+                personId: person.person_id,
+                totalContacts: contacts.length
+            });
+
             const emailContacts = contacts.filter(c => c.contact_type === 'email');
             
+            logger.info('BillingMessageService: Contatos de email filtrados', {
+                emailContactsCount: emailContacts.length,
+                emailContacts: emailContacts.map(c => c.contact_value)
+            });
+
             if (!emailContacts.length) {
                 logger.warn('Pessoa não possui contatos de email', {
                     personId: person.person_id,
@@ -58,12 +69,18 @@ class BillingMessageService {
 
             // Sempre usa template 1 para faturamento
             const template = await this.templateService.findByType(1);
+            
+            logger.info('BillingMessageService: Template encontrado', {
+                templateId: template.template_id,
+                templateType: template.type
+            });
+
             const processedTemplate = this.templateService.processTemplate(template, templateData);
 
             // Cria task para cada contato
             for (const contact of emailContacts) {
-                await this.taskService.create({
-                    type: 'SEND_EMAIL',
+                const taskData = {
+                    type: 'email',
                     payload: {
                         to: contact.contact_value,
                         subject: processedTemplate.subject,
@@ -74,6 +91,18 @@ class BillingMessageService {
                             contact_id: contact.contact_id
                         }
                     }
+                };
+
+                logger.info('BillingMessageService: Criando task de email', {
+                    taskType: taskData.type,
+                    contactEmail: contact.contact_value
+                });
+
+                const task = await this.taskService.create(taskData);
+
+                logger.info('BillingMessageService: Task de email criada', {
+                    taskId: task.task_id,
+                    contactEmail: contact.contact_value
                 });
             }
 
@@ -86,6 +115,7 @@ class BillingMessageService {
         } catch (error) {
             logger.error('Erro ao processar mensagem de faturamento', {
                 error: error.message,
+                errorStack: error.stack,
                 movementId: movement.id,
                 personId: person?.person_id
             });

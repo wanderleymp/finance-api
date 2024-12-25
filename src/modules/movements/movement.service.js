@@ -357,23 +357,44 @@ class MovementService extends IMovementService {
      */
     async _processBillingMessage(movement, person) {
         try {
-            // Busca contatos da pessoa
-            const contacts = await this.personContactRepository.findByPerson(person.person_id);
+            logger.info('Iniciando processamento de mensagem de faturamento', {
+                movementId: movement.movement_id,
+                personId: person.person_id
+            });
+
+            // Usa o serviço de pessoa para buscar contatos
+            const PersonService = require('../persons/person.service');
+            const personService = new PersonService();
             
+            logger.info('Buscando contatos da pessoa', {
+                personId: person.person_id
+            });
+
+            const contactsResult = await personService.findContacts(person.person_id);
+            const contacts = contactsResult.items || [];
+            
+            logger.info('Contatos encontrados', {
+                movementId: movement.movement_id,
+                personId: person.person_id,
+                contactCount: contacts.length
+            });
+
             // Processa mensagem
             await this.billingMessageService.processBillingMessage(movement, person, contacts);
             
             logger.info('Mensagem de faturamento enviada com sucesso', {
-                movementId: movement.id,
+                movementId: movement.movement_id,
                 personId: person.person_id
             });
         } catch (error) {
             logger.error('Erro ao processar mensagem de faturamento', {
-                error: error.message,
-                movementId: movement.id,
+                error: error,
+                errorMessage: error.message,
+                errorStack: error.stack,
+                movementId: movement.movement_id,
                 personId: person.person_id
             });
-            // Não propaga o erro para não impactar o fluxo principal
+            throw error;
         }
     }
 

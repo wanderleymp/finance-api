@@ -301,6 +301,11 @@ class MovementController {
         try {
             const { id } = req.params;
 
+            console.log('CONTROLLER: Enviando mensagem de faturamento', { 
+                movementId: id,
+                user: req.user // Log do usuário que está fazendo a requisição
+            });
+
             logger.info('Controller: Iniciando envio de mensagem de faturamento', { 
                 movementId: id,
                 user: req.user // Log do usuário que está fazendo a requisição
@@ -310,6 +315,7 @@ class MovementController {
             const movement = await this.service.findOne(id);
             
             if (!movement) {
+                console.log('CONTROLLER: Movimento não encontrado', { movementId: id });
                 logger.warn('Movimento não encontrado', { 
                     movementId: id 
                 });
@@ -320,6 +326,7 @@ class MovementController {
 
             // Verifica se o movimento tem pessoa associada
             if (!movement.person) {
+                console.log('CONTROLLER: Movimento sem pessoa associada', { movementId: id });
                 logger.warn('Movimento sem pessoa associada', { 
                     movementId: id 
                 });
@@ -331,6 +338,11 @@ class MovementController {
             // Processa mensagem de faturamento
             await this.service._processBillingMessage(movement, movement.person);
 
+            console.log('CONTROLLER: Mensagem de faturamento enviada com sucesso', { 
+                movementId: id,
+                personId: movement.person.person_id
+            });
+
             logger.info('Mensagem de faturamento enviada com sucesso', { 
                 movementId: id,
                 personId: movement.person.person_id
@@ -340,6 +352,12 @@ class MovementController {
                 message: 'Mensagem de faturamento enviada com sucesso' 
             });
         } catch (error) {
+            console.log('CONTROLLER: Erro ao enviar mensagem de faturamento', {
+                error: error,
+                errorMessage: error.message,
+                errorStack: error.stack
+            });
+
             // Log detalhado do erro
             logger.error('Erro completo ao enviar mensagem de faturamento', {
                 error: error,
