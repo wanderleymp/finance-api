@@ -98,7 +98,13 @@ app.use('/docs', swaggerUi.serve, swaggerUi.setup(swaggerSpec));
 app.use('/health', healthRoutes);
 authModule.register(app); // Registra rotas de autenticação antes do middleware
 
-// Registra o módulo de mensagens (precisa ter endpoints públicos)
+// Registra o módulo de tasks e seus auxiliares primeiro
+taskModule.register(app);
+taskTypesModule.register(app);
+taskDependenciesModule.register(app);
+taskLogsModule.register(app);
+
+// Registra o módulo de mensagens depois que o taskModule estiver registrado
 const messagesModuleInstance = new MessagesModule(app);
 messagesModuleInstance.initialize().catch(error => {
     logger.error('Erro ao inicializar módulo de mensagens', {
@@ -132,12 +138,6 @@ app.use('/movement-items', movementItemModule.getRouter());
 // Registra o módulo de parcelas
 const installmentModule = require('./modules/installments/installment.module');
 installmentModule.register(app);
-
-// Registra o módulo de tasks e seus auxiliares
-taskModule.register(app);
-taskTypesModule.register(app);
-taskDependenciesModule.register(app);
-taskLogsModule.register(app);
 
 // Rota 404 para capturar requisições não encontradas
 app.use((req, res, next) => {

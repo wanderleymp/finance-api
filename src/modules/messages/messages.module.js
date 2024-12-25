@@ -2,6 +2,7 @@ const { logger } = require('../../middlewares/logger');
 const schedule = require('node-schedule');
 const SubscriptionRenewalJob = require('./jobs/subscription-renewal.job');
 const webhookRoutes = require('./routes/webhook.routes');
+const chatModule = require('./chat.module');
 
 class MessagesModule {
     constructor(app) {
@@ -13,10 +14,14 @@ class MessagesModule {
         // Registrar rotas do webhook
         this.app.use('/messages/webhooks', webhookRoutes);
 
+        // Registrar módulo de chat (que inclui as rotas de teste)
+        chatModule(this.app);
+
         logger.info('Rotas do módulo de mensagens registradas', {
             routes: [
                 '/messages/webhooks/graph/subscribe',
-                '/messages/webhooks/graph/messages'
+                '/messages/webhooks/graph/messages',
+                '/messages/test/*'
             ]
         });
     }
