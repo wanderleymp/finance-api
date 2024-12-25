@@ -34,7 +34,7 @@ class TaskModule {
 
     register(app) {
         logger.info('Registrando módulo de tasks');
-        app.use('/api/tasks', this.routes.getRouter());
+        app.use('/tasks', this.routes.getRouter());
         
         // Expõe o service e worker para outros módulos
         app.set('taskService', this.service);

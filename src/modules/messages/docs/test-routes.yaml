@@ -1,0 +1,116 @@
+openapi: 3.0.0
+paths:
+  /messages/test/test-email-task:
+    post:
+      tags:
+        - Messages
+      summary: Cria uma task de teste para envio de email
+      description: |
+        Cria uma task do tipo 'email' para testar o envio de emails.
+        A task será processada automaticamente pelo worker.
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                to:
+                  type: array
+                  items:
+                    type: object
+                    properties:
+                      email:
+                        type: string
+                        format: email
+                      person_contact_id:
+                        type: integer
+                  description: Lista de destinatários do email
+                  example:
+                    - email: "wanderley@agilegestao.com"
+                      person_contact_id: 159
+                    - email: "wanderleywm@hotmail.com"
+                      person_contact_id: 255
+                subject:
+                  type: string
+                  description: Assunto do email
+                  example: "Teste de Email via Task"
+                metadata:
+                  type: object
+                  description: Metadados adicionais (opcional)
+                  example: {}
+      responses:
+        '201':
+          description: Task de email criada com sucesso
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  id:
+                    type: integer
+                    description: ID da task criada
+                  type:
+                    type: string
+                    enum: [email]
+                  status:
+                    type: string
+                    enum: [pending]
+                  payload:
+                    type: object
+                    properties:
+                      to:
+                        type: array
+                        items:
+                          type: object
+                      subject:
+                        type: string
+                      metadata:
+                        type: object
+                example:
+                  id: 35
+                  type: "email"
+                  status: "pending"
+                  payload:
+                    to:
+                      - email: "wanderley@agilegestao.com"
+                        person_contact_id: 159
+                      - email: "wanderleywm@hotmail.com"
+                        person_contact_id: 255
+                    subject: "Teste de Email via Task"
+                    metadata: {}
+        '400':
+          description: Dados inválidos
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  error:
+                    type: string
+                example:
+                  error: "Dados inválidos para criação da task"
+        '401':
+          description: Não autorizado
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  error:
+                    type: string
+                example:
+                  error: "Token não fornecido ou inválido"
+        '500':
+          description: Erro interno do servidor
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  error:
+                    type: string
+                example:
+                  error: "Erro interno do servidor"

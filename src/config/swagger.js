@@ -15,11 +15,21 @@ const options = {
                 url: 'http://localhost:3000',
                 description: 'Servidor de desenvolvimento local'
             }
-        ]
+        ],
+        components: {
+            securitySchemes: {
+                bearerAuth: {
+                    type: 'http',
+                    scheme: 'bearer',
+                    bearerFormat: 'JWT'
+                }
+            }
+        }
     },
     apis: [
         path.join(__dirname, '../modules/**/routes.js'),
-        path.join(__dirname, '../modules/**/docs/*.yaml')
+        path.join(__dirname, '../modules/**/docs/*.yaml'),
+        path.join(__dirname, '../modules/**/docs/*.js')
     ]
 };
 
