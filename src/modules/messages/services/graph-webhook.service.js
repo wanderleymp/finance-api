@@ -5,8 +5,24 @@ const EmailTrackingService = require('./email-tracking.service');
 
 class GraphWebhookService {
     constructor() {
-        this.baseUrl = process.env.GRAPH_WEBHOOK_BASE_URL;
-        this.path = process.env.GRAPH_WEBHOOK_PATH;
+        // URL fixa para ambiente de desenvolvimento
+        const baseUrl = 'https://dev.agilefinance.com.br';
+        const path = '/webhooks/graph/messages';
+
+        logger.info('Inicializando GraphWebhookService com as seguintes configurações:', {
+            baseUrl,
+            path,
+            hasSecret: !!process.env.GRAPH_WEBHOOK_SECRET,
+            hasTenantId: !!process.env.MICROSOFT_TENANT_ID,
+            hasClientId: !!process.env.MICROSOFT_CLIENT_ID,
+            hasClientSecret: !!process.env.MICROSOFT_CLIENT_SECRET,
+            hasEmailUser: !!process.env.MICROSOFT_EMAIL_USER,
+            hasCertificate: !!process.env.GRAPH_WEBHOOK_CERTIFICATE,
+            hasCertificateId: !!process.env.GRAPH_WEBHOOK_CERTIFICATE_ID
+        });
+
+        this.baseUrl = baseUrl;
+        this.path = path;
         this.secret = process.env.GRAPH_WEBHOOK_SECRET;
         this.emailTrackingService = new EmailTrackingService();
         
@@ -14,33 +30,72 @@ class GraphWebhookService {
     }
 
     initializeClient() {
-        const credential = new ClientSecretCredential(
-            process.env.MICROSOFT_TENANT_ID,
-            process.env.MICROSOFT_CLIENT_ID,
-            process.env.MICROSOFT_CLIENT_SECRET
-        );
+        try {
+            logger.info('Inicializando cliente do Microsoft Graph');
+            
+            const credential = new ClientSecretCredential(
+                process.env.MICROSOFT_TENANT_ID,
+                process.env.MICROSOFT_CLIENT_ID,
+                process.env.MICROSOFT_CLIENT_SECRET
+            );
 
-        this.graphClient = Client.initWithMiddleware({
-            authProvider: {
-                getAccessToken: async () => {
-                    const response = await credential.getToken('https://graph.microsoft.com/.default');
-                    return response.token;
+            this.graphClient = Client.initWithMiddleware({
+                authProvider: {
+                    getAccessToken: async () => {
+                        const response = await credential.getToken('https://graph.microsoft.com/.default');
+                        return response.token;
+                    }
                 }
-            }
-        });
+            });
+
+            logger.info('Cliente do Microsoft Graph inicializado com sucesso');
+        } catch (error) {
+            logger.error('Erro ao inicializar cliente do Microsoft Graph', {
+                error: error.message
+            });
+            throw error;
+        }
     }
 
     async createSubscription() {
         try {
-            // Verificar se as variáveis de ambiente necessárias estão presentes
-            if (!process.env.GRAPH_WEBHOOK_CERTIFICATE || !process.env.GRAPH_WEBHOOK_CERTIFICATE_ID) {
-                throw new Error('As variáveis de ambiente GRAPH_WEBHOOK_CERTIFICATE e GRAPH_WEBHOOK_CERTIFICATE_ID são obrigatórias');
+            // Verificar todas as variáveis de ambiente necessárias
+            const requiredVars = {
+                MICROSOFT_TENANT_ID: process.env.MICROSOFT_TENANT_ID,
+                MICROSOFT_CLIENT_ID: process.env.MICROSOFT_CLIENT_ID,
+                MICROSOFT_CLIENT_SECRET: process.env.MICROSOFT_CLIENT_SECRET,
+                MICROSOFT_EMAIL_USER: process.env.MICROSOFT_EMAIL_USER,
+                GRAPH_WEBHOOK_CERTIFICATE: process.env.GRAPH_WEBHOOK_CERTIFICATE,
+                GRAPH_WEBHOOK_CERTIFICATE_ID: process.env.GRAPH_WEBHOOK_CERTIFICATE_ID,
+                GRAPH_WEBHOOK_SECRET: this.secret
+            };
+
+            const missingVars = Object.entries(requiredVars)
+                .filter(([_, value]) => !value)
+                .map(([key]) => key);
+
+            if (missingVars.length > 0) {
+                const error = new Error(`As seguintes variáveis de ambiente são obrigatórias: ${missingVars.join(', ')}`);
+                logger.error('Erro ao criar subscription - variáveis de ambiente faltando', {
+                    missingVars,
+                    error: error.message
+                });
+                throw error;
             }
+
+            // Usar a URL completa do endpoint de validação
+            const notificationUrl = `${this.baseUrl}${this.path}`;
+
+            logger.info('Criando subscription com as seguintes configurações:', {
+                notificationUrl,
+                emailUser: process.env.MICROSOFT_EMAIL_USER,
+                certificateId: process.env.GRAPH_WEBHOOK_CERTIFICATE_ID
+            });
 
             const subscription = {
                 changeType: 'created,updated',
-                notificationUrl: `${this.baseUrl}/webhooks/graph/messages`,
-                resource: `/users/${process.env.MICROSOFT_EMAIL_USER}/messages?$select=id,subject,receivedDateTime,internetMessageId`,
+                notificationUrl,
+                resource: `/users/${process.env.MICROSOFT_EMAIL_USER}/messages?$select=id,subject,receivedDateTime,internetMessageId,from,toRecipients`,
                 expirationDateTime: new Date(Date.now() + 3 * 24 * 60 * 60 * 1000), // 3 dias
                 clientState: this.secret,
                 includeResourceData: true,
@@ -48,13 +103,6 @@ class GraphWebhookService {
                 encryptionCertificate: process.env.GRAPH_WEBHOOK_CERTIFICATE,
                 encryptionCertificateId: process.env.GRAPH_WEBHOOK_CERTIFICATE_ID
             };
-
-            logger.info('Criando subscription com os seguintes dados:', {
-                notificationUrl: subscription.notificationUrl,
-                resource: subscription.resource,
-                expirationDateTime: subscription.expirationDateTime,
-                certificateId: subscription.encryptionCertificateId
-            });
 
             const result = await this.graphClient.api('/subscriptions')
                 .post(subscription);
@@ -76,6 +124,8 @@ class GraphWebhookService {
 
     async renewSubscription(subscriptionId) {
         try {
+            logger.info('Renovando subscription', { subscriptionId });
+
             const subscription = {
                 expirationDateTime: new Date(Date.now() + 3 * 24 * 60 * 60 * 1000) // 3 dias
             };
@@ -92,8 +142,7 @@ class GraphWebhookService {
         } catch (error) {
             logger.error('Erro ao renovar subscription', {
                 error: error.message,
-                subscriptionId,
-                stack: error.stack
+                subscriptionId
             });
             throw error;
         }
@@ -101,6 +150,8 @@ class GraphWebhookService {
 
     async deleteSubscription(subscriptionId) {
         try {
+            logger.info('Deletando subscription', { subscriptionId });
+
             await this.graphClient.api(`/subscriptions/${subscriptionId}`)
                 .delete();
 
@@ -108,8 +159,7 @@ class GraphWebhookService {
         } catch (error) {
             logger.error('Erro ao deletar subscription', {
                 error: error.message,
-                subscriptionId,
-                stack: error.stack
+                subscriptionId
             });
             throw error;
         }
@@ -117,60 +167,36 @@ class GraphWebhookService {
 
     async handleNotification(notification) {
         try {
-            // Validar clientState para garantir que a notificação é legítima
-            if (notification.clientState !== this.secret) {
-                throw new Error('Invalid clientState');
-            }
-
-            const { messageId, status, resourceData } = notification;
-            const recipientEmail = resourceData.toRecipients[0].emailAddress.address;
-
-            // Mapear status do Graph para nossos status
-            let trackingStatus;
-            switch (status) {
-                case 'created':
-                    trackingStatus = 'QUEUED';
-                    break;
-                case 'delivered':
-                    trackingStatus = 'DELIVERED';
-                    break;
-                case 'read':
-                    trackingStatus = 'READ';
-                    break;
-                default:
-                    trackingStatus = 'PENDING';
-            }
-
-            // Atualizar status no nosso tracking
-            await this.emailTrackingService.updateStatus(
-                messageId,
-                recipientEmail,
-                trackingStatus,
-                {
-                    graphNotification: notification
-                }
-            );
-
-            logger.info('Notificação processada com sucesso', {
-                messageId,
-                recipientEmail,
-                status: trackingStatus
+            logger.info('Processando notificação', {
+                changeType: notification.changeType,
+                resource: notification.resource,
+                clientState: notification.clientState
             });
+
+            // Validar clientState
+            if (notification.clientState !== this.secret) {
+                const error = new Error('Invalid clientState');
+                logger.error('Erro de validação do clientState', {
+                    expected: this.secret,
+                    received: notification.clientState
+                });
+                throw error;
+            }
+
+            await this.emailTrackingService.processEmailNotification(notification);
+
+            logger.info('Notificação processada com sucesso');
         } catch (error) {
             logger.error('Erro ao processar notificação', {
                 error: error.message,
-                notification,
-                stack: error.stack
+                notification
             });
             throw error;
         }
     }
 
     validateWebhook(validationToken) {
-        // Microsoft envia um token de validação que deve ser retornado
-        if (!validationToken) {
-            throw new Error('Validation token não fornecido');
-        }
+        logger.info('Validando webhook', { validationToken });
         return validationToken;
     }
 }

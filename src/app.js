@@ -27,7 +27,6 @@ const taskModule = require('./modules/tasks/task.module');
 const taskTypesModule = require('./modules/tasktypes/tasktypes.module');
 const taskDependenciesModule = require('./modules/taskdependencies/taskdependencies.module');
 const taskLogsModule = require('./modules/tasklogs/tasklogs.module');
-const messagesModule = require('./modules/messages/chat.module');
 const MessagesModule = require('./modules/messages/messages.module');
 
 const app = express();
@@ -47,10 +46,11 @@ app.use((req, res, next) => {
 
 // Configurações básicas
 app.use(cors({
-    origin: ['https://dev.agilefinance.com.br', 'http://localhost:3000'],
+    origin: ['https://dev.agilefinance.com.br', 'https://api.agilefinance.com.br', 'http://localhost:3000'],
     methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
     allowedHeaders: ['Content-Type', 'Authorization'],
-    credentials: true
+    credentials: true,
+    exposedHeaders: ['Content-Range']
 }));
 
 app.use(

@@ -3,8 +3,8 @@ const { logger } = require('../middlewares/logger');
 
 // Valores padrão para desenvolvimento
 const JWT_CONFIG = {
-  secret: process.env.JWT_SECRET || 'sua_chave_secreta_aqui',
-  refreshSecret: process.env.JWT_REFRESH_SECRET || 'sua_chave_refresh_secreta_aqui',
+  secret: process.env.JWT_SECRET || 'agile@2023',
+  refreshSecret: process.env.JWT_REFRESH_SECRET || 'agile@2023',
   expiration: process.env.JWT_EXPIRATION || '1h',
   refreshExpiration: process.env.JWT_REFRESH_EXPIRATION || '7d'
 };
@@ -44,7 +44,10 @@ class JwtService {
     try {
       return jwt.verify(token, JWT_CONFIG.secret);
     } catch (error) {
-      logger.error('Error verifying token', { error: error.message });
+      logger.error('Error verifying token', { 
+        error: error.message,
+        token: token.substring(0, 10) + '...'
+      });
       return null;
     }
   }
@@ -54,15 +57,6 @@ class JwtService {
       return jwt.verify(token, JWT_CONFIG.refreshSecret);
     } catch (error) {
       logger.error('Error verifying refresh token', { error: error.message });
-      return null;
-    }
-  }
-
-  static decodeToken(token) {
-    try {
-      return jwt.decode(token);
-    } catch (error) {
-      logger.error('Error decoding token', { error: error.message });
       return null;
     }
   }
