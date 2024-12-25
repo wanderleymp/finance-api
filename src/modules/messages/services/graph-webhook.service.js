@@ -32,14 +32,29 @@ class GraphWebhookService {
 
     async createSubscription() {
         try {
+            // Verificar se as variáveis de ambiente necessárias estão presentes
+            if (!process.env.GRAPH_WEBHOOK_CERTIFICATE || !process.env.GRAPH_WEBHOOK_CERTIFICATE_ID) {
+                throw new Error('As variáveis de ambiente GRAPH_WEBHOOK_CERTIFICATE e GRAPH_WEBHOOK_CERTIFICATE_ID são obrigatórias');
+            }
+
             const subscription = {
                 changeType: 'created,updated',
-                notificationUrl: `${this.baseUrl}${this.path}`,
-                resource: '/users/' + process.env.MICROSOFT_EMAIL_USER + '/messages',
+                notificationUrl: `${this.baseUrl}/webhooks/graph/messages`,
+                resource: `/users/${process.env.MICROSOFT_EMAIL_USER}/messages?$select=id,subject,receivedDateTime,internetMessageId`,
                 expirationDateTime: new Date(Date.now() + 3 * 24 * 60 * 60 * 1000), // 3 dias
                 clientState: this.secret,
-                includeResourceData: true
+                includeResourceData: true,
+                latestSupportedTlsVersion: 'v1_2',
+                encryptionCertificate: process.env.GRAPH_WEBHOOK_CERTIFICATE,
+                encryptionCertificateId: process.env.GRAPH_WEBHOOK_CERTIFICATE_ID
             };
+
+            logger.info('Criando subscription com os seguintes dados:', {
+                notificationUrl: subscription.notificationUrl,
+                resource: subscription.resource,
+                expirationDateTime: subscription.expirationDateTime,
+                certificateId: subscription.encryptionCertificateId
+            });
 
             const result = await this.graphClient.api('/subscriptions')
                 .post(subscription);

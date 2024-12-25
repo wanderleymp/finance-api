@@ -1,5 +1,6 @@
 require('dotenv').config();
 const app = require('./app');
+const http = require('http');
 const https = require('https');
 const fs = require('fs');
 const path = require('path');
@@ -13,28 +14,26 @@ async function startServer() {
 
         const port = process.env.PORT || 3000;
         
-        // Configurações HTTPS
-        let httpsOptions;
-        
-        if (process.env.NODE_ENV === 'production') {
-            httpsOptions = {
-                key: fs.readFileSync('/etc/ssl/agilefinance/privkey.pem'),
-                cert: fs.readFileSync('/etc/ssl/agilefinance/fullchain.pem')
-            };
-        } else {
-            // Usar certificados de desenvolvimento
+        // Criar servidor HTTP para o Traefik
+        const httpServer = http.createServer(app);
+        httpServer.listen(port, () => {
+            logger.info(`Servidor HTTP rodando na porta ${port} (${process.env.NODE_ENV})`);
+        });
+
+        // Em desenvolvimento, também criar servidor HTTPS
+        if (process.env.NODE_ENV !== 'production') {
+            const httpsPort = process.env.HTTPS_PORT || 3443;
             const certsPath = path.join(__dirname, '..', 'certs');
-            httpsOptions = {
+            const httpsOptions = {
                 key: fs.readFileSync(path.join(certsPath, 'server.key')),
                 cert: fs.readFileSync(path.join(certsPath, 'server.cert'))
             };
-        }
 
-        // Criar servidor HTTPS
-        const httpsServer = https.createServer(httpsOptions, app);
-        httpsServer.listen(port, () => {
-            logger.info(`Servidor HTTPS rodando na porta ${port} (${process.env.NODE_ENV})`);
-        });
+            const httpsServer = https.createServer(httpsOptions, app);
+            httpsServer.listen(httpsPort, () => {
+                logger.info(`Servidor HTTPS rodando na porta ${httpsPort} (${process.env.NODE_ENV})`);
+            });
+        }
 
     } catch (error) {
         logger.error('Erro ao iniciar servidor', {

@@ -3,7 +3,7 @@ const BaseRepository = require('../../../repositories/base/BaseRepository');
 
 class EmailTrackingRepository extends BaseRepository {
     constructor() {
-        super('messages.email_tracking', 'id');
+        super('public.email_tracking', 'tracking_id');
     }
 
     async createMany(trackings) {
@@ -14,7 +14,7 @@ class EmailTrackingRepository extends BaseRepository {
             const results = [];
             for (const tracking of trackings) {
                 const query = `
-                    INSERT INTO messages.email_tracking (
+                    INSERT INTO public.email_tracking (
                         message_id, chat_message_id, recipient_email,
                         status, metadata
                     ) VALUES ($1, $2, $3, $4, $5)
@@ -35,6 +35,7 @@ class EmailTrackingRepository extends BaseRepository {
 
             await client.query('COMMIT');
             return results;
+
         } catch (error) {
             await client.query('ROLLBACK');
             logger.error('Erro ao criar múltiplos trackings', {
@@ -48,93 +49,69 @@ class EmailTrackingRepository extends BaseRepository {
     }
 
     async updateStatus(messageId, recipientEmail, status, metadata = {}) {
-        const client = await this.pool.connect();
         try {
-            const timestamp = new Date();
-            let updateFields = ['status = $1', 'last_status_update = $2', 'metadata = metadata || $3::jsonb'];
-            let values = [status, timestamp, metadata];
-            let paramCount = 4;
-
-            // Adiciona timestamps específicos baseado no status
-            if (status === 'DELIVERED') {
-                updateFields.push('delivered_at = $' + paramCount);
-                values.push(timestamp);
-                paramCount++;
-            } else if (status === 'READ') {
-                updateFields.push('read_at = $' + paramCount);
-                values.push(timestamp);
-                paramCount++;
-            }
-
             const query = `
-                UPDATE messages.email_tracking
-                SET ${updateFields.join(', ')},
+                UPDATE public.email_tracking 
+                SET status = $1, 
+                    metadata = COALESCE(metadata, '{}'::jsonb) || $2::jsonb,
                     updated_at = CURRENT_TIMESTAMP
-                WHERE message_id = $${paramCount} AND recipient_email = $${paramCount + 1}
+                WHERE message_id = $3 AND recipient_email = $4
                 RETURNING *
             `;
-            
-            values.push(messageId, recipientEmail);
 
-            const result = await client.query(query, values);
+            const values = [status, metadata, messageId, recipientEmail];
+            const result = await this.pool.query(query, values);
+
             return result.rows[0];
         } catch (error) {
-            logger.error('Erro ao atualizar status do tracking', {
+            logger.error('Erro ao atualizar status do email tracking', {
                 error: error.message,
                 messageId,
                 recipientEmail,
-                status
+                status,
+                metadata
             });
             throw error;
-        } finally {
-            client.release();
         }
     }
 
     async findByMessageAndRecipient(messageId, recipientEmail) {
-        const client = await this.pool.connect();
         try {
             const query = `
-                SELECT *
-                FROM messages.email_tracking
+                SELECT * FROM public.email_tracking
                 WHERE message_id = $1 AND recipient_email = $2
             `;
-            
-            const result = await client.query(query, [messageId, recipientEmail]);
+
+            const values = [messageId, recipientEmail];
+            const result = await this.pool.query(query, values);
+
             return result.rows[0];
         } catch (error) {
-            logger.error('Erro ao buscar tracking', {
+            logger.error('Erro ao buscar email tracking', {
                 error: error.message,
                 messageId,
                 recipientEmail
             });
             throw error;
-        } finally {
-            client.release();
         }
     }
 
     async findUnconfirmed(minutes = 30) {
-        const client = await this.pool.connect();
         try {
             const query = `
-                SELECT *
-                FROM messages.email_tracking
-                WHERE status IN ('PENDING', 'QUEUED')
+                SELECT * FROM public.email_tracking
+                WHERE status = 'PENDING'
                 AND created_at < NOW() - INTERVAL '${minutes} minutes'
-                ORDER BY created_at ASC
             `;
-            
-            const result = await client.query(query);
+
+            const result = await this.pool.query(query);
             return result.rows;
         } catch (error) {
-            logger.error('Erro ao buscar trackings não confirmados', {
+            logger.error('Erro ao buscar emails não confirmados', {
                 error: error.message,
                 minutes
             });
             throw error;
-        } finally {
-            client.release();
         }
     }
 }

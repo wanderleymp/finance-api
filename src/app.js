@@ -10,6 +10,7 @@ const path = require('path');
 
 // Importando rotas dos módulos
 const healthRoutes = require('./modules/health/health.routes');
+const authModule = require('./modules/auth/auth.module');
 const boletoModule = require('./modules/boletos/boleto.module');
 const movementRoutes = require('./modules/movements/movement.module');
 const movementPaymentRoutes = require('./modules/movement-payments/movement-payment.module');
@@ -38,38 +39,38 @@ app.use((req, res, next) => {
         url: req.url,
         path: req.path,
         originalUrl: req.originalUrl,
-        ip: req.ip
+        ip: req.ip,
+        headers: req.headers
     });
     next();
 });
 
 // Configurações básicas
-app.use(cors());
+app.use(cors({
+    origin: ['https://dev.agilefinance.com.br', 'http://localhost:3000'],
+    methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
+    allowedHeaders: ['Content-Type', 'Authorization'],
+    credentials: true
+}));
+
 app.use(
     helmet({
         contentSecurityPolicy: false,
-        crossOriginEmbedderPolicy: false
+        crossOriginEmbedderPolicy: false,
+        crossOriginResourcePolicy: false
     })
 );
+
 app.use(express.json());
 
 // Setup do Swagger
-app.get('/api-docs.json', (req, res) => {
-    res.setHeader('Content-Type', 'application/json');
-    res.send(swaggerSpec);
-});
+app.use('/docs', swaggerUi.serve, swaggerUi.setup(swaggerSpec));
 
-// Setup do Swagger UI
-app.use('/api-docs', swaggerUi.serve, swaggerUi.setup(swaggerSpec));
-
-// Rotas públicas
+// Rotas públicas (não precisam de autenticação)
 app.use('/health', healthRoutes);
+authModule.register(app); // Registra rotas de autenticação antes do middleware
 
-// Registra módulos
-const authModule = require('./modules/auth/auth.module');
-authModule.register(app);
-
-// Middleware de autenticação
+// Middleware de autenticação para todas as outras rotas
 app.use(authMiddleware);
 
 // Registra outros módulos (que precisam de autenticação)
@@ -101,32 +102,14 @@ taskTypesModule.register(app);
 taskDependenciesModule.register(app);
 taskLogsModule.register(app);
 
-// Inicializar módulos
-const initializeModules = async () => {
-    try {
-        // Inicializar módulo de mensagens
-        const messagesModuleInstance = new MessagesModule(app);
-        await messagesModuleInstance.initialize();
-    } catch (error) {
-        logger.error('Erro ao inicializar módulos', {
-            error: error.message,
-            stack: error.stack
-        });
-        throw error;
-    }
-};
-
-// Inicializar módulos
-initializeModules().catch(error => {
-    logger.error('Falha ao inicializar módulos', {
+// Registra o módulo de mensagens
+const messagesModuleInstance = new MessagesModule(app);
+messagesModuleInstance.initialize().catch(error => {
+    logger.error('Erro ao inicializar módulo de mensagens', {
         error: error.message,
         stack: error.stack
     });
-    process.exit(1);
 });
-
-// Registra o módulo de mensagens (depois do módulo de tasks)
-messagesModule(app);
 
 // Rota 404 para capturar requisições não encontradas
 app.use((req, res, next) => {

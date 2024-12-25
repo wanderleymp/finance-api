@@ -2,11 +2,11 @@ const JwtService = require('../config/jwt');
 const { logger } = require('./logger');
 
 const PUBLIC_ROUTES = [
-  { path: '/api/auth/login', method: 'POST' },
-  { path: '/api/auth/refresh-token', method: 'POST' },
-  { path: '/api/users/register', method: 'POST' },
-  { path: '/api/health', method: 'GET' },
-  { path: '/api/status', method: 'GET' }
+  { path: '/auth/login', method: 'POST' },
+  { path: '/auth/refresh-token', method: 'POST' },
+  { path: '/users/register', method: 'POST' },
+  { path: '/health', method: 'GET' },
+  { path: '/status', method: 'GET' }
 ];
 
 const authMiddleware = (req, res, next) => {
@@ -49,8 +49,11 @@ const authMiddleware = (req, res, next) => {
 
     return next();
   } catch (error) {
-    logger.error('Authentication error', { error: error.message });
-    return res.status(401).json({ error: 'Token invalid or expired' });
+    logger.error('Erro na autenticação', {
+      error: error.message,
+      stack: error.stack
+    });
+    return res.status(401).json({ error: 'Token invalid' });
   }
 };
 

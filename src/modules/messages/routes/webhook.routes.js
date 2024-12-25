@@ -2,6 +2,7 @@ const express = require('express');
 const router = express.Router();
 const { logger } = require('../../../middlewares/logger');
 const GraphWebhookService = require('../services/graph-webhook.service');
+const { authMiddleware } = require('../../../middlewares/auth');
 
 const webhookService = new GraphWebhookService();
 
@@ -34,7 +35,7 @@ router.post('/graph/messages', async (req, res) => {
 });
 
 // Endpoint para criar subscription manualmente
-router.post('/graph/subscribe', async (req, res) => {
+router.post('/graph/subscribe', authMiddleware, async (req, res) => {
     try {
         const subscription = await webhookService.createSubscription();
         res.json(subscription);
@@ -48,7 +49,7 @@ router.post('/graph/subscribe', async (req, res) => {
 });
 
 // Endpoint para renovar subscription
-router.post('/graph/renew/:subscriptionId', async (req, res) => {
+router.post('/graph/renew/:subscriptionId', authMiddleware, async (req, res) => {
     try {
         const subscription = await webhookService.renewSubscription(req.params.subscriptionId);
         res.json(subscription);
@@ -63,7 +64,7 @@ router.post('/graph/renew/:subscriptionId', async (req, res) => {
 });
 
 // Endpoint para deletar subscription
-router.delete('/graph/subscription/:subscriptionId', async (req, res) => {
+router.delete('/graph/subscription/:subscriptionId', authMiddleware, async (req, res) => {
     try {
         await webhookService.deleteSubscription(req.params.subscriptionId);
         res.status(204).send();
