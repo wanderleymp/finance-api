@@ -163,7 +163,7 @@ class TaskService {
 
     async findPendingTasks(limit = 10) {
         try {
-            logger.info('Buscando tasks pendentes', { limit });
+            logger.debug('Buscando tasks pendentes', { limit });
             return await this.repository.findPendingTasks(limit);
         } catch (error) {
             logger.error('Erro ao buscar tasks pendentes', {

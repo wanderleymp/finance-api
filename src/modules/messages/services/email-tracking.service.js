@@ -101,6 +101,41 @@ class EmailTrackingService {
             throw error;
         }
     }
+
+    async processEmailNotification(notification) {
+        try {
+            logger.info('Processando notificação de email', {
+                changeType: notification.changeType,
+                resource: notification.resource,
+                subscriptionId: notification.subscriptionId
+            });
+
+            // Extrair o ID da mensagem do resource
+            const messageId = notification.resourceData.id;
+
+            // Se a notificação for de criação ou atualização, buscar detalhes da mensagem
+            if (notification.changeType === 'created' || notification.changeType === 'updated') {
+                // Atualizar o status do email para DELIVERED
+                await this.updateStatus(messageId, null, 'DELIVERED', {
+                    notificationType: notification.changeType,
+                    receivedAt: new Date().toISOString()
+                });
+
+                logger.info('Notificação de email processada com sucesso', {
+                    messageId,
+                    changeType: notification.changeType
+                });
+            }
+
+            return true;
+        } catch (error) {
+            logger.error('Erro ao processar notificação de email', {
+                error: error.message,
+                notification
+            });
+            throw error;
+        }
+    }
 }
 
 module.exports = EmailTrackingService;

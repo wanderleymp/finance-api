@@ -11,7 +11,14 @@ class MessagesModule {
 
     registerRoutes() {
         // Registrar rotas do webhook
-        this.app.use('/webhooks', webhookRoutes);
+        this.app.use('/messages/webhooks', webhookRoutes);
+
+        logger.info('Rotas do módulo de mensagens registradas', {
+            routes: [
+                '/messages/webhooks/graph/subscribe',
+                '/messages/webhooks/graph/messages'
+            ]
+        });
     }
 
     scheduleJobs() {

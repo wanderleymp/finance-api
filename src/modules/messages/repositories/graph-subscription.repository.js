@@ -3,14 +3,14 @@ const BaseRepository = require('../../../repositories/base/BaseRepository');
 
 class GraphSubscriptionRepository extends BaseRepository {
     constructor() {
-        super('messages.graph_subscriptions', 'subscription_id');
+        super('public.graph_subscriptions', 'subscription_id');
     }
 
     async create(data) {
         const client = await this.pool.connect();
         try {
             const query = `
-                INSERT INTO messages.graph_subscriptions (
+                INSERT INTO public.graph_subscriptions (
                     subscription_id, resource, change_type, 
                     notification_url, expiration_date, client_state,
                     status
@@ -46,7 +46,7 @@ class GraphSubscriptionRepository extends BaseRepository {
         try {
             const query = `
                 SELECT *
-                FROM messages.graph_subscriptions
+                FROM public.graph_subscriptions
                 WHERE status = 'active'
                 AND expiration_date > NOW()
             `;
@@ -68,7 +68,7 @@ class GraphSubscriptionRepository extends BaseRepository {
         try {
             const query = `
                 SELECT *
-                FROM messages.graph_subscriptions
+                FROM public.graph_subscriptions
                 WHERE status = 'active'
                 AND expiration_date <= NOW() + INTERVAL '${hoursThreshold} hours'
                 AND expiration_date > NOW()
@@ -91,7 +91,7 @@ class GraphSubscriptionRepository extends BaseRepository {
         const client = await this.pool.connect();
         try {
             const query = `
-                UPDATE messages.graph_subscriptions
+                UPDATE public.graph_subscriptions
                 SET expiration_date = $1,
                     updated_at = CURRENT_TIMESTAMP
                 WHERE subscription_id = $2
@@ -116,7 +116,7 @@ class GraphSubscriptionRepository extends BaseRepository {
         const client = await this.pool.connect();
         try {
             const query = `
-                UPDATE messages.graph_subscriptions
+                UPDATE public.graph_subscriptions
                 SET status = 'inactive',
                     updated_at = CURRENT_TIMESTAMP
                 WHERE subscription_id = $1

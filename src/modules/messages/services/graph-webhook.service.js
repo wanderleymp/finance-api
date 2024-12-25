@@ -4,10 +4,10 @@ const { logger } = require('../../../middlewares/logger');
 const EmailTrackingService = require('./email-tracking.service');
 
 class GraphWebhookService {
-    constructor() {
+    constructor(subscriptionRepository) {
         // URL fixa para ambiente de desenvolvimento
         const baseUrl = 'https://dev.agilefinance.com.br';
-        const path = '/webhooks/graph/messages';
+        const path = '/messages/webhooks/graph/messages';
 
         logger.info('Inicializando GraphWebhookService com as seguintes configurações:', {
             baseUrl,
@@ -25,6 +25,7 @@ class GraphWebhookService {
         this.path = path;
         this.secret = process.env.GRAPH_WEBHOOK_SECRET;
         this.emailTrackingService = new EmailTrackingService();
+        this.subscriptionRepository = subscriptionRepository;
         
         this.initializeClient();
     }
@@ -70,6 +71,13 @@ class GraphWebhookService {
                 GRAPH_WEBHOOK_SECRET: this.secret
             };
 
+            logger.info('Verificando variáveis de ambiente', {
+                vars: Object.keys(requiredVars).reduce((acc, key) => {
+                    acc[key] = !!requiredVars[key];
+                    return acc;
+                }, {})
+            });
+
             const missingVars = Object.entries(requiredVars)
                 .filter(([_, value]) => !value)
                 .map(([key]) => key);
@@ -89,7 +97,7 @@ class GraphWebhookService {
             logger.info('Criando subscription com as seguintes configurações:', {
                 notificationUrl,
                 emailUser: process.env.MICROSOFT_EMAIL_USER,
-                certificateId: process.env.GRAPH_WEBHOOK_CERTIFICATE_ID
+                expirationDateTime: new Date(Date.now() + 3 * 24 * 60 * 60 * 1000)
             });
 
             const subscription = {
@@ -100,23 +108,48 @@ class GraphWebhookService {
                 clientState: this.secret,
                 includeResourceData: true,
                 latestSupportedTlsVersion: 'v1_2',
-                encryptionCertificate: process.env.GRAPH_WEBHOOK_CERTIFICATE,
+                encryptionCertificate: process.env.GRAPH_WEBHOOK_CERTIFICATE.replace(/\\n/g, '\n'),
                 encryptionCertificateId: process.env.GRAPH_WEBHOOK_CERTIFICATE_ID
             };
+
+            logger.info('Enviando requisição para o Microsoft Graph', {
+                subscription: {
+                    ...subscription,
+                    clientState: '***',
+                    encryptionCertificate: '***'
+                }
+            });
 
             const result = await this.graphClient.api('/subscriptions')
                 .post(subscription);
 
-            logger.info('Subscription criada com sucesso', {
+            logger.info('Subscription criada com sucesso no Graph', {
                 subscriptionId: result.id,
-                expirationDateTime: result.expirationDateTime
+                expirationDateTime: result.expirationDateTime,
+                result
+            });
+
+            // Salvar a subscription no banco de dados
+            const savedSubscription = await this.subscriptionRepository.create(result);
+
+            logger.info('Subscription salva no banco de dados', {
+                subscriptionId: savedSubscription.subscription_id,
+                expirationDate: savedSubscription.expiration_date,
+                savedSubscription
             });
 
             return result;
         } catch (error) {
             logger.error('Erro ao criar subscription', {
                 error: error.message,
-                stack: error.stack
+                stack: error.stack,
+                response: error.response ? {
+                    status: error.response.status,
+                    statusText: error.response.statusText,
+                    data: error.response.data,
+                    headers: error.response.headers
+                } : undefined,
+                graphError: error.graphError
             });
             throw error;
         }
@@ -198,6 +231,25 @@ class GraphWebhookService {
     validateWebhook(validationToken) {
         logger.info('Validando webhook', { validationToken });
         return validationToken;
+    }
+
+    async getGraphToken() {
+        try {
+            const credential = new ClientSecretCredential(
+                process.env.MICROSOFT_TENANT_ID,
+                process.env.MICROSOFT_CLIENT_ID,
+                process.env.MICROSOFT_CLIENT_SECRET
+            );
+
+            const response = await credential.getToken('https://graph.microsoft.com/.default');
+            return response.token;
+        } catch (error) {
+            logger.error('Erro ao obter token do Graph', {
+                error: error.message,
+                stack: error.stack
+            });
+            throw error;
+        }
     }
 }
 

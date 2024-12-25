@@ -63,12 +63,49 @@ app.use(
 
 app.use(express.json());
 
+// Log de todas as requisições
+app.use((req, res, next) => {
+    logger.info('Nova requisição recebida', {
+        method: req.method,
+        path: req.path,
+        query: req.query,
+        headers: req.headers,
+        body: req.body,
+        url: req.url,
+        originalUrl: req.originalUrl,
+        baseUrl: req.baseUrl
+    });
+
+    // Captura a resposta
+    const oldSend = res.send;
+    res.send = function (data) {
+        logger.info('Resposta enviada', {
+            method: req.method,
+            path: req.path,
+            statusCode: res.statusCode,
+            body: typeof data === 'string' ? data : JSON.stringify(data)
+        });
+        return oldSend.apply(res, arguments);
+    };
+
+    next();
+});
+
 // Setup do Swagger
 app.use('/docs', swaggerUi.serve, swaggerUi.setup(swaggerSpec));
 
 // Rotas públicas (não precisam de autenticação)
 app.use('/health', healthRoutes);
 authModule.register(app); // Registra rotas de autenticação antes do middleware
+
+// Registra o módulo de mensagens (precisa ter endpoints públicos)
+const messagesModuleInstance = new MessagesModule(app);
+messagesModuleInstance.initialize().catch(error => {
+    logger.error('Erro ao inicializar módulo de mensagens', {
+        error: error.message,
+        stack: error.stack
+    });
+});
 
 // Middleware de autenticação para todas as outras rotas
 app.use(authMiddleware);
@@ -101,15 +138,6 @@ taskModule.register(app);
 taskTypesModule.register(app);
 taskDependenciesModule.register(app);
 taskLogsModule.register(app);
-
-// Registra o módulo de mensagens
-const messagesModuleInstance = new MessagesModule(app);
-messagesModuleInstance.initialize().catch(error => {
-    logger.error('Erro ao inicializar módulo de mensagens', {
-        error: error.message,
-        stack: error.stack
-    });
-});
 
 // Rota 404 para capturar requisições não encontradas
 app.use((req, res, next) => {
