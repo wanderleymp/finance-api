@@ -6,29 +6,73 @@ class ChatRepository extends BaseRepository {
         super('chats', 'chat_id');
     }
 
-    async createChat() {
+    async findAll(filters = {}, page = 1, limit = 20) {
         const client = await this.pool.connect();
         try {
-            const query = `
-            INSERT INTO chats (
-                status,
-                allow_reply
-            )
-            VALUES ($1, $2)
-            RETURNING *
+            const offset = (page - 1) * limit;
+            let query = `
+                SELECT 
+                    c.*,
+                    cp.person_contact_id as owner_id,
+                    ct.contact_value as owner_email,
+                    p.full_name as owner_name,
+                    lm.content as last_message,
+                    lm.created_at as last_message_date,
+                    COUNT(*) OVER() as total_count
+                FROM chats c
+                LEFT JOIN chat_participants cp ON c.chat_id = cp.chat_id AND cp.role = 'OWNER'
+                LEFT JOIN person_contacts pc ON cp.person_contact_id = pc.person_contact_id
+                LEFT JOIN contacts ct ON pc.contact_id = ct.contact_id AND ct.contact_type = 'email'
+                LEFT JOIN persons p ON pc.person_id = p.person_id
+                LEFT JOIN chat_messages lm ON c.last_message_id = lm.message_id
+                WHERE c.status = 'ACTIVE'
             `;
-            const values = ['ACTIVE', true];
+            const values = [];
+            let paramCount = 1;
+
+            // Filtro por pessoa
+            if (filters.personContactId) {
+                query += ` AND cp.person_contact_id = $${paramCount++}`;
+                values.push(filters.personContactId);
+            }
+
+            // Ordenação e paginação
+            query += ` ORDER BY COALESCE(lm.created_at, c.created_at) DESC`;
+            query += ` LIMIT $${paramCount++} OFFSET $${paramCount++}`;
+            values.push(limit, offset);
 
             const result = await client.query(query, values);
-            return result.rows[0];
+            const totalItems = parseInt(result.rows[0]?.total_count || 0);
+            
+            return {
+                items: result.rows || [],
+                meta: {
+                    totalItems,
+                    itemCount: result.rows?.length || 0,
+                    itemsPerPage: parseInt(limit),
+                    totalPages: Math.ceil(totalItems / limit),
+                    currentPage: parseInt(page)
+                }
+            };
         } catch (error) {
-            logger.error('Erro ao criar chat', {
-                error: error.message
+            logger.error('Erro ao listar chats', {
+                error: error.message,
+                stack: error.stack,
+                filters,
+                page,
+                limit
             });
             throw error;
         } finally {
             client.release();
         }
+    }
+
+    async createChat() {
+        return await this.create({
+            status: 'ACTIVE',
+            allow_reply: true
+        });
     }
 
     async findChatByPerson(personContactId) {
@@ -60,57 +104,18 @@ class ChatRepository extends BaseRepository {
     }
 
     async createMessage(chatId, direction, content, metadata = {}) {
-        const client = await this.pool.connect();
-        try {
-            const query = `
-            INSERT INTO chat_messages (
-                chat_id,
-                direction,
-                content,
-                metadata
-            )
-            VALUES ($1, $2, $3, $4)
-            RETURNING *
-            `;
-            const values = [chatId, direction, content, metadata];
-
-            const result = await client.query(query, values);
-            return result.rows[0];
-        } catch (error) {
-            logger.error('Erro ao criar mensagem', {
-                error: error.message,
-                chatId,
-                direction
-            });
-            throw error;
-        } finally {
-            client.release();
-        }
+        return await this.create({
+            chat_id: chatId,
+            direction,
+            content,
+            metadata
+        }, 'chat_messages', 'message_id');
     }
 
     async updateChatLastMessage(chatId, messageId) {
-        const client = await this.pool.connect();
-        try {
-            const query = `
-                UPDATE chats
-                SET last_message_id = $1
-                WHERE chat_id = $2
-                RETURNING *
-            `;
-            const values = [messageId, chatId];
-
-            const result = await client.query(query, values);
-            return result.rows[0];
-        } catch (error) {
-            logger.error('Erro ao atualizar última mensagem do chat', {
-                error: error.message,
-                chatId,
-                messageId
-            });
-            throw error;
-        } finally {
-            client.release();
-        }
+        return await this.update(chatId, {
+            last_message_id: messageId
+        });
     }
 
     async findMessagesByChat(chatId, page = 1, limit = 20) {
@@ -129,11 +134,17 @@ class ChatRepository extends BaseRepository {
             const values = [chatId, limit, offset];
 
             const result = await client.query(query, values);
+            const totalItems = parseInt(result.rows[0]?.total_count || 0);
+            
             return {
-                data: result.rows,
-                total: result.rows[0]?.total_count || 0,
-                page,
-                limit
+                items: result.rows || [],
+                meta: {
+                    totalItems,
+                    itemCount: result.rows?.length || 0,
+                    itemsPerPage: parseInt(limit),
+                    totalPages: Math.ceil(totalItems / limit),
+                    currentPage: parseInt(page)
+                }
             };
         } catch (error) {
             logger.error('Erro ao buscar mensagens do chat', {
@@ -149,32 +160,11 @@ class ChatRepository extends BaseRepository {
     }
 
     async updateMessageStatus(messageId, status) {
-        const client = await this.pool.connect();
-        try {
-            const query = `
-                UPDATE chat_messages
-                SET metadata = jsonb_set(
-                    COALESCE(metadata, '{}'::jsonb),
-                    '{status}',
-                    $1::jsonb
-                )
-                WHERE message_id = $2
-                RETURNING *
-            `;
-            const values = [JSON.stringify(status), messageId];
-
-            const result = await client.query(query, values);
-            return result.rows[0];
-        } catch (error) {
-            logger.error('Erro ao atualizar status da mensagem', {
-                error: error.message,
-                messageId,
+        return await this.update(messageId, {
+            metadata: {
                 status
-            });
-            throw error;
-        } finally {
-            client.release();
-        }
+            }
+        }, 'chat_messages', 'message_id');
     }
 }
 

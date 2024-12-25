@@ -1,4 +1,5 @@
 const testRoutes = require('./test.routes');
+const chatController = require('./chat.controller');
 const registerProcessors = require('./register-processors');
 const { logger } = require('../../middlewares/logger');
 
@@ -15,8 +16,18 @@ module.exports = (app) => {
     // Registra processadores de tasks
     registerProcessors(taskService, taskWorker);
     
+    // Registra rotas de chat
+    app.use('/messages/chat', chatController);
+    
     // Registra rotas de teste
     app.use('/messages/test', testRoutes(taskService));
 
-    logger.info('Módulo de mensagens registrado com sucesso');
+    logger.info('Módulo de mensagens registrado com sucesso', {
+        routes: [
+            '/messages/chat',
+            '/messages/chat/:chatId/messages',
+            '/messages/chat/billing/:personId',
+            '/messages/test/*'
+        ]
+    });
 };

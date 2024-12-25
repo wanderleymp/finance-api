@@ -3,7 +3,7 @@ const BaseRepository = require('../../repositories/base/BaseRepository');
 
 class ChatParticipantRepository extends BaseRepository {
     constructor() {
-        super('chat_participants');
+        super('chat_participants', 'participant_id');
     }
 
     async create(data) {
@@ -49,9 +49,10 @@ class ChatParticipantRepository extends BaseRepository {
                     p.full_name as person_name,
                     p.person_id
                 FROM chat_participants cp
-                JOIN person_contacts pc ON cp.person_contact_id = pc.person_contact_id
-                JOIN persons p ON pc.person_id = p.person_id
-                WHERE cp.chat_id = $1
+                LEFT JOIN person_contacts pc ON cp.person_contact_id = pc.id AND pc.type = 'EMAIL'
+                LEFT JOIN persons p ON pc.person_id = p.person_id
+                WHERE cp.chat_id = $1 AND cp.status = 'ACTIVE'
+                ORDER BY cp.created_at
             `;
             const values = [chatId];
 
@@ -68,75 +69,55 @@ class ChatParticipantRepository extends BaseRepository {
         }
     }
 
-    async findByPersonContactId(personContactId) {
+    async delete(chatId, personContactId) {
+        const client = await this.pool.connect();
+        try {
+            const query = `
+                UPDATE chat_participants
+                SET status = 'INACTIVE'
+                WHERE chat_id = $1 AND person_contact_id = $2
+                RETURNING *
+            `;
+            const values = [chatId, personContactId];
+
+            const result = await client.query(query, values);
+            return result.rows[0];
+        } catch (error) {
+            logger.error('Erro ao remover participante do chat', {
+                error: error.message,
+                chatId,
+                personContactId
+            });
+            throw error;
+        } finally {
+            client.release();
+        }
+    }
+
+    async findByPersonId(personId) {
         const client = await this.pool.connect();
         try {
             const query = `
                 SELECT 
                     cp.*,
                     c.status as chat_status,
-                    c.last_message_id
+                    c.last_message_id,
+                    lm.content as last_message,
+                    lm.created_at as last_message_date
                 FROM chat_participants cp
                 JOIN chats c ON cp.chat_id = c.chat_id
-                WHERE cp.person_contact_id = $1
+                LEFT JOIN chat_messages lm ON c.last_message_id = lm.message_id
+                WHERE cp.person_contact_id = $1 AND cp.status = 'ACTIVE'
+                ORDER BY COALESCE(lm.created_at, c.created_at) DESC
             `;
-            const values = [personContactId];
+            const values = [personId];
 
             const result = await client.query(query, values);
             return result.rows;
         } catch (error) {
-            logger.error('Erro ao buscar chats do participante', {
+            logger.error('Erro ao buscar chats da pessoa', {
                 error: error.message,
-                personContactId
-            });
-            throw error;
-        } finally {
-            client.release();
-        }
-    }
-
-    async updateStatus(chatId, personContactId, status) {
-        const client = await this.pool.connect();
-        try {
-            const query = `
-                UPDATE chat_participants
-                SET status = $1
-                WHERE chat_id = $2 AND person_contact_id = $3
-                RETURNING *
-            `;
-            const values = [status, chatId, personContactId];
-
-            const result = await client.query(query, values);
-            return result.rows[0];
-        } catch (error) {
-            logger.error('Erro ao atualizar status do participante', {
-                error: error.message,
-                chatId,
-                personContactId,
-                status
-            });
-            throw error;
-        } finally {
-            client.release();
-        }
-    }
-
-    async delete(chatId, personContactId) {
-        const client = await this.pool.connect();
-        try {
-            const query = `
-                DELETE FROM chat_participants
-                WHERE chat_id = $1 AND person_contact_id = $2
-            `;
-            const values = [chatId, personContactId];
-
-            await client.query(query, values);
-            return true;
-        } catch (error) {
-            logger.error('Erro ao remover participante do chat', {
-                error: error.message,
-                chatId,
-                personContactId
+                personId
             });
             throw error;
         } finally {
