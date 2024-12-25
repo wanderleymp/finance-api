@@ -147,6 +147,43 @@ class BaseRepository {
     }
 
     /**
+     * Busca um registro pelo ID
+     * @param {number|string} id - ID do registro
+     * @returns {Promise<Object|null>} Registro encontrado ou null
+     */
+    async findOne(id) {
+        try {
+            logger.debug('BaseRepository findOne - input:', {
+                id,
+                tableName: this.tableName,
+                primaryKey: this.primaryKey
+            });
+
+            const query = `
+                SELECT *
+                FROM ${this.tableName}
+                WHERE ${this.primaryKey} = $1
+            `;
+
+            const result = await this.pool.query(query, [id]);
+
+            logger.debug('BaseRepository findOne - result:', {
+                rowCount: result.rowCount,
+                tableName: this.tableName
+            });
+
+            return result.rows[0] || null;
+        } catch (error) {
+            logger.error('BaseRepository findOne - error:', {
+                error: error.message,
+                tableName: this.tableName,
+                id
+            });
+            throw error;
+        }
+    }
+
+    /**
      * Cria um novo registro
      */
     async create(data) {

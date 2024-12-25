@@ -293,6 +293,71 @@ class MovementController {
             });
         }
     }
+
+    /**
+     * Envia mensagem de faturamento
+     */
+    async sendBillingMessage(req, res) {
+        try {
+            const { id } = req.params;
+
+            logger.info('Controller: Iniciando envio de mensagem de faturamento', { 
+                movementId: id,
+                user: req.user // Log do usuário que está fazendo a requisição
+            });
+
+            // Busca movimento e pessoa
+            const movement = await this.service.findOne(id);
+            
+            if (!movement) {
+                logger.warn('Movimento não encontrado', { 
+                    movementId: id 
+                });
+                return res.status(404).json({ 
+                    error: 'Movimento não encontrado' 
+                });
+            }
+
+            // Verifica se o movimento tem pessoa associada
+            if (!movement.person) {
+                logger.warn('Movimento sem pessoa associada', { 
+                    movementId: id 
+                });
+                return res.status(400).json({ 
+                    error: 'Movimento não possui pessoa associada' 
+                });
+            }
+
+            // Processa mensagem de faturamento
+            await this.service._processBillingMessage(movement, movement.person);
+
+            logger.info('Mensagem de faturamento enviada com sucesso', { 
+                movementId: id,
+                personId: movement.person.person_id
+            });
+
+            return res.json({ 
+                message: 'Mensagem de faturamento enviada com sucesso' 
+            });
+        } catch (error) {
+            // Log detalhado do erro
+            logger.error('Erro completo ao enviar mensagem de faturamento', {
+                error: error,
+                errorMessage: error.message,
+                errorStack: error.stack,
+                movementId: req.params.id,
+                // Adiciona informações adicionais de contexto
+                requestBody: req.body,
+                requestParams: req.params,
+                requestQuery: req.query
+            });
+
+            return res.status(500).json({ 
+                error: 'Erro interno ao processar mensagem de faturamento',
+                details: error.message
+            });
+        }
+    }
 }
 
 module.exports = MovementController;

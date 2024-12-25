@@ -12,6 +12,7 @@ const BoletoService = require('../boletos/boleto.service');
 const BoletoRepository = require('../boletos/boleto.repository');
 const TaskService = require('../tasks/services/task.service');
 const TaskRepository = require('../tasks/repositories/task.repository');
+const PersonContactRepository = require('../person-contacts/person-contact.repository');
 const n8nService = require('../../services/n8n.service');
 const CacheService = require('../../services/cache.service');
 const express = require('express');
@@ -27,6 +28,7 @@ const installmentRepository = new InstallmentRepository();
 const repository = new MovementRepository(personRepository, movementTypeRepository, movementStatusRepository);
 const boletoRepository = new BoletoRepository(systemDatabase.pool);
 const taskRepository = new TaskRepository();
+const personContactRepository = new PersonContactRepository();
 const cacheService = new CacheService('movements');
 
 // Instancia os serviços auxiliares
@@ -55,7 +57,8 @@ const service = new MovementService({
     movementTypeRepository,
     movementStatusRepository,
     paymentMethodRepository,
-    installmentRepository
+    installmentRepository,
+    personContactRepository
 });
 
 // Instancia o controller

@@ -1,5 +1,6 @@
 const { Router } = require('express');
 const { validateRequest } = require('../../middlewares/requestValidator');
+const { logger } = require('../../middlewares/logger');
 const { 
     listMovementsSchema,
     createMovementSchema,
@@ -13,6 +14,18 @@ const movementItemRoutes = require('./movement-items.routes');
  */
 module.exports = (controller) => {
     const router = Router();
+
+    // Middleware de log para todas as rotas
+    router.use((req, res, next) => {
+        logger.info('Requisição recebida', {
+            method: req.method,
+            path: req.path,
+            body: req.body,
+            params: req.params,
+            query: req.query
+        });
+        next();
+    });
 
     // Rotas de movimento
     router.get('/', 
@@ -59,8 +72,13 @@ module.exports = (controller) => {
         controller.updateStatus.bind(controller)
     );
 
+    // Nova rota para billing
+    router.post('/:id/billing',
+        controller.sendBillingMessage.bind(controller)
+    );
+
     // Adiciona rotas de items
-    router.use('/', movementItemRoutes());
+    router.use('/:id/items', movementItemRoutes(controller));
 
     return router;
 };

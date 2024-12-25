@@ -4,6 +4,7 @@ const MovementStatusRepository = require('../movement-statuses/movement-status.r
 const InstallmentRepository = require('../installments/installment.repository');
 const PersonRepository = require('../persons/person.repository');
 const PaymentMethodRepository = require('../payment-methods/payment-method.repository');
+const BillingMessageService = require('../messages/billing/billing-message.service');
 const { logger } = require('../../middlewares/logger');
 const { ValidationError } = require('../../utils/errors');
 const IMovementService = require('./interfaces/IMovementService');
@@ -18,7 +19,8 @@ class MovementService extends IMovementService {
         movementPaymentRepository,
         paymentMethodRepository,
         installmentRepository,
-        movementPaymentService
+        movementPaymentService,
+        personContactRepository
     }) {
         super();
         
@@ -29,6 +31,8 @@ class MovementService extends IMovementService {
         this.cacheService = cacheService;
         this.pool = pool;
         this.movementPaymentService = movementPaymentService;
+        this.personContactRepository = personContactRepository;
+        this.billingMessageService = new BillingMessageService();
 
         this.cachePrefix = 'movements';
         this.cacheTTL = {
@@ -149,6 +153,45 @@ class MovementService extends IMovementService {
                 error: error.message,
                 id,
                 detailed
+            });
+            throw error;
+        }
+    }
+
+    /**
+     * Busca movimento por ID com detalhes
+     * @param {number} id - ID do movimento
+     * @returns {Promise<Object>} Movimento com detalhes
+     */
+    async findOne(id) {
+        try {
+            // Busca movimento pelo repositório
+            const movement = await this.movementRepository.findById(id);
+            
+            if (!movement) {
+                logger.warn('Movimento não encontrado', { movementId: id });
+                return null;
+            }
+
+            // Busca pessoa do movimento
+            const person = await this.personRepository.findById(movement.person_id);
+            
+            // Adiciona pessoa ao movimento
+            movement.person = person;
+
+            // Busca outros detalhes se necessário
+            // Por exemplo, installments, payments, etc.
+
+            logger.info('Movimento encontrado', { 
+                movementId: id,
+                personId: person?.person_id 
+            });
+
+            return movement;
+        } catch (error) {
+            logger.error('Erro ao buscar movimento', {
+                error: error.message,
+                movementId: id
             });
             throw error;
         }
@@ -287,6 +330,10 @@ class MovementService extends IMovementService {
                 });
             }
 
+            // Após criar o movimento, envia mensagem de faturamento
+            const person = await this.personRepository.findById(data.person_id);
+            await this._processBillingMessage(movement, person);
+
             // Invalidar cache
             await this.invalidateCache();
 
@@ -301,6 +348,32 @@ class MovementService extends IMovementService {
             throw error;
         } finally {
             client.release();
+        }
+    }
+
+    /**
+     * Processa mensagem de faturamento
+     * @private
+     */
+    async _processBillingMessage(movement, person) {
+        try {
+            // Busca contatos da pessoa
+            const contacts = await this.personContactRepository.findByPerson(person.person_id);
+            
+            // Processa mensagem
+            await this.billingMessageService.processBillingMessage(movement, person, contacts);
+            
+            logger.info('Mensagem de faturamento enviada com sucesso', {
+                movementId: movement.id,
+                personId: person.person_id
+            });
+        } catch (error) {
+            logger.error('Erro ao processar mensagem de faturamento', {
+                error: error.message,
+                movementId: movement.id,
+                personId: person.person_id
+            });
+            // Não propaga o erro para não impactar o fluxo principal
         }
     }
 
