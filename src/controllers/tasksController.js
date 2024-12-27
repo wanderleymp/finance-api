@@ -113,28 +113,13 @@ class TasksController {
         try {
             const { id } = req.params;
             
-            // Buscar a task
-            const task = await this.taskService.getTaskById(id);
-            if (!task) {
-                throw new Error('Tarefa não encontrada');
-            }
+            // Processar a tarefa usando o método do serviço
+            const result = await this.taskService.processTask(id);
 
-            // Verificar se a task já foi processada
-            if (task.status !== 'pending') {
-                throw new Error(`Tarefa não pode ser processada pois está com status ${task.status}`);
-            }
-
-            // Processar baseado no tipo
-            switch (task.type_name) {
-                case 'BOLETO':
-                    // await BoletoProcessor.process(task);
-                    break;
-                // Adicionar outros tipos aqui
-                default:
-                    throw new Error(`Tipo de tarefa ${task.type_name} não suportado para processamento manual`);
-            }
-
-            res.status(200).json({ message: 'Tarefa processada com sucesso' });
+            res.status(200).json({ 
+                message: 'Tarefa processada com sucesso', 
+                result 
+            });
         } catch (error) {
             logger.error('Erro ao processar tarefa', { 
                 taskId: req.params.id,

@@ -43,7 +43,7 @@ class EmailProcessor extends BaseProcessor {
 
             // Registra no chat
             const mainRecipient = to[0]; // Primeiro destinatário é o principal
-            const otherRecipients = to.slice(1); // Outros destinatários são participantes
+            const otherRecipients = Array.isArray(to) && to.length > 1 ? to.slice(1) : [];
 
             // Cria ou encontra o chat com todos os participantes
             const chat = await this.chatService.findOrCreateChat(

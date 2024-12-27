@@ -5,7 +5,10 @@ const TaskDependenciesService = require('../taskdependencies/taskdependencies.se
 class TaskService {
     constructor({ taskRepository, taskLogsService, taskDependenciesService, taskTypesRepository }) {
         this.repository = taskRepository;
-        this.logsService = taskLogsService;
+        // Garante que logsService seja uma instância de TaskLogsService
+        this.logsService = taskLogsService instanceof TaskLogsService 
+            ? taskLogsService 
+            : new TaskLogsService();
         this.dependenciesService = taskDependenciesService;
         this.taskTypesRepository = taskTypesRepository;
     }
@@ -234,32 +237,106 @@ class TaskService {
 
     async processTask(id) {
         try {
-            logger.info('Processando task', { id });
+            logger.info('Iniciando processamento de task', { 
+                id,
+                logsService: this.logsService ? Object.keys(this.logsService) : 'Sem logsService'
+            });
+
+            // Verifica se logsService tem o método create
+            if (!this.logsService || typeof this.logsService.create !== 'function') {
+                logger.error('Método create não encontrado no logsService', { 
+                    logsService: this.logsService,
+                    logsServiceType: typeof this.logsService,
+                    logsServiceKeys: this.logsService ? Object.keys(this.logsService) : 'N/A'
+                });
+                throw new Error('Serviço de logs não configurado corretamente');
+            }
+
+            // Busca a task
+            const task = await this.repository.findById(id);
+            if (!task) {
+                throw new Error('Task não encontrada');
+            }
+
+            logger.debug('Task encontrada', { 
+                task,
+                payload: task.payload
+            });
 
             // Atualiza status para running
-            await this.update(id, { status: 'running' });
+            await this.repository.update(id, { status: 'running' });
 
-            // Aqui você implementaria a lógica de processamento da task
-            // Por exemplo, chamar um worker específico baseado no tipo da task
+            // Cria log de início de processamento
+            await this.logsService.create({
+                task_id: id,
+                status: 'running',
+                metadata: { action: 'process_start' }
+            });
 
-            // Por enquanto, vamos apenas simular um processamento bem-sucedido
-            await new Promise(resolve => setTimeout(resolve, 1000));
+            // Processa a task baseado no tipo
+            const payload = JSON.parse(task.payload);
+            
+            logger.info('Processando payload da task', { 
+                taskId: id, 
+                taskType: task.type_id, 
+                payloadType: typeof payload 
+            });
 
-            // Atualiza status para success
-            await this.update(id, { status: 'success' });
+            // Lógica de processamento específica (a ser implementada)
+            // Por exemplo:
+            // switch(task.type_id) {
+            //     case 1: // boleto
+            //         await this.processBoletotask(payload);
+            //         break;
+            //     case 3: // email
+            //         await this.processEmailTask(payload);
+            //         break;
+            //     default:
+            //         throw new Error(`Tipo de task não suportado: ${task.type_id}`);
+            // }
+
+            // Atualiza status para completed
+            await this.repository.update(id, { status: 'completed' });
+
+            // Cria log de conclusão
+            await this.logsService.create({
+                task_id: id,
+                status: 'completed',
+                metadata: { action: 'process_end' }
+            });
+
+            logger.info('Task processada com sucesso', { id });
 
             return true;
         } catch (error) {
             logger.error('Erro ao processar task', {
                 error: error.message,
+                errorStack: error.stack,
                 id
             });
 
             // Atualiza status para error
-            await this.update(id, { 
+            await this.repository.update(id, { 
                 status: 'error',
                 error_message: error.message
             });
+
+            // Cria log de erro
+            try {
+                await this.logsService.create({
+                    task_id: id,
+                    status: 'error',
+                    metadata: { 
+                        action: 'process_error',
+                        error_message: error.message
+                    }
+                });
+            } catch (logError) {
+                logger.error('Erro ao criar log de erro', {
+                    originalError: error.message,
+                    logError: logError.message
+                });
+            }
 
             throw error;
         }

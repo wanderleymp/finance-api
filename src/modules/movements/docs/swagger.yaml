@@ -83,6 +83,52 @@ paths:
               schema:
                 $ref: '#/components/schemas/MovementItem'
 
+  /movements/{id}/billing:
+    post:
+      tags:
+        - Billing
+      summary: Envia email de faturamento para um movimento
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: integer
+          description: ID do movimento
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                recipient:
+                  type: object
+                  properties:
+                    email:
+                      type: string
+                      description: Email do destinatário
+                    person_contact_id:
+                      type: integer
+                      description: ID de contato da pessoa
+                  required:
+                    - email
+                    - person_contact_id
+      responses:
+        '200':
+          description: Email de faturamento enviado com sucesso
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                    description: Mensagem de confirmação
+                  taskId:
+                    type: integer
+                    description: ID da task de envio de email
+
 components:
   schemas:
     MovementItem:
