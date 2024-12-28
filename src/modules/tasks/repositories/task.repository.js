@@ -94,7 +94,7 @@ class TaskRepository extends BaseRepository {
     async findPendingTasks(limit = 10) {
         const client = await this.pool.connect();
         try {
-            logger.info('Buscando tasks pendentes', { limit });
+            // Removido o log desnecessário
             
             const query = `
                 SELECT t.*, tt.name as type_name
