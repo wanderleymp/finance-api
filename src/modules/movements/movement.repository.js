@@ -59,7 +59,7 @@ class MovementRepository extends BaseRepository {
                 LEFT JOIN persons p ON m.person_id = p.person_id
                 LEFT JOIN person_documents pd ON p.person_id = pd.person_id AND pd.document_type = 'CPF'
                 LEFT JOIN movement_types mt ON m.movement_type_id = mt.movement_type_id
-                LEFT JOIN movement_status ms ON m.movement_status_id = ms.status_id
+                LEFT JOIN movement_statuses ms ON m.movement_status_id = ms.movement_status_id
                 WHERE m.movement_id = $1
             `;
 
