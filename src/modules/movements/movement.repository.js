@@ -3,230 +3,35 @@ const { logger } = require('../../middlewares/logger');
 const { DatabaseError } = require('../../utils/errors');
 
 class MovementRepository extends BaseRepository {
-    constructor(personRepository, movementTypeRepository, movementStatusRepository) {
+    constructor() {
         super('movements', 'movement_id');
-        if (!personRepository || !movementTypeRepository || !movementStatusRepository) {
-            throw new Error('Repositórios são obrigatórios');
-        }
-        this.personRepository = personRepository;
-        this.movementTypeRepository = movementTypeRepository;
-        this.movementStatusRepository = movementStatusRepository;
     }
 
     async findAll(page = 1, limit = 10, filters = {}) {
         try {
             logger.info('Repository: Buscando movimentos', { page, limit, filters });
 
-            const queryParams = [];
-            const conditions = [];
-            let paramCount = 1;
+            // Adiciona joins personalizados aos filtros
+            const customFilters = { ...filters };
 
-            // Filtros básicos
-            if (filters.status) {
-                conditions.push(`m.status = $${paramCount}`);
-                queryParams.push(filters.status);
-                paramCount++;
-            }
-
-            if (filters.person_id) {
-                conditions.push(`m.person_id = $${paramCount}`);
-                queryParams.push(filters.person_id);
-                paramCount++;
-            }
-
-            if (filters.movement_type_id) {
-                conditions.push(`m.movement_type_id = $${paramCount}`);
-                queryParams.push(filters.movement_type_id);
-                paramCount++;
-            }
-
-            if (filters.start_date) {
-                conditions.push(`m.movement_date >= $${paramCount}`);
-                queryParams.push(filters.start_date);
-                paramCount++;
-            }
-
-            if (filters.end_date) {
-                conditions.push(`m.movement_date <= $${paramCount}`);
-                queryParams.push(filters.end_date);
-                paramCount++;
-            }
-
-            const whereClause = conditions.length > 0 
-                ? `WHERE ${conditions.join(' AND ')}` 
-                : '';
-
-            const offset = (page - 1) * limit;
-
-            // Query base
-            let query = `
-                SELECT m.*
+            // Query personalizada com joins
+            const customQuery = `
+                SELECT 
+                    m.*,
+                    ms.status_name,
+                    mt.type_name,
+                    p.full_name as person_name
                 FROM movements m
-                ${whereClause}
-                ORDER BY m.movement_date DESC
-                LIMIT $${paramCount} OFFSET $${paramCount + 1}
+                LEFT JOIN movement_statuses ms ON m.movement_status_id = ms.movement_status_id
+                LEFT JOIN movement_types mt ON m.movement_type_id = mt.movement_type_id
+                LEFT JOIN persons p ON m.person_id = p.person_id
             `;
 
-            // Query de contagem
-            const countQuery = `
-                SELECT COUNT(*) as total
-                FROM movements m
-                ${whereClause}
-            `;
-
-            // Adiciona parâmetros de paginação
-            queryParams.push(limit, offset);
-
-            logger.info('Repository: Executando queries', { query, countQuery, queryParams });
-
-            // Executa as queries
-            const [resultQuery, countResult] = await Promise.all([
-                this.pool.query(query, queryParams),
-                this.pool.query(countQuery, queryParams.slice(0, -2))
-            ]);
-
-            const total = parseInt(countResult.rows[0].total);
-            const totalPages = Math.ceil(total / limit);
-
-            // Busca dados relacionados
-            let movements = await Promise.all(resultQuery.rows.map(async (movement) => {
-                // Busca pessoa
-                const person = await this.personRepository.findById(movement.person_id);
-                if (person) {
-                    movement.person_name = person.person_name;
-                    movement.person_document = person.document;
-                }
-
-                // Busca tipo de movimento
-                const movementType = await this.movementTypeRepository.findById(movement.movement_type_id);
-                if (movementType) {
-                    movement.type_name = movementType.type_name;
-                }
-
-                // Busca status do movimento
-                const movementStatus = await this.movementStatusRepository.findById(movement.movement_status_id);
-                if (movementStatus) {
-                    movement.status_name = movementStatus.status_name;
-                }
-
-                return movement;
-            }));
-
-            // Se include=payments, busca os pagamentos
-            if (filters.include?.startsWith('payments')) {
-                const movementIds = movements.map(row => row.movement_id);
-                
-                if (movementIds.length > 0) {
-                    const paymentsQuery = `
-                        SELECT 
-                            pay.*
-                        FROM movement_payments pay
-                        WHERE pay.movement_id = ANY($1)
-                        ORDER BY pay.created_at DESC
-                    `;
-
-                    const paymentsResult = await this.pool.query(paymentsQuery, [movementIds]);
-                    
-                    // Se include=payments.installments, busca as parcelas
-                    if (filters.include.includes('installments')) {
-                        const paymentIds = paymentsResult.rows.map(row => row.payment_id);
-                        
-                        if (paymentIds.length > 0) {
-                            const installmentsQuery = `
-                                SELECT 
-                                    i.*
-                                FROM installments i
-                                WHERE i.payment_id = ANY($1)
-                                ORDER BY i.due_date ASC
-                            `;
-
-                            const installmentsResult = await this.pool.query(installmentsQuery, [paymentIds]);
-                            
-                            // Se include=payments.installments.boletos, busca os boletos
-                            if (filters.include.includes('boletos')) {
-                                const installmentIds = installmentsResult.rows.map(row => row.installment_id);
-                                
-                                if (installmentIds.length > 0) {
-                                    const boletosQuery = `
-                                        SELECT 
-                                            b.boleto_id,
-                                            b.installment_id,
-                                            b.status,
-                                            b.generated_at,
-                                            b.boleto_number,
-                                            b.boleto_url,
-                                            b.codigo_barras,
-                                            b.linha_digitavel,
-                                            b.pix_copia_e_cola
-                                        FROM boletos b
-                                        WHERE b.installment_id = ANY($1)
-                                        ORDER BY b.generated_at DESC
-                                    `;
-
-                                    const boletosResult = await this.pool.query(boletosQuery, [installmentIds]);
-                                    
-                                    // Agrupa os boletos por installment_id
-                                    const boletosMap = boletosResult.rows.reduce((acc, boleto) => {
-                                        if (!acc[boleto.installment_id]) {
-                                            acc[boleto.installment_id] = [];
-                                        }
-                                        acc[boleto.installment_id].push(boleto);
-                                        return acc;
-                                    }, {});
-
-                                    // Adiciona os boletos às parcelas
-                                    installmentsResult.rows = installmentsResult.rows.map(installment => ({
-                                        ...installment,
-                                        boletos: boletosMap[installment.installment_id] || []
-                                    }));
-                                }
-                            }
-
-                            // Agrupa as parcelas por payment_id
-                            const installmentsMap = installmentsResult.rows.reduce((acc, installment) => {
-                                if (!acc[installment.payment_id]) {
-                                    acc[installment.payment_id] = [];
-                                }
-                                acc[installment.payment_id].push(installment);
-                                return acc;
-                            }, {});
-
-                            // Adiciona as parcelas aos pagamentos
-                            paymentsResult.rows = paymentsResult.rows.map(payment => ({
-                                ...payment,
-                                installments: installmentsMap[payment.payment_id] || []
-                            }));
-                        }
-                    }
-
-                    // Agrupa os pagamentos por movement_id
-                    const paymentsMap = paymentsResult.rows.reduce((acc, payment) => {
-                        if (!acc[payment.movement_id]) {
-                            acc[payment.movement_id] = [];
-                        }
-                        acc[payment.movement_id].push(payment);
-                        return acc;
-                    }, {});
-
-                    // Adiciona os pagamentos aos movimentos
-                    movements = movements.map(movement => ({
-                        ...movement,
-                        payments: paymentsMap[movement.movement_id] || []
-                    }));
-                }
-            }
-
-            logger.info('Repository: Resultado da busca', { movements, total, totalPages });
-
-            return {
-                data: movements,
-                pagination: {
-                    total,
-                    totalPages,
-                    currentPage: page,
-                    limit
-                }
-            };
+            // Usa o método findAll do BaseRepository com query personalizada
+            return await super.findAll(page, limit, customFilters, {
+                customQuery,
+                orderBy: 'm.movement_id DESC'
+            });
         } catch (error) {
             logger.error('Repository: Erro ao buscar movimentos', {
                 error: error.message,
@@ -245,8 +50,16 @@ class MovementRepository extends BaseRepository {
 
             const query = `
                 SELECT 
-                    m.*
+                    m.*,
+                    p.full_name,
+                    pd.document_value as document,
+                    mt.type_name,
+                    ms.status_name
                 FROM movements m
+                LEFT JOIN persons p ON m.person_id = p.person_id
+                LEFT JOIN person_documents pd ON p.person_id = pd.person_id AND pd.document_type = 'CPF'
+                LEFT JOIN movement_types mt ON m.movement_type_id = mt.movement_type_id
+                LEFT JOIN movement_status ms ON m.movement_status_id = ms.status_id
                 WHERE m.movement_id = $1
             `;
 
@@ -254,27 +67,6 @@ class MovementRepository extends BaseRepository {
 
             const { rows } = await this.pool.query(query, [id]);
             const movement = rows[0];
-
-            if (movement) {
-                // Busca pessoa
-                const person = await this.personRepository.findById(movement.person_id);
-                if (person) {
-                    movement.person_name = person.person_name;
-                    movement.person_document = person.document;
-                }
-
-                // Busca tipo de movimento
-                const movementType = await this.movementTypeRepository.findById(movement.movement_type_id);
-                if (movementType) {
-                    movement.type_name = movementType.type_name;
-                }
-
-                // Busca status do movimento
-                const movementStatus = await this.movementStatusRepository.findById(movement.movement_status_id);
-                if (movementStatus) {
-                    movement.status_name = movementStatus.status_name;
-                }
-            }
 
             logger.info('Repository: Resultado da busca por ID', { movement });
 
@@ -287,6 +79,129 @@ class MovementRepository extends BaseRepository {
                 id
             });
             throw error;
+        }
+    }
+
+    /**
+     * Cria um movimento com cliente de transação
+     * @param {Object} client - Cliente de transação
+     * @param {Object} data - Dados do movimento
+     * @returns {Promise<Object>} Movimento criado
+     */
+    async createWithClient(client, data) {
+        try {
+            logger.info('Repository: Criando movimento com cliente de transação', { data });
+
+            const columns = Object.keys(data);
+            const values = Object.values(data);
+            const placeholders = values.map((_, index) => `$${index + 1}`).join(', ');
+
+            const query = `
+                INSERT INTO ${this.tableName} (${columns.join(', ')})
+                VALUES (${placeholders})
+                RETURNING *
+            `;
+
+            const result = await client.query(query, values);
+            
+            logger.info('Repository: Movimento criado com sucesso', { 
+                movement_id: result.rows[0].movement_id 
+            });
+
+            return result.rows[0];
+        } catch (error) {
+            logger.error('Repository: Erro ao criar movimento', {
+                error: error.message,
+                data,
+                tableName: this.tableName
+            });
+            throw new DatabaseError('Erro ao criar movimento', error);
+        }
+    }
+
+    /**
+     * Atualiza movimento com cliente de transação
+     * @param {Object} client - Cliente de transação
+     * @param {number} id - ID do movimento
+     * @param {Object} data - Dados para atualização
+     * @returns {Promise<Object>} Movimento atualizado
+     */
+    async updateWithClient(client, id, data) {
+        try {
+            logger.info('Repository: Atualizando movimento com cliente de transação', { 
+                id, 
+                data 
+            });
+
+            const setColumns = Object.keys(data)
+                .map((key, index) => `${key} = $${index + 2}`)
+                .join(', ');
+
+            const query = `
+                UPDATE ${this.tableName}
+                SET ${setColumns}, updated_at = NOW()
+                WHERE ${this.primaryKey} = $1
+                RETURNING *
+            `;
+
+            const values = [id, ...Object.values(data)];
+
+            const result = await client.query(query, values);
+            
+            if (result.rows.length === 0) {
+                throw new DatabaseError(`Movimento com ID ${id} não encontrado`);
+            }
+
+            logger.info('Repository: Movimento atualizado com sucesso', { 
+                movement_id: result.rows[0].movement_id 
+            });
+
+            return result.rows[0];
+        } catch (error) {
+            logger.error('Repository: Erro ao atualizar movimento', {
+                error: error.message,
+                id,
+                data,
+                tableName: this.tableName
+            });
+            throw new DatabaseError('Erro ao atualizar movimento', error);
+        }
+    }
+
+    /**
+     * Remove movimento com cliente de transação
+     * @param {Object} client - Cliente de transação
+     * @param {number} id - ID do movimento
+     * @returns {Promise<Object>} Movimento removido
+     */
+    async deleteWithClient(client, id) {
+        try {
+            logger.info('Repository: Removendo movimento com cliente de transação', { id });
+
+            const query = `
+                DELETE FROM ${this.tableName}
+                WHERE ${this.primaryKey} = $1
+                RETURNING *
+            `;
+
+            const result = await client.query(query, [id]);
+            
+            if (result.rows.length === 0) {
+                throw new DatabaseError(`Movimento com ID ${id} não encontrado`);
+            }
+
+            logger.info('Repository: Movimento removido com sucesso', { 
+                movement_id: result.rows[0].movement_id 
+            });
+
+            return result.rows[0];
+        } catch (error) {
+            logger.error('Repository: Erro ao remover movimento', {
+                error: error.message,
+                id,
+                tableName: this.tableName
+            });
+            throw new DatabaseError('Erro ao remover movimento', error);
         }
     }
 }

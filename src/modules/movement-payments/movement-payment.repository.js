@@ -5,7 +5,6 @@ const { systemDatabase } = require('../../config/database');
 class MovementPaymentRepository extends BaseRepository {
     constructor() {
         super('movement_payments', 'payment_id');
-        this.pool = systemDatabase.pool;
     }
 
     /**
@@ -82,8 +81,8 @@ class MovementPaymentRepository extends BaseRepository {
 
             // Executa as queries
             const [result, countResult] = await Promise.all([
-                this.pool.query(query, queryParams),
-                this.pool.query(countQuery, queryParams.slice(0, -2))
+                systemDatabase.pool.query(query, queryParams),
+                systemDatabase.pool.query(countQuery, queryParams.slice(0, -2))
             ]);
 
             return {
@@ -116,7 +115,7 @@ class MovementPaymentRepository extends BaseRepository {
                 ORDER BY mp.created_at DESC
             `;
 
-            const { rows } = await this.pool.query(query, [movementId]);
+            const { rows } = await systemDatabase.pool.query(query, [movementId]);
             return rows;
         } catch (error) {
             logger.error('Erro ao buscar pagamentos do movimento', {
@@ -138,7 +137,7 @@ class MovementPaymentRepository extends BaseRepository {
 
             logger.info('Repository: Buscando movimento por ID', { id: movementId });
 
-            const result = await this.pool.query(query, [movementId]);
+            const result = await systemDatabase.pool.query(query, [movementId]);
 
             if (result.rows.length === 0) {
                 return null;
@@ -207,7 +206,7 @@ class MovementPaymentRepository extends BaseRepository {
                 RETURNING *
             `;
 
-            const { rows } = await this.pool.query(query, values);
+            const { rows } = await systemDatabase.pool.query(query, values);
             return rows[0];
         } catch (error) {
             logger.error('Erro ao atualizar pagamento', {
@@ -230,7 +229,7 @@ class MovementPaymentRepository extends BaseRepository {
                 RETURNING *
             `;
 
-            const { rows } = await this.pool.query(query, [id]);
+            const { rows } = await systemDatabase.pool.query(query, [id]);
             return rows[0];
         } catch (error) {
             logger.error('Erro ao remover pagamento', {
@@ -238,6 +237,129 @@ class MovementPaymentRepository extends BaseRepository {
                 id
             });
             throw error;
+        }
+    }
+
+    /**
+     * Cria um pagamento com cliente de transação
+     * @param {Object} client - Cliente de transação
+     * @param {Object} data - Dados do pagamento
+     * @returns {Promise<Object>} Pagamento criado
+     */
+    async createWithClient(client, data) {
+        try {
+            logger.info('Repository: Criando pagamento com cliente de transação', { data });
+
+            const columns = Object.keys(data);
+            const values = Object.values(data);
+            const placeholders = values.map((_, index) => `$${index + 1}`).join(', ');
+
+            const query = `
+                INSERT INTO ${this.tableName} (${columns.join(', ')}, created_at)
+                VALUES (${placeholders}, NOW())
+                RETURNING *
+            `;
+
+            const result = await client.query(query, values);
+            
+            logger.info('Repository: Pagamento criado com sucesso', { 
+                payment_id: result.rows[0].payment_id 
+            });
+
+            return result.rows[0];
+        } catch (error) {
+            logger.error('Repository: Erro ao criar pagamento', {
+                error: error.message,
+                data,
+                tableName: this.tableName
+            });
+            throw new DatabaseError('Erro ao criar pagamento', error);
+        }
+    }
+
+    /**
+     * Atualiza pagamento com cliente de transação
+     * @param {Object} client - Cliente de transação
+     * @param {number} id - ID do pagamento
+     * @param {Object} data - Dados para atualização
+     * @returns {Promise<Object>} Pagamento atualizado
+     */
+    async updateWithClient(client, id, data) {
+        try {
+            logger.info('Repository: Atualizando pagamento com cliente de transação', { 
+                id, 
+                data 
+            });
+
+            const setColumns = Object.keys(data)
+                .map((key, index) => `${key} = $${index + 2}`)
+                .join(', ');
+
+            const query = `
+                UPDATE ${this.tableName}
+                SET ${setColumns}, updated_at = NOW()
+                WHERE ${this.primaryKey} = $1
+                RETURNING *
+            `;
+
+            const values = [id, ...Object.values(data)];
+
+            const result = await client.query(query, values);
+            
+            if (result.rows.length === 0) {
+                throw new DatabaseError(`Pagamento com ID ${id} não encontrado`);
+            }
+
+            logger.info('Repository: Pagamento atualizado com sucesso', { 
+                payment_id: result.rows[0].payment_id 
+            });
+
+            return result.rows[0];
+        } catch (error) {
+            logger.error('Repository: Erro ao atualizar pagamento', {
+                error: error.message,
+                id,
+                data,
+                tableName: this.tableName
+            });
+            throw new DatabaseError('Erro ao atualizar pagamento', error);
+        }
+    }
+
+    /**
+     * Remove pagamento com cliente de transação
+     * @param {Object} client - Cliente de transação
+     * @param {number} id - ID do pagamento
+     * @returns {Promise<Object>} Pagamento removido
+     */
+    async deleteWithClient(client, id) {
+        try {
+            logger.info('Repository: Removendo pagamento com cliente de transação', { id });
+
+            const query = `
+                DELETE FROM ${this.tableName}
+                WHERE ${this.primaryKey} = $1
+                RETURNING *
+            `;
+
+            const result = await client.query(query, [id]);
+            
+            if (result.rows.length === 0) {
+                throw new DatabaseError(`Pagamento com ID ${id} não encontrado`);
+            }
+
+            logger.info('Repository: Pagamento removido com sucesso', { 
+                payment_id: result.rows[0].payment_id 
+            });
+
+            return result.rows[0];
+        } catch (error) {
+            logger.error('Repository: Erro ao remover pagamento', {
+                error: error.message,
+                id,
+                tableName: this.tableName
+            });
+            throw new DatabaseError('Erro ao remover pagamento', error);
         }
     }
 }

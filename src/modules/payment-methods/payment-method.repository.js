@@ -1,9 +1,133 @@
 const BaseRepository = require('../../repositories/base/BaseRepository');
 const { logger } = require('../../middlewares/logger');
+const { DatabaseError } = require('../../utils/errors');
 
 class PaymentMethodRepository extends BaseRepository {
     constructor() {
         super('payment_methods', 'payment_method_id');
+    }
+
+    /**
+     * Cria um método de pagamento com cliente de transação
+     * @param {Object} client - Cliente de transação
+     * @param {Object} data - Dados do método de pagamento
+     * @returns {Promise<Object>} Método de pagamento criado
+     */
+    async createWithClient(client, data) {
+        try {
+            logger.info('Repository: Criando método de pagamento com cliente de transação', { data });
+
+            const columns = Object.keys(data);
+            const values = Object.values(data);
+            const placeholders = values.map((_, index) => `$${index + 1}`).join(', ');
+
+            const query = `
+                INSERT INTO ${this.tableName} (${columns.join(', ')}, created_at)
+                VALUES (${placeholders}, NOW())
+                RETURNING *
+            `;
+
+            const result = await client.query(query, values);
+            
+            logger.info('Repository: Método de pagamento criado com sucesso', { 
+                payment_method_id: result.rows[0].payment_method_id 
+            });
+
+            return result.rows[0];
+        } catch (error) {
+            logger.error('Repository: Erro ao criar método de pagamento', {
+                error: error.message,
+                data,
+                tableName: this.tableName
+            });
+            throw new DatabaseError('Erro ao criar método de pagamento', error);
+        }
+    }
+
+    /**
+     * Atualiza método de pagamento com cliente de transação
+     * @param {Object} client - Cliente de transação
+     * @param {number} id - ID do método de pagamento
+     * @param {Object} data - Dados para atualização
+     * @returns {Promise<Object>} Método de pagamento atualizado
+     */
+    async updateWithClient(client, id, data) {
+        try {
+            logger.info('Repository: Atualizando método de pagamento com cliente de transação', { 
+                id, 
+                data 
+            });
+
+            const setColumns = Object.keys(data)
+                .map((key, index) => `${key} = $${index + 2}`)
+                .join(', ');
+
+            const query = `
+                UPDATE ${this.tableName}
+                SET ${setColumns}, updated_at = NOW()
+                WHERE ${this.primaryKey} = $1
+                RETURNING *
+            `;
+
+            const values = [id, ...Object.values(data)];
+
+            const result = await client.query(query, values);
+            
+            if (result.rows.length === 0) {
+                throw new DatabaseError(`Método de pagamento com ID ${id} não encontrado`);
+            }
+
+            logger.info('Repository: Método de pagamento atualizado com sucesso', { 
+                payment_method_id: result.rows[0].payment_method_id 
+            });
+
+            return result.rows[0];
+        } catch (error) {
+            logger.error('Repository: Erro ao atualizar método de pagamento', {
+                error: error.message,
+                id,
+                data,
+                tableName: this.tableName
+            });
+            throw new DatabaseError('Erro ao atualizar método de pagamento', error);
+        }
+    }
+
+    /**
+     * Remove método de pagamento com cliente de transação
+     * @param {Object} client - Cliente de transação
+     * @param {number} id - ID do método de pagamento
+     * @returns {Promise<Object>} Método de pagamento removido
+     */
+    async deleteWithClient(client, id) {
+        try {
+            logger.info('Repository: Removendo método de pagamento com cliente de transação', { id });
+
+            const query = `
+                DELETE FROM ${this.tableName}
+                WHERE ${this.primaryKey} = $1
+                RETURNING *
+            `;
+
+            const result = await client.query(query, [id]);
+            
+            if (result.rows.length === 0) {
+                throw new DatabaseError(`Método de pagamento com ID ${id} não encontrado`);
+            }
+
+            logger.info('Repository: Método de pagamento removido com sucesso', { 
+                payment_method_id: result.rows[0].payment_method_id 
+            });
+
+            return result.rows[0];
+        } catch (error) {
+            logger.error('Repository: Erro ao remover método de pagamento', {
+                error: error.message,
+                id,
+                tableName: this.tableName
+            });
+            throw new DatabaseError('Erro ao remover método de pagamento', error);
+        }
     }
 
     /**
@@ -37,7 +161,7 @@ class PaymentMethodRepository extends BaseRepository {
             // Query principal
             const query = `
                 SELECT *
-                FROM payment_methods
+                FROM ${this.tableName}
                 ${whereClause}
                 ORDER BY created_at DESC
                 LIMIT $${paramCount + 1} OFFSET $${paramCount + 2}
@@ -46,20 +170,11 @@ class PaymentMethodRepository extends BaseRepository {
             // Query de contagem
             const countQuery = `
                 SELECT COUNT(*) as total
-                FROM payment_methods
+                FROM ${this.tableName}
                 ${whereClause}
             `;
 
-            // Adiciona os parâmetros de paginação
             queryParams.push(limit, offset);
-
-            // Log da query
-            logger.info('Repository: Executando query', { 
-                query,
-                countQuery,
-                queryParams,
-                paramCount
-            });
 
             // Executa as queries
             const [result, countResult] = await Promise.all([
@@ -68,17 +183,19 @@ class PaymentMethodRepository extends BaseRepository {
             ]);
 
             return {
-                rows: result.rows,
-                count: parseInt(countResult.rows[0].total)
+                data: result.rows,
+                total: parseInt(countResult.rows[0].total),
+                page,
+                limit
             };
         } catch (error) {
-            logger.error('Erro ao listar formas de pagamento', {
+            logger.error('Erro ao buscar métodos de pagamento', {
                 error: error.message,
                 page,
                 limit,
                 filters
             });
-            throw error;
+            throw new DatabaseError('Erro ao buscar métodos de pagamento', error);
         }
     }
 
@@ -89,8 +206,8 @@ class PaymentMethodRepository extends BaseRepository {
         try {
             const query = `
                 SELECT *
-                FROM payment_methods
-                WHERE payment_method_id = $1
+                FROM ${this.tableName}
+                WHERE ${this.primaryKey} = $1
                 AND deleted_at IS NULL
             `;
 
@@ -101,7 +218,7 @@ class PaymentMethodRepository extends BaseRepository {
                 error: error.message,
                 id
             });
-            throw error;
+            throw new DatabaseError('Erro ao buscar forma de pagamento', error);
         }
     }
 
@@ -111,7 +228,7 @@ class PaymentMethodRepository extends BaseRepository {
     async create(data) {
         try {
             const query = `
-                INSERT INTO payment_methods (
+                INSERT INTO ${this.tableName} (
                     method_name,
                     description,
                     has_entry,
@@ -149,7 +266,7 @@ class PaymentMethodRepository extends BaseRepository {
                 error: error.message,
                 data
             });
-            throw error;
+            throw new DatabaseError('Erro ao criar forma de pagamento', error);
         }
     }
 
@@ -242,9 +359,9 @@ class PaymentMethodRepository extends BaseRepository {
             values.push(id);
 
             const query = `
-                UPDATE payment_methods
+                UPDATE ${this.tableName}
                 SET ${updates.join(', ')}
-                WHERE payment_method_id = $${paramCount}
+                WHERE ${this.primaryKey} = $${paramCount}
                 AND deleted_at IS NULL
                 RETURNING *
             `;
@@ -257,7 +374,7 @@ class PaymentMethodRepository extends BaseRepository {
                 id,
                 data
             });
-            throw error;
+            throw new DatabaseError('Erro ao atualizar forma de pagamento', error);
         }
     }
 
@@ -267,9 +384,9 @@ class PaymentMethodRepository extends BaseRepository {
     async delete(id) {
         try {
             const query = `
-                UPDATE payment_methods
+                UPDATE ${this.tableName}
                 SET deleted_at = NOW()
-                WHERE payment_method_id = $1
+                WHERE ${this.primaryKey} = $1
                 AND deleted_at IS NULL
                 RETURNING *
             `;
@@ -281,7 +398,7 @@ class PaymentMethodRepository extends BaseRepository {
                 error: error.message,
                 id
             });
-            throw error;
+            throw new DatabaseError('Erro ao remover forma de pagamento', error);
         }
     }
 }

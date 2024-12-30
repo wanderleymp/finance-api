@@ -15,7 +15,6 @@ class MovementService extends IMovementService {
     constructor({ 
         movementRepository, 
         cacheService,
-        pool,
         movementPaymentRepository,
         paymentMethodRepository,
         installmentRepository,
@@ -29,7 +28,6 @@ class MovementService extends IMovementService {
         this.paymentMethodRepository = paymentMethodRepository;
         this.installmentRepository = installmentRepository;
         this.cacheService = cacheService;
-        this.pool = pool;
         this.movementPaymentService = movementPaymentService;
         this.personContactRepository = personContactRepository;
         this.billingMessageService = new BillingMessageService();
@@ -200,95 +198,37 @@ class MovementService extends IMovementService {
     /**
      * Lista movimentos com paginação e filtros
      */
-    async findAll(page = 1, limit = 10, filters = {}, includes = []) {
+    async findAll(page = 1, limit = 10, filters = {}, detailed = false) {
         try {
-            logger.info('Service: Iniciando listagem de movimentos', {
-                page,
-                limit,
+            logger.info('Serviço: Listando movimentos', { 
+                page, 
+                limit, 
                 filters,
-                includes
+                detailed 
             });
 
-            // Valida os filtros
-            this.validateFilters(filters);
+            const result = await this.movementRepository.findAll(page, limit, filters);
 
-            // Prepara os filtros
-            const preparedFilters = this.prepareFilters(filters);
+            if (detailed) {
+                // Se detailed for true, adiciona informações adicionais para cada movimento
+                const detailedItems = await Promise.all(
+                    result.items.map(async (movement) => {
+                        const movementPayments = await this.movementPaymentRepository.findByMovementId(movement.movement_id);
+                        return {
+                            ...movement,
+                            payments: movementPayments
+                        };
+                    })
+                );
 
-            // Tenta buscar do cache
-            const cacheKey = this.cacheService?.generateKey(
-                `${this.cachePrefix}:${includes.join(',')}:list`, 
-                { page, limit, ...preparedFilters }
-            );
-            
-            if (this.cacheService) {
-                const cached = await this.cacheService.get(cacheKey);
-                if (cached) {
-                    logger.info('Service: Retornando lista do cache');
-                    return cached;
-                }
+                result.items = detailedItems;
             }
-
-            // Busca os movimentos básicos
-            const movements = await this.movementRepository.findAll(page, limit, preparedFilters);
-
-            // Para cada movimento, busca os dados relacionados
-            const enrichedData = await Promise.all(movements.data.map(async movement => {
-                return this.findById(movement.movement_id, this.parseIncludes(includes.join(',')));
-            }));
-
-            const result = {
-                data: enrichedData,
-                pagination: movements.pagination
-            };
-
-            // Salva no cache
-            await this.cacheService?.set(
-                cacheKey, 
-                result, 
-                this.cacheTTL.detail
-            );
 
             return result;
         } catch (error) {
-            logger.error('Erro ao listar movimentos no serviço', {
+            logger.error('Serviço: Erro ao listar movimentos', {
                 error: error.message,
-                page,
-                limit,
-                filters
-            });
-            throw error;
-        }
-    }
-
-    /**
-     * Lista todos os movimentos
-     */
-    async findAll(page = 1, limit = 10, filters = {}) {
-        try {
-            // Valida os filtros
-            this.validateFilters(filters);
-
-            // Prepara os filtros
-            const preparedFilters = this.prepareFilters(filters);
-
-            // Tenta buscar do cache
-            const cacheKey = `movements:${page}:${limit}:${JSON.stringify(preparedFilters)}`;
-            const cachedData = await this.cacheService?.get(cacheKey);
-            if (cachedData) {
-                return cachedData;
-            }
-
-            // Busca os movimentos com paginação
-            const result = await this.movementRepository.findAll(page, limit, preparedFilters);
-
-            // Salva no cache
-            await this.cacheService?.set(cacheKey, result, this.cacheTTL.list);
-
-            return result;
-        } catch (error) {
-            logger.error('Erro ao listar movimentos no serviço', {
-                error: error.message,
+                error_stack: error.stack,
                 page,
                 limit,
                 filters
@@ -301,10 +241,7 @@ class MovementService extends IMovementService {
      * Cria um novo movimento
      */
     async create(data) {
-        const client = await this.pool.connect();
-        try {
-            await client.query('BEGIN');
-            
+        return this.movementRepository.transaction(async (client) => {
             logger.info('Service: Criando novo movimento', { data });
 
             // Separar dados do movimento e do pagamento
@@ -313,8 +250,6 @@ class MovementService extends IMovementService {
             // Criar movimento
             const movement = await this.movementRepository.createWithClient(client, movementData);
             logger.info('Service: Movimento criado', { movement });
-
-            await client.query('COMMIT');
 
             // Se tiver payment_method_id, criar o movimento_payment usando a rota existente
             if (payment_method_id) {
@@ -338,17 +273,7 @@ class MovementService extends IMovementService {
             await this.invalidateCache();
 
             return new MovementResponseDTO(movement);
-        } catch (error) {
-            await client.query('ROLLBACK');
-            logger.error('Service: Erro ao criar movimento', {
-                error: error.message,
-                error_stack: error.stack,
-                data
-            });
-            throw error;
-        } finally {
-            client.release();
-        }
+        });
     }
 
     /**
@@ -545,58 +470,39 @@ class MovementService extends IMovementService {
      * Cria um novo pagamento para o movimento
      */
     async createPayment(movementId, paymentData) {
-        const client = await this.pool.connect();
-        try {
-            await client.query('BEGIN');
-            
-            logger.info('Service: Iniciando criação de pagamento', { 
-                movementId,
+        return this.movementPaymentRepository.transaction(async (client) => {
+            logger.info('Service: Criando pagamento para movimento', { 
+                movementId, 
                 paymentData 
             });
 
-            // Verifica se o movimento existe
-            const movement = await this.findById(movementId);
-            if (!movement) {
-                throw new ValidationError('Movimento não encontrado');
+            // Validar dados do pagamento
+            const validatedPaymentData = await this.validatePaymentData(paymentData);
+
+            // Criar pagamento
+            const payment = await this.movementPaymentRepository.createWithClient(
+                client, 
+                { 
+                    ...validatedPaymentData, 
+                    movement_id: movementId 
+                }
+            );
+
+            // Se houver parcelas, criar parcelas
+            if (paymentData.installments && paymentData.installments.length > 0) {
+                await this.createInstallments(client, payment.movement_payment_id, paymentData.installments);
             }
 
-            // Verifica se o método de pagamento existe
-            const paymentMethod = await this.paymentMethodRepository.findById(paymentData.payment_method_id);
-            if (!paymentMethod) {
-                throw new ValidationError('Método de pagamento não encontrado');
-            }
+            // Atualizar status do movimento se necessário
+            await this.updateMovementStatus(client, movementId, payment);
 
-            logger.info('Service: Criando pagamento', {
-                movement_id: movementId,
-                payment_method_id: paymentData.payment_method_id,
-                total_amount: movement.total_amount,
-                payment_method: paymentMethod
+            logger.info('Service: Pagamento criado com sucesso', { 
+                movementId, 
+                paymentId: payment.movement_payment_id 
             });
 
-            // Cria o pagamento
-            const payment = await this.movementPaymentService.createWithTransaction(client, {
-                movement_id: movementId,
-                payment_method_id: paymentData.payment_method_id,
-                total_amount: movement.total_amount,
-                status: 'PENDING'
-            });
-
-            logger.info('Service: Pagamento criado com sucesso', { payment });
-            
-            await client.query('COMMIT');
             return payment;
-
-        } catch (error) {
-            await client.query('ROLLBACK');
-            logger.error('Service: Erro ao criar pagamento', {
-                error: error.message,
-                movementId,
-                paymentData
-            });
-            throw error;
-        } finally {
-            client.release();
-        }
+        });
     }
 
     /**

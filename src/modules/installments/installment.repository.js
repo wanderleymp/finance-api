@@ -29,7 +29,7 @@ class InstallmentRepository extends BaseRepository {
                 error: error.message,
                 movementId
             });
-            throw error;
+            throw new DatabaseError('Erro ao buscar parcelas do movimento', error);
         }
     }
 
@@ -52,7 +52,7 @@ class InstallmentRepository extends BaseRepository {
                 error: error.message,
                 paymentId
             });
-            throw error;
+            throw new DatabaseError('Erro ao buscar parcelas do pagamento', error);
         }
     }
 
@@ -174,7 +174,7 @@ class InstallmentRepository extends BaseRepository {
                 limit,
                 filters
             });
-            throw new DatabaseError('Erro ao buscar parcelas');
+            throw new DatabaseError('Erro ao buscar parcelas', error);
         }
     }
 
@@ -276,6 +276,129 @@ class InstallmentRepository extends BaseRepository {
                 installmentId
             });
             throw error;
+        }
+    }
+
+    /**
+     * Cria uma parcela com cliente de transação
+     * @param {Object} client - Cliente de transação
+     * @param {Object} data - Dados da parcela
+     * @returns {Promise<Object>} Parcela criada
+     */
+    async createWithClient(client, data) {
+        try {
+            logger.info('Repository: Criando parcela com cliente de transação', { data });
+
+            const columns = Object.keys(data);
+            const values = Object.values(data);
+            const placeholders = values.map((_, index) => `$${index + 1}`).join(', ');
+
+            const query = `
+                INSERT INTO ${this.tableName} (${columns.join(', ')}, created_at)
+                VALUES (${placeholders}, NOW())
+                RETURNING *
+            `;
+
+            const result = await client.query(query, values);
+            
+            logger.info('Repository: Parcela criada com sucesso', { 
+                installment_id: result.rows[0].installment_id 
+            });
+
+            return result.rows[0];
+        } catch (error) {
+            logger.error('Repository: Erro ao criar parcela', {
+                error: error.message,
+                data,
+                tableName: this.tableName
+            });
+            throw new DatabaseError('Erro ao criar parcela', error);
+        }
+    }
+
+    /**
+     * Atualiza parcela com cliente de transação
+     * @param {Object} client - Cliente de transação
+     * @param {number} id - ID da parcela
+     * @param {Object} data - Dados para atualização
+     * @returns {Promise<Object>} Parcela atualizada
+     */
+    async updateWithClient(client, id, data) {
+        try {
+            logger.info('Repository: Atualizando parcela com cliente de transação', { 
+                id, 
+                data 
+            });
+
+            const setColumns = Object.keys(data)
+                .map((key, index) => `${key} = $${index + 2}`)
+                .join(', ');
+
+            const query = `
+                UPDATE ${this.tableName}
+                SET ${setColumns}, updated_at = NOW()
+                WHERE ${this.primaryKey} = $1
+                RETURNING *
+            `;
+
+            const values = [id, ...Object.values(data)];
+
+            const result = await client.query(query, values);
+            
+            if (result.rows.length === 0) {
+                throw new DatabaseError(`Parcela com ID ${id} não encontrada`);
+            }
+
+            logger.info('Repository: Parcela atualizada com sucesso', { 
+                installment_id: result.rows[0].installment_id 
+            });
+
+            return result.rows[0];
+        } catch (error) {
+            logger.error('Repository: Erro ao atualizar parcela', {
+                error: error.message,
+                id,
+                data,
+                tableName: this.tableName
+            });
+            throw new DatabaseError('Erro ao atualizar parcela', error);
+        }
+    }
+
+    /**
+     * Remove parcela com cliente de transação
+     * @param {Object} client - Cliente de transação
+     * @param {number} id - ID da parcela
+     * @returns {Promise<Object>} Parcela removida
+     */
+    async deleteWithClient(client, id) {
+        try {
+            logger.info('Repository: Removendo parcela com cliente de transação', { id });
+
+            const query = `
+                DELETE FROM ${this.tableName}
+                WHERE ${this.primaryKey} = $1
+                RETURNING *
+            `;
+
+            const result = await client.query(query, [id]);
+            
+            if (result.rows.length === 0) {
+                throw new DatabaseError(`Parcela com ID ${id} não encontrada`);
+            }
+
+            logger.info('Repository: Parcela removida com sucesso', { 
+                installment_id: result.rows[0].installment_id 
+            });
+
+            return result.rows[0];
+        } catch (error) {
+            logger.error('Repository: Erro ao remover parcela', {
+                error: error.message,
+                id,
+                tableName: this.tableName
+            });
+            throw new DatabaseError('Erro ao remover parcela', error);
         }
     }
 }

@@ -1,12 +1,10 @@
 const BaseRepository = require('../../repositories/base/BaseRepository');
 const { logger } = require('../../middlewares/logger');
 const { DatabaseError } = require('../../utils/errors');
-const { systemDatabase } = require('../../config/database');
 
 class BoletoRepository extends BaseRepository {
     constructor() {
         super('boletos', 'boleto_id');
-        this.pool = systemDatabase.pool;
     }
 
     /**
@@ -53,60 +51,39 @@ class BoletoRepository extends BaseRepository {
                 ? `WHERE ${conditions.join(' AND ')}` 
                 : '';
 
-            // Calcula o offset para paginação
             const offset = (page - 1) * limit;
 
-            // Query principal
             const query = `
                 SELECT 
                     b.*,
-                    i.installment_number,
-                    i.amount,
-                    i.due_date
+                    i.due_date,
+                    i.total_amount,
+                    COUNT(*) OVER() as total_count
                 FROM boletos b
-                LEFT JOIN installments i ON i.installment_id = b.installment_id
+                JOIN installments i ON b.installment_id = i.installment_id
                 ${whereClause}
-                ORDER BY b.generated_at DESC
+                ORDER BY i.due_date DESC
                 LIMIT $${paramCount} OFFSET $${paramCount + 1}
             `;
 
-            // Query de contagem
-            const countQuery = `
-                SELECT COUNT(*) as total
-                FROM boletos b
-                LEFT JOIN installments i ON i.installment_id = b.installment_id
-                ${whereClause}
-            `;
-
-            // Adiciona parâmetros de paginação
             queryParams.push(limit, offset);
 
-            // Executa as queries
-            const [resultQuery, countResult] = await Promise.all([
-                this.pool.query(query, queryParams),
-                this.pool.query(countQuery, queryParams.slice(0, -2))
-            ]);
-
-            const total = parseInt(countResult.rows[0].total);
-            const totalPages = Math.ceil(total / limit);
+            const result = await this.query(query, queryParams);
 
             return {
-                data: resultQuery.rows,
-                pagination: {
-                    total,
-                    totalPages,
-                    currentPage: page,
-                    limit
-                }
+                data: result.rows,
+                total: result.rows.length > 0 ? parseInt(result.rows[0].total_count) : 0,
+                page,
+                limit
             };
         } catch (error) {
             logger.error('Erro ao buscar boletos', {
                 error: error.message,
+                filters,
                 page,
-                limit,
-                filters
+                limit
             });
-            throw new DatabaseError('Erro ao buscar boletos');
+            throw new DatabaseError('Erro ao buscar boletos', error);
         }
     }
 
@@ -126,7 +103,7 @@ class BoletoRepository extends BaseRepository {
                 WHERE b.boleto_id = $1
             `;
 
-            const result = await this.pool.query(query, [boletoId]);
+            const result = await this.query(query, [boletoId]);
 
             if (result.rowCount === 0) {
                 return null;
@@ -146,10 +123,7 @@ class BoletoRepository extends BaseRepository {
      * Atualiza um boleto existente
      */
     async updateBoleto(boletoId, data) {
-        const client = await this.pool.connect();
         try {
-            await client.query('BEGIN');
-
             const query = `
                 UPDATE boletos
                 SET 
@@ -160,24 +134,20 @@ class BoletoRepository extends BaseRepository {
             `;
 
             const values = [data.status, boletoId];
-            const result = await client.query(query, values);
+            const result = await this.query(query, values);
 
             if (result.rowCount === 0) {
                 throw new Error('Boleto não encontrado');
             }
 
-            await client.query('COMMIT');
             return result.rows[0];
         } catch (error) {
-            await client.query('ROLLBACK');
             logger.error('Erro ao atualizar boleto', {
                 error: error.message,
                 boletoId,
                 data
             });
             throw new DatabaseError('Erro ao atualizar boleto');
-        } finally {
-            client.release();
         }
     }
 
@@ -185,10 +155,7 @@ class BoletoRepository extends BaseRepository {
      * Cria um novo boleto
      */
     async createBoleto(data) {
-        const client = await this.pool.connect();
         try {
-            await client.query('BEGIN');
-
             const query = `
                 INSERT INTO boletos (
                     installment_id,
@@ -210,8 +177,7 @@ class BoletoRepository extends BaseRepository {
                 data.payer_id
             ];
 
-            const result = await client.query(query, values);
-            await client.query('COMMIT');
+            const result = await this.query(query, values);
 
             logger.info('Boleto criado com sucesso', { 
                 boletoId: result.rows[0].boleto_id 
@@ -219,14 +185,11 @@ class BoletoRepository extends BaseRepository {
 
             return result.rows[0];
         } catch (error) {
-            await client.query('ROLLBACK');
             logger.error('Erro ao criar boleto no banco', {
                 error: error.message,
                 data
             });
             throw new DatabaseError('Erro ao criar boleto');
-        } finally {
-            client.release();
         }
     }
 }

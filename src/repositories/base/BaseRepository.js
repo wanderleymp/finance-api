@@ -11,7 +11,7 @@ class BaseRepository {
     /**
      * Lista todos os registros
      */
-    async findAll(page = 1, limit = 10, filters = {}) {
+    async findAll(page = 1, limit = 10, filters = {}, options = {}) {
         try {
             logger.debug('BaseRepository findAll - input:', {
                 page,
@@ -44,20 +44,29 @@ class BaseRepository {
                 ? `WHERE ${conditions.join(' AND ')}` 
                 : '';
 
-            // Query para buscar os dados
-            const query = `
+            // Usa query personalizada ou padrão
+            const baseQuery = options.customQuery || `
                 SELECT *
                 FROM ${this.tableName}
                 ${whereClause}
-                ORDER BY created_at DESC
+            `;
+
+            // Adiciona ORDER BY personalizado ou padrão
+            const orderByClause = options.orderBy 
+                ? `ORDER BY ${options.orderBy}` 
+                : `ORDER BY created_at DESC`;
+
+            // Query para buscar os dados
+            const query = `
+                ${baseQuery}
+                ${orderByClause}
                 LIMIT $${paramCount} OFFSET $${paramCount + 1}
             `;
 
             // Query para contar o total
             const countQuery = `
                 SELECT COUNT(*) as total
-                FROM ${this.tableName}
-                ${whereClause}
+                FROM (${baseQuery}) as subquery
             `;
 
             logger.debug('BaseRepository findAll - queries:', {
@@ -99,8 +108,7 @@ class BaseRepository {
                 tableName: this.tableName,
                 filters,
                 page,
-                limit,
-                stack: error.stack
+                limit
             });
             throw error;
         }
@@ -343,6 +351,42 @@ class BaseRepository {
                 stack: error.stack
             });
             throw error;
+        }
+    }
+
+    /**
+     * Executa uma transação de banco de dados
+     * @param {Function} callback - Função que recebe o cliente de transação
+     * @returns {Promise} Resultado da transação
+     */
+    async transaction(callback) {
+        const client = await this.pool.connect();
+        
+        try {
+            // Inicia a transação
+            await client.query('BEGIN');
+            
+            // Executa o callback com o cliente de transação
+            const result = await callback(client);
+            
+            // Confirma a transação
+            await client.query('COMMIT');
+            
+            return result;
+        } catch (error) {
+            // Em caso de erro, faz rollback
+            await client.query('ROLLBACK');
+            
+            logger.error('Erro em transação de banco', {
+                error: error.message,
+                stack: error.stack,
+                tableName: this.tableName
+            });
+            
+            throw error;
+        } finally {
+            // Sempre libera o cliente
+            client.release();
         }
     }
 }

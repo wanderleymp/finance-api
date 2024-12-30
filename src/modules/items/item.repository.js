@@ -1,20 +1,99 @@
 const { logger } = require('../../middlewares/logger');
 const BaseRepository = require('../../repositories/base/BaseRepository');
+const { DatabaseError } = require('../../utils/errors');
 
 class ItemRepository extends BaseRepository {
     constructor() {
         super('items', 'item_id');
     }
 
+    /**
+     * Cria um item
+     * @param {Object} data - Dados do item
+     * @returns {Promise<Object>} Item criado
+     */
+    async create(data) {
+        try {
+            const fields = Object.keys(data);
+            const values = Object.values(data);
+            const placeholders = fields.map((_, index) => `$${index + 1}`).join(', ');
+            
+            const query = `
+                INSERT INTO ${this.tableName} (${fields.join(', ')})
+                VALUES (${placeholders})
+                RETURNING item_id, code, name, description, price, active, created_at, updated_at
+            `;
+            
+            const result = await this.pool.query(query, values);
+            return result.rows[0];
+        } catch (error) {
+            logger.error('Erro ao criar item', { error, data });
+            throw error;
+        }
+    }
+
+    /**
+     * Atualiza item
+     * @param {number} id - ID do item
+     * @param {Object} data - Dados para atualização
+     * @returns {Promise<Object>} Item atualizado
+     */
+    async update(id, data) {
+        try {
+            const fields = Object.keys(data);
+            const values = Object.values(data);
+            const setClause = fields.map((field, index) => `${field} = $${index + 1}`).join(', ');
+            
+            const query = `
+                UPDATE ${this.tableName}
+                SET ${setClause}, updated_at = CURRENT_TIMESTAMP
+                WHERE item_id = $${fields.length + 1} AND deleted_at IS NULL
+                RETURNING item_id, code, name, description, price, active, created_at, updated_at
+            `;
+            
+            const result = await this.pool.query(query, [...values, id]);
+            return result.rows[0];
+        } catch (error) {
+            logger.error('Erro ao atualizar item', { error, id, data });
+            throw error;
+        }
+    }
+
+    /**
+     * Remove item
+     * @param {number} id - ID do item
+     * @returns {Promise<boolean>} True se removido com sucesso
+     */
+    async delete(id) {
+        try {
+            const query = `
+                UPDATE ${this.tableName}
+                SET deleted_at = CURRENT_TIMESTAMP
+                WHERE item_id = $1 AND deleted_at IS NULL
+            `;
+            await this.pool.query(query, [id]);
+            return true;
+        } catch (error) {
+            logger.error('Erro ao remover item', { error, id });
+            throw error;
+        }
+    }
+
+    /**
+     * Busca itens com filtros
+     * @param {Object} filters - Filtros para busca
+     * @param {number} page - Página atual
+     * @param {number} limit - Limite de itens por página
+     * @returns {Promise<Object>} Resultado da busca
+     */
     async findAll(filters = {}, page = 1, limit = 10) {
-        const client = await this.pool.connect();
         try {
             const offset = (page - 1) * limit;
 
             // Constrói a query base
             let query = `
                 SELECT i.*, COUNT(*) OVER() as total_count
-                FROM items i
+                FROM ${this.tableName} i
                 WHERE 1=1
             `;
             const values = [];
@@ -52,41 +131,34 @@ class ItemRepository extends BaseRepository {
                 values.push(filters.active);
             }
 
-            // Ordenação padrão por name se não especificado
-            const validFields = ['code', 'name', 'price', 'created_at'];
-            const orderBy = validFields.includes(filters.orderBy) ? filters.orderBy : 'name';
-            const orderDirection = ['ASC', 'DESC'].includes(filters.orderDirection) ? filters.orderDirection : 'ASC';
-            query += ` ORDER BY ${orderBy} ${orderDirection}`;
-
-            // Adiciona paginação
-            query += ` LIMIT $${paramCount++} OFFSET $${paramCount++}`;
+            // Adiciona ordenação e paginação
+            query += ` ORDER BY created_at DESC LIMIT $${paramCount++} OFFSET $${paramCount++}`;
             values.push(limit, offset);
 
-            const result = await client.query(query, values);
-
-            const totalCount = result.rows[0]?.total_count || 0;
-            const totalPages = Math.ceil(totalCount / limit);
+            const result = await this.pool.query(query, values);
 
             return {
-                data: result.rows.map(row => {
-                    delete row.total_count;
-                    return row;
-                }),
-                pagination: {
-                    total: parseInt(totalCount),
-                    totalPages,
-                    currentPage: page,
-                    limit
-                }
+                data: result.rows,
+                total: result.rows.length > 0 ? parseInt(result.rows[0].total_count) : 0,
+                page,
+                limit
             };
         } catch (error) {
-            logger.error('Repository: Erro ao listar items', { error });
-            throw error;
-        } finally {
-            client.release();
+            logger.error('Erro ao buscar itens', {
+                error: error.message,
+                filters,
+                page,
+                limit
+            });
+            throw new DatabaseError('Erro ao buscar itens', error);
         }
     }
 
+    /**
+     * Busca item por ID
+     * @param {number} id - ID do item
+     * @returns {Promise<Object>} Item encontrado
+     */
     async findById(id) {
         try {
             const query = `
@@ -98,62 +170,6 @@ class ItemRepository extends BaseRepository {
             return result.rows[0] || null;
         } catch (error) {
             logger.error('Erro ao buscar item por ID', { error, id });
-            throw error;
-        }
-    }
-
-    async create(data) {
-        try {
-            const fields = Object.keys(data);
-            const values = Object.values(data);
-            const placeholders = fields.map((_, index) => `$${index + 1}`).join(', ');
-            
-            const query = `
-                INSERT INTO ${this.tableName} (${fields.join(', ')})
-                VALUES (${placeholders})
-                RETURNING item_id, code, name, description, price, active, created_at, updated_at
-            `;
-            
-            const result = await this.pool.query(query, values);
-            return result.rows[0];
-        } catch (error) {
-            logger.error('Erro ao criar item', { error, data });
-            throw error;
-        }
-    }
-
-    async update(id, data) {
-        try {
-            const fields = Object.keys(data);
-            const values = Object.values(data);
-            const setClause = fields.map((field, index) => `${field} = $${index + 1}`).join(', ');
-            
-            const query = `
-                UPDATE ${this.tableName}
-                SET ${setClause}, updated_at = CURRENT_TIMESTAMP
-                WHERE item_id = $${fields.length + 1} AND deleted_at IS NULL
-                RETURNING item_id, code, name, description, price, active, created_at, updated_at
-            `;
-            
-            const result = await this.pool.query(query, [...values, id]);
-            return result.rows[0];
-        } catch (error) {
-            logger.error('Erro ao atualizar item', { error, id, data });
-            throw error;
-        }
-    }
-
-    async delete(id) {
-        try {
-            const query = `
-                UPDATE ${this.tableName}
-                SET deleted_at = CURRENT_TIMESTAMP
-                WHERE item_id = $1 AND deleted_at IS NULL
-            `;
-            await this.pool.query(query, [id]);
-            return true;
-        } catch (error) {
-            logger.error('Erro ao remover item', { error, id });
             throw error;
         }
     }
