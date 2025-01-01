@@ -126,11 +126,43 @@ class InstallmentRepository extends BaseRepository {
             const totalItems = parseInt(countResult.rows[0].total);
             const totalPages = Math.ceil(totalItems / limit);
 
+            // Agrupa os boletos por installment_id
+            const boletosMap = dataResult.rows.reduce((acc, row) => {
+                const installmentId = row.installment_id;
+                if (!acc[installmentId]) {
+                    acc[installmentId] = [];
+                }
+                if (row.boleto_id) {
+                    acc[installmentId].push({
+                        boleto_id: row.boleto_id,
+                        boleto_number: row.boleto_number,
+                        boleto_url: row.boleto_url,
+                        status: row.boleto_status
+                    });
+                }
+                return acc;
+            }, {});
+
+            // Remove duplicatas e adiciona boletos
+            const uniqueInstallments = dataResult.rows.reduce((acc, row) => {
+                if (!acc.find(item => item.installment_id === row.installment_id)) {
+                    const installment = { ...row };
+                    delete installment.boleto_id;
+                    delete installment.boleto_number;
+                    delete installment.boleto_url;
+                    delete installment.boleto_status;
+                    
+                    installment.boletos = boletosMap[row.installment_id] || [];
+                    acc.push(installment);
+                }
+                return acc;
+            }, []);
+
             return {
-                data: dataResult.rows,
+                items: uniqueInstallments,
                 meta: {
                     totalItems,
-                    itemCount: dataResult.rows.length,
+                    itemCount: uniqueInstallments.length,
                     itemsPerPage: limit,
                     totalPages,
                     currentPage: page
@@ -458,6 +490,72 @@ class InstallmentRepository extends BaseRepository {
                 tableName: this.tableName
             });
             throw new DatabaseError('Erro ao remover parcela', error);
+        }
+    }
+
+    /**
+     * Busca detalhes de uma parcela específica por ID
+     * @param {number} installmentId - ID da parcela
+     * @returns {Promise<Object>} Detalhes da parcela com boletos
+     */
+    async findInstallmentWithDetails(installmentId) {
+        try {
+            // Query para buscar detalhes da parcela com boletos
+            const query = `
+                SELECT 
+                    i.*,
+                    b.boleto_id,
+                    b.boleto_number,
+                    b.boleto_url,
+                    b.status as boleto_status,
+                    b.generated_at as boleto_generated_at
+                FROM installments i
+                LEFT JOIN boletos b ON b.installment_id = i.installment_id
+                WHERE i.installment_id = $1
+            `;
+
+            const result = await this.pool.query(query, [installmentId]);
+
+            // Se não encontrar a parcela, retorna null
+            if (result.rows.length === 0) {
+                return null;
+            }
+
+            // Agrupa os boletos
+            const boletosMap = result.rows.reduce((acc, row) => {
+                const installmentId = row.installment_id;
+                if (!acc[installmentId]) {
+                    acc[installmentId] = [];
+                }
+                if (row.boleto_id) {
+                    acc[installmentId].push({
+                        boleto_id: row.boleto_id,
+                        boleto_number: row.boleto_number,
+                        boleto_url: row.boleto_url,
+                        status: row.boleto_status,
+                        generated_at: row.boleto_generated_at
+                    });
+                }
+                return acc;
+            }, {});
+
+            // Remove duplicatas e adiciona boletos
+            const installment = { ...result.rows[0] };
+            delete installment.boleto_id;
+            delete installment.boleto_number;
+            delete installment.boleto_url;
+            delete installment.boleto_status;
+            delete installment.boleto_generated_at;
+
+            installment.boletos = boletosMap[installmentId] || [];
+
+            return installment;
+        } catch (error) {
+            logger.error('Erro ao buscar detalhes da parcela', { 
+                error: error.message,
+                installmentId 
+            });
+            throw new DatabaseError('Erro ao buscar detalhes da parcela', error);
         }
     }
 }

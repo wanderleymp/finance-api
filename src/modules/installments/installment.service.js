@@ -65,15 +65,10 @@ class InstallmentService {
             const result = await this.repository.findAllWithDetails(page, limit, filters);
             
             // Transforma os resultados em DTOs
-            result.items = await Promise.all(result.items.map(async (item) => {
+            result.items = result.items.map((item) => {
                 const installmentResponse = new InstallmentResponseDTO(item);
-                
-                // Busca boletos da parcela
-                const boletos = await this.boletoService.listBoletosByInstallmentId(item.installment_id);
-                installmentResponse.boletos = boletos;
-                
                 return installmentResponse;
-            }));
+            });
             
             await this.cacheService.set(cacheKey, result, this.cacheTTL.list);
             
@@ -96,18 +91,51 @@ class InstallmentService {
                 return cached;
             }
 
-            const installment = await this.repository.findById(id);
+            const installment = await this.repository.findInstallmentWithDetails(id);
             
             if (!installment) {
                 throw new ValidationError('Parcela não encontrada');
             }
+
+            const installmentResponse = new InstallmentResponseDTO(installment);
             
-            const response = new InstallmentResponseDTO(installment);
-            await this.cacheService.set(cacheKey, response, this.cacheTTL.detail);
+            await this.cacheService.set(cacheKey, installmentResponse, this.cacheTTL.detail);
             
-            return response;
+            return installmentResponse;
         } catch (error) {
-            logger.error('Erro ao buscar parcela', { error });
+            logger.error('Erro ao buscar parcela por ID', { error, id });
+            throw error;
+        }
+    }
+
+    /**
+     * Busca detalhes de uma parcela específica
+     */
+    async getInstallmentDetails(id) {
+        try {
+            logger.info('Serviço: Buscando detalhes da parcela', { id });
+            
+            const cacheKey = this.cacheService.generateKey(`${this.cachePrefix}:details`, { id });
+            const cached = await this.cacheService.get(cacheKey);
+            
+            if (cached) {
+                logger.info('Cache hit: Retornando detalhes da parcela do cache');
+                return cached;
+            }
+
+            const installment = await this.repository.findInstallmentWithDetails(id);
+            
+            if (!installment) {
+                throw new ValidationError('Parcela não encontrada');
+            }
+
+            const installmentResponse = new InstallmentResponseDTO(installment);
+            
+            await this.cacheService.set(cacheKey, installmentResponse, this.cacheTTL.detail);
+            
+            return installmentResponse;
+        } catch (error) {
+            logger.error('Erro ao buscar detalhes da parcela', { error, id });
             throw error;
         }
     }

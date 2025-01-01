@@ -77,6 +77,23 @@ class InstallmentController {
     }
 
     /**
+     * Busca detalhes de uma parcela
+     */
+    async showDetails(req, res, next) {
+        try {
+            const { id } = req.params;
+            
+            logger.info('Controller: Buscando detalhes da parcela', { id });
+            
+            const result = await this.service.getInstallmentDetails(parseInt(id));
+            
+            return res.json(result);
+        } catch (error) {
+            next(error);
+        }
+    }
+
+    /**
      * Gera boleto para parcela
      */
     async generateBoleto(req, res, next) {
