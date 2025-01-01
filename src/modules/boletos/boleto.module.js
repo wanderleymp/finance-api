@@ -1,33 +1,38 @@
+const express = require('express');
 const BoletoController = require('./boleto.controller');
 const BoletoService = require('./boleto.service');
 const BoletoRepository = require('./boleto.repository');
-const BoletoProcessor = require('./boleto.processor');
-const BoletoRoutes = require('./boleto.routes');
-const n8nService = require('../../services/n8n.service');
-const MockCacheService = require('../../services/mockCacheService');
+const { systemDatabase } = require('../../config/database');
 const { logger } = require('../../middlewares/logger');
 
-class BoletoModule {
-    constructor() {
-        this.repository = new BoletoRepository();
-        this.processor = new BoletoProcessor({ n8nService });
-        this.service = new BoletoService({ 
-            boletoRepository: this.repository,
-            n8nService,
-            taskService: {
-                createTask: async (type, data) => {
-                    logger.info('Task criada', { type, data });
-                    return true;
-                }
-            },
-            cacheService: MockCacheService
-        });
-        this.controller = new BoletoController({ boletoService: this.service });
-    }
+// Instancia o repositório
+const repository = new BoletoRepository(systemDatabase.pool);
 
-    register(app) {
-        app.use('/boletos', BoletoRoutes(this.controller));
-    }
-}
+// Instancia o serviço
+const service = new BoletoService({ 
+    boletoRepository: repository
+});
 
-module.exports = new BoletoModule();
+// Instancia o controller
+const controller = new BoletoController({ 
+    boletoService: service 
+});
+
+// Configura as rotas
+const router = express.Router();
+const boletoRoutes = require('./boleto.routes')(controller);
+
+router.use('/', boletoRoutes);
+
+logger.info('Módulo de boletos registrado com sucesso', {
+    routes: [
+        'GET /boletos',
+        'GET /boletos/details',
+        'GET /boletos/:id',
+        'GET /boletos/:id/details',
+        'POST /boletos',
+        'PUT /boletos/:id'
+    ]
+});
+
+module.exports = router;

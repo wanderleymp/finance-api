@@ -119,6 +119,76 @@ class MovementPaymentService extends IMovementPaymentService {
     }
 
     /**
+     * Busca pagamentos por ID de movimento
+     * @param {number} movementId - ID do movimento
+     * @param {boolean} [detailed=false] - Se deve carregar detalhes
+     * @returns {Promise<Array>} Lista de pagamentos
+     */
+    async findByMovementId(movementId, detailed = false) {
+        try {
+            logger.info('Serviço: Buscando pagamentos por movimento ID', { movementId, detailed });
+
+            const cacheKey = this.cacheService.generateKey(`${this.cachePrefix}:movement`, { movementId, detailed });
+
+            const payments = await this.cacheService.getOrSet(
+                cacheKey,
+                async () => {
+                    logger.info('Serviço: Buscando dados de pagamentos', { movementId });
+                    const data = await this.repository.findByMovementId(movementId);
+                    
+                    logger.info('Serviço: Pagamentos encontrados', { 
+                        count: data.length, 
+                        paymentIds: data.map(p => p.payment_id) 
+                    });
+
+                    if (!detailed) {
+                        return data.map(payment => new MovementPaymentResponseDTO(payment));
+                    }
+
+                    // Se detailed, carrega installments e boletos
+                    const paymentsWithDetails = await Promise.all(
+                        data.map(async (payment) => {
+                            logger.info('Serviço: Carregando detalhes para pagamento', { 
+                                payment_id: payment.payment_id 
+                            });
+
+                            const [installments, boletos] = await Promise.all([
+                                this.installmentRepository.findByPaymentId(payment.payment_id),
+                                this.boletoService.findByPaymentId(payment.payment_id)
+                            ]);
+
+                            logger.info('Serviço: Detalhes carregados', { 
+                                payment_id: payment.payment_id,
+                                installments_count: installments.length,
+                                boletos_count: boletos.length
+                            });
+
+                            return {
+                                ...payment,
+                                installments,
+                                boletos
+                            };
+                        })
+                    );
+
+                    return paymentsWithDetails.map(payment => new MovementPaymentResponseDTO(payment));
+                },
+                this.cacheTTL.detail
+            );
+
+            return payments;
+        } catch (error) {
+            logger.error('Erro ao buscar pagamentos por movimento ID', {
+                error: error.message,
+                movementId,
+                detailed,
+                error_stack: error.stack
+            });
+            throw error;
+        }
+    }
+
+    /**
      * Cria um novo pagamento
      */
     async create(data) {
@@ -149,7 +219,7 @@ class MovementPaymentService extends IMovementPaymentService {
                     const installment = await this.installmentService.createInstallment({
                         payment_id: payment.payment_id,
                         installment_number: i,
-                        total_installments: paymentMethod.data.installment_count,
+                        total_installments: paymentMethod.max_installments,
                         amount: installmentAmount,
                         balance: installmentAmount,
                         due_date: dueDate.toISOString().split('T')[0],

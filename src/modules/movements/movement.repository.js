@@ -50,25 +50,40 @@ class MovementRepository extends BaseRepository {
 
             const query = `
                 SELECT 
-                    m.*,
-                    p.full_name,
-                    pd.document_value as document,
-                    mt.type_name,
-                    ms.status_name
+                    m.movement_id,
+                    m.movement_type_id,
+                    m.movement_status_id,
+                    m.person_id,
+                    m.movement_date,
+                    m.description,
+                    m.created_at,
+                    m.updated_at
                 FROM movements m
-                LEFT JOIN persons p ON m.person_id = p.person_id
-                LEFT JOIN person_documents pd ON p.person_id = pd.person_id AND pd.document_type = 'CPF'
-                LEFT JOIN movement_types mt ON m.movement_type_id = mt.movement_type_id
-                LEFT JOIN movement_statuses ms ON m.movement_status_id = ms.movement_status_id
                 WHERE m.movement_id = $1
             `;
 
-            logger.info('Repository: Executando query', { query, id });
+            logger.info('Repository: Executando query', { 
+                query, 
+                id, 
+                queryParams: [id] 
+            });
 
-            const { rows } = await this.pool.query(query, [id]);
+            const { rows, rowCount } = await this.pool.query(query, [id]);
+
+            logger.info('Repository: Resultado da busca', { 
+                rowCount, 
+                hasRows: rows.length > 0 
+            });
+
             const movement = rows[0];
 
-            logger.info('Repository: Resultado da busca por ID', { movement });
+            logger.info('Repository: Movimento encontrado', { 
+                movement: movement ? {
+                    movement_id: movement.movement_id,
+                    movement_type_id: movement.movement_type_id,
+                    person_id: movement.person_id
+                } : null 
+            });
 
             return movement;
         } catch (error) {

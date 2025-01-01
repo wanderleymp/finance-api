@@ -10,38 +10,40 @@ const { ValidationError } = require('../../utils/errors');
 const IMovementService = require('./interfaces/IMovementService');
 const MovementResponseDTO = require('./dto/movement-response.dto');
 const MovementPaymentService = require('../movement-payments/movement-payment.service');
+const BoletoRepository = require('../boletos/boleto.repository'); // Adicionado o BoletoRepository
 
 class MovementService extends IMovementService {
     constructor({ 
-        movementRepository, 
+        movementRepository,
+        personRepository,
+        movementTypeRepository,
+        movementStatusRepository,
         cacheService,
-        movementPaymentRepository,
         paymentMethodRepository,
         installmentRepository,
         movementPaymentService,
-        personContactRepository
+        personContactRepository,
+        boletoRepository 
     }) {
         super();
         
         this.movementRepository = movementRepository;
-        this.movementPaymentRepository = movementPaymentRepository;
+        this.personRepository = personRepository;
+        this.movementTypeRepository = movementTypeRepository;
+        this.movementStatusRepository = movementStatusRepository;
+        this.cacheService = cacheService;
         this.paymentMethodRepository = paymentMethodRepository;
         this.installmentRepository = installmentRepository;
-        this.cacheService = cacheService;
         this.movementPaymentService = movementPaymentService;
         this.personContactRepository = personContactRepository;
+        this.boletoRepository = boletoRepository;
         this.billingMessageService = new BillingMessageService();
 
         this.cachePrefix = 'movements';
         this.cacheTTL = {
-            list: 300, // 5 minutos
-            detail: 600 // 10 minutos
+            list: 5 * 60, // 5 minutos
+            detail: 15 * 60 // 15 minutos
         };
-
-        // Inicializa os outros repositórios
-        this.movementTypeRepository = new MovementTypeRepository();
-        this.movementStatusRepository = new MovementStatusRepository();
-        this.personRepository = new PersonRepository();
     }
 
     /**
@@ -97,60 +99,81 @@ class MovementService extends IMovementService {
      */
     async findById(id, detailed = false) {
         try {
-            // Busca o movimento
+            logger.info('Service: Buscando movimento por ID', { id, detailed });
+
+            // Busca movimento base
             const movement = await this.movementRepository.findById(id);
+
             if (!movement) {
+                logger.warn('Service: Movimento não encontrado', { id });
                 return null;
             }
 
-            // Enriquece com os dados básicos
-            const [person, type, status] = await Promise.all([
-                this.personRepository.findById(movement.person_id),
-                this.movementTypeRepository.findById(movement.movement_type_id),
-                this.movementStatusRepository.findById(movement.movement_status_id)
-            ]);
+            // Log adicional para debug
+            logger.info('Service: Movimento encontrado', { 
+                movement_id: movement.movement_id, 
+                movement_type_id: movement.movement_type_id,
+                person_id: movement.person_id 
+            });
 
-            const result = {
-                ...movement,
-                person_name: person?.full_name,
-                type_name: type?.type_name,
-                status_name: status?.status_name
-            };
-
-            // Se não for detalhado, retorna apenas os dados básicos
+            // Se não for detailed, retorna movimento básico
             if (!detailed) {
-                return result;
+                return movement;
             }
 
-            // Enriquece com os dados detalhados
-            const [payments, installments] = await Promise.all([
-                this.movementPaymentRepository.findByMovementId(movement.movement_id),
-                this.installmentRepository.findByMovementId(movement.movement_id)
+            // Se detailed, carrega installments e boletos
+            const [person, type, status, payments] = await Promise.all([
+                this.personRepository.findById(movement.person_id),
+                this.movementTypeRepository.findById(movement.movement_type_id),
+                this.movementStatusRepository.findById(movement.movement_status_id),
+                this.movementPaymentService.findByMovementId(movement.movement_id, true) // Passa detailed true
             ]);
+
+            // Log dos resultados das promises
+            logger.info('Service: Resultados das promises', {
+                person_found: !!person,
+                type_found: !!type,
+                status_found: !!status,
+                payments_count: payments.length
+            });
 
             // Calcula totais
             const total_paid = payments
                 .filter(p => p.status_id === 2) // Status "Confirmado"
                 .reduce((sum, p) => sum + p.amount, 0);
 
+            const total_value = payments.reduce((sum, p) => sum + p.amount, 0);
+
             const enrichedPerson = person ? {
                 ...person,
                 contacts: await this.personRepository.findContacts(person.person_id)
             } : null;
 
+            // Log do movimento enriquecido
+            logger.info('Service: Movimento enriquecido', {
+                movement_id: movement.movement_id,
+                total_paid,
+                total_value,
+                remaining_amount: total_value - total_paid
+            });
+
             return {
-                ...result,
+                ...movement,
+                person_name: person?.full_name,
+                type_name: type?.type_name,
+                status_name: status?.status_name,
                 person: enrichedPerson,
                 payments,
-                installments,
                 total_paid,
-                remaining_amount: movement.total_amount - total_paid
+                total_value,
+                remaining_amount: total_value - total_paid
             };
         } catch (error) {
             logger.error('Erro ao buscar movimento por ID', {
                 error: error.message,
                 id,
-                detailed
+                detailed,
+                error_stack: error.stack
             });
             throw error;
         }

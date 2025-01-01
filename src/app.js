@@ -120,7 +120,7 @@ app.use(authMiddleware);
 const userModule = require('./modules/user/user.module');
 userModule.register(app);
 
-boletoModule.register(app);
+app.use('/boletos', boletoModule);
 app.use('/movements', movementRoutes);
 app.use('/movement-payments', movementPaymentRoutes);
 app.use('/payment-methods', paymentMethodRoutes);

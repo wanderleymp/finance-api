@@ -1,6 +1,5 @@
 const BaseRepository = require('../../repositories/base/BaseRepository');
 const { logger } = require('../../middlewares/logger');
-const { DatabaseError } = require('../../utils/errors');
 
 class BoletoRepository extends BaseRepository {
     constructor() {
@@ -9,187 +8,136 @@ class BoletoRepository extends BaseRepository {
 
     /**
      * Lista todos os boletos com paginação e filtros
+     * @param {number} page - Número da página
+     * @param {number} limit - Limite de itens por página
+     * @param {object} filters - Filtros aplicados
+     * @returns {Promise<object>} Lista paginada de boletos
      */
     async findAll(page = 1, limit = 10, filters = {}) {
         try {
-            const queryParams = [];
-            const conditions = [];
-            let paramCount = 1;
+            logger.debug('Listando boletos', { page, limit, filters });
+            return await super.findAll(page, limit, filters, { orderBy: 'boleto_id DESC' });
+        } catch (error) {
+            logger.error('Erro ao listar boletos', { error: error.message, filters });
+            throw error;
+        }
+    }
 
-            // Filtros básicos
-            if (filters.status) {
-                conditions.push(`b.status = $${paramCount}`);
-                queryParams.push(filters.status);
-                paramCount++;
-            }
-
-            if (filters.installment_id) {
-                conditions.push(`b.installment_id = $${paramCount}`);
-                queryParams.push(filters.installment_id);
-                paramCount++;
-            }
-
-            if (filters.boleto_number) {
-                conditions.push(`b.boleto_number ILIKE $${paramCount}`);
-                queryParams.push(`%${filters.boleto_number}%`);
-                paramCount++;
-            }
-
-            if (filters.start_date) {
-                conditions.push(`i.due_date >= $${paramCount}`);
-                queryParams.push(filters.start_date);
-                paramCount++;
-            }
-
-            if (filters.end_date) {
-                conditions.push(`i.due_date <= $${paramCount}`);
-                queryParams.push(filters.end_date);
-                paramCount++;
-            }
-
-            const whereClause = conditions.length > 0 
-                ? `WHERE ${conditions.join(' AND ')}` 
-                : '';
-
-            const offset = (page - 1) * limit;
-
-            const query = `
+    /**
+     * Lista boletos com dados relacionados
+     * @param {number} page - Número da página
+     * @param {number} limit - Limite de itens por página
+     * @param {object} filters - Filtros aplicados
+     * @returns {Promise<object>} Lista paginada de boletos com dados relacionados
+     */
+    async findAllWithDetails(page = 1, limit = 10, filters = {}) {
+        try {
+            logger.debug('Listando boletos com detalhes', { page, limit, filters });
+            
+            const customQuery = `
                 SELECT 
                     b.*,
                     i.due_date,
-                    i.total_amount,
-                    COUNT(*) OVER() as total_count
+                    i.amount
                 FROM boletos b
                 JOIN installments i ON b.installment_id = i.installment_id
-                ${whereClause}
-                ORDER BY i.due_date DESC
-                LIMIT $${paramCount} OFFSET $${paramCount + 1}
             `;
 
-            queryParams.push(limit, offset);
-
-            const result = await this.query(query, queryParams);
-
-            return {
-                data: result.rows,
-                total: result.rows.length > 0 ? parseInt(result.rows[0].total_count) : 0,
-                page,
-                limit
-            };
-        } catch (error) {
-            logger.error('Erro ao buscar boletos', {
-                error: error.message,
-                filters,
-                page,
-                limit
+            return await super.findAll(page, limit, filters, { 
+                customQuery,
+                orderBy: 'i.due_date DESC'
             });
-            throw new DatabaseError('Erro ao buscar boletos', error);
+        } catch (error) {
+            logger.error('Erro ao listar boletos com detalhes', { error: error.message, filters });
+            throw error;
         }
     }
 
     /**
      * Busca um boleto por ID
+     * @param {number} boletoId - ID do boleto
+     * @returns {Promise<object>} Boleto encontrado
      */
     async findById(boletoId) {
         try {
+            logger.debug('Buscando boleto por ID', { boletoId });
+            const query = 'SELECT * FROM boletos WHERE boleto_id = $1';
+            const result = await this.pool.query(query, [boletoId]);
+            return result.rows[0];
+        } catch (error) {
+            logger.error('Erro ao buscar boleto por ID', { error: error.message, boletoId });
+            throw error;
+        }
+    }
+
+    /**
+     * Busca um boleto por ID com dados relacionados
+     * @param {number} boletoId - ID do boleto
+     * @returns {Promise<object>} Boleto encontrado com dados relacionados
+     */
+    async findByIdWithDetails(boletoId) {
+        try {
+            logger.debug('Buscando boleto por ID com detalhes', { boletoId });
             const query = `
                 SELECT 
                     b.*,
-                    i.installment_number,
-                    i.amount,
-                    i.due_date
+                    i.due_date,
+                    i.amount
                 FROM boletos b
-                LEFT JOIN installments i ON i.installment_id = b.installment_id
+                JOIN installments i ON b.installment_id = i.installment_id
                 WHERE b.boleto_id = $1
             `;
-
-            const result = await this.query(query, [boletoId]);
-
-            if (result.rowCount === 0) {
-                return null;
-            }
-
+            const result = await this.pool.query(query, [boletoId]);
             return result.rows[0];
         } catch (error) {
-            logger.error('Erro ao buscar boleto por ID', {
-                error: error.message,
-                boletoId
-            });
-            throw new DatabaseError('Erro ao buscar boleto');
+            logger.error('Erro ao buscar boleto por ID com detalhes', { error: error.message, boletoId });
+            throw error;
         }
     }
 
     /**
      * Atualiza um boleto existente
+     * @param {number} boletoId - ID do boleto
+     * @param {object} data - Dados para atualização
+     * @returns {Promise<object>} Boleto atualizado
      */
     async updateBoleto(boletoId, data) {
         try {
-            const query = `
-                UPDATE boletos
-                SET 
-                    status = $1,
-                    last_status_update = NOW()
-                WHERE boleto_id = $2
-                RETURNING *
-            `;
-
-            const values = [data.status, boletoId];
-            const result = await this.query(query, values);
-
-            if (result.rowCount === 0) {
-                throw new Error('Boleto não encontrado');
-            }
-
+            logger.debug('Atualizando boleto', { boletoId, data });
+            const query = 'UPDATE boletos SET status = $1, updated_at = NOW() WHERE boleto_id = $2 RETURNING *';
+            const result = await this.pool.query(query, [data.status, boletoId]);
             return result.rows[0];
         } catch (error) {
-            logger.error('Erro ao atualizar boleto', {
-                error: error.message,
-                boletoId,
-                data
-            });
-            throw new DatabaseError('Erro ao atualizar boleto');
+            logger.error('Erro ao atualizar boleto', { error: error.message, boletoId, data });
+            throw error;
         }
     }
 
     /**
      * Cria um novo boleto
+     * @param {object} data - Dados do boleto
+     * @returns {Promise<object>} Boleto criado
      */
     async createBoleto(data) {
         try {
+            logger.debug('Criando boleto', { data });
             const query = `
                 INSERT INTO boletos (
                     installment_id,
-                    due_date,
-                    amount,
                     status,
-                    description,
-                    payer_id
-                ) VALUES ($1, $2, $3, $4, $5, $6)
+                    created_at,
+                    updated_at
+                ) VALUES ($1, $2, NOW(), NOW())
                 RETURNING *
             `;
-
-            const values = [
+            const result = await this.pool.query(query, [
                 data.installment_id,
-                data.due_date,
-                data.amount,
-                'A Emitir',
-                data.description,
-                data.payer_id
-            ];
-
-            const result = await this.query(query, values);
-
-            logger.info('Boleto criado com sucesso', { 
-                boletoId: result.rows[0].boleto_id 
-            });
-
+                data.status || 'A_RECEBER'
+            ]);
             return result.rows[0];
         } catch (error) {
-            logger.error('Erro ao criar boleto no banco', {
-                error: error.message,
-                data
-            });
-            throw new DatabaseError('Erro ao criar boleto');
+            logger.error('Erro ao criar boleto', { error: error.message, data });
+            throw error;
         }
     }
 }

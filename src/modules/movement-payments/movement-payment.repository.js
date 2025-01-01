@@ -115,12 +115,25 @@ class MovementPaymentRepository extends BaseRepository {
                 ORDER BY mp.created_at DESC
             `;
 
+            logger.info('Repository: Executando busca de pagamentos', { 
+                movementId, 
+                query 
+            });
+
             const { rows } = await systemDatabase.pool.query(query, [movementId]);
+
+            logger.info('Repository: Resultado da busca de pagamentos', { 
+                movementId,
+                payment_count: rows.length,
+                payment_ids: rows.map(r => r.payment_id)
+            });
+
             return rows;
         } catch (error) {
             logger.error('Erro ao buscar pagamentos do movimento', {
                 error: error.message,
-                movementId
+                movementId,
+                error_stack: error.stack
             });
             throw error;
         }

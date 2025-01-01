@@ -55,7 +55,9 @@ class MovementController {
             logger.error('Controller: Erro ao buscar movimento', {
                 error: error.message,
                 error_stack: error.stack,
-                id: req.params.id
+                id: req.params.id,
+                detailed: req.query.detailed,
+                error_full: JSON.stringify(error, Object.getOwnPropertyNames(error))
             });
             return res.status(500).json({
                 success: false,
