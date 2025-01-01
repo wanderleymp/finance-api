@@ -1,3 +1,5 @@
+const PersonDetailsResponseDTO = require('../../persons/dto/person-response.dto').PersonDetailsResponseDTO;
+
 class BoletoDTO {
     constructor(data) {
         this.boleto_id = data.boleto_id;
@@ -5,6 +7,17 @@ class BoletoDTO {
         this.generated_at = data.generated_at;
         this.boleto_number = data.boleto_number;
         this.boleto_url = data.boleto_url;
+    }
+}
+
+class MovementPaymentDTO {
+    constructor(data) {
+        this.movement_payment_id = data.movement_payment_id;
+        this.movement_id = data.movement_id;
+        this.payment_method = data.payment_method;
+        this.amount = data.amount;
+        this.status = data.status;
+        this.payment_date = data.payment_date;
     }
 }
 
@@ -30,6 +43,16 @@ class InstallmentResponseDTO {
         // Inclui boletos se existirem
         if (data.boletos) {
             this.boletos = data.boletos.map(boleto => new BoletoDTO(boleto));
+        }
+
+        // Inclui pagamentos se existirem
+        if (data.movement_payments) {
+            this.movement_payments = data.movement_payments.map(payment => new MovementPaymentDTO(payment));
+        }
+
+        // Inclui pessoa se existir
+        if (data.person) {
+            this.person = new PersonDetailsResponseDTO(data.person);
         }
     }
 }

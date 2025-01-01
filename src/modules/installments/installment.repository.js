@@ -1,10 +1,12 @@
 const BaseRepository = require('../../repositories/base/BaseRepository');
 const { logger } = require('../../middlewares/logger');
 const { DatabaseError } = require('../../utils/errors');
+const PersonService = require('../persons/person.service');
 
 class InstallmentRepository extends BaseRepository {
     constructor() {
         super('installments', 'installment_id');
+        this.personService = new PersonService();
     }
 
     /**
@@ -496,11 +498,11 @@ class InstallmentRepository extends BaseRepository {
     /**
      * Busca detalhes de uma parcela específica por ID
      * @param {number} installmentId - ID da parcela
-     * @returns {Promise<Object>} Detalhes da parcela com boletos
+     * @returns {Promise<Object>} Detalhes da parcela com boletos e pessoa
      */
     async findInstallmentWithDetails(installmentId) {
         try {
-            // Query para buscar detalhes da parcela com boletos
+            // Query para buscar detalhes da parcela com boletos e pessoa do movimento
             const query = `
                 SELECT 
                     i.*,
@@ -508,9 +510,13 @@ class InstallmentRepository extends BaseRepository {
                     b.boleto_number,
                     b.boleto_url,
                     b.status as boleto_status,
-                    b.generated_at as boleto_generated_at
+                    b.generated_at as boleto_generated_at,
+                    p.person_id
                 FROM installments i
                 LEFT JOIN boletos b ON b.installment_id = i.installment_id
+                LEFT JOIN movement_payments mp ON mp.payment_id = i.payment_id
+                LEFT JOIN movements m ON m.movement_id = mp.movement_id
+                LEFT JOIN persons p ON p.person_id = m.person_id
                 WHERE i.installment_id = $1
             `;
 
@@ -539,15 +545,31 @@ class InstallmentRepository extends BaseRepository {
                 return acc;
             }, {});
 
-            // Remove duplicatas e adiciona boletos
+            // Remove duplicatas e adiciona boletos e pessoa
             const installment = { ...result.rows[0] };
+            
+            // Limpa campos de boletos e pessoa
             delete installment.boleto_id;
             delete installment.boleto_number;
             delete installment.boleto_url;
             delete installment.boleto_status;
             delete installment.boleto_generated_at;
+            delete installment.person_id;
 
             installment.boletos = boletosMap[installmentId] || [];
+
+            // Busca detalhes completos da pessoa se existir
+            if (result.rows[0].person_id) {
+                try {
+                    installment.person = await this.personService.findPersonWithDetails(result.rows[0].person_id);
+                } catch (personError) {
+                    logger.warn('Erro ao buscar detalhes da pessoa', { 
+                        personId: result.rows[0].person_id,
+                        error: personError.message 
+                    });
+                    installment.person = null;
+                }
+            }
 
             return installment;
         } catch (error) {
