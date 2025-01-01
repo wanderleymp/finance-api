@@ -35,13 +35,51 @@ class InstallmentService {
             const result = await this.repository.findAll(page, limit, filters);
             
             // Transforma os resultados em DTOs
-            result.data = result.data.map(item => new InstallmentResponseDTO(item));
+            result.items = result.items.map(item => new InstallmentResponseDTO(item));
             
             await this.cacheService.set(cacheKey, result, this.cacheTTL.list);
             
             return result;
         } catch (error) {
             logger.error('Erro ao listar parcelas', { error });
+            throw error;
+        }
+    }
+
+    /**
+     * Lista parcelas com detalhes (boletos)
+     */
+    async listInstallmentsWithDetails(page = 1, limit = 10, filters = {}) {
+        try {
+            logger.info('Serviço: Listando parcelas com detalhes', { page, limit, filters });
+            
+            const cacheKey = this.cacheService.generateKey(`${this.cachePrefix}:details`, { page, limit, ...filters });
+            const cached = await this.cacheService.get(cacheKey);
+            
+            if (cached) {
+                logger.info('Cache hit: Retornando parcelas com detalhes do cache');
+                return cached;
+            }
+
+            // Busca parcelas com boletos
+            const result = await this.repository.findAllWithDetails(page, limit, filters);
+            
+            // Transforma os resultados em DTOs
+            result.items = await Promise.all(result.items.map(async (item) => {
+                const installmentResponse = new InstallmentResponseDTO(item);
+                
+                // Busca boletos da parcela
+                const boletos = await this.boletoService.listBoletosByInstallmentId(item.installment_id);
+                installmentResponse.boletos = boletos;
+                
+                return installmentResponse;
+            }));
+            
+            await this.cacheService.set(cacheKey, result, this.cacheTTL.list);
+            
+            return result;
+        } catch (error) {
+            logger.error('Erro ao listar parcelas com detalhes', { error });
             throw error;
         }
     }

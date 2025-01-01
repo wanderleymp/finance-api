@@ -56,7 +56,10 @@ class InstallmentRepository extends BaseRepository {
         }
     }
 
-    async findAll(page = 1, limit = 10, filters = {}) {
+    /**
+     * Busca parcelas com detalhes
+     */
+    async findAllWithDetails(page = 1, limit = 10, filters = {}) {
         try {
             const queryParams = [];
             const conditions = [];
@@ -93,38 +96,104 @@ class InstallmentRepository extends BaseRepository {
 
             const offset = (page - 1) * limit;
 
-            // Query base
-            let query = `
+            // Query com join para boletos
+            const query = `
                 SELECT 
-                    i.*
+                    i.*,
+                    b.boleto_id,
+                    b.boleto_number,
+                    b.boleto_url,
+                    b.status as boleto_status
                 FROM installments i
+                LEFT JOIN boletos b ON b.installment_id = i.installment_id
                 ${whereClause}
                 ORDER BY i.due_date DESC
                 LIMIT $${paramCount} OFFSET $${paramCount + 1}
             `;
 
-            // Query de contagem
+            // Query para contar total
             const countQuery = `
-                SELECT COUNT(*) as total
+                SELECT COUNT(DISTINCT i.installment_id) as total
                 FROM installments i
                 ${whereClause}
             `;
 
-            // Adiciona parâmetros de paginação
-            queryParams.push(limit, offset);
-
-            // Executa as queries
-            const [resultQuery, countResult] = await Promise.all([
-                this.pool.query(query, queryParams),
-                this.pool.query(countQuery, queryParams.slice(0, -2))
+            const [dataResult, countResult] = await Promise.all([
+                this.pool.query(query, [...queryParams, limit, offset]),
+                this.pool.query(countQuery, queryParams)
             ]);
 
-            const total = parseInt(countResult.rows[0].total);
-            const totalPages = Math.ceil(total / limit);
+            const totalItems = parseInt(countResult.rows[0].total);
+            const totalPages = Math.ceil(totalItems / limit);
 
-            // Se include=boletos, busca os boletos para cada parcela
+            return {
+                data: dataResult.rows,
+                meta: {
+                    totalItems,
+                    itemCount: dataResult.rows.length,
+                    itemsPerPage: limit,
+                    totalPages,
+                    currentPage: page
+                }
+            };
+        } catch (error) {
+            logger.error('Erro ao buscar parcelas com detalhes', { 
+                error: error.message,
+                filters 
+            });
+            throw new DatabaseError('Erro ao buscar parcelas com detalhes', error);
+        }
+    }
+
+    async findAll(page = 1, limit = 10, filters = {}) {
+        try {
+            // Prepara os filtros
+            const queryFilters = {};
+            
+            // Mapeia os filtros para os nomes corretos das colunas
+            if (filters.status) queryFilters.status = filters.status;
+            if (filters.account_entry_id) queryFilters.account_entry_id = filters.account_entry_id;
+
+            // Adiciona filtros de data se existirem
+            if (filters.start_date) {
+                queryFilters.due_date = { 
+                    operator: '>=', 
+                    value: filters.start_date 
+                };
+            }
+            
+            if (filters.end_date) {
+                queryFilters.due_date = { 
+                    ...(queryFilters.due_date || {}),
+                    operator: filters.start_date ? '<=' : '<=',
+                    value: filters.end_date 
+                };
+            }
+
+            // Opções para personalizar a query
+            const options = {
+                orderBy: 'due_date DESC',
+                customQuery: `
+                    SELECT 
+                        installment_id,
+                        payment_id,
+                        account_entry_id,
+                        installment_number,
+                        due_date,
+                        amount,
+                        balance,
+                        status,
+                        expected_date
+                    FROM ${this.tableName}
+                `
+            };
+
+            // Usa o método findAll do BaseRepository
+            const result = await super.findAll(page, limit, queryFilters, options);
+
+            // Se incluir boletos, busca os boletos para cada parcela
             if (filters.include === 'boletos') {
-                const installmentIds = resultQuery.rows.map(row => row.installment_id);
+                const installmentIds = result.items.map(row => row.installment_id);
                 
                 if (installmentIds.length > 0) {
                     const boletosQuery = `
@@ -151,28 +220,18 @@ class InstallmentRepository extends BaseRepository {
                     }, {});
 
                     // Adiciona os boletos a cada parcela
-                    resultQuery.rows = resultQuery.rows.map(installment => ({
+                    result.items = result.items.map(installment => ({
                         ...installment,
                         boletos: boletosMap[installment.installment_id] || []
                     }));
                 }
             }
 
-            return {
-                data: resultQuery.rows,
-                pagination: {
-                    total,
-                    totalPages,
-                    currentPage: page,
-                    limit
-                }
-            };
+            return result;
         } catch (error) {
-            logger.error('Erro ao buscar parcelas', {
+            logger.error('Erro ao buscar parcelas', { 
                 error: error.message,
-                page,
-                limit,
-                filters
+                filters 
             });
             throw new DatabaseError('Erro ao buscar parcelas', error);
         }
@@ -294,8 +353,8 @@ class InstallmentRepository extends BaseRepository {
             const placeholders = values.map((_, index) => `$${index + 1}`).join(', ');
 
             const query = `
-                INSERT INTO ${this.tableName} (${columns.join(', ')}, created_at)
-                VALUES (${placeholders}, NOW())
+                INSERT INTO ${this.tableName} (${columns.join(', ')})
+                VALUES (${placeholders})
                 RETURNING *
             `;
 
@@ -336,7 +395,7 @@ class InstallmentRepository extends BaseRepository {
 
             const query = `
                 UPDATE ${this.tableName}
-                SET ${setColumns}, updated_at = NOW()
+                SET ${setColumns}
                 WHERE ${this.primaryKey} = $1
                 RETURNING *
             `;

@@ -18,6 +18,11 @@ module.exports = (installmentController) => {
         installmentController.index.bind(installmentController)
     );
 
+    router.get('/details', 
+        validateRequest(installmentSchema.listInstallments, 'query'),
+        installmentController.listWithDetails.bind(installmentController)
+    );
+
     router.get('/:id',
         validateRequest(installmentSchema.getInstallmentById, 'params'),
         installmentController.show.bind(installmentController)

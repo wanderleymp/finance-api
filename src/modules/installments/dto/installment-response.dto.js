@@ -11,14 +11,13 @@ class InstallmentResponseDTO {
     constructor(data) {
         this.installment_id = data.installment_id;
         this.payment_id = data.payment_id;
-        this.due_date = data.due_date;
-        this.amount = data.amount;
-        this.status = data.status;
-        this.payment_date = data.payment_date;
+        this.account_entry_id = data.account_entry_id;
         this.installment_number = data.installment_number;
-        this.total_installments = data.total_installments;
-        this.created_at = data.created_at;
-        this.updated_at = data.updated_at;
+        this.due_date = data.due_date;
+        this.expected_date = data.expected_date;
+        this.amount = data.amount;
+        this.balance = data.balance;
+        this.status = data.status;
 
         // Inclui boletos se existirem
         if (data.boletos) {
