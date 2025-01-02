@@ -1,0 +1,212 @@
+openapi: 3.0.0
+info:
+  title: Installments API
+  description: API para gerenciamento de parcelas financeiras
+  version: 1.0.0
+
+paths:
+  /installments:
+    get:
+      summary: Listar parcelas
+      description: Recupera uma lista de parcelas com suporte a filtros e paginação
+      tags:
+        - Installments
+      parameters:
+        - in: query
+          name: page
+          schema:
+            type: integer
+            default: 1
+          description: Número da página
+        - in: query
+          name: limit
+          schema:
+            type: integer
+            default: 10
+          description: Número de itens por página
+        - in: query
+          name: status
+          schema:
+            type: string
+            enum: 
+              - PENDING
+              - PAID
+              - OVERDUE
+          description: Filtrar por status da parcela
+        - in: query
+          name: movement_id
+          schema:
+            type: integer
+          description: Filtrar por ID do movimento
+        - in: query
+          name: payment_id
+          schema:
+            type: integer
+          description: Filtrar por ID do pagamento
+        - in: query
+          name: due_date_start
+          schema:
+            type: string
+            format: date
+          description: Data de vencimento inicial (formato YYYY-MM-DD)
+        - in: query
+          name: due_date_end
+          schema:
+            type: string
+            format: date
+          description: Data de vencimento final (formato YYYY-MM-DD)
+        - in: query
+          name: min_amount
+          schema:
+            type: number
+            format: float
+          description: Valor mínimo da parcela
+        - in: query
+          name: max_amount
+          schema:
+            type: number
+            format: float
+          description: Valor máximo da parcela
+      responses:
+        '200':
+          description: Lista de parcelas recuperada com sucesso
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  total:
+                    type: integer
+                    description: Número total de parcelas
+                  page:
+                    type: integer
+                    description: Página atual
+                  limit:
+                    type: integer
+                    description: Limite de itens por página
+                  data:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/Installment'
+        '400':
+          description: Erro de requisição
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '500':
+          description: Erro interno do servidor
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /installments/{installmentId}:
+    get:
+      summary: Recuperar parcela por ID
+      description: Recupera os detalhes de uma parcela específica
+      tags:
+        - Installments
+      parameters:
+        - in: path
+          name: installmentId
+          required: true
+          schema:
+            type: integer
+          description: ID da parcela
+      responses:
+        '200':
+          description: Detalhes da parcela recuperados com sucesso
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Installment'
+        '404':
+          description: Parcela não encontrada
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '500':
+          description: Erro interno do servidor
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+components:
+  schemas:
+    Installment:
+      type: object
+      properties:
+        installment_id:
+          type: integer
+          description: ID único da parcela
+        payment_id:
+          type: integer
+          description: ID do pagamento associado
+        account_entry_id:
+          type: integer
+          description: ID da entrada contábil
+        installment_number:
+          type: integer
+          description: Número da parcela
+        due_date:
+          type: string
+          format: date
+          description: Data de vencimento
+        expected_date:
+          type: string
+          format: date
+          description: Data esperada de pagamento
+        amount:
+          type: number
+          format: float
+          description: Valor da parcela
+        balance:
+          type: number
+          format: float
+          description: Saldo remanescente
+        status:
+          type: string
+          enum:
+            - PENDING
+            - PAID
+            - OVERDUE
+          description: Status da parcela
+        days_overdue:
+          type: integer
+          description: Dias em atraso ou adiantamento
+        boletos:
+          type: array
+          items:
+            $ref: '#/components/schemas/Boleto'
+          description: Lista de boletos associados à parcela
+
+    Boleto:
+      type: object
+      properties:
+        boleto_id:
+          type: integer
+          description: ID do boleto
+        number:
+          type: string
+          description: Número do boleto
+        value:
+          type: number
+          format: float
+          description: Valor do boleto
+        due_date:
+          type: string
+          format: date
+          description: Data de vencimento do boleto
+
+    ErrorResponse:
+      type: object
+      properties:
+        message:
+          type: string
+          description: Mensagem de erro detalhada
+        code:
+          type: string
+          description: Código de erro

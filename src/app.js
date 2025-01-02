@@ -46,7 +46,7 @@ app.use((req, res, next) => {
 
 // Configurações básicas
 app.use(cors({
-    origin: ['https://dev.agilefinance.com.br', 'https://api.agilefinance.com.br', 'http://localhost:3000'],
+    origin: ['https://dev.agilefinance.com.br', 'https://api.agilefinance.com.br', 'http://localhost:3000', 'http://localhost:5173'],
     methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
     allowedHeaders: ['Content-Type', 'Authorization'],
     credentials: true,
