@@ -53,7 +53,13 @@ class InstallmentService {
         try {
             logger.info('Serviço: Listando parcelas com detalhes', { page, limit, filters });
             
-            const cacheKey = this.cacheService.generateKey(`${this.cachePrefix}:details`, { page, limit, ...filters });
+            // Adiciona include de boletos aos filtros
+            const detailFilters = {
+                ...filters,
+                include: 'boletos'
+            };
+            
+            const cacheKey = this.cacheService.generateKey(`${this.cachePrefix}:details`, { page, limit, ...detailFilters });
             const cached = await this.cacheService.get(cacheKey);
             
             if (cached) {
@@ -61,8 +67,8 @@ class InstallmentService {
                 return cached;
             }
 
-            // Busca parcelas com boletos
-            const result = await this.repository.findAllWithDetails(page, limit, filters);
+            // Usa findAll com include de boletos
+            const result = await this.repository.findAll(page, limit, detailFilters);
             
             // Transforma os resultados em DTOs
             result.items = result.items.map((item) => {
