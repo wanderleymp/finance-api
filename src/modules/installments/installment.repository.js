@@ -131,6 +131,7 @@ class InstallmentRepository extends BaseRepository {
                         p.full_name,
                         m.movement_id, 
                         m.movement_status_id,
+                        m.movement_id, // adicionado movement_id
                         i.installment_id,
                         i.payment_id,
                         i.account_entry_id,
@@ -140,7 +141,7 @@ class InstallmentRepository extends BaseRepository {
                         i.balance,
                         i.status,
                         i.expected_date
-                        ${filters.include === 'boletos' ? `
+                        ${filters.include === 'boletos' ? `,
                             b.boleto_id,
                             b.boleto_number,
                             b.boleto_url,

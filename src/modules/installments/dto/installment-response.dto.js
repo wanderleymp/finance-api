@@ -33,12 +33,13 @@ class InstallmentResponseDTO {
         this.balance = data.balance;
         this.status = data.status;
         this.full_name = data.full_name;
+        this.movement_id = data.movement_id;
+        this.movement_status_id = data.movement_status_id;
 
         // Calcula dias em atraso ou adiantamento
-        const currentDate = new Date('2025-01-01T10:40:07Z');
-        const expectedDate = new Date(this.expected_date);
-        
-        const timeDiff = currentDate.getTime() - expectedDate.getTime();
+        const dueDate = new Date(this.due_date);
+        const today = new Date();
+        const timeDiff = today.getTime() - dueDate.getTime();
         this.days_overdue = Math.floor(timeDiff / (1000 * 3600 * 24));
 
         // Inclui boletos se existirem
@@ -55,6 +56,14 @@ class InstallmentResponseDTO {
         if (data.person) {
             this.person = new PersonDetailsResponseDTO(data.person);
         }
+    }
+
+    calculateDaysOverdue(due_date) {
+        const dueDate = new Date(due_date);
+        const today = new Date();
+        const timeDiff = today.getTime() - dueDate.getTime();
+        const daysDiff = Math.floor(timeDiff / (1000 * 3600 * 24));
+        return daysDiff > 0 ? daysDiff : -1;
     }
 }
 
