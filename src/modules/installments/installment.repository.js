@@ -112,35 +112,32 @@ class InstallmentRepository extends BaseRepository {
                 orderBy,
                 customQuery: `
                     SELECT 
+                        p.full_name,
+                        m.movement_id, 
+                        m.movement_status_id,
+                        i.installment_id,
+                        i.payment_id,
+                        i.account_entry_id,
+                        i.installment_number,
+                        i.due_date,
+                        i.amount,
+                        i.balance,
+                        i.status,
+                        i.expected_date,
                         ${filters.include === 'boletos' ? `
-                            i.installment_id,
-                            i.payment_id,
-                            i.account_entry_id,
-                            i.installment_number,
-                            i.due_date,
-                            i.amount,
-                            i.balance,
-                            i.status,
-                            i.expected_date,
                             b.boleto_id,
                             b.boleto_number,
                             b.boleto_url,
                             b.status as boleto_status,
                             b.generated_at as boleto_generated_at
-                        ` : `
-                            i.installment_id,
-                            i.payment_id,
-                            i.account_entry_id,
-                            i.installment_number,
-                            i.due_date,
-                            i.amount,
-                            i.balance,
-                            i.status,
-                            i.expected_date
-                        `}
-                    FROM ${this.tableName} i
+                        ` : ''}
+                    FROM installments i
+                    JOIN movement_payments mp ON i.payment_id = mp.payment_id
+                    JOIN movements m ON mp.movement_id = m.movement_id
+                    JOIN persons p ON m.person_id = p.person_id
                     ${filters.include === 'boletos' ? 'LEFT JOIN boletos b ON b.installment_id = i.installment_id' : ''}
-                    ${whereClause}
+                    ${whereClause ? whereClause + ' AND m.movement_status_id = 2' : 'WHERE m.movement_status_id = 2'}
+                    ORDER BY ${orderBy}
                     LIMIT $${paramCount++} OFFSET $${paramCount++}
                 `,
                 queryParams,
@@ -148,15 +145,25 @@ class InstallmentRepository extends BaseRepository {
                     SELECT COUNT(*) as total
                     FROM (
                         SELECT DISTINCT i.installment_id
-                        FROM ${this.tableName} i
+                        FROM installments i
+                        JOIN movement_payments mp ON i.payment_id = mp.payment_id
+                        JOIN movements m ON mp.movement_id = m.movement_id
+                        JOIN persons p ON m.person_id = p.person_id
                         ${filters.include === 'boletos' ? 'LEFT JOIN boletos b ON b.installment_id = i.installment_id' : ''}
-                        ${whereClause}
+                        ${whereClause ? whereClause + ' AND m.movement_status_id = 2' : 'WHERE m.movement_status_id = 2'}
                     ) as subquery
                 `
             };
 
             // Usa o método findAll do BaseRepository
             const result = await super.findAll(page, limit, filters, options);
+
+            // Log para verificar o full_name e garantir sua inclusão na query
+            logger.debug('Resultado da busca de parcelas', {
+                itemCount: result.items.length,
+                firstItem: result.items[0],
+                full_name: result.items[0].full_name
+            });
 
             // Se incluir boletos, agrupa os boletos por parcela
             if (filters.include === 'boletos') {

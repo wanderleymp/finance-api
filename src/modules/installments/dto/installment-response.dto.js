@@ -32,6 +32,7 @@ class InstallmentResponseDTO {
         this.amount = data.amount;
         this.balance = data.balance;
         this.status = data.status;
+        this.full_name = data.full_name;
 
         // Calcula dias em atraso ou adiantamento
         const currentDate = new Date('2025-01-01T10:40:07Z');
