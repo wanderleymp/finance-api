@@ -131,7 +131,6 @@ class InstallmentRepository extends BaseRepository {
                         p.full_name,
                         m.movement_id, 
                         m.movement_status_id,
-                        m.movement_id, // adicionado movement_id
                         i.installment_id,
                         i.payment_id,
                         i.account_entry_id,
@@ -164,8 +163,8 @@ class InstallmentRepository extends BaseRepository {
                         SELECT DISTINCT i.installment_id
                         FROM installments i
                         JOIN movement_payments mp ON i.payment_id = mp.payment_id
-                        JOIN movements m ON mp.movement_id = m.movement_id
-                        JOIN persons p ON m.person_id = p.person_id
+                        JOIN movements m ON m.movement_id = mp.movement_id
+                        JOIN persons p ON p.person_id = m.person_id
                         ${filters.include === 'boletos' ? 'LEFT JOIN boletos b ON b.installment_id = i.installment_id' : ''}
                         ${whereClause ? whereClause + ' AND m.movement_status_id = 2' : 'WHERE m.movement_status_id = 2'}
                     ) as subquery
