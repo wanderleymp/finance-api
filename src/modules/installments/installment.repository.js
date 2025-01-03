@@ -90,10 +90,18 @@ class InstallmentRepository extends BaseRepository {
                 whereClause += `${whereClause ? ' AND ' : ' WHERE '}i.due_date <= $${paramCount++}::date`;
             }
 
-            // Adiciona outros filtros se existirem
+            // Adiciona filtro de status
+            let statusList = [];
             if (filters.status) {
-                queryParams.push(filters.status);
-                whereClause += `${whereClause ? ' AND ' : ' WHERE '}i.status = $${paramCount++}`;
+                // Converte para array se não for
+                statusList = Array.isArray(filters.status) 
+                    ? filters.status 
+                    : [filters.status];
+                
+                // Adiciona status como parâmetro
+                queryParams.push(statusList);
+                
+                whereClause += `${whereClause ? ' AND ' : ' WHERE '}i.status = ANY($${paramCount++})`;
             }
 
             if (filters.account_entry_id) {
@@ -106,6 +114,14 @@ class InstallmentRepository extends BaseRepository {
 
             // Adiciona parâmetros de paginação
             queryParams.push(limit, offset);
+
+            // Log detalhado dos parâmetros
+            logger.debug('Parâmetros da consulta de parcelas', { 
+                filters, 
+                whereClause, 
+                queryParams,
+                statusList
+            });
 
             // Opções para personalizar a query
             const options = {
@@ -123,7 +139,7 @@ class InstallmentRepository extends BaseRepository {
                         i.amount,
                         i.balance,
                         i.status,
-                        i.expected_date,
+                        i.expected_date
                         ${filters.include === 'boletos' ? `
                             b.boleto_id,
                             b.boleto_number,
@@ -138,7 +154,7 @@ class InstallmentRepository extends BaseRepository {
                     ${filters.include === 'boletos' ? 'LEFT JOIN boletos b ON b.installment_id = i.installment_id' : ''}
                     ${whereClause ? whereClause + ' AND m.movement_status_id = 2' : 'WHERE m.movement_status_id = 2'}
                     ORDER BY ${orderBy}
-                    LIMIT $${paramCount++} OFFSET $${paramCount++}
+                    LIMIT $${paramCount} OFFSET $${paramCount + 1}
                 `,
                 queryParams,
                 countQuery: `
@@ -162,7 +178,8 @@ class InstallmentRepository extends BaseRepository {
             logger.debug('Resultado da busca de parcelas', {
                 itemCount: result.items.length,
                 firstItem: result.items[0],
-                full_name: result.items[0].full_name
+                full_name: result.items[0]?.full_name,
+                status: result.items.map(item => item.status)
             });
 
             // Se incluir boletos, agrupa os boletos por parcela
