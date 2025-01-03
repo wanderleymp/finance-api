@@ -26,39 +26,36 @@ class BaseRepository {
             const parsedLimit = parseInt(limit) || 10;
             const offset = (parsedPage - 1) * parsedLimit;
             
-            // Prepara os filtros
-            const queryParams = [];
+            // Usa parâmetros personalizados ou prepara novos
+            const originalQueryParams = options.queryParams || [];
+            const queryParams = [...originalQueryParams];
+
+            // Adiciona filtros de data ou outros filtros específicos
             const conditions = [];
-            let paramCount = 1;
+            let paramCount = originalQueryParams.length + 1;
 
-            // Filtros básicos
-            for (const [key, value] of Object.entries(filters)) {
-                if (value !== undefined && value !== null && value !== '') {
-                    conditions.push(`${key} = $${paramCount}`);
-                    queryParams.push(value);
-                    paramCount++;
-                }
-            }
-
-            const whereClause = conditions.length > 0 
-                ? `WHERE ${conditions.join(' AND ')}` 
-                : '';
+            // Adiciona parâmetros de paginação
+            queryParams.push(parsedLimit, offset);
 
             // Usa query personalizada ou padrão
             const baseQuery = options.customQuery || `
                 SELECT *
                 FROM ${this.tableName}
-                ${whereClause}
+                ${conditions.length > 0 ? `WHERE ${conditions.join(' AND ')}` : ''}
             `;
 
-            // Adiciona ORDER BY personalizado ou padrão
+            // Define orderBy
             const orderByClause = options.orderBy 
                 ? `ORDER BY ${options.orderBy}` 
                 : `ORDER BY created_at DESC`;
 
             // Query para buscar os dados
             const query = `
-                ${baseQuery}
+                WITH subquery AS (
+                    ${baseQuery}
+                )
+                SELECT * 
+                FROM subquery
                 ${orderByClause}
                 LIMIT $${paramCount} OFFSET $${paramCount + 1}
             `;
@@ -66,23 +63,20 @@ class BaseRepository {
             // Query para contar o total
             const countQuery = `
                 SELECT COUNT(*) as total
-                FROM (${baseQuery}) as subquery
+                FROM (${baseQuery}) as count_subquery
             `;
 
             logger.debug('BaseRepository findAll - queries:', {
                 query,
                 countQuery,
                 queryParams,
-                paramCount,
-                offset,
-                parsedPage,
-                parsedLimit
+                paramCount
             });
 
             // Executa as queries
             const [data, countResult] = await Promise.all([
-                this.pool.query(query, [...queryParams, parsedLimit, offset]),
-                this.pool.query(countQuery, queryParams)
+                this.pool.query(query, queryParams),
+                this.pool.query(countQuery, originalQueryParams)
             ]);
 
             const totalItems = parseInt(countResult.rows[0].total);
@@ -108,7 +102,8 @@ class BaseRepository {
                 tableName: this.tableName,
                 filters,
                 page,
-                limit
+                limit,
+                stack: error.stack
             });
             throw error;
         }

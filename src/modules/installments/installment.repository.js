@@ -69,35 +69,50 @@ class InstallmentRepository extends BaseRepository {
 
     async findAll(page = 1, limit = 10, filters = {}) {
         try {
-            // Prepara os filtros
-            const queryFilters = {};
-            
-            // Mapeia os filtros para os nomes corretos das colunas
-            if (filters.status) queryFilters.status = filters.status;
-            if (filters.account_entry_id) queryFilters.account_entry_id = filters.account_entry_id;
+            // Normaliza a página e o limite
+            page = Math.max(1, Number(page));
+            limit = Math.max(1, Number(limit));
+            const offset = (page - 1) * limit;
 
+            // Prepara os filtros
+            const queryParams = [];
+            let whereClause = '';
+            let paramCount = 1;
+            
             // Adiciona filtros de data se existirem
             if (filters.start_date) {
-                queryFilters.due_date = { 
-                    operator: '>=', 
-                    value: filters.start_date 
-                };
+                queryParams.push(filters.start_date);
+                whereClause += `${whereClause ? ' AND ' : ' WHERE '}i.due_date >= $${paramCount++}::date`;
             }
             
             if (filters.end_date) {
-                queryFilters.due_date = { 
-                    ...(queryFilters.due_date || {}),
-                    operator: filters.start_date ? '<=' : '<=',
-                    value: filters.end_date 
-                };
+                queryParams.push(filters.end_date);
+                whereClause += `${whereClause ? ' AND ' : ' WHERE '}i.due_date <= $${paramCount++}::date`;
             }
+
+            // Adiciona outros filtros se existirem
+            if (filters.status) {
+                queryParams.push(filters.status);
+                whereClause += `${whereClause ? ' AND ' : ' WHERE '}i.status = $${paramCount++}`;
+            }
+
+            if (filters.account_entry_id) {
+                queryParams.push(filters.account_entry_id);
+                whereClause += `${whereClause ? ' AND ' : ' WHERE '}i.account_entry_id = $${paramCount++}`;
+            }
+
+            // Define orderBy
+            const orderBy = filters.orderBy || 'due_date DESC';
+
+            // Adiciona parâmetros de paginação
+            queryParams.push(limit, offset);
 
             // Opções para personalizar a query
             const options = {
-                orderBy: filters.orderBy || 'due_date DESC',
-                customQuery: filters.include === 'boletos' 
-                    ? `
-                        SELECT 
+                orderBy,
+                customQuery: `
+                    SELECT 
+                        ${filters.include === 'boletos' ? `
                             i.installment_id,
                             i.payment_id,
                             i.account_entry_id,
@@ -112,28 +127,38 @@ class InstallmentRepository extends BaseRepository {
                             b.boleto_url,
                             b.status as boleto_status,
                             b.generated_at as boleto_generated_at
+                        ` : `
+                            i.installment_id,
+                            i.payment_id,
+                            i.account_entry_id,
+                            i.installment_number,
+                            i.due_date,
+                            i.amount,
+                            i.balance,
+                            i.status,
+                            i.expected_date
+                        `}
+                    FROM ${this.tableName} i
+                    ${filters.include === 'boletos' ? 'LEFT JOIN boletos b ON b.installment_id = i.installment_id' : ''}
+                    ${whereClause}
+                    LIMIT $${paramCount++} OFFSET $${paramCount++}
+                `,
+                queryParams,
+                countQuery: `
+                    SELECT COUNT(*) as total
+                    FROM (
+                        SELECT DISTINCT i.installment_id
                         FROM ${this.tableName} i
-                        LEFT JOIN boletos b ON b.installment_id = i.installment_id
-                    ` 
-                    : `
-                        SELECT 
-                            installment_id,
-                            payment_id,
-                            account_entry_id,
-                            installment_number,
-                            due_date,
-                            amount,
-                            balance,
-                            status,
-                            expected_date
-                        FROM ${this.tableName}
-                    `
+                        ${filters.include === 'boletos' ? 'LEFT JOIN boletos b ON b.installment_id = i.installment_id' : ''}
+                        ${whereClause}
+                    ) as subquery
+                `
             };
 
             // Usa o método findAll do BaseRepository
-            const result = await super.findAll(page, limit, queryFilters, options);
+            const result = await super.findAll(page, limit, filters, options);
 
-            // Se incluir boletos, busca os boletos para cada parcela
+            // Se incluir boletos, agrupa os boletos por parcela
             if (filters.include === 'boletos') {
                 // Agrupa boletos por installment_id
                 const boletosMap = {};
@@ -152,31 +177,25 @@ class InstallmentRepository extends BaseRepository {
                     }
                 });
 
-                // Agrupa boletos e remove colunas extras
-                result.items = result.items.reduce((acc, row) => {
-                    const existingInstallment = acc.find(i => i.installment_id === row.installment_id);
-                    
-                    if (!existingInstallment) {
-                        const cleanRow = { ...row };
-                        delete cleanRow.boleto_id;
-                        delete cleanRow.boleto_number;
-                        delete cleanRow.boleto_url;
-                        delete cleanRow.boleto_status;
-                        delete cleanRow.boleto_generated_at;
-                        
-                        cleanRow.boletos = boletosMap[row.installment_id] || [];
-                        acc.push(cleanRow);
-                    }
-                    
-                    return acc;
-                }, []);
+                // Adiciona boletos aos itens
+                result.items = result.items.map(item => {
+                    const installmentWithBoletos = { ...item };
+                    installmentWithBoletos.boletos = boletosMap[item.installment_id] || [];
+                    delete installmentWithBoletos.boleto_id;
+                    delete installmentWithBoletos.boleto_number;
+                    delete installmentWithBoletos.boleto_url;
+                    delete installmentWithBoletos.boleto_status;
+                    delete installmentWithBoletos.boleto_generated_at;
+                    return installmentWithBoletos;
+                });
             }
 
             return result;
         } catch (error) {
             logger.error('Erro ao buscar parcelas', { 
-                error: error.message,
-                filters 
+                error: error.message, 
+                filters,
+                stack: error.stack
             });
             throw new DatabaseError('Erro ao buscar parcelas', error);
         }
