@@ -36,31 +36,6 @@ class InstallmentController {
     }
 
     /**
-     * Lista parcelas com detalhes
-     */
-    async listWithDetails(req, res, next) {
-        try {
-            const { page, limit, ...filters } = req.query;
-            
-            logger.info('Controller: Listando parcelas com detalhes', { 
-                page, 
-                limit, 
-                filters 
-            });
-
-            const result = await this.service.listInstallmentsWithDetails(
-                parseInt(page) || 1, 
-                parseInt(limit) || 10, 
-                filters
-            );
-
-            return res.json(result);
-        } catch (error) {
-            next(error);
-        }
-    }
-
-    /**
      * Busca parcela por ID
      */
     async show(req, res, next) {

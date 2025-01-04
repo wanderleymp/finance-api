@@ -46,45 +46,6 @@ class InstallmentService {
         }
     }
 
-    /**
-     * Lista parcelas com detalhes (boletos)
-     */
-    async listInstallmentsWithDetails(page = 1, limit = 10, filters = {}) {
-        try {
-            logger.info('Serviço: Listando parcelas com detalhes', { page, limit, filters });
-            
-            // Adiciona include de boletos aos filtros
-            const detailFilters = {
-                ...filters,
-                include: 'boletos'
-            };
-            
-            const cacheKey = this.cacheService.generateKey(`${this.cachePrefix}:details`, { page, limit, ...detailFilters });
-            const cached = await this.cacheService.get(cacheKey);
-            
-            if (cached) {
-                logger.info('Cache hit: Retornando parcelas com detalhes do cache');
-                return cached;
-            }
-
-            // Usa findAll com include de boletos
-            const result = await this.repository.findAll(page, limit, detailFilters);
-            
-            // Transforma os resultados em DTOs
-            result.items = result.items.map((item) => {
-                const installmentResponse = new InstallmentResponseDTO(item);
-                return installmentResponse;
-            });
-            
-            await this.cacheService.set(cacheKey, result, this.cacheTTL.list);
-            
-            return result;
-        } catch (error) {
-            logger.error('Erro ao listar parcelas com detalhes', { error });
-            throw error;
-        }
-    }
-
     async getInstallmentById(id) {
         try {
             logger.info('Serviço: Buscando parcela por ID', { id });

@@ -232,11 +232,14 @@ class InstallmentRepository extends BaseRepository {
                 result.items = result.items.map(item => {
                     const installmentWithBoletos = { ...item };
                     installmentWithBoletos.boletos = boletosMap[item.installment_id] || [];
+                    
+                    // Remove colunas de boleto individuais
                     delete installmentWithBoletos.boleto_id;
                     delete installmentWithBoletos.boleto_number;
                     delete installmentWithBoletos.boleto_url;
                     delete installmentWithBoletos.boleto_status;
                     delete installmentWithBoletos.boleto_generated_at;
+                    
                     return installmentWithBoletos;
                 });
             }
