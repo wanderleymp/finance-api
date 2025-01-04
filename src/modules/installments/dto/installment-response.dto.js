@@ -42,9 +42,15 @@ class InstallmentResponseDTO {
         const timeDiff = today.getTime() - dueDate.getTime();
         this.days_overdue = Math.floor(timeDiff / (1000 * 3600 * 24));
 
-        // Inclui boletos se existirem
-        if (data.boletos) {
-            this.boletos = data.boletos.map(boleto => new BoletoDTO(boleto));
+        // Adiciona boleto diretamente se existir
+        if (data.boleto_id) {
+            this.boletos = [{
+                boleto_id: data.boleto_id,
+                boleto_number: data.boleto_number,
+                boleto_url: data.boleto_url,
+                status: data.boleto_status,
+                generated_at: data.boleto_generated_at
+            }];
         }
 
         // Inclui pagamentos se existirem

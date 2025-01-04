@@ -489,13 +489,6 @@ class InstallmentRepository extends BaseRepository {
             });
 
             const query = `
-                WITH movement_person AS (
-                    SELECT m.movement_id, m.person_id
-                    FROM movements m
-                    JOIN movement_payments mp ON m.movement_id = mp.movement_id
-                    JOIN installments i ON mp.payment_id = i.payment_id
-                    WHERE i.installment_id = $1
-                )
                 SELECT 
                     p.full_name,
                     m.movement_id, 
@@ -529,7 +522,7 @@ class InstallmentRepository extends BaseRepository {
                     FROM boletos
                     ORDER BY installment_id, boleto_id DESC
                 ) b ON b.installment_id = i.installment_id
-                WHERE i.installment_id = $1
+                WHERE i.installment_id = $1 AND m.movement_status_id = 2
             `;
 
             logger.info('Executando query de detalhes da parcela', { 
@@ -550,84 +543,6 @@ class InstallmentRepository extends BaseRepository {
                 error: error.message,
                 errorStack: error.stack,
                 id
-            });
-            throw new DatabaseError('Erro ao buscar detalhes da parcela', error);
-        }
-    }
-
-    /**
-     * Busca detalhes de uma parcela específica por ID
-     * @param {number} installmentId - ID da parcela
-     * @returns {Promise<Object>} Detalhes da parcela com boletos e pessoa
-     */
-    async findInstallmentWithDetails(installmentId) {
-        try {
-            // Query para buscar detalhes da parcela com boletos e pessoa do movimento
-            const query = `
-                SELECT 
-                    i.*,
-                    b.boleto_id,
-                    b.boleto_number,
-                    b.boleto_url,
-                    b.status as boleto_status,
-                    b.boleto_generated_at
-                FROM installments i
-                LEFT JOIN (
-                    SELECT DISTINCT ON (installment_id)
-                        installment_id, 
-                        boleto_id,
-                        boleto_number,
-                        boleto_url,
-                        status,
-                        generated_at as boleto_generated_at
-                    FROM boletos
-                    ORDER BY installment_id, boleto_id DESC
-                ) b ON b.installment_id = i.installment_id
-                WHERE i.installment_id = $1
-            `;
-
-            const result = await this.pool.query(query, [installmentId]);
-
-            // Se não encontrar a parcela, retorna null
-            if (result.rows.length === 0) {
-                return null;
-            }
-
-            // Agrupa os boletos
-            const boletosMap = result.rows.reduce((acc, row) => {
-                const installmentId = row.installment_id;
-                if (!acc[installmentId]) {
-                    acc[installmentId] = [];
-                }
-                if (row.boleto_id) {
-                    acc[installmentId].push({
-                        boleto_id: row.boleto_id,
-                        boleto_number: row.boleto_number,
-                        boleto_url: row.boleto_url,
-                        status: row.boleto_status,
-                        generated_at: row.boleto_generated_at
-                    });
-                }
-                return acc;
-            }, {});
-
-            // Remove duplicatas e adiciona boletos
-            const installment = { ...result.rows[0] };
-            
-            // Limpa campos de boletos
-            delete installment.boleto_id;
-            delete installment.boleto_number;
-            delete installment.boleto_url;
-            delete installment.boleto_status;
-            delete installment.boleto_generated_at;
-
-            installment.boletos = boletosMap[installmentId] || [];
-
-            return installment;
-        } catch (error) {
-            logger.error('Erro ao buscar detalhes da parcela', { 
-                error: error.message,
-                installmentId 
             });
             throw new DatabaseError('Erro ao buscar detalhes da parcela', error);
         }
