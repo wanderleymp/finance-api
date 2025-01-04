@@ -9,7 +9,8 @@ const installmentSchema = {
         payment_id: Joi.number().integer().positive().optional(),
         start_date: Joi.date().iso().optional(),
         end_date: Joi.date().iso().optional(),
-        include: Joi.string().valid('boletos').optional()
+        include: Joi.string().valid('boletos').optional(),
+        full_name: Joi.string().optional()
     }).unknown(false),
 
     // Schema para busca por ID

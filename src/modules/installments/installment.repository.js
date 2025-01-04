@@ -109,6 +109,11 @@ class InstallmentRepository extends BaseRepository {
                 whereClause += `${whereClause ? ' AND ' : ' WHERE '}i.account_entry_id = $${paramCount++}`;
             }
 
+            if (filters.full_name) {
+                queryParams.push(`%${filters.full_name}%`);
+                whereClause += `${whereClause ? ' AND ' : ' WHERE '}LOWER(p.full_name) LIKE LOWER($${paramCount++})`;
+            }
+
             // Define orderBy
             const orderBy = filters.orderBy || 'due_date DESC, full_name ASC';
 
