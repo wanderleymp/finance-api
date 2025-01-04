@@ -110,7 +110,7 @@ class InstallmentRepository extends BaseRepository {
             }
 
             // Define orderBy
-            const orderBy = filters.orderBy || 'due_date DESC';
+            const orderBy = filters.orderBy || 'due_date DESC, full_name ASC';
 
             // Adiciona parâmetros de paginação
             queryParams.push(limit, offset);
