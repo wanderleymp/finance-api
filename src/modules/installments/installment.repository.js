@@ -141,17 +141,28 @@ class InstallmentRepository extends BaseRepository {
                         i.status,
                         i.expected_date
                         ${filters.include === 'boletos' ? `,
-                            b.boleto_id,
-                            b.boleto_number,
-                            b.boleto_url,
-                            b.status as boleto_status,
-                            b.generated_at as boleto_generated_at
+                            boletos.boleto_id,
+                            boletos.boleto_number,
+                            boletos.boleto_url,
+                            boletos.status as boleto_status,
+                            boletos.boleto_generated_at
                         ` : ''}
                     FROM installments i
                     JOIN movement_payments mp ON i.payment_id = mp.payment_id
                     JOIN movements m ON mp.movement_id = m.movement_id
                     JOIN persons p ON m.person_id = p.person_id
-                    ${filters.include === 'boletos' ? 'LEFT JOIN boletos b ON b.installment_id = i.installment_id' : ''}
+                    ${filters.include === 'boletos' ? `
+                        LEFT JOIN (
+                            SELECT DISTINCT ON (installment_id)
+                                installment_id, 
+                                boleto_id,
+                                boleto_number,
+                                boleto_url,
+                                status,
+                                generated_at as boleto_generated_at
+                            FROM boletos
+                            ORDER BY installment_id, boleto_id DESC
+                        ) boletos ON boletos.installment_id = i.installment_id` : ''}
                     ${whereClause ? whereClause + ' AND m.movement_status_id = 2' : 'WHERE m.movement_status_id = 2'}
                     ORDER BY ${orderBy}
                     LIMIT $${paramCount} OFFSET $${paramCount + 1}
@@ -165,7 +176,18 @@ class InstallmentRepository extends BaseRepository {
                         JOIN movement_payments mp ON i.payment_id = mp.payment_id
                         JOIN movements m ON m.movement_id = mp.movement_id
                         JOIN persons p ON p.person_id = m.person_id
-                        ${filters.include === 'boletos' ? 'LEFT JOIN boletos b ON b.installment_id = i.installment_id' : ''}
+                        ${filters.include === 'boletos' ? `
+                            LEFT JOIN (
+                                SELECT DISTINCT ON (installment_id)
+                                    installment_id, 
+                                    boleto_id,
+                                    boleto_number,
+                                    boleto_url,
+                                    status,
+                                    generated_at as boleto_generated_at
+                                FROM boletos
+                                ORDER BY installment_id, boleto_id DESC
+                            ) boletos ON boletos.installment_id = i.installment_id` : ''}
                         ${whereClause ? whereClause + ' AND m.movement_status_id = 2' : 'WHERE m.movement_status_id = 2'}
                     ) as subquery
                 `
@@ -464,10 +486,20 @@ class InstallmentRepository extends BaseRepository {
                     b.boleto_number,
                     b.boleto_url,
                     b.status as boleto_status,
-                    b.generated_at as boleto_generated_at,
+                    b.boleto_generated_at,
                     p.person_id
                 FROM installments i
-                LEFT JOIN boletos b ON b.installment_id = i.installment_id
+                LEFT JOIN (
+                    SELECT DISTINCT ON (installment_id)
+                        installment_id, 
+                        boleto_id,
+                        boleto_number,
+                        boleto_url,
+                        status,
+                        generated_at as boleto_generated_at
+                    FROM boletos
+                    ORDER BY installment_id, boleto_id DESC
+                ) b ON b.installment_id = i.installment_id
                 LEFT JOIN movement_payments mp ON mp.payment_id = i.payment_id
                 LEFT JOIN movements m ON m.movement_id = mp.movement_id
                 LEFT JOIN persons p ON p.person_id = m.person_id
