@@ -26,8 +26,22 @@ const installmentSchema = {
     // Schema para atualização de vencimento
     updateDueDate: Joi.object({
         id: Joi.number().integer().positive().required(),
-        due_date: Joi.date().iso().required()
-    }).unknown(false),
+        due_date: Joi.string().isoDate().optional(),
+        amount: Joi.number().positive().optional()
+    }).min(1).unknown(false),
+
+    // Schema para atualização de vencimento e valor
+    updateInstallment: Joi.object({
+        id: Joi.number().integer().positive().required(),
+        due_date: Joi.alternatives().try(
+            Joi.date().iso(), 
+            Joi.string().isoDate()
+        ).optional(),
+        amount: Joi.alternatives().try(
+            Joi.number().positive(), 
+            Joi.string().regex(/^\d+(\.\d{1,2})?$/)
+        ).optional()
+    }).or('due_date', 'amount').unknown(false),
 };
 
 module.exports = installmentSchema;

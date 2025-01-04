@@ -44,5 +44,12 @@ module.exports = (installmentController) => {
         installmentController.updateDueDate.bind(installmentController)
     );
 
+    // Atualiza o valor de uma parcela
+    router.patch('/:id', 
+        validateRequest(installmentSchema.updateInstallment, 'params'),
+        validateRequest(installmentSchema.updateInstallment, 'body'),
+        installmentController.updateInstallment.bind(installmentController)
+    );
+
     return router;
 };

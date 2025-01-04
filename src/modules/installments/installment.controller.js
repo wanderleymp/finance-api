@@ -1,4 +1,5 @@
 const { logger } = require('../../middlewares/logger');
+const installmentSchema = require('./schemas/installment.schema'); 
 
 class InstallmentController {
     /**
@@ -121,27 +122,36 @@ class InstallmentController {
      */
     async updateDueDate(req, res, next) {
         try {
-            const { id } = req.params;
-            const { due_date } = req.body;
+            const { id, due_date, amount } = { ...req.params, ...req.body };
 
-            // Valida os dados de entrada
-            const { error } = installmentSchema.updateDueDate.validate({ 
-                id: Number(id), 
-                due_date 
-            });
-
-            if (error) {
-                return res.status(400).json({
-                    success: false,
-                    error: 'Erro de validação',
-                    details: error.details
-                });
-            }
-
-            // Chama o serviço para atualizar o vencimento
             const updatedInstallment = await this.service.updateInstallmentDueDate(
                 Number(id), 
-                due_date
+                due_date,
+                amount
+            );
+
+            res.status(200).json({
+                success: true,
+                data: updatedInstallment
+            });
+        } catch (error) {
+            next(error);
+        }
+    }
+
+    /**
+     * Atualiza a data de vencimento ou valor de uma parcela
+     * @route PATCH /installments/:id
+     */
+    async updateInstallment(req, res, next) {
+        try {
+            const { id } = req.params;
+            const { due_date, amount } = req.body;
+
+            // Chama o serviço para atualizar
+            const updatedInstallment = await this.service.updateInstallment(
+                Number(id), 
+                { due_date, amount }
             );
 
             // Retorna a parcela atualizada

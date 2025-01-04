@@ -17,9 +17,14 @@ function validateRequest(schema, property = 'body') {
                 });
             }
 
-            const { error } = schema.validate(req[property], {
+            // Adiciona o ID dos parâmetros ao corpo para validação
+            const dataToValidate = property === 'params' 
+                ? { ...req[property], ...req.body }
+                : req[property];
+
+            const { error } = schema.validate(dataToValidate, {
                 abortEarly: false,
-                allowUnknown: true,
+                allowUnknown: false,
                 stripUnknown: true
             });
 

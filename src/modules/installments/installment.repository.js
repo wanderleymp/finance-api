@@ -295,26 +295,53 @@ class InstallmentRepository extends BaseRepository {
         try {
             await client.query('BEGIN');
 
+            // Prepara os campos para atualização
+            const updateFields = [];
+            const queryParams = [];
+            let paramIndex = 1;
+
+            // Adiciona due_date se fornecido
+            if (data.due_date) {
+                updateFields.push(`due_date = $${paramIndex}`);
+                queryParams.push(data.due_date);
+                paramIndex++;
+            }
+
+            // Adiciona amount se fornecido
+            if (data.amount !== undefined) {
+                updateFields.push(`amount = $${paramIndex}`);
+                queryParams.push(data.amount);
+                paramIndex++;
+            }
+
+            // Adiciona o ID como último parâmetro
+            queryParams.push(id);
+
+            // Constrói a query dinamicamente
             const query = `
                 UPDATE ${this.tableName}
-                SET 
-                    status = COALESCE($1, status),
-                    payment_date = COALESCE($2, payment_date),
-                    updated_at = NOW()
-                WHERE ${this.primaryKey} = $3
+                SET ${updateFields.join(', ')}
+                WHERE ${this.primaryKey} = $${paramIndex}
                 RETURNING *
             `;
 
-            const result = await client.query(query, [
-                data.status,
-                data.payment_date,
-                id
-            ]);
+            logger.debug('Update query', { 
+                query, 
+                params: queryParams,
+                data 
+            });
+
+            const result = await client.query(query, queryParams);
 
             await client.query('COMMIT');
             return result.rows[0];
         } catch (error) {
             await client.query('ROLLBACK');
+            logger.error('Erro ao atualizar parcela', { 
+                error: error.message, 
+                data,
+                id 
+            });
             throw error;
         } finally {
             client.release();

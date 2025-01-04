@@ -241,9 +241,10 @@ class InstallmentService {
      * Atualiza a data de vencimento de uma parcela
      * @param {number} installmentId - ID da parcela
      * @param {string} newDueDate - Nova data de vencimento (formato ISO)
+     * @param {number} [newAmount] - Novo valor da parcela (opcional)
      * @returns {Promise<Object>} Parcela atualizada
      */
-    async updateInstallmentDueDate(installmentId, newDueDate) {
+    async updateInstallmentDueDate(installmentId, newDueDate, newAmount) {
         try {
             // Valida a data de vencimento
             const parsedDueDate = new Date(newDueDate);
@@ -259,24 +260,36 @@ class InstallmentService {
                 throw new Error('Parcela não encontrada');
             }
 
-            // Atualiza a data de vencimento
-            const updatedInstallment = await this.repository.updateDueDate(
+            // Prepara dados para atualização
+            const updateData = { 
+                due_date: parsedDueDate 
+            };
+
+            // Adiciona amount se fornecido
+            if (newAmount !== undefined) {
+                updateData.amount = newAmount;
+            }
+
+            // Atualiza a data de vencimento e/ou valor
+            const updatedInstallment = await this.repository.update(
                 installmentId, 
-                parsedDueDate
+                updateData
             );
 
             // Log da atualização
-            this.logger.info('Vencimento da parcela atualizado com sucesso', {
+            logger.info('Vencimento da parcela atualizado com sucesso', {
                 installmentId,
-                newDueDate: parsedDueDate
+                newDueDate: parsedDueDate,
+                newAmount
             });
 
             return new InstallmentResponseDTO(updatedInstallment);
         } catch (error) {
-            this.logger.error('Erro ao atualizar vencimento da parcela', {
+            logger.error('Erro ao atualizar vencimento da parcela', {
                 error: error.message,
                 installmentId,
-                newDueDate
+                newDueDate,
+                newAmount
             });
             throw error;
         }
