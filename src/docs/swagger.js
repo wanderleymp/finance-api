@@ -754,6 +754,98 @@ const options = {
                         }
                     }
                 }
+            },
+            '/installments/{id}/due-date': {
+                patch: {
+                    summary: 'Atualizar data de vencimento de uma parcela',
+                    description: 'Atualiza a data de vencimento de uma parcela específica',
+                    tags: ['Installments'],
+                    security: [{ bearerAuth: [] }],
+                    parameters: [
+                        {
+                            name: 'id',
+                            in: 'path',
+                            required: true,
+                            description: 'ID da parcela',
+                            schema: {
+                                type: 'integer',
+                                minimum: 1
+                            }
+                        }
+                    ],
+                    requestBody: {
+                        required: true,
+                        content: {
+                            'application/json': {
+                                schema: {
+                                    type: 'object',
+                                    properties: {
+                                        due_date: {
+                                            type: 'string',
+                                            format: 'date-time',
+                                            description: 'Nova data de vencimento no formato ISO'
+                                        }
+                                    },
+                                    required: ['due_date']
+                                },
+                                example: {
+                                    due_date: '2025-02-15T00:00:00Z'
+                                }
+                            }
+                        }
+                    },
+                    responses: {
+                        '200': {
+                            description: 'Parcela atualizada com sucesso',
+                            content: {
+                                'application/json': {
+                                    schema: {
+                                        type: 'object',
+                                        properties: {
+                                            success: {
+                                                type: 'boolean',
+                                                example: true
+                                            },
+                                            data: {
+                                                $ref: '#/components/schemas/Installment'
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                        },
+                        '400': {
+                            description: 'Erro de validação',
+                            content: {
+                                'application/json': {
+                                    schema: {
+                                        $ref: '#/components/schemas/ValidationError'
+                                    }
+                                }
+                            }
+                        },
+                        '401': {
+                            description: 'Não autorizado',
+                            content: {
+                                'application/json': {
+                                    schema: {
+                                        $ref: '#/components/schemas/UnauthorizedError'
+                                    }
+                                }
+                            }
+                        },
+                        '404': {
+                            description: 'Parcela não encontrada',
+                            content: {
+                                'application/json': {
+                                    schema: {
+                                        $ref: '#/components/schemas/NotFoundError'
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
             }
         }
     },

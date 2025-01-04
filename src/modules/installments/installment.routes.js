@@ -38,5 +38,11 @@ module.exports = (installmentController) => {
         installmentController.generateBoleto.bind(installmentController)
     );
 
+    // Atualiza a data de vencimento de uma parcela
+    router.patch('/:id/due-date', 
+        validateRequest(installmentSchema.updateDueDate, 'params'),
+        installmentController.updateDueDate.bind(installmentController)
+    );
+
     return router;
 };

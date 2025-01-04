@@ -478,6 +478,85 @@ class InstallmentRepository extends BaseRepository {
 
     /**
      * Busca detalhes de uma parcela específica por ID
+     * @param {number} id - ID da parcela
+     * @returns {Promise<Object>} Detalhes da parcela
+     */
+    async findInstallmentWithDetails(id) {
+        try {
+            logger.info('Buscando detalhes da parcela', { 
+                id, 
+                method: 'findInstallmentWithDetails' 
+            });
+
+            const query = `
+                WITH movement_person AS (
+                    SELECT m.movement_id, m.person_id
+                    FROM movements m
+                    JOIN movement_payments mp ON m.movement_id = mp.movement_id
+                    JOIN installments i ON mp.payment_id = i.payment_id
+                    WHERE i.installment_id = $1
+                )
+                SELECT 
+                    p.full_name,
+                    m.movement_id, 
+                    m.movement_status_id,
+                    i.installment_id,
+                    i.payment_id,
+                    i.account_entry_id,
+                    i.installment_number,
+                    i.due_date,
+                    i.amount,
+                    i.balance,
+                    i.status,
+                    i.expected_date,
+                    b.boleto_id,
+                    b.boleto_number,
+                    b.boleto_url,
+                    b.status as boleto_status,
+                    b.generated_at as boleto_generated_at
+                FROM installments i
+                JOIN movement_payments mp ON i.payment_id = mp.payment_id
+                JOIN movements m ON mp.movement_id = m.movement_id
+                JOIN persons p ON m.person_id = p.person_id
+                LEFT JOIN (
+                    SELECT DISTINCT ON (installment_id)
+                        installment_id, 
+                        boleto_id,
+                        boleto_number,
+                        boleto_url,
+                        status,
+                        generated_at
+                    FROM boletos
+                    ORDER BY installment_id, boleto_id DESC
+                ) b ON b.installment_id = i.installment_id
+                WHERE i.installment_id = $1
+            `;
+
+            logger.info('Executando query de detalhes da parcela', { 
+                query, 
+                id 
+            });
+
+            const { rows } = await this.pool.query(query, [id]);
+            
+            logger.info('Resultado da busca de detalhes da parcela', { 
+                rowCount: rows.length,
+                firstRow: rows[0]
+            });
+
+            return rows[0] || null;
+        } catch (error) {
+            logger.error('Erro ao buscar detalhes da parcela', {
+                error: error.message,
+                errorStack: error.stack,
+                id
+            });
+            throw new DatabaseError('Erro ao buscar detalhes da parcela', error);
+        }
+    }
+
+    /**
+     * Busca detalhes de uma parcela específica por ID
      * @param {number} installmentId - ID da parcela
      * @returns {Promise<Object>} Detalhes da parcela com boletos e pessoa
      */
@@ -491,8 +570,7 @@ class InstallmentRepository extends BaseRepository {
                     b.boleto_number,
                     b.boleto_url,
                     b.status as boleto_status,
-                    b.boleto_generated_at,
-                    p.person_id
+                    b.boleto_generated_at
                 FROM installments i
                 LEFT JOIN (
                     SELECT DISTINCT ON (installment_id)
@@ -505,9 +583,6 @@ class InstallmentRepository extends BaseRepository {
                     FROM boletos
                     ORDER BY installment_id, boleto_id DESC
                 ) b ON b.installment_id = i.installment_id
-                LEFT JOIN movement_payments mp ON mp.payment_id = i.payment_id
-                LEFT JOIN movements m ON m.movement_id = mp.movement_id
-                LEFT JOIN persons p ON p.person_id = m.person_id
                 WHERE i.installment_id = $1
             `;
 
@@ -536,31 +611,17 @@ class InstallmentRepository extends BaseRepository {
                 return acc;
             }, {});
 
-            // Remove duplicatas e adiciona boletos e pessoa
+            // Remove duplicatas e adiciona boletos
             const installment = { ...result.rows[0] };
             
-            // Limpa campos de boletos e pessoa
+            // Limpa campos de boletos
             delete installment.boleto_id;
             delete installment.boleto_number;
             delete installment.boleto_url;
             delete installment.boleto_status;
             delete installment.boleto_generated_at;
-            delete installment.person_id;
 
             installment.boletos = boletosMap[installmentId] || [];
-
-            // Busca detalhes completos da pessoa se existir
-            if (result.rows[0].person_id) {
-                try {
-                    installment.person = await this.personService.findPersonWithDetails(result.rows[0].person_id);
-                } catch (personError) {
-                    logger.warn('Erro ao buscar detalhes da pessoa', { 
-                        personId: result.rows[0].person_id,
-                        error: personError.message 
-                    });
-                    installment.person = null;
-                }
-            }
 
             return installment;
         } catch (error) {
@@ -569,6 +630,44 @@ class InstallmentRepository extends BaseRepository {
                 installmentId 
             });
             throw new DatabaseError('Erro ao buscar detalhes da parcela', error);
+        }
+    }
+
+    /**
+     * Atualiza a data de vencimento de uma parcela
+     * @param {number} installmentId - ID da parcela
+     * @param {Date} newDueDate - Nova data de vencimento
+     * @returns {Promise<Object>} Parcela atualizada
+     */
+    async updateDueDate(installmentId, newDueDate) {
+        try {
+            const query = `
+                UPDATE installments 
+                SET due_date = $1, 
+                    updated_at = NOW()
+                WHERE installment_id = $2 
+                RETURNING *
+            `;
+
+            const { rows } = await this.pool.query(query, [newDueDate, installmentId]);
+
+            if (rows.length === 0) {
+                throw new DatabaseError('Parcela não encontrada');
+            }
+
+            logger.info('Vencimento da parcela atualizado', {
+                installmentId,
+                newDueDate
+            });
+
+            return rows[0];
+        } catch (error) {
+            logger.error('Erro ao atualizar vencimento da parcela', {
+                error: error.message,
+                installmentId,
+                newDueDate
+            });
+            throw new DatabaseError('Erro ao atualizar vencimento da parcela', error);
         }
     }
 }

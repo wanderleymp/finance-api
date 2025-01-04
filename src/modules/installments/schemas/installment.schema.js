@@ -21,7 +21,13 @@ const installmentSchema = {
     // Schema para geração de boleto
     generateBoleto: Joi.object({
         id: Joi.number().integer().positive().required()
-    })
+    }),
+
+    // Schema para atualização de vencimento
+    updateDueDate: Joi.object({
+        id: Joi.number().integer().positive().required(),
+        due_date: Joi.date().iso().required()
+    }).unknown(false),
 };
 
 module.exports = installmentSchema;

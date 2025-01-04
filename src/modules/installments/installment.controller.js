@@ -114,6 +114,45 @@ class InstallmentController {
             next(error);
         }
     }
+
+    /**
+     * Atualiza a data de vencimento de uma parcela
+     * @route PATCH /installments/:id/due-date
+     */
+    async updateDueDate(req, res, next) {
+        try {
+            const { id } = req.params;
+            const { due_date } = req.body;
+
+            // Valida os dados de entrada
+            const { error } = installmentSchema.updateDueDate.validate({ 
+                id: Number(id), 
+                due_date 
+            });
+
+            if (error) {
+                return res.status(400).json({
+                    success: false,
+                    error: 'Erro de validação',
+                    details: error.details
+                });
+            }
+
+            // Chama o serviço para atualizar o vencimento
+            const updatedInstallment = await this.service.updateInstallmentDueDate(
+                Number(id), 
+                due_date
+            );
+
+            // Retorna a parcela atualizada
+            res.status(200).json({
+                success: true,
+                data: updatedInstallment
+            });
+        } catch (error) {
+            next(error);
+        }
+    }
 }
 
 module.exports = InstallmentController;

@@ -237,6 +237,51 @@ class InstallmentService {
         }
     }
 
+    /**
+     * Atualiza a data de vencimento de uma parcela
+     * @param {number} installmentId - ID da parcela
+     * @param {string} newDueDate - Nova data de vencimento (formato ISO)
+     * @returns {Promise<Object>} Parcela atualizada
+     */
+    async updateInstallmentDueDate(installmentId, newDueDate) {
+        try {
+            // Valida a data de vencimento
+            const parsedDueDate = new Date(newDueDate);
+            
+            if (isNaN(parsedDueDate.getTime())) {
+                throw new Error('Data de vencimento inválida');
+            }
+
+            // Verifica se a parcela existe
+            const existingInstallment = await this.repository.findById(installmentId);
+            
+            if (!existingInstallment) {
+                throw new Error('Parcela não encontrada');
+            }
+
+            // Atualiza a data de vencimento
+            const updatedInstallment = await this.repository.updateDueDate(
+                installmentId, 
+                parsedDueDate
+            );
+
+            // Log da atualização
+            this.logger.info('Vencimento da parcela atualizado com sucesso', {
+                installmentId,
+                newDueDate: parsedDueDate
+            });
+
+            return new InstallmentResponseDTO(updatedInstallment);
+        } catch (error) {
+            this.logger.error('Erro ao atualizar vencimento da parcela', {
+                error: error.message,
+                installmentId,
+                newDueDate
+            });
+            throw error;
+        }
+    }
+
     async generateBoleto(installmentId) {
         try {
             logger.info('Service: Gerando boleto para parcela', { installmentId });
