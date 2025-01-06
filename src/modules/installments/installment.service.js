@@ -3,6 +3,7 @@ const { ValidationError } = require('../../utils/errors');
 const CreateInstallmentDTO = require('./dto/create-installment.dto');
 const UpdateInstallmentDTO = require('./dto/update-installment.dto');
 const InstallmentResponseDTO = require('./dto/installment-response.dto');
+const moment = require('moment-timezone');
 
 class InstallmentService {
     constructor({ 
@@ -205,54 +206,57 @@ class InstallmentService {
      * @param {number} [newAmount] - Novo valor da parcela (opcional)
      * @returns {Promise<Object>} Parcela atualizada
      */
-    async updateInstallmentDueDate(installmentId, newDueDate, newAmount) {
+    async updateInstallmentDueDate(id, dueDate, amount) {
+        const client = await this.repository.pool.connect();
         try {
-            // Valida a data de vencimento
-            const parsedDueDate = new Date(newDueDate);
-            
-            if (isNaN(parsedDueDate.getTime())) {
-                throw new Error('Data de vencimento inválida');
+            await client.query('BEGIN');
+
+            // Verificar se parcela existe
+            const existing = await this.repository.findById(id);
+            if (!existing) {
+                throw new ValidationError('Parcela não encontrada');
             }
 
-            // Verifica se a parcela existe
-            const existingInstallment = await this.repository.findById(installmentId);
-            
-            if (!existingInstallment) {
-                throw new Error('Parcela não encontrada');
-            }
-
-            // Prepara dados para atualização
-            const updateData = { 
-                due_date: parsedDueDate 
+            // Criar DTO para validar dados
+            const updateData = {
+                due_date: dueDate,
+                amount: amount
             };
+            const dto = new UpdateInstallmentDTO(updateData);
+            dto.validate();
 
-            // Adiciona amount se fornecido
-            if (newAmount !== undefined) {
-                updateData.amount = newAmount;
-            }
-
-            // Atualiza a data de vencimento e/ou valor
-            const updatedInstallment = await this.repository.update(
-                installmentId, 
-                updateData
-            );
-
-            // Log da atualização
-            logger.info('Vencimento da parcela atualizado com sucesso', {
-                installmentId,
-                newDueDate: parsedDueDate,
-                newAmount
+            logger.info('Dados para atualização', { 
+                updateData: {
+                    due_date: dto.due_date,
+                    amount: dto.amount
+                }
             });
 
-            return new InstallmentResponseDTO(updatedInstallment);
+            // Atualizar parcela diretamente
+            const updated = await this.repository.update(id, {
+                due_date: dto.due_date,
+                amount: parseFloat(dto.amount)
+            });
+
+            await client.query('COMMIT');
+
+            // Invalidar cache
+            await this.cacheService.del(`${this.cachePrefix}:list:*`);
+            await this.cacheService.del(`${this.cachePrefix}:detail:${id}`);
+            
+            return new InstallmentResponseDTO(updated);
         } catch (error) {
-            logger.error('Erro ao atualizar vencimento da parcela', {
-                error: error.message,
-                installmentId,
-                newDueDate,
-                newAmount
+            await client.query('ROLLBACK');
+            logger.error('Erro ao atualizar vencimento da parcela', { 
+                error: error.message, 
+                id, 
+                dueDate, 
+                amount,
+                stack: error.stack 
             });
             throw error;
+        } finally {
+            client.release();
         }
     }
 

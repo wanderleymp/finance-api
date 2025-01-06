@@ -275,26 +275,45 @@ class BaseRepository {
                 tableName: this.tableName
             });
 
-            const updates = Object.entries(data)
+            // Converte datas para o formato correto com mais precisão
+            const processedData = Object.entries(data).reduce((acc, [key, value]) => {
+                if (value instanceof Date) {
+                    // Se for uma data, converte para ISO string em UTC
+                    acc[key] = value.toISOString();
+                } else if (typeof value === 'string' && /^\d{4}-\d{2}-\d{2}/.test(value)) {
+                    // Se for uma string de data, cria um novo Date às 15:00 no timezone de São Paulo
+                    const date = new Date(value);
+                    const saoPauloTime = new Date(date.toLocaleString('en-US', { timeZone: 'America/Sao_Paulo' }));
+                    saoPauloTime.setHours(15, 0, 0, 0);
+                    acc[key] = saoPauloTime.toISOString();
+                } else {
+                    acc[key] = value;
+                }
+                return acc;
+            }, {});
+
+            const updates = Object.entries(processedData)
                 .map(([key, _], index) => `${key} = $${index + 1}`)
                 .join(', ');
 
             const query = `
                 UPDATE ${this.tableName}
                 SET ${updates}
-                WHERE ${this.primaryKey} = $${Object.keys(data).length + 1}
+                WHERE ${this.primaryKey} = $${Object.keys(processedData).length + 1}
                 RETURNING *
             `;
 
             logger.debug('BaseRepository update - query:', {
                 query,
-                values: [...Object.values(data), id]
+                values: [...Object.values(processedData), id],
+                processedData
             });
 
-            const result = await this.pool.query(query, [...Object.values(data), id]);
+            const result = await this.pool.query(query, [...Object.values(processedData), id]);
 
             logger.debug('BaseRepository update - result:', {
-                result: result.rows[0]
+                result: result.rows[0],
+                rowCount: result.rowCount
             });
 
             return result.rows[0];

@@ -1,5 +1,6 @@
 const { logger } = require('../../middlewares/logger');
 const installmentSchema = require('./schemas/installment.schema'); 
+const UpdateInstallmentDTO = require('./dto/update-installment.dto'); 
 
 class InstallmentController {
     /**
@@ -8,6 +9,7 @@ class InstallmentController {
      */
     constructor({ installmentService }) {
         this.service = installmentService;
+        this.installmentService = installmentService;
     }
 
     /**
@@ -18,8 +20,6 @@ class InstallmentController {
             const { page, limit, ...filters } = req.query;
             
             logger.info('Controller: Listando parcelas', { 
-                page, 
-                limit, 
                 filters 
             });
 
@@ -31,7 +31,8 @@ class InstallmentController {
 
             return res.json(result);
         } catch (error) {
-            next(error);
+            logger.error('Erro ao listar parcelas', { error: error.message });
+            return res.status(500).json({ message: 'Erro ao listar parcelas' });
         }
     }
 
@@ -48,7 +49,8 @@ class InstallmentController {
             
             return res.json(result);
         } catch (error) {
-            next(error);
+            logger.error('Erro ao buscar parcela', { error: error.message });
+            return res.status(500).json({ message: 'Erro ao buscar parcela' });
         }
     }
 
@@ -65,7 +67,8 @@ class InstallmentController {
             
             return res.json(result);
         } catch (error) {
-            next(error);
+            logger.error('Erro ao buscar detalhes da parcela', { error: error.message });
+            return res.status(500).json({ message: 'Erro ao buscar detalhes da parcela' });
         }
     }
 
@@ -82,12 +85,8 @@ class InstallmentController {
 
             return res.status(201).json(boleto);
         } catch (error) {
-            logger.error('Controller: Erro ao gerar boleto', {
-                error: error.message,
-                error_stack: error.stack,
-                id: req.params.id
-            });
-            next(error);
+            logger.error('Erro ao gerar boleto', { error: error.message });
+            return res.status(500).json({ message: 'Erro ao gerar boleto' });
         }
     }
 
@@ -95,22 +94,62 @@ class InstallmentController {
      * Atualiza a data de vencimento de uma parcela
      * @route PATCH /installments/:id/due-date
      */
-    async updateDueDate(req, res, next) {
+    async updateDueDate(req, res) {
         try {
-            const { id, due_date, amount } = { ...req.params, ...req.body };
+            const { id } = req.params;
+            
+            logger.info('Dados recebidos para atualização', {
+                params: req.params,
+                body: req.body
+            });
 
+            // Cria DTO com validações
+            const updateDto = new UpdateInstallmentDTO(req.body);
+            
+            // Valida o DTO
+            updateDto.validate();
+
+            // Extrai dados validados
+            const { due_date, amount } = updateDto;
+
+            logger.info('Atualizando parcela', { 
+                installmentId: id, 
+                dueDate: due_date, 
+                amount 
+            });
+
+            // Chama serviço para atualizar
             const updatedInstallment = await this.service.updateInstallmentDueDate(
                 Number(id), 
-                due_date,
-                amount
+                due_date, 
+                parseFloat(amount)
             );
 
-            res.status(200).json({
+            // Retorna resposta
+            return res.status(200).json({
                 success: true,
                 data: updatedInstallment
             });
         } catch (error) {
-            next(error);
+            logger.error('Erro ao atualizar vencimento da parcela', {
+                error: error.message,
+                body: req.body,
+                stack: error.stack
+            });
+
+            // Trata erros de validação
+            if (error.message.includes('obrigatória') || error.message.includes('inválida')) {
+                return res.status(400).json({
+                    success: false,
+                    message: error.message
+                });
+            }
+
+            // Outros erros
+            return res.status(500).json({
+                success: false,
+                message: 'Erro interno ao atualizar parcela'
+            });
         }
     }
 
