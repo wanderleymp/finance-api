@@ -23,7 +23,8 @@ class MovementService extends IMovementService {
         installmentRepository,
         movementPaymentService,
         personContactRepository,
-        boletoRepository 
+        boletoRepository,
+        movementPaymentRepository // Adicionando este parâmetro
     }) {
         super();
         
@@ -37,6 +38,7 @@ class MovementService extends IMovementService {
         this.movementPaymentService = movementPaymentService;
         this.personContactRepository = personContactRepository;
         this.boletoRepository = boletoRepository;
+        this.movementPaymentRepository = movementPaymentRepository; // Adicionando esta linha
         this.billingMessageService = new BillingMessageService();
 
         this.cachePrefix = 'movements';

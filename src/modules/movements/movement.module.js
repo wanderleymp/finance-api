@@ -58,7 +58,9 @@ const service = new MovementService({
     movementStatusRepository,
     paymentMethodRepository,
     installmentRepository,
-    personContactRepository
+    personContactRepository,
+    movementPaymentRepository,
+    boletoRepository
 });
 
 // Instancia o controller
