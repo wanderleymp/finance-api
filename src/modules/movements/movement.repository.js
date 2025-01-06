@@ -14,10 +14,16 @@ class MovementRepository extends BaseRepository {
             // Adiciona joins personalizados aos filtros
             const customFilters = { ...filters };
 
-            // Query personalizada com joins
+            // Query personalizada com joins e alias definido
             const customQuery = `
                 SELECT 
-                    m.*,
+                    m.movement_id,
+                    m.movement_type_id,
+                    m.movement_status_id,
+                    m.person_id,
+                    m.movement_date,
+                    m.description,
+                    m.created_at,
                     ms.status_name,
                     mt.type_name,
                     p.full_name as person_name
@@ -30,7 +36,7 @@ class MovementRepository extends BaseRepository {
             // Usa o método findAll do BaseRepository com query personalizada
             return await super.findAll(page, limit, customFilters, {
                 customQuery,
-                orderBy: 'm.movement_id DESC'
+                orderBy: 'movement_id DESC'
             });
         } catch (error) {
             logger.error('Repository: Erro ao buscar movimentos', {
@@ -56,8 +62,7 @@ class MovementRepository extends BaseRepository {
                     m.person_id,
                     m.movement_date,
                     m.description,
-                    m.created_at,
-                    m.updated_at
+                    m.created_at
                 FROM movements m
                 WHERE m.movement_id = $1
             `;
@@ -154,7 +159,7 @@ class MovementRepository extends BaseRepository {
 
             const query = `
                 UPDATE ${this.tableName}
-                SET ${setColumns}, updated_at = NOW()
+                SET ${setColumns}
                 WHERE ${this.primaryKey} = $1
                 RETURNING *
             `;

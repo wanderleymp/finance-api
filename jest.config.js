@@ -18,7 +18,8 @@ module.exports = {
         }
     },
     testMatch: [
-        '**/src/**/__tests__/**/*.test.js'
+        '**/src/**/__tests__/**/*.test.js',
+        '**/tests/**/*.test.js'
     ],
     setupFiles: [
         '<rootDir>/.jest/setEnvVars.js'
