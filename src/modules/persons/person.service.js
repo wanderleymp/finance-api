@@ -1,6 +1,6 @@
 const { logger } = require('../../middlewares/logger');
 const PersonRepository = require('./person.repository');
-const AddressService = require('../addresses/address.service');
+const AddressRepository = require('../addresses/address.repository');
 const ContactService = require('../contacts/contact.service');
 const PersonContactService = require('../person-contacts/person-contact.service');
 const CnpjService = require('../../services/cnpjService');
@@ -9,6 +9,7 @@ const PersonValidator = require('./validators/person.validator');
 const CreatePersonDTO = require('./dto/create-person.dto');
 const UpdatePersonDTO = require('./dto/update-person.dto');
 const { systemDatabase } = require('../../config/database');
+const personAddressRepository = require('../../repositories/personAddressRepository');
 
 class PersonService {
     constructor({ 
@@ -62,22 +63,43 @@ class PersonService {
                 };
             }
 
+            logger.error('DEBUG findAllWithDetails FULL', { 
+                personItems: JSON.stringify(personItems),
+                personItemsLength: personItems.length,
+                personItemsType: typeof personItems
+            });
+
+            logger.error('DEBUG findAllWithDetails', { 
+                persons: JSON.stringify(persons),
+                personsType: typeof persons,
+                personsKeys: Object.keys(persons),
+                personItems: persons.items ? JSON.stringify(persons.items) : 'undefined'
+            });
+
             // Para cada pessoa, busca seus relacionamentos
             const personsWithDetails = await Promise.all(
-                personItems.map(async (person) => {
+                persons.items.map(async (person) => {
                     logger.info('Buscando detalhes para pessoa', { personId: person.person_id });
 
                     const [documents, contacts, addresses] = await Promise.all([
                         this.findDocuments(person.person_id),
                         this.findContacts(person.person_id),
-                        this.findAddresses(person.person_id)
+                        personAddressRepository.findByPersonId(person.person_id)
                     ]);
 
                     logger.info('Detalhes encontrados', { 
                         personId: person.person_id,
                         documentsCount: documents.items ? documents.items.length : 'N/A',
                         contactsCount: contacts.items ? contacts.items.length : 'N/A',
-                        addressesCount: addresses.items ? addresses.items.length : 'N/A'
+                        addressesCount: addresses ? addresses.length : 'N/A',
+                        addressesRaw: JSON.stringify(addresses)
+                    });
+
+                    logger.error('DEBUG findAllWithDetails', { 
+                        personId: person.person_id,
+                        documents: JSON.stringify(documents),
+                        contacts: JSON.stringify(contacts),
+                        addresses: JSON.stringify(personAddressRepository.findByPersonId(person.person_id))
                     });
 
                     // Usa o DTO de detalhes
@@ -86,7 +108,7 @@ class PersonService {
                         ...person,
                         documents: documents.items || [],
                         contacts: contacts.items || [],
-                        addresses: addresses.items || []
+                        addresses: addresses || []
                     });
                 })
             );
@@ -233,7 +255,7 @@ class PersonService {
             const [documents, contacts, addresses] = await Promise.all([
                 this.findDocuments(person.person_id),
                 this.findContacts(person.person_id),
-                this.findAddresses(person.person_id)
+                personAddressRepository.findByPersonId(person.person_id)
             ]);
 
             // Usa o DTO de detalhes
@@ -242,7 +264,7 @@ class PersonService {
                 ...person,
                 documents: documents.items || [],
                 contacts: contacts.items || [],
-                addresses: addresses.items || []
+                addresses: addresses || []
             });
 
             // Salva no cache por 2 minutos
@@ -312,12 +334,11 @@ class PersonService {
                 throw new Error('Pessoa não encontrada');
             }
 
-            // Usa o serviço de endereços para buscar
-            const AddressService = require('../addresses/address.service');
-            const addressService = new AddressService();
-            
-            const result = await addressService.findAll(1, 100, { person_id: personId });
-            return result;
+            const result = await personAddressRepository.findByPersonId(personId);
+            return {
+                items: result,
+                total: result.length
+            };
         } catch (error) {
             logger.error('Erro ao buscar endereços da pessoa', {
                 error: error.message,
@@ -453,9 +474,9 @@ class PersonService {
             let existingAddress = null;
 
             // Verifica se já existe um endereço igual
-            const AddressService = require('../addresses/address.service');
-            const addressService = new AddressService();
-            const existingAddresses = await addressService.findByPersonId(personId);
+            const AddressRepository = require('../addresses/address.repository');
+            const addressRepository = new AddressRepository();
+            const existingAddresses = await addressRepository.findByPersonId(personId);
 
             // Limpa o CEP para comparação
             const cleanPostalCode = addressData.postal_code?.replace(/[^\d]/g, '');

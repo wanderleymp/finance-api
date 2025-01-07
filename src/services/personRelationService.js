@@ -14,7 +14,7 @@ class PersonRelationService {
             const [documents, contacts, addresses] = await Promise.all([
                 personDocumentRepository.findAll({ person_id: personId }),
                 personContactRepository.findAll({ person_id: personId }),
-                personAddressRepository.findAll({ person_id: personId })
+                personAddressRepository.findByPersonId(personId)
             ]);
 
             return {
