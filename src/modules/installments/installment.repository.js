@@ -90,7 +90,7 @@ class InstallmentRepository {
                 LEFT JOIN movement_payments mp ON i.payment_id = mp.payment_id
                 LEFT JOIN movements m ON mp.movement_id = m.movement_id
                 LEFT JOIN persons p ON m.person_id = p.person_id
-                ${whereClause}
+                ${whereClause ? whereClause + ' AND ' : 'WHERE '}m.movement_status_id = 2
                 ORDER BY i.due_date DESC, i.installment_number
                 LIMIT $${queryParams.length + 2} OFFSET $${queryParams.length + 3}
             `;
@@ -100,7 +100,7 @@ class InstallmentRepository {
                 FROM installments i
                 LEFT JOIN movement_payments mp ON i.payment_id = mp.payment_id
                 LEFT JOIN movements m ON mp.movement_id = m.movement_id
-                ${whereClause}
+                ${whereClause ? whereClause + ' AND ' : 'WHERE '}m.movement_status_id = 2
             `;
 
             const fullQueryParams = [...queryParams, includeBoletos, parsedLimit, offset];
@@ -496,7 +496,7 @@ class InstallmentRepository {
                     FROM boletos
                     ORDER BY installment_id, boleto_id DESC
                 ) b ON b.installment_id = i.installment_id
-                ${whereClause} AND m.movement_status_id = 2
+                ${whereClause ? whereClause + ' AND ' : 'WHERE '}m.movement_status_id = 2
             `;
 
             logger.info('Executando query de detalhes da parcela', { 
