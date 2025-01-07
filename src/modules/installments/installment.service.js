@@ -40,10 +40,12 @@ class InstallmentService {
                 logger.info('Nenhuma parcela encontrada', { page, limit, filters });
                 return {
                     items: [],
-                    total: 0,
-                    page,
-                    limit,
-                    totalPages: 0
+                    meta: {
+                        total: 0,
+                        page,
+                        limit,
+                        totalPages: 0
+                    }
                 };
             }
 
@@ -53,10 +55,12 @@ class InstallmentService {
 
             const formattedResult = {
                 items,
-                total: result.total,
-                page: result.page,
-                limit: result.limit,
-                totalPages
+                meta: {
+                    total: result.total,
+                    page: result.page,
+                    limit: result.limit,
+                    totalPages
+                }
             };
 
             // Salva no cache

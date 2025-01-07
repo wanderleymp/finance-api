@@ -1,52 +1,44 @@
-const BaseRepository = require('../../repositories/base/BaseRepository');
 const { logger } = require('../../middlewares/logger');
 const { DatabaseError } = require('../../utils/errors');
 const PersonService = require('../persons/person.service');
 const moment = require('moment-timezone');
+const { systemDatabase } = require('../../config/database');
 
-class InstallmentRepository extends BaseRepository {
+class InstallmentRepository {
     constructor() {
-        super('installments', 'installment_id');
+        this.pool = systemDatabase.pool;
+        this.tableName = 'installments';
+        this.primaryKey = 'installment_id';
         this.personService = new PersonService();
     }
 
-    /**
-     * Constrói a cláusula WHERE com base nos filtros
-     * @private
-     */
     buildWhereClause(filters = {}) {
         const conditions = [];
         const params = [];
         let paramCount = 0;
 
-        // Filtros de data
         if (filters.start_date && filters.end_date) {
             const startDate = moment(filters.start_date).startOf('day').toISOString();
             const endDate = moment(filters.end_date).endOf('day').toISOString();
-            
             conditions.push(`i.due_date BETWEEN $${++paramCount} AND $${++paramCount}`);
             params.push(startDate, endDate);
         }
 
-        // Filtro por status
         if (filters.status) {
             conditions.push(`i.status = $${++paramCount}`);
             params.push(filters.status);
         }
 
-        // Filtro por movimento (payment)
         if (filters.payment_id) {
             conditions.push(`i.payment_id = $${++paramCount}`);
             params.push(filters.payment_id);
         }
 
-        // Filtro por número da parcela
         if (filters.installment_number) {
             conditions.push(`i.installment_number = $${++paramCount}`);
             params.push(filters.installment_number);
         }
 
-        // Filtro por valor
         if (filters.amount) {
             conditions.push(`i.amount = $${++paramCount}`);
             params.push(filters.amount);
@@ -56,18 +48,19 @@ class InstallmentRepository extends BaseRepository {
             ? `WHERE ${conditions.join(' AND ')}`
             : '';
 
-        return { whereClause, params, paramCount };
+        return { whereClause, queryParams: params, paramCount };
     }
 
-    /**
-     * Lista todas as parcelas com filtros e paginação
-     */
     async findAll(page = 1, limit = 10, filters = {}) {
         try {
-            const { whereClause, params, paramCount } = this.buildWhereClause(filters);
-            const offset = (page - 1) * limit;
-
-            // Query principal com joins necessários
+            const includeBoletos = filters.include === 'boletos';
+            const { whereClause, queryParams } = this.buildWhereClause(filters);
+            
+            // Calculamos o offset aqui para garantir que está correto
+            const parsedPage = parseInt(page) || 1;
+            const parsedLimit = parseInt(limit) || 10;
+            const offset = (parsedPage - 1) * parsedLimit;
+            
             const query = `
                 SELECT 
                     i.installment_id,
@@ -85,9 +78,9 @@ class InstallmentRepository extends BaseRepository {
                     m.movement_status_id as movement_status,
                     p.full_name as person_name,
                     CASE 
-                        WHEN $${paramCount + 3}::boolean = true THEN (
-                            SELECT json_agg(b.*) 
-                            FROM boletos b 
+                        WHEN $${queryParams.length + 1} = true THEN (
+                            SELECT json_agg(b.*)
+                            FROM boletos b
                             WHERE b.installment_id = i.installment_id
                         )
                         ELSE NULL
@@ -98,11 +91,9 @@ class InstallmentRepository extends BaseRepository {
                 LEFT JOIN persons p ON m.person_id = p.person_id
                 ${whereClause}
                 ORDER BY i.due_date DESC, i.installment_number
-                LIMIT $${paramCount + 1}
-                OFFSET $${paramCount + 2}
+                LIMIT $${queryParams.length + 2} OFFSET $${queryParams.length + 3}
             `;
 
-            // Query de contagem
             const countQuery = `
                 SELECT COUNT(*)::integer as total
                 FROM installments i
@@ -111,34 +102,34 @@ class InstallmentRepository extends BaseRepository {
                 ${whereClause}
             `;
 
+            const fullQueryParams = [...queryParams, includeBoletos, parsedLimit, offset];
+
             // Executa as queries
-            const includeBoletos = filters.include === 'boletos';
-            const [resultQuery, countResult] = await Promise.all([
-                this.pool.query(query, [...params, limit, offset, includeBoletos]),
-                this.pool.query(countQuery, params)
+            const [dataResult, countResult] = await Promise.all([
+                this.pool.query(query, fullQueryParams),
+                this.pool.query(countQuery, queryParams)
             ]);
 
             return {
-                data: resultQuery.rows,
+                data: dataResult.rows,
                 total: parseInt(countResult.rows[0]?.total || 0),
-                page: parseInt(page),
-                limit: parseInt(limit)
+                page: parsedPage,
+                limit: parsedLimit
             };
+            
         } catch (error) {
             logger.error('Erro ao listar parcelas', {
                 error: error.message,
                 filters,
                 stack: error.stack
             });
-            throw new DatabaseError('Erro ao listar parcelas', error);
+            throw new DatabaseError('Erro ao listar parcelas');
         }
     }
 
-    /**
-     * Busca parcelas de um movimento
-     */
     async findByMovementId(movementId) {
         try {
+            const { whereClause, queryParams } = this.buildWhereClause({ movement_id: movementId });
             const query = `
                 SELECT 
                     i.installment_id,
@@ -157,11 +148,11 @@ class InstallmentRepository extends BaseRepository {
                 FROM installments i
                 JOIN movement_payments mp ON i.payment_id = mp.payment_id
                 JOIN movements m ON mp.movement_id = m.movement_id
-                WHERE m.movement_id = $1
+                ${whereClause}
                 ORDER BY i.installment_number
             `;
 
-            const { rows } = await this.pool.query(query, [movementId]);
+            const { rows } = await this.pool.query(query, queryParams);
             return rows;
         } catch (error) {
             logger.error('Erro ao buscar parcelas do movimento', {
@@ -172,11 +163,9 @@ class InstallmentRepository extends BaseRepository {
         }
     }
 
-    /**
-     * Busca parcelas de um pagamento
-     */
     async findByPaymentId(paymentId) {
         try {
+            const { whereClause, queryParams } = this.buildWhereClause({ payment_id: paymentId });
             const query = `
                 SELECT 
                     i.installment_id,
@@ -189,11 +178,11 @@ class InstallmentRepository extends BaseRepository {
                     i.account_entry_id,
                     i.expected_date
                 FROM installments i
-                WHERE i.payment_id = $1
+                ${whereClause}
                 ORDER BY i.installment_number
             `;
 
-            const { rows } = await this.pool.query(query, [paymentId]);
+            const { rows } = await this.pool.query(query, queryParams);
             return rows;
         } catch (error) {
             logger.error('Erro ao buscar parcelas do pagamento', {
@@ -304,6 +293,7 @@ class InstallmentRepository extends BaseRepository {
 
     async findPaymentByInstallmentId(installmentId) {
         try {
+            const { whereClause, queryParams } = this.buildWhereClause({ installment_id: installmentId });
             const query = `
                 SELECT 
                     p.payment_id,
@@ -313,12 +303,12 @@ class InstallmentRepository extends BaseRepository {
                 FROM installments i
                 JOIN movement_payments p ON i.payment_id = p.payment_id
                 JOIN movements m ON m.movement_id = p.movement_id
-                WHERE i.installment_id = $1
+                ${whereClause}
             `;
 
             logger.info('Repository: Buscando pagamento por ID da parcela', { installmentId });
 
-            const result = await this.pool.query(query, [installmentId]);
+            const result = await this.pool.query(query, queryParams);
 
             if (result.rows.length === 0) {
                 return null;
@@ -470,6 +460,7 @@ class InstallmentRepository extends BaseRepository {
                 method: 'findInstallmentWithDetails' 
             });
 
+            const { whereClause, queryParams } = this.buildWhereClause({ installment_id: id });
             const query = `
                 SELECT 
                     p.full_name,
@@ -504,7 +495,7 @@ class InstallmentRepository extends BaseRepository {
                     FROM boletos
                     ORDER BY installment_id, boleto_id DESC
                 ) b ON b.installment_id = i.installment_id
-                WHERE i.installment_id = $1 AND m.movement_status_id = 2
+                ${whereClause} AND m.movement_status_id = 2
             `;
 
             logger.info('Executando query de detalhes da parcela', { 
@@ -512,7 +503,7 @@ class InstallmentRepository extends BaseRepository {
                 id 
             });
 
-            const { rows } = await this.pool.query(query, [id]);
+            const { rows } = await this.pool.query(query, queryParams);
             
             logger.info('Resultado da busca de detalhes da parcela', { 
                 rowCount: rows.length,
