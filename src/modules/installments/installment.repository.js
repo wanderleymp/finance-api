@@ -76,6 +76,7 @@ class InstallmentRepository {
                     m.description as movement_description,
                     m.movement_type_id as movement_type,
                     m.movement_status_id as movement_status,
+                    p.full_name,
                     p.full_name as person_name,
                     CASE 
                         WHEN $${queryParams.length + 1} = true THEN (
@@ -556,6 +557,49 @@ class InstallmentRepository {
                 newDueDate
             });
             throw new DatabaseError('Erro ao atualizar vencimento da parcela', error);
+        }
+    }
+
+    async getInstallmentById(installmentId) {
+        try {
+            const query = `
+                SELECT 
+                    i.installment_id,
+                    i.payment_id,
+                    i.installment_number,
+                    i.due_date,
+                    i.amount,
+                    i.balance,
+                    i.status,
+                    i.account_entry_id,
+                    i.expected_date,
+                    mp.movement_id,
+                    m.description as movement_description,
+                    m.movement_type_id as movement_type,
+                    m.movement_status_id as movement_status,
+                    p.full_name,
+                    p.full_name as person_name,
+                    (
+                        SELECT json_agg(b.*)
+                        FROM boletos b
+                        WHERE b.installment_id = i.installment_id
+                    ) as boletos
+                FROM installments i
+                LEFT JOIN movement_payments mp ON i.payment_id = mp.payment_id
+                LEFT JOIN movements m ON mp.movement_id = m.movement_id
+                LEFT JOIN persons p ON m.person_id = p.person_id
+                WHERE i.installment_id = $1
+            `;
+
+            const result = await this.pool.query(query, [installmentId]);
+            return result.rows[0];
+        } catch (error) {
+            logger.error('Erro ao buscar parcela por ID', {
+                error: error.message,
+                installmentId,
+                stack: error.stack
+            });
+            throw new DatabaseError('Erro ao buscar parcela por ID');
         }
     }
 }
