@@ -35,10 +35,21 @@ class PersonService {
 
     async findAllWithDetails(page = 1, limit = 10, filters = {}, order = {}) {
         try {
+            logger.info('Iniciando busca de pessoas com detalhes', { page, limit, filters, order });
+
             // Busca as pessoas
             const persons = await this.findAll(filters, page, limit, order);
             
-            if (!persons || !persons.items || persons.items.length === 0) {
+            logger.info('Resultado da busca de pessoas', { 
+                personsCount: persons.items ? persons.items.length : 'N/A', 
+                meta: persons.meta 
+            });
+
+            // Garante que persons.items seja sempre um array
+            const personItems = persons.items || [];
+            
+            if (personItems.length === 0) {
+                logger.warn('Nenhuma pessoa encontrada');
                 return {
                     items: [],
                     meta: {
@@ -53,30 +64,52 @@ class PersonService {
 
             // Para cada pessoa, busca seus relacionamentos
             const personsWithDetails = await Promise.all(
-                persons.items.map(async (person) => {
+                personItems.map(async (person) => {
+                    logger.info('Buscando detalhes para pessoa', { personId: person.person_id });
+
                     const [documents, contacts, addresses] = await Promise.all([
                         this.findDocuments(person.person_id),
                         this.findContacts(person.person_id),
                         this.findAddresses(person.person_id)
                     ]);
 
+                    logger.info('Detalhes encontrados', { 
+                        personId: person.person_id,
+                        documentsCount: documents.items ? documents.items.length : 'N/A',
+                        contactsCount: contacts.items ? contacts.items.length : 'N/A',
+                        addressesCount: addresses.items ? addresses.items.length : 'N/A'
+                    });
+
                     // Usa o DTO de detalhes
                     const { PersonDetailsResponseDTO } = require('./dto/person-response.dto');
                     return PersonDetailsResponseDTO.fromDatabase({
                         ...person,
-                        documents: documents.items,
-                        contacts: contacts.items,
-                        addresses: addresses.items
+                        documents: documents.items || [],
+                        contacts: contacts.items || [],
+                        addresses: addresses.items || []
                     });
                 })
             );
 
             return {
                 items: personsWithDetails,
-                meta: persons.meta
+                meta: persons.meta || {
+                    totalItems: 0,
+                    itemCount: 0,
+                    itemsPerPage: parseInt(limit),
+                    totalPages: 0,
+                    currentPage: parseInt(page)
+                }
             };
         } catch (error) {
-            logger.error('Erro ao listar pessoas com detalhes', { error: error.message, page, limit, filters, order });
+            logger.error('Erro ao listar pessoas com detalhes', { 
+                error: error.message, 
+                page, 
+                limit, 
+                filters, 
+                order,
+                stack: error.stack 
+            });
             throw error;
         }
     }
@@ -207,9 +240,9 @@ class PersonService {
             const { PersonDetailsResponseDTO } = require('./dto/person-response.dto');
             const result = PersonDetailsResponseDTO.fromDatabase({
                 ...person,
-                documents: documents.items,
-                contacts: contacts.items,
-                addresses: addresses.items
+                documents: documents.items || [],
+                contacts: contacts.items || [],
+                addresses: addresses.items || []
             });
 
             // Salva no cache por 2 minutos
@@ -417,6 +450,8 @@ class PersonService {
                 throw new Error('Pessoa não encontrada');
             }
 
+            let existingAddress = null;
+
             // Verifica se já existe um endereço igual
             const AddressService = require('../addresses/address.service');
             const addressService = new AddressService();
@@ -426,7 +461,7 @@ class PersonService {
             const cleanPostalCode = addressData.postal_code?.replace(/[^\d]/g, '');
 
             // Verifica se já existe um endereço com os mesmos dados
-            const existingAddress = existingAddresses.find(address => {
+            existingAddress = existingAddresses.find(address => {
                 // Normaliza os dados para comparação
                 const existingPostalCode = address.postal_code?.replace(/[^\d]/g, '');
                 const existingStreet = address.street?.trim().toUpperCase();

@@ -22,8 +22,13 @@ class AddressRepository extends BaseRepository {
             });
 
             return {
-                items: result.items.map(AddressResponseDTO.fromDatabase),
-                meta: result.meta
+                items: result.data ? result.data.map(AddressResponseDTO.fromDatabase) : [],
+                meta: {
+                    currentPage: result.page,
+                    itemsPerPage: result.limit,
+                    totalItems: result.total,
+                    totalPages: Math.ceil(result.total / result.limit)
+                }
             };
         } catch (error) {
             logger.error('Erro ao buscar endereços', {

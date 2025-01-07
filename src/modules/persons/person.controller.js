@@ -69,13 +69,40 @@ class PersonController {
                 direction: req.query.orderDirection?.toUpperCase()
             };
 
+            logger.info('Iniciando busca de pessoas com detalhes no controller', { 
+                page, 
+                limit, 
+                filters, 
+                order 
+            });
+
             const result = await this.personService.findAllWithDetails(page, limit, filters, order);
+
+            logger.info('Resultado da busca de pessoas no controller', { 
+                itemsCount: result.items ? result.items.length : 'N/A',
+                meta: result.meta 
+            });
+
+            if (!result) {
+                logger.warn('Resultado da busca de pessoas é undefined');
+                return handleResponse(res, {
+                    items: [],
+                    meta: {
+                        totalItems: 0,
+                        itemCount: 0,
+                        itemsPerPage: limit,
+                        totalPages: 0,
+                        currentPage: page
+                    }
+                });
+            }
 
             return handleResponse(res, result);
         } catch (error) {
-            logger.error('Erro ao buscar pessoas com detalhes', {
+            logger.error('Erro ao buscar pessoas com detalhes no controller', {
                 error: error.message,
-                query: req.query
+                query: req.query,
+                stack: error.stack
             });
             return handleError(res, error);
         }
