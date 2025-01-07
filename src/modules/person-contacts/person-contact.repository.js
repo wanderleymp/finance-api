@@ -135,6 +135,7 @@ class PersonContactRepository extends IPersonContactRepository {
 
             const query = `
                 SELECT 
+                    pc.person_contact_id,
                     pc.contact_id,
                     pc.created_at,
                     c.contact_value,
