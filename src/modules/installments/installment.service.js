@@ -35,14 +35,42 @@ class InstallmentService {
 
             const result = await this.repository.findAll(page, limit, filters);
             
+            // Verifica se há itens antes de mapear
+            if (!result.items || result.items.length === 0) {
+                logger.info('Nenhuma parcela encontrada', { page, limit, filters });
+                return {
+                    items: [],
+                    total: 0,
+                    page,
+                    limit,
+                    totalPages: 0
+                };
+            }
+
             // Transforma os resultados em DTOs
             result.items = result.items.map(item => new InstallmentResponseDTO(item));
             
-            await this.cacheService.set(cacheKey, result, this.cacheTTL.list);
+            // Adiciona meta informações de paginação
+            const paginatedResult = {
+                items: result.items,
+                total: result.total,
+                page: result.page,
+                limit: result.limit,
+                totalPages: result.totalPages
+            };
+
+            // Caching do resultado
+            await this.cacheService.set(cacheKey, paginatedResult, this.cacheTTL.list);
             
-            return result;
+            return paginatedResult;
         } catch (error) {
-            logger.error('Erro ao listar parcelas', { error });
+            logger.error('Erro ao listar parcelas', { 
+                error: error.message,
+                stack: error.stack,
+                page,
+                limit,
+                filters 
+            });
             throw error;
         }
     }

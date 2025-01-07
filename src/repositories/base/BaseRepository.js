@@ -11,99 +11,58 @@ class BaseRepository {
     /**
      * Lista todos os registros
      */
-    async findAll(page = 1, limit = 10, filters = {}, options = {}) {
+    async findAll(page, limit, filters = {}, options = {}) {
         try {
-            logger.debug('BaseRepository findAll - input:', {
-                page,
-                limit,
-                filters,
-                tableName: this.tableName,
-                primaryKey: this.primaryKey
-            });
-
-            // Garante que page e limit são números
+            // Parâmetros padrão
             const parsedPage = parseInt(page) || 1;
             const parsedLimit = parseInt(limit) || 10;
             const offset = (parsedPage - 1) * parsedLimit;
+
+            // Usa parâmetros personalizados ou padrão
+            const queryParams = options.queryParams || [];
             
-            // Usa parâmetros personalizados ou prepara novos
-            const originalQueryParams = options.queryParams || [];
-            const queryParams = [...originalQueryParams];
-
-            // Adiciona filtros de data ou outros filtros específicos
-            const conditions = [];
-            let paramCount = originalQueryParams.length + 1;
-
-            // Adiciona parâmetros de paginação
-            queryParams.push(parsedLimit, offset);
-
-            // Usa query personalizada ou padrão
-            const baseQuery = options.customQuery || `
-                SELECT *
-                FROM ${this.tableName}
-                ${conditions.length > 0 ? `WHERE ${conditions.join(' AND ')}` : ''}
-            `;
-
-            // Define orderBy
-            const orderByClause = options.orderBy 
-                ? `ORDER BY ${options.orderBy}` 
-                : `ORDER BY created_at DESC`;
-
-            // Query para buscar os dados
-            const query = `
-                WITH subquery AS (
-                    ${baseQuery}
-                )
+            // Query personalizada ou padrão
+            const query = options.customQuery || `
                 SELECT * 
-                FROM subquery
-                ${orderByClause}
-                LIMIT $${paramCount} OFFSET $${paramCount + 1}
+                FROM ${this.tableName}
+                LIMIT $1 OFFSET $2
             `;
 
-            // Query para contar o total
-            const countQuery = `
-                SELECT COUNT(*) as total
-                FROM (${baseQuery}) as count_subquery
+            // Parâmetros para a query
+            const fullQueryParams = [
+                ...(options.queryParams || []),
+                parsedLimit,
+                offset
+            ];
+
+            // Query de contagem
+            const countQuery = options.countQuery || `
+                SELECT COUNT(*) as total 
+                FROM ${this.tableName}
             `;
 
-            logger.debug('BaseRepository findAll - queries:', {
+            logger.debug('BaseRepository findAll - debug', {
                 query,
                 countQuery,
-                queryParams,
-                paramCount
+                fullQueryParams
             });
 
             // Executa as queries
-            const [data, countResult] = await Promise.all([
-                this.pool.query(query, queryParams),
-                this.pool.query(countQuery, originalQueryParams)
+            const [dataResult, countResult] = await Promise.all([
+                this.pool.query(query, fullQueryParams),
+                this.pool.query(countQuery, queryParams)
             ]);
 
-            const totalItems = parseInt(countResult.rows[0].total);
-            const totalPages = Math.ceil(totalItems / parsedLimit);
-
-            const result = {
-                items: data.rows,
-                meta: {
-                    totalItems,
-                    itemCount: data.rows.length,
-                    itemsPerPage: parsedLimit,
-                    totalPages,
-                    currentPage: parsedPage
-                }
+            return {
+                data: dataResult.rows,
+                total: parseInt(countResult.rows[0]?.total || 0),
+                page: parsedPage,
+                limit: parsedLimit
             };
-
-            logger.debug('BaseRepository findAll - result:', result);
-
-            return result;
         } catch (error) {
-            logger.error('BaseRepository - Erro ao listar registros', {
-                error: error.message,
-                tableName: this.tableName,
-                filters,
-                page,
-                limit,
-                stack: error.stack
+            logger.error('Erro no BaseRepository findAll', { 
+                error: error.message, 
+                stack: error.stack 
             });
             throw error;
         }

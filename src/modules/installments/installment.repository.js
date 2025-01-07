@@ -67,191 +67,94 @@ class InstallmentRepository extends BaseRepository {
     //     }
     // }
 
-    async findAll(page = 1, limit = 10, filters = {}) {
+    async findAll(page, limit, filters = {}) {
+        // Normaliza page e limit
+        page = Math.max(1, Number(page));
+        limit = Math.max(1, Number(limit));
+        const offset = (page - 1) * limit;
+
+        // Prepara cláusulas WHERE dinâmicas
+        const whereClauses = [];
+        const queryParams = [];
+        let paramIndex = 1;
+
+        // Filtro de status de movimento padrão
+        whereClauses.push(`m.movement_status_id = $${paramIndex}`);
+        queryParams.push(2);
+        paramIndex++;
+
+        // Filtros adicionais
+        if (filters.status) {
+            whereClauses.push(`i.status = $${paramIndex}`);
+            queryParams.push(filters.status);
+            paramIndex++;
+        }
+
+        if (filters.payment_id) {
+            whereClauses.push(`i.payment_id = $${paramIndex}`);
+            queryParams.push(filters.payment_id);
+            paramIndex++;
+        }
+
+        // Construção dinâmica das queries
+        const baseQuery = `
+            FROM installments i
+            LEFT JOIN movement_payments mp ON i.payment_id = mp.payment_id
+            LEFT JOIN movements m ON mp.movement_id = m.movement_id
+            LEFT JOIN persons p ON m.person_id = p.person_id
+            WHERE ${whereClauses.join(' AND ')}
+        `;
+
+        // Query para buscar dados
+        const dataQuery = `
+            SELECT 
+                p.full_name,
+                m.movement_id, 
+                m.movement_status_id,
+                i.installment_id,
+                i.payment_id,
+                i.account_entry_id,
+                i.installment_number,
+                i.due_date,
+                i.amount,
+                i.balance,
+                i.status,
+                i.expected_date
+            ${baseQuery}
+            ORDER BY i.due_date DESC, p.full_name ASC
+            LIMIT $${paramIndex} OFFSET $${paramIndex + 1}
+        `;
+        queryParams.push(limit, offset);
+
+        // Query de contagem
+        const countQuery = `
+            SELECT COUNT(*) as total
+            ${baseQuery}
+        `;
+
         try {
-            // Normaliza a página e o limite
-            page = Math.max(1, Number(page));
-            limit = Math.max(1, Number(limit));
-            const offset = (page - 1) * limit;
+            // Executa as queries
+            const [dataResult, countResult] = await Promise.all([
+                this.pool.query(dataQuery, queryParams),
+                this.pool.query(countQuery, queryParams.slice(0, -2))
+            ]);
 
-            // Prepara os filtros
-            const queryParams = [];
-            let whereClause = '';
-            let paramCount = 1;
-            
-            // Adiciona filtros de data se existirem
-            if (filters.start_date) {
-                queryParams.push(filters.start_date);
-                whereClause += `${whereClause ? ' AND ' : ' WHERE '}i.due_date >= $${paramCount++}::date`;
-            }
-            
-            if (filters.end_date) {
-                queryParams.push(filters.end_date);
-                whereClause += `${whereClause ? ' AND ' : ' WHERE '}i.due_date <= $${paramCount++}::date`;
-            }
+            const total = parseInt(countResult.rows[0]?.total || 0);
+            const totalPages = Math.ceil(total / limit);
 
-            // Adiciona filtro de status
-            let statusList = [];
-            if (filters.status) {
-                // Converte para array se não for
-                statusList = Array.isArray(filters.status) 
-                    ? filters.status 
-                    : [filters.status];
-                
-                // Adiciona status como parâmetro
-                queryParams.push(statusList);
-                
-                whereClause += `${whereClause ? ' AND ' : ' WHERE '}i.status = ANY($${paramCount++})`;
-            }
-
-            if (filters.account_entry_id) {
-                queryParams.push(filters.account_entry_id);
-                whereClause += `${whereClause ? ' AND ' : ' WHERE '}i.account_entry_id = $${paramCount++}`;
-            }
-
-            if (filters.full_name) {
-                queryParams.push(`%${filters.full_name}%`);
-                whereClause += `${whereClause ? ' AND ' : ' WHERE '}LOWER(p.full_name) LIKE LOWER($${paramCount++})`;
-            }
-
-            // Define orderBy
-            const orderBy = filters.orderBy || 'due_date DESC, full_name ASC';
-
-            // Adiciona parâmetros de paginação
-            queryParams.push(limit, offset);
-
-            // Log detalhado dos parâmetros
-            logger.debug('Parâmetros da consulta de parcelas', { 
-                filters, 
-                whereClause, 
-                queryParams,
-                statusList
-            });
-
-            // Opções para personalizar a query
-            const options = {
-                orderBy,
-                customQuery: `
-                    SELECT 
-                        p.full_name,
-                        m.movement_id, 
-                        m.movement_status_id,
-                        i.installment_id,
-                        i.payment_id,
-                        i.account_entry_id,
-                        i.installment_number,
-                        i.due_date,
-                        i.amount,
-                        i.balance,
-                        i.status,
-                        i.expected_date
-                        ${filters.include === 'boletos' ? `,
-                            boletos.boleto_id,
-                            boletos.boleto_number,
-                            boletos.boleto_url,
-                            boletos.status as boleto_status,
-                            boletos.boleto_generated_at
-                        ` : ''}
-                    FROM installments i
-                    JOIN movement_payments mp ON i.payment_id = mp.payment_id
-                    JOIN movements m ON mp.movement_id = m.movement_id
-                    JOIN persons p ON m.person_id = p.person_id
-                    ${filters.include === 'boletos' ? `
-                        LEFT JOIN (
-                            SELECT DISTINCT ON (installment_id)
-                                installment_id, 
-                                boleto_id,
-                                boleto_number,
-                                boleto_url,
-                                status,
-                                generated_at as boleto_generated_at
-                            FROM boletos
-                            ORDER BY installment_id, boleto_id DESC
-                        ) boletos ON boletos.installment_id = i.installment_id` : ''}
-                    ${whereClause ? whereClause + ' AND m.movement_status_id = 2' : 'WHERE m.movement_status_id = 2'}
-                    ORDER BY ${orderBy}
-                    LIMIT $${paramCount} OFFSET $${paramCount + 1}
-                `,
-                queryParams,
-                countQuery: `
-                    SELECT COUNT(*) as total
-                    FROM (
-                        SELECT DISTINCT i.installment_id
-                        FROM installments i
-                        JOIN movement_payments mp ON i.payment_id = mp.payment_id
-                        JOIN movements m ON m.movement_id = mp.movement_id
-                        JOIN persons p ON p.person_id = m.person_id
-                        ${filters.include === 'boletos' ? `
-                            LEFT JOIN (
-                                SELECT DISTINCT ON (installment_id)
-                                    installment_id, 
-                                    boleto_id,
-                                    boleto_number,
-                                    boleto_url,
-                                    status,
-                                    generated_at as boleto_generated_at
-                                FROM boletos
-                                ORDER BY installment_id, boleto_id DESC
-                            ) boletos ON boletos.installment_id = i.installment_id` : ''}
-                        ${whereClause ? whereClause + ' AND m.movement_status_id = 2' : 'WHERE m.movement_status_id = 2'}
-                    ) as subquery
-                `
+            return {
+                items: dataResult.rows,
+                total,
+                page,
+                limit,
+                totalPages
             };
-
-            // Usa o método findAll do BaseRepository
-            const result = await super.findAll(page, limit, filters, options);
-
-            // Log para verificar o full_name e garantir sua inclusão na query
-            logger.debug('Resultado da busca de parcelas', {
-                itemCount: result.items.length,
-                firstItem: result.items[0],
-                full_name: result.items[0]?.full_name,
-                status: result.items.map(item => item.status)
-            });
-
-            // Se incluir boletos, agrupa os boletos por parcela
-            if (filters.include === 'boletos') {
-                // Agrupa boletos por installment_id
-                const boletosMap = {};
-                result.items.forEach(row => {
-                    if (row.boleto_id) {
-                        if (!boletosMap[row.installment_id]) {
-                            boletosMap[row.installment_id] = [];
-                        }
-                        boletosMap[row.installment_id].push({
-                            boleto_id: row.boleto_id,
-                            boleto_number: row.boleto_number,
-                            boleto_url: row.boleto_url,
-                            status: row.boleto_status,
-                            generated_at: row.boleto_generated_at
-                        });
-                    }
-                });
-
-                // Adiciona boletos aos itens
-                result.items = result.items.map(item => {
-                    const installmentWithBoletos = { ...item };
-                    installmentWithBoletos.boletos = boletosMap[item.installment_id] || [];
-                    
-                    // Remove colunas de boleto individuais
-                    delete installmentWithBoletos.boleto_id;
-                    delete installmentWithBoletos.boleto_number;
-                    delete installmentWithBoletos.boleto_url;
-                    delete installmentWithBoletos.boleto_status;
-                    delete installmentWithBoletos.boleto_generated_at;
-                    
-                    return installmentWithBoletos;
-                });
-            }
-
-            return result;
         } catch (error) {
-            logger.error('Erro ao buscar parcelas', { 
+            this.logger.error('Erro ao buscar parcelas', { 
                 error: error.message, 
-                filters,
-                stack: error.stack
+                stack: error.stack 
             });
-            throw new DatabaseError('Erro ao buscar parcelas', error);
+            throw error;
         }
     }
 
@@ -359,7 +262,7 @@ class InstallmentRepository extends BaseRepository {
                     m.description,
                     m.person_id
                 FROM installments i
-                JOIN movement_payments p ON p.payment_id = i.payment_id
+                JOIN movement_payments p ON i.payment_id = p.payment_id
                 JOIN movements m ON m.movement_id = p.movement_id
                 WHERE i.installment_id = $1
             `;
@@ -538,9 +441,9 @@ class InstallmentRepository extends BaseRepository {
                     b.status as boleto_status,
                     b.generated_at as boleto_generated_at
                 FROM installments i
-                JOIN movement_payments mp ON i.payment_id = mp.payment_id
-                JOIN movements m ON mp.movement_id = m.movement_id
-                JOIN persons p ON m.person_id = p.person_id
+                LEFT JOIN movement_payments mp ON i.payment_id = mp.payment_id
+                LEFT JOIN movements m ON mp.movement_id = m.movement_id
+                LEFT JOIN persons p ON m.person_id = p.person_id
                 LEFT JOIN (
                     SELECT DISTINCT ON (installment_id)
                         installment_id, 
