@@ -13,24 +13,46 @@ class BaseRepository {
      */
     async findAll(page, limit, filters = {}, options = {}) {
         try {
+            // Log detalhado de entrada
+            logger.debug('BaseRepository.findAll - Entrada', {
+                page,
+                limit,
+                filters: JSON.stringify(filters),
+                tableName: this.tableName
+            });
+
             // Parâmetros padrão
             const parsedPage = parseInt(page) || 1;
             const parsedLimit = parseInt(limit) || 10;
             const offset = (parsedPage - 1) * parsedLimit;
 
-            // Usa parâmetros personalizados ou padrão
-            const queryParams = options.queryParams || [];
-            
+            // Construir cláusula WHERE
+            const { whereClause, queryParams, paramCount } = this.buildWhereClause(filters);
+
+            // Log da cláusula WHERE
+            logger.debug('BaseRepository.findAll - Cláusula WHERE', {
+                whereClause,
+                queryParams,
+                paramCount
+            });
+
             // Query personalizada ou padrão
             const query = options.customQuery || `
                 SELECT * 
                 FROM ${this.tableName}
-                LIMIT $1 OFFSET $2
+                ${whereClause}
+                LIMIT $${paramCount} OFFSET $${paramCount + 1}
             `;
+
+            // Log da query
+            logger.debug('BaseRepository.findAll - Query', {
+                query,
+                fullQueryParams: [...queryParams, parsedLimit, offset]
+            });
 
             // Parâmetros para a query
             const fullQueryParams = [
-                ...(options.queryParams || []),
+                ...queryParams,
                 parsedLimit,
                 offset
             ];
@@ -39,6 +61,7 @@ class BaseRepository {
             const countQuery = options.countQuery || `
                 SELECT COUNT(*) as total 
                 FROM ${this.tableName}
+                ${whereClause}
             `;
 
             logger.debug('BaseRepository findAll - debug', {
@@ -53,6 +76,12 @@ class BaseRepository {
                 this.pool.query(countQuery, queryParams)
             ]);
 
+            // Log dos resultados
+            logger.debug('BaseRepository.findAll - Resultados', {
+                dataResultCount: dataResult.rows.length,
+                totalItems: countResult.rows[0]?.total
+            });
+
             return {
                 data: dataResult.rows,
                 total: parseInt(countResult.rows[0]?.total || 0),
@@ -62,7 +91,8 @@ class BaseRepository {
         } catch (error) {
             logger.error('Erro no BaseRepository findAll', { 
                 error: error.message, 
-                stack: error.stack 
+                stack: error.stack,
+                tableName: this.tableName
             });
             throw error;
         }
@@ -361,6 +391,71 @@ class BaseRepository {
             // Sempre libera o cliente
             client.release();
         }
+    }
+
+    /**
+     * Constrói uma cláusula WHERE dinâmica para consultas
+     * @param {Object} filters - Filtros a serem aplicados
+     * @returns {Object} Objeto com cláusula WHERE, parâmetros e contagem de parâmetros
+     */
+    buildWhereClause(filters = {}) {
+        const whereConditions = [];
+        const queryParams = [];
+        let paramCount = 1;
+
+        // Log detalhado dos filtros recebidos
+        logger.debug('BaseRepository.buildWhereClause - Filtros recebidos', {
+            filters: JSON.stringify(filters)
+        });
+
+        // Filtro de data com tratamento específico para due_date
+        if (filters.start_date && filters.end_date) {
+            // Converte para timestamps com início do dia e fim do dia
+            const startDate = new Date(filters.start_date);
+            startDate.setHours(0, 0, 0, 0);
+            
+            const endDate = new Date(filters.end_date);
+            endDate.setHours(23, 59, 59, 999);
+            
+            whereConditions.push(`due_date >= $${paramCount} AND due_date <= $${paramCount + 1}`);
+            queryParams.push(startDate.toISOString(), endDate.toISOString());
+            
+            logger.debug('BaseRepository.buildWhereClause - Filtro de Data', {
+                startDateInput: filters.start_date,
+                startDateConverted: startDate.toISOString(),
+                endDateInput: filters.end_date,
+                endDateConverted: endDate.toISOString()
+            });
+            
+            paramCount += 2;
+        }
+
+        // Filtros dinâmicos para outros campos
+        Object.keys(filters).forEach(key => {
+            // Ignorar filtros de data e include
+            if (key !== 'start_date' && key !== 'end_date' && key !== 'include') {
+                whereConditions.push(`${key} = $${paramCount}`);
+                queryParams.push(filters[key]);
+                paramCount++;
+            }
+        });
+
+        // Construção da cláusula WHERE
+        const whereClause = whereConditions.length > 0 
+            ? `WHERE ${whereConditions.join(' AND ')}` 
+            : '';
+
+        logger.debug('BaseRepository.buildWhereClause - Resultado Final', {
+            whereClause,
+            queryParams,
+            paramCount
+        });
+
+        return {
+            whereClause,
+            queryParams,
+            paramCount
+        };
     }
 }
 

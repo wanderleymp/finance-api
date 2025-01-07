@@ -2,11 +2,136 @@ const BaseRepository = require('../../repositories/base/BaseRepository');
 const { logger } = require('../../middlewares/logger');
 const { DatabaseError } = require('../../utils/errors');
 const PersonService = require('../persons/person.service');
+const moment = require('moment-timezone');
 
 class InstallmentRepository extends BaseRepository {
     constructor() {
         super('installments', 'installment_id');
         this.personService = new PersonService();
+    }
+
+    /**
+     * Constrói a cláusula WHERE com base nos filtros
+     * @private
+     */
+    buildWhereClause(filters = {}) {
+        const conditions = [];
+        const params = [];
+        let paramCount = 0;
+
+        // Filtros de data
+        if (filters.start_date && filters.end_date) {
+            const startDate = moment(filters.start_date).startOf('day').toISOString();
+            const endDate = moment(filters.end_date).endOf('day').toISOString();
+            
+            conditions.push(`i.due_date BETWEEN $${++paramCount} AND $${++paramCount}`);
+            params.push(startDate, endDate);
+        }
+
+        // Filtro por status
+        if (filters.status) {
+            conditions.push(`i.status = $${++paramCount}`);
+            params.push(filters.status);
+        }
+
+        // Filtro por movimento (payment)
+        if (filters.payment_id) {
+            conditions.push(`i.payment_id = $${++paramCount}`);
+            params.push(filters.payment_id);
+        }
+
+        // Filtro por número da parcela
+        if (filters.installment_number) {
+            conditions.push(`i.installment_number = $${++paramCount}`);
+            params.push(filters.installment_number);
+        }
+
+        // Filtro por valor
+        if (filters.amount) {
+            conditions.push(`i.amount = $${++paramCount}`);
+            params.push(filters.amount);
+        }
+
+        const whereClause = conditions.length > 0 
+            ? `WHERE ${conditions.join(' AND ')}`
+            : '';
+
+        return { whereClause, params, paramCount };
+    }
+
+    /**
+     * Lista todas as parcelas com filtros e paginação
+     */
+    async findAll(page = 1, limit = 10, filters = {}) {
+        try {
+            const { whereClause, params, paramCount } = this.buildWhereClause(filters);
+            const offset = (page - 1) * limit;
+
+            // Query principal com joins necessários
+            const query = `
+                SELECT 
+                    i.installment_id,
+                    i.payment_id,
+                    i.installment_number,
+                    i.due_date,
+                    i.amount,
+                    i.balance,
+                    i.status,
+                    i.account_entry_id,
+                    i.expected_date,
+                    mp.movement_id,
+                    m.description as movement_description,
+                    m.movement_type_id as movement_type,
+                    m.movement_status_id as movement_status,
+                    p.full_name as person_name,
+                    CASE 
+                        WHEN $${paramCount + 3}::boolean = true THEN (
+                            SELECT json_agg(b.*) 
+                            FROM boletos b 
+                            WHERE b.installment_id = i.installment_id
+                        )
+                        ELSE NULL
+                    END as boletos
+                FROM installments i
+                LEFT JOIN movement_payments mp ON i.payment_id = mp.payment_id
+                LEFT JOIN movements m ON mp.movement_id = m.movement_id
+                LEFT JOIN persons p ON m.person_id = p.person_id
+                ${whereClause}
+                ORDER BY i.due_date DESC, i.installment_number
+                LIMIT $${paramCount + 1}
+                OFFSET $${paramCount + 2}
+            `;
+
+            // Query de contagem
+            const countQuery = `
+                SELECT COUNT(*)::integer as total
+                FROM installments i
+                LEFT JOIN movement_payments mp ON i.payment_id = mp.payment_id
+                LEFT JOIN movements m ON mp.movement_id = m.movement_id
+                ${whereClause}
+            `;
+
+            // Executa as queries
+            const includeBoletos = filters.include === 'boletos';
+            const [resultQuery, countResult] = await Promise.all([
+                this.pool.query(query, [...params, limit, offset, includeBoletos]),
+                this.pool.query(countQuery, params)
+            ]);
+
+            return {
+                data: resultQuery.rows,
+                total: parseInt(countResult.rows[0]?.total || 0),
+                page: parseInt(page),
+                limit: parseInt(limit)
+            };
+        } catch (error) {
+            logger.error('Erro ao listar parcelas', {
+                error: error.message,
+                filters,
+                stack: error.stack
+            });
+            throw new DatabaseError('Erro ao listar parcelas', error);
+        }
     }
 
     /**
@@ -16,11 +141,23 @@ class InstallmentRepository extends BaseRepository {
         try {
             const query = `
                 SELECT 
-                    i.*,
-                    ist.name as status_name
+                    i.installment_id,
+                    i.payment_id,
+                    i.installment_number,
+                    i.due_date,
+                    i.amount,
+                    i.balance,
+                    i.status,
+                    i.account_entry_id,
+                    i.expected_date,
+                    m.movement_id,
+                    m.description as movement_description,
+                    m.movement_type_id as movement_type,
+                    m.movement_status_id as movement_status
                 FROM installments i
-                LEFT JOIN installment_status ist ON ist.status_id = i.status_id
-                WHERE i.movement_id = $1
+                JOIN movement_payments mp ON i.payment_id = mp.payment_id
+                JOIN movements m ON mp.movement_id = m.movement_id
+                WHERE m.movement_id = $1
                 ORDER BY i.installment_number
             `;
 
@@ -41,7 +178,16 @@ class InstallmentRepository extends BaseRepository {
     async findByPaymentId(paymentId) {
         try {
             const query = `
-                SELECT i.*
+                SELECT 
+                    i.installment_id,
+                    i.payment_id,
+                    i.installment_number,
+                    i.due_date,
+                    i.amount,
+                    i.balance,
+                    i.status,
+                    i.account_entry_id,
+                    i.expected_date
                 FROM installments i
                 WHERE i.payment_id = $1
                 ORDER BY i.installment_number
@@ -58,106 +204,6 @@ class InstallmentRepository extends BaseRepository {
         }
     }
 
-    // Método removido, substituído por findAll com include=boletos
-    // async findAllWithDetails(page = 1, limit = 10, filters = {}) {
-    //     try {
-    //         // Lógica anterior de busca com detalhes
-    //     } catch (error) {
-    //         throw error;
-    //     }
-    // }
-
-    async findAll(page, limit, filters = {}) {
-        // Normaliza page e limit
-        page = Math.max(1, Number(page));
-        limit = Math.max(1, Number(limit));
-        const offset = (page - 1) * limit;
-
-        // Prepara cláusulas WHERE dinâmicas
-        const whereClauses = [];
-        const queryParams = [];
-        let paramIndex = 1;
-
-        // Filtro de status de movimento padrão
-        whereClauses.push(`m.movement_status_id = $${paramIndex}`);
-        queryParams.push(2);
-        paramIndex++;
-
-        // Filtros adicionais
-        if (filters.status) {
-            whereClauses.push(`i.status = $${paramIndex}`);
-            queryParams.push(filters.status);
-            paramIndex++;
-        }
-
-        if (filters.payment_id) {
-            whereClauses.push(`i.payment_id = $${paramIndex}`);
-            queryParams.push(filters.payment_id);
-            paramIndex++;
-        }
-
-        // Construção dinâmica das queries
-        const baseQuery = `
-            FROM installments i
-            LEFT JOIN movement_payments mp ON i.payment_id = mp.payment_id
-            LEFT JOIN movements m ON mp.movement_id = m.movement_id
-            LEFT JOIN persons p ON m.person_id = p.person_id
-            WHERE ${whereClauses.join(' AND ')}
-        `;
-
-        // Query para buscar dados
-        const dataQuery = `
-            SELECT 
-                p.full_name,
-                m.movement_id, 
-                m.movement_status_id,
-                i.installment_id,
-                i.payment_id,
-                i.account_entry_id,
-                i.installment_number,
-                i.due_date,
-                i.amount,
-                i.balance,
-                i.status,
-                i.expected_date
-            ${baseQuery}
-            ORDER BY i.due_date DESC, p.full_name ASC
-            LIMIT $${paramIndex} OFFSET $${paramIndex + 1}
-        `;
-        queryParams.push(limit, offset);
-
-        // Query de contagem
-        const countQuery = `
-            SELECT COUNT(*) as total
-            ${baseQuery}
-        `;
-
-        try {
-            // Executa as queries
-            const [dataResult, countResult] = await Promise.all([
-                this.pool.query(dataQuery, queryParams),
-                this.pool.query(countQuery, queryParams.slice(0, -2))
-            ]);
-
-            const total = parseInt(countResult.rows[0]?.total || 0);
-            const totalPages = Math.ceil(total / limit);
-
-            return {
-                items: dataResult.rows,
-                total,
-                page,
-                limit,
-                totalPages
-            };
-        } catch (error) {
-            this.logger.error('Erro ao buscar parcelas', { 
-                error: error.message, 
-                stack: error.stack 
-            });
-            throw error;
-        }
-    }
-
     async create(data) {
         const client = await this.pool.connect();
         try {
@@ -171,8 +217,9 @@ class InstallmentRepository extends BaseRepository {
                     amount,
                     balance,
                     status,
-                    account_entry_id
-                ) VALUES ($1, $2, $3, $4, $5, $6, $7)
+                    account_entry_id,
+                    expected_date
+                ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
                 RETURNING *
             `;
 
@@ -183,7 +230,8 @@ class InstallmentRepository extends BaseRepository {
                 data.amount,
                 data.balance,
                 data.status,
-                data.account_entry_id
+                data.account_entry_id,
+                data.expected_date
             ]);
 
             await client.query('COMMIT');
@@ -258,7 +306,8 @@ class InstallmentRepository extends BaseRepository {
         try {
             const query = `
                 SELECT 
-                    p.*,
+                    p.payment_id,
+                    p.movement_id,
                     m.description,
                     m.person_id
                 FROM installments i

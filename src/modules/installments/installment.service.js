@@ -36,7 +36,7 @@ class InstallmentService {
             const result = await this.repository.findAll(page, limit, filters);
             
             // Verifica se há itens antes de mapear
-            if (!result.items || result.items.length === 0) {
+            if (!result.data || result.data.length === 0) {
                 logger.info('Nenhuma parcela encontrada', { page, limit, filters });
                 return {
                     items: [],
@@ -48,28 +48,28 @@ class InstallmentService {
             }
 
             // Transforma os resultados em DTOs
-            result.items = result.items.map(item => new InstallmentResponseDTO(item));
-            
-            // Adiciona meta informações de paginação
-            const paginatedResult = {
-                items: result.items,
+            const items = result.data.map(item => new InstallmentResponseDTO(item));
+            const totalPages = Math.ceil(result.total / result.limit);
+
+            const formattedResult = {
+                items,
                 total: result.total,
                 page: result.page,
                 limit: result.limit,
-                totalPages: result.totalPages
+                totalPages
             };
 
-            // Caching do resultado
-            await this.cacheService.set(cacheKey, paginatedResult, this.cacheTTL.list);
-            
-            return paginatedResult;
+            // Salva no cache
+            await this.cacheService.set(cacheKey, formattedResult, this.cacheTTL.list);
+
+            return formattedResult;
         } catch (error) {
             logger.error('Erro ao listar parcelas', { 
-                error: error.message,
-                stack: error.stack,
+                error: error.message, 
+                filters,
                 page,
                 limit,
-                filters 
+                stack: error.stack 
             });
             throw error;
         }
