@@ -44,6 +44,11 @@ class InstallmentRepository {
             params.push(filters.amount);
         }
 
+        if (filters.full_name) {
+            conditions.push(`p.full_name ILIKE $${++paramCount}`);
+            params.push(`%${filters.full_name}%`);
+        }
+
         const whereClause = conditions.length > 0 
             ? `WHERE ${conditions.join(' AND ')}`
             : '';
@@ -100,6 +105,7 @@ class InstallmentRepository {
                 FROM installments i
                 LEFT JOIN movement_payments mp ON i.payment_id = mp.payment_id
                 LEFT JOIN movements m ON mp.movement_id = m.movement_id
+                LEFT JOIN persons p ON m.person_id = p.person_id
                 ${whereClause ? whereClause + ' AND ' : 'WHERE '}m.movement_status_id = 2
             `;
 
@@ -149,6 +155,7 @@ class InstallmentRepository {
                 FROM installments i
                 JOIN movement_payments mp ON i.payment_id = mp.payment_id
                 JOIN movements m ON mp.movement_id = m.movement_id
+                LEFT JOIN persons p ON m.person_id = p.person_id
                 ${whereClause}
                 ORDER BY i.installment_number
             `;
@@ -304,6 +311,7 @@ class InstallmentRepository {
                 FROM installments i
                 JOIN movement_payments p ON i.payment_id = p.payment_id
                 JOIN movements m ON m.movement_id = p.movement_id
+                LEFT JOIN persons p ON m.person_id = p.person_id
                 ${whereClause}
             `;
 
