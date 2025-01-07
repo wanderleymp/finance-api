@@ -115,13 +115,7 @@ class PersonService {
 
             return {
                 items: personsWithDetails,
-                meta: persons.meta || {
-                    totalItems: 0,
-                    itemCount: 0,
-                    itemsPerPage: parseInt(limit),
-                    totalPages: 0,
-                    currentPage: parseInt(page)
-                }
+                meta: persons.meta
             };
         } catch (error) {
             logger.error('Erro ao listar pessoas com detalhes', { 
