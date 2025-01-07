@@ -15,6 +15,8 @@ class MovementRepository extends BaseRepository {
             const customFilters = { ...filters };
 
             // Query personalizada com joins e alias definido
+            const whereClause = this.getWhereClause(customFilters);
+            const paramCount = Object.keys(customFilters).length;
             const customQuery = `
                 SELECT 
                     m.movement_id,
@@ -31,13 +33,36 @@ class MovementRepository extends BaseRepository {
                 LEFT JOIN movement_statuses ms ON m.movement_status_id = ms.movement_status_id
                 LEFT JOIN movement_types mt ON m.movement_type_id = mt.movement_type_id
                 LEFT JOIN persons p ON m.person_id = p.person_id
+                ${whereClause}
+                ORDER BY m.movement_id DESC
+                LIMIT $${paramCount + 1} OFFSET $${paramCount + 2}
+            `;
+
+            // Query de contagem com os mesmos joins
+            const countQuery = `
+                SELECT COUNT(*) as total 
+                FROM movements m
+                LEFT JOIN movement_statuses ms ON m.movement_status_id = ms.movement_status_id
+                LEFT JOIN movement_types mt ON m.movement_type_id = mt.movement_type_id
+                LEFT JOIN persons p ON m.person_id = p.person_id
+                ${whereClause}
             `;
 
             // Usa o método findAll do BaseRepository com query personalizada
-            return await super.findAll(page, limit, customFilters, {
+            const result = await super.findAll(page, limit, customFilters, {
                 customQuery,
-                orderBy: 'movement_id DESC'
+                countQuery
             });
+
+            return {
+                items: result.data,
+                meta: {
+                    total: result.total,
+                    page: result.page,
+                    limit: result.limit,
+                    totalPages: Math.ceil(result.total / result.limit)
+                }
+            };
         } catch (error) {
             logger.error('Repository: Erro ao buscar movimentos', {
                 error: error.message,
@@ -223,6 +248,14 @@ class MovementRepository extends BaseRepository {
             });
             throw new DatabaseError('Erro ao remover movimento', error);
         }
+    }
+
+    getWhereClause(filters) {
+        const conditions = Object.keys(filters)
+            .map((key, index) => `${key} = $${index + 1}`)
+            .join(' AND ');
+
+        return conditions ? `WHERE ${conditions}` : '';
     }
 }
 
