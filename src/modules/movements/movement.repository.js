@@ -9,14 +9,43 @@ class MovementRepository extends BaseRepository {
 
     async findAll(page = 1, limit = 10, filters = {}) {
         try {
-            logger.info('Repository: Buscando movimentos', { page, limit, filters });
+            // Extrair filtros especiais
+            const { 
+                orderBy = 'movement_date', 
+                orderDirection = 'DESC', 
+                startDate, 
+                endDate,
+                include,
+                ...otherFilters 
+            } = filters;
 
-            // Adiciona joins personalizados aos filtros
-            const customFilters = { ...filters };
+            // Mapeamento de campos de ordenação
+            const orderByMapping = {
+                'date': 'movement_date',
+                'id': 'movement_id',
+                'type': 'movement_type_id',
+                'status': 'movement_status_id'
+            };
+
+            // Mapear o campo de ordenação
+            const mappedOrderBy = orderByMapping[orderBy] || orderBy;
+
+            // Construir cláusula WHERE para filtros de data
+            const whereConditions = [];
+            const queryParams = [];
+
+            // Filtro de data
+            if (startDate && endDate) {
+                whereConditions.push(`m.movement_date BETWEEN $1 AND $2`);
+                queryParams.push(startDate, endDate);
+            }
+
+            // Construir cláusula WHERE
+            const whereClause = whereConditions.length > 0 
+                ? `WHERE ${whereConditions.join(' AND ')}` 
+                : '';
 
             // Query personalizada com joins e alias definido
-            const whereClause = this.getWhereClause(customFilters);
-            const paramCount = Object.keys(customFilters).length;
             const customQuery = `
                 SELECT 
                     m.movement_id,
@@ -34,8 +63,7 @@ class MovementRepository extends BaseRepository {
                 LEFT JOIN movement_types mt ON m.movement_type_id = mt.movement_type_id
                 LEFT JOIN persons p ON m.person_id = p.person_id
                 ${whereClause}
-                ORDER BY m.movement_id DESC
-                LIMIT $${paramCount + 1} OFFSET $${paramCount + 2}
+                ORDER BY m.${mappedOrderBy} ${orderDirection}
             `;
 
             // Query de contagem com os mesmos joins
@@ -49,29 +77,78 @@ class MovementRepository extends BaseRepository {
             `;
 
             // Usa o método findAll do BaseRepository com query personalizada
-            const result = await super.findAll(page, limit, customFilters, {
+            const result = await super.findAll(page, limit, {}, {
                 customQuery,
-                countQuery
+                countQuery,
+                queryParams
             });
 
+            // Processamento adicional para includes, se necessário
+            let processedItems = result.data;
+            if (include) {
+                const includeOptions = include.split('.');
+                
+                // Lógica para processamento de includes
+                if (includeOptions.includes('payments')) {
+                    const movementIds = result.data.map(m => m.movement_id);
+                    const payments = await this.findPaymentsByMovementIds(movementIds);
+                    
+                    processedItems = result.data.map(movement => ({
+                        ...movement,
+                        payments: payments.filter(p => p.movement_id === movement.movement_id)
+                    }));
+
+                    // Se incluir installments
+                    if (includeOptions.includes('installments')) {
+                        const paymentIds = payments.map(p => p.payment_id);
+                        logger.debug('Buscando installments', { paymentIds });
+                        const installments = await this.findInstallmentsByPaymentIds(paymentIds);
+                        logger.debug('Installments encontrados', { count: installments.length, installments });
+
+                        processedItems = processedItems.map(movement => ({
+                            ...movement,
+                            payments: movement.payments.map(payment => ({
+                                ...payment,
+                                installments: installments.filter(i => i.payment_id === payment.payment_id)
+                            }))
+                        }));
+
+                        // Se incluir boletos
+                        if (includeOptions.includes('boletos')) {
+                            const installmentIds = installments.map(i => i.installment_id);
+                            const boletos = await this.findBoletosByInstallmentIds(installmentIds);
+
+                            processedItems = processedItems.map(movement => ({
+                                ...movement,
+                                payments: movement.payments.map(payment => ({
+                                    ...payment,
+                                    installments: payment.installments.map(installment => ({
+                                        ...installment,
+                                        boletos: boletos.filter(b => b.installment_id === installment.installment_id)
+                                    }))
+                                }))
+                            }));
+                        }
+                    }
+                }
+            }
+
             return {
-                items: result.data,
+                items: processedItems,
                 meta: {
                     total: result.total,
-                    page: result.page,
-                    limit: result.limit,
-                    totalPages: Math.ceil(result.total / result.limit)
+                    page: parseInt(page),
+                    limit: parseInt(limit),
+                    totalPages: Math.ceil(result.total / limit)
                 }
             };
         } catch (error) {
             logger.error('Repository: Erro ao buscar movimentos', {
                 error: error.message,
-                error_stack: error.stack,
-                page,
-                limit,
-                filters
+                filters,
+                stack: error.stack
             });
-            throw new DatabaseError('Erro ao buscar movimentos');
+            throw new DatabaseError('Erro ao buscar movimentos', error);
         }
     }
 
@@ -256,6 +333,49 @@ class MovementRepository extends BaseRepository {
             .join(' AND ');
 
         return conditions ? `WHERE ${conditions}` : '';
+    }
+
+    // Métodos auxiliares para busca de dados relacionados
+    async findPaymentsByMovementIds(movementIds) {
+        try {
+            const query = `
+                SELECT * FROM movement_payments 
+                WHERE movement_id = ANY($1)
+            `;
+            const result = await this.pool.query(query, [movementIds]);
+            return result.rows;
+        } catch (error) {
+            logger.error('Erro ao buscar pagamentos', { error: error.message });
+            return [];
+        }
+    }
+
+    async findInstallmentsByPaymentIds(paymentIds) {
+        try {
+            const query = `
+                SELECT * FROM installments 
+                WHERE payment_id = ANY($1)
+            `;
+            const result = await this.pool.query(query, [paymentIds]);
+            return result.rows;
+        } catch (error) {
+            logger.error('Erro ao buscar parcelas', { error: error.message });
+            return [];
+        }
+    }
+
+    async findBoletosByInstallmentIds(installmentIds) {
+        try {
+            const query = `
+                SELECT * FROM boletos 
+                WHERE installment_id = ANY($1)
+            `;
+            const result = await this.pool.query(query, [installmentIds]);
+            return result.rows;
+        } catch (error) {
+            logger.error('Erro ao buscar boletos', { error: error.message });
+            return [];
+        }
     }
 }
 

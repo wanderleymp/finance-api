@@ -18,7 +18,8 @@ class BaseRepository {
                 page,
                 limit,
                 filters: JSON.stringify(filters),
-                tableName: this.tableName
+                tableName: this.tableName,
+                customQuery: !!options.customQuery
             });
 
             // Parâmetros padrão
@@ -26,54 +27,55 @@ class BaseRepository {
             const parsedLimit = parseInt(limit) || 10;
             const offset = (parsedPage - 1) * parsedLimit;
 
-            // Construir cláusula WHERE
-            const { whereClause, queryParams, paramCount } = this.buildWhereClause(filters);
+            // Preparar query e parâmetros
+            let query, countQuery, queryParams;
 
-            // Log da cláusula WHERE
-            logger.debug('BaseRepository.findAll - Cláusula WHERE', {
-                whereClause,
-                queryParams,
-                paramCount
-            });
+            if (options.customQuery) {
+                // Query personalizada
+                query = options.customQuery;
+                countQuery = options.countQuery;
+                queryParams = options.queryParams || [];
+                
+                // Adicionar LIMIT e OFFSET
+                const baseParamsLength = queryParams.length;
+                query += ` LIMIT $${baseParamsLength + 1} OFFSET $${baseParamsLength + 2}`;
+                
+                // Adicionar parâmetros de paginação apenas para a query principal
+                queryParams = [...queryParams, parsedLimit, offset];
+            } else {
+                // Query padrão
+                const { whereClause, queryParams: baseQueryParams } = this.buildWhereClause(filters);
+                queryParams = baseQueryParams;
 
-            // Query personalizada ou padrão
-            const query = options.customQuery || `
-                SELECT * 
-                FROM ${this.tableName}
-                ${whereClause}
-                LIMIT $${paramCount} OFFSET $${paramCount + 1}
-            `;
+                query = `
+                    SELECT * 
+                    FROM ${this.tableName}
+                    ${whereClause}
+                    LIMIT $${baseQueryParams.length + 1} OFFSET $${baseQueryParams.length + 2}
+                `;
+
+                countQuery = `
+                    SELECT COUNT(*) as total 
+                    FROM ${this.tableName}
+                    ${whereClause}
+                `;
+
+                // Adicionar parâmetros de paginação apenas para a query principal
+                queryParams = [...baseQueryParams, parsedLimit, offset];
+            }
 
             // Log da query
             logger.debug('BaseRepository.findAll - Query', {
                 query,
-                fullQueryParams: [...queryParams, parsedLimit, offset]
-            });
-
-            // Parâmetros para a query
-            const fullQueryParams = [
-                ...queryParams,
-                parsedLimit,
-                offset
-            ];
-
-            // Query de contagem
-            const countQuery = options.countQuery || `
-                SELECT COUNT(*) as total 
-                FROM ${this.tableName}
-                ${whereClause}
-            `;
-
-            logger.debug('BaseRepository findAll - debug', {
-                query,
                 countQuery,
-                fullQueryParams
+                queryParams,
+                countQueryParams: options.queryParams || []
             });
 
             // Executa as queries
             const [dataResult, countResult] = await Promise.all([
-                this.pool.query(query, fullQueryParams),
-                this.pool.query(countQuery, queryParams)
+                this.pool.query(query, queryParams),
+                this.pool.query(countQuery, options.queryParams || [])
             ]);
 
             // Log dos resultados
@@ -92,7 +94,8 @@ class BaseRepository {
             logger.error('Erro no BaseRepository findAll', { 
                 error: error.message, 
                 stack: error.stack,
-                tableName: this.tableName
+                tableName: this.tableName,
+                options
             });
             throw error;
         }

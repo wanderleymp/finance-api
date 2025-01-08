@@ -85,6 +85,42 @@ module.exports = (controller) => {
         controller.sendBillingMessage.bind(controller)
     );
 
+    // Nova rota para detalhes do movimento
+    router.get('/details', async (req, res) => {
+        try {
+            const { id } = req.query;
+            
+            if (!id) {
+                return res.status(400).json({
+                    success: false,
+                    error: 'ID do movimento é obrigatório'
+                });
+            }
+
+            const movementId = parseInt(id, 10);
+
+            if (isNaN(movementId)) {
+                return res.status(400).json({
+                    success: false,
+                    error: 'ID do movimento inválido'
+                });
+            }
+
+            const result = await controller.service.getMovementById(movementId, true);
+            return res.json(result);
+        } catch (error) {
+            logger.error('Erro na rota de detalhes do movimento', {
+                error: error.message,
+                query: req.query
+            });
+
+            return res.status(500).json({
+                success: false,
+                error: 'Erro ao buscar detalhes do movimento'
+            });
+        }
+    });
+
     // Adiciona rotas de items
     router.use('/:id/items', movementItemRoutes(controller));
 
