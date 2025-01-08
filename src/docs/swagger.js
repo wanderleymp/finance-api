@@ -127,6 +127,47 @@ const options = {
                             description: 'Data de atualização'
                         }
                     }
+                },
+                Movement: {
+                    type: 'object',
+                    properties: {
+                        movement_id: {
+                            type: 'integer',
+                            description: 'ID do movimento'
+                        },
+                        person_id: {
+                            type: 'integer',
+                            description: 'ID da pessoa associada ao movimento'
+                        },
+                        description: {
+                            type: 'string',
+                            description: 'Descrição detalhada do movimento'
+                        },
+                        type: {
+                            type: 'string',
+                            enum: ['INCOME', 'EXPENSE'],
+                            description: 'Tipo do movimento (Receita ou Despesa)'
+                        },
+                        status: {
+                            type: 'string',
+                            enum: ['PENDING', 'PAID', 'CANCELLED'],
+                            description: 'Status atual do movimento'
+                        },
+                        total_value: {
+                            type: 'number',
+                            description: 'Valor total do movimento'
+                        },
+                        created_at: {
+                            type: 'string',
+                            format: 'date-time',
+                            description: 'Data e hora de criação do movimento'
+                        },
+                        updated_at: {
+                            type: 'string',
+                            format: 'date-time',
+                            description: 'Data e hora da última atualização'
+                        }
+                    }
                 }
             }
         },
@@ -840,6 +881,178 @@ const options = {
                                 'application/json': {
                                     schema: {
                                         $ref: '#/components/schemas/NotFoundError'
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            },
+            '/movements': {
+                get: {
+                    tags: ['Movimentos'],
+                    summary: 'Listar movimentos',
+                    description: 'Recupera uma lista de movimentos com suporte a paginação e inclusão de dados relacionados',
+                    security: [{ bearerAuth: [] }],
+                    parameters: [
+                        {
+                            in: 'query',
+                            name: 'page',
+                            schema: {
+                                type: 'integer',
+                                default: 1,
+                                minimum: 1
+                            },
+                            description: 'Número da página de resultados'
+                        },
+                        {
+                            in: 'query',
+                            name: 'limit',
+                            schema: {
+                                type: 'integer',
+                                default: 10,
+                                minimum: 1,
+                                maximum: 100
+                            },
+                            description: 'Quantidade de registros por página'
+                        },
+                        {
+                            in: 'query',
+                            name: 'include',
+                            schema: {
+                                type: 'array',
+                                items: {
+                                    type: 'string',
+                                    enum: ['payments', 'installments', 'boletos', 'person']
+                                }
+                            },
+                            description: 'Dados relacionados a serem incluídos na resposta. Opções: payments (pagamentos), installments (parcelas), boletos (boletos bancários), person (dados da pessoa)',
+                            style: 'form',
+                            explode: false
+                        },
+                        {
+                            in: 'query',
+                            name: 'type',
+                            schema: {
+                                type: 'string',
+                                enum: ['INCOME', 'EXPENSE']
+                            },
+                            description: 'Filtrar movimentos por tipo (Receita ou Despesa)'
+                        },
+                        {
+                            in: 'query',
+                            name: 'status',
+                            schema: {
+                                type: 'string',
+                                enum: ['PENDING', 'PAID', 'CANCELLED']
+                            },
+                            description: 'Filtrar movimentos por status'
+                        }
+                    ],
+                    responses: {
+                        200: {
+                            description: 'Lista de movimentos recuperada com sucesso',
+                            content: {
+                                'application/json': {
+                                    schema: {
+                                        type: 'object',
+                                        properties: {
+                                            data: {
+                                                type: 'array',
+                                                items: {
+                                                    $ref: '#/components/schemas/Movement'
+                                                }
+                                            },
+                                            pagination: {
+                                                $ref: '#/components/schemas/Pagination'
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                        },
+                        400: {
+                            description: 'Requisição inválida',
+                            content: {
+                                'application/json': {
+                                    schema: {
+                                        $ref: '#/components/schemas/Error'
+                                    }
+                                }
+                            }
+                        },
+                        401: {
+                            description: 'Não autorizado. Token de autenticação inválido ou ausente',
+                            content: {
+                                'application/json': {
+                                    schema: {
+                                        $ref: '#/components/schemas/Error'
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            },
+            '/movements/{id}': {
+                get: {
+                    tags: ['Movimentos'],
+                    summary: 'Buscar movimento por ID',
+                    description: 'Recupera os detalhes de um movimento específico, com opção de incluir dados relacionados',
+                    security: [{ bearerAuth: [] }],
+                    parameters: [
+                        {
+                            in: 'path',
+                            name: 'id',
+                            required: true,
+                            schema: {
+                                type: 'integer',
+                                minimum: 1
+                            },
+                            description: 'ID único do movimento'
+                        },
+                        {
+                            in: 'query',
+                            name: 'include',
+                            schema: {
+                                type: 'array',
+                                items: {
+                                    type: 'string',
+                                    enum: ['payments', 'installments', 'boletos', 'person']
+                                }
+                            },
+                            description: 'Dados relacionados a serem incluídos na resposta. Opções: payments (pagamentos), installments (parcelas), boletos (boletos bancários), person (dados da pessoa)',
+                            style: 'form',
+                            explode: false
+                        }
+                    ],
+                    responses: {
+                        200: {
+                            description: 'Movimento encontrado com sucesso',
+                            content: {
+                                'application/json': {
+                                    schema: {
+                                        $ref: '#/components/schemas/Movement'
+                                    }
+                                }
+                            }
+                        },
+                        404: {
+                            description: 'Movimento não encontrado',
+                            content: {
+                                'application/json': {
+                                    schema: {
+                                        $ref: '#/components/schemas/Error'
+                                    }
+                                }
+                            }
+                        },
+                        401: {
+                            description: 'Não autorizado. Token de autenticação inválido ou ausente',
+                            content: {
+                                'application/json': {
+                                    schema: {
+                                        $ref: '#/components/schemas/Error'
                                     }
                                 }
                             }
