@@ -1008,57 +1008,76 @@ const options = {
                     security: [{ bearerAuth: [] }],
                     parameters: [
                         {
-                            in: 'query',
                             name: 'page',
+                            in: 'query',
                             schema: {
                                 type: 'integer',
-                                default: 1,
-                                minimum: 1
+                                default: 1
                             },
-                            description: 'Número da página de resultados'
+                            description: 'Número da página'
                         },
                         {
-                            in: 'query',
                             name: 'limit',
+                            in: 'query',
                             schema: {
                                 type: 'integer',
-                                default: 10,
-                                minimum: 1,
-                                maximum: 100
+                                default: 10
                             },
                             description: 'Quantidade de registros por página'
                         },
                         {
+                            name: 'orderBy',
                             in: 'query',
+                            schema: {
+                                type: 'string',
+                                enum: ['date', 'id', 'type', 'status'],
+                                default: 'date'
+                            },
+                            description: 'Campo para ordenação dos resultados'
+                        },
+                        {
+                            name: 'orderDirection',
+                            in: 'query',
+                            schema: {
+                                type: 'string',
+                                enum: ['asc', 'desc'],
+                                default: 'desc'
+                            },
+                            description: 'Direção da ordenação'
+                        },
+                        {
+                            name: 'startDate',
+                            in: 'query',
+                            schema: {
+                                type: 'string',
+                                format: 'date'
+                            },
+                            description: 'Data inicial para filtro de movimentos'
+                        },
+                        {
+                            name: 'endDate',
+                            in: 'query',
+                            schema: {
+                                type: 'string',
+                                format: 'date'
+                            },
+                            description: 'Data final para filtro de movimentos'
+                        },
+                        {
+                            name: 'search',
+                            in: 'query',
+                            schema: {
+                                type: 'string'
+                            },
+                            description: 'Termo de busca para filtrar movimentos por descrição ou nome da pessoa'
+                        },
+                        {
                             name: 'include',
-                            schema: {
-                                type: 'array',
-                                items: {
-                                    type: 'string',
-                                    enum: ['payments', 'installments', 'boletos', 'person']
-                                }
-                            },
-                            description: 'Dados relacionados a serem incluídos na resposta. Opções: payments (pagamentos), installments (parcelas), boletos (boletos bancários), person (dados da pessoa)',
-                            style: 'form',
-                            explode: false
-                        },
-                        {
                             in: 'query',
-                            name: 'type',
                             schema: {
-                                type: 'string',
-                                enum: ['INCOME', 'EXPENSE']
+                                type: 'string'
                             },
-                            description: 'Filtrar movimentos por tipo (Receita ou Despesa)'
-                        },
-                        {
-                            in: 'query',
-                            name: 'status',
-                            schema: {
-                                type: 'string',
-                                enum: ['PENDING', 'PAID', 'CANCELLED']
-                            },
-                            description: 'Filtrar movimentos por status'
+                            description: 'Incluir dados relacionados (ex: payments.installments.boletos)'
                         }
                     ],
                     responses: {
