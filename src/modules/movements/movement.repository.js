@@ -16,6 +16,7 @@ class MovementRepository extends BaseRepository {
                 startDate, 
                 endDate,
                 include,
+                search,
                 ...otherFilters 
             } = filters;
 
@@ -38,6 +39,16 @@ class MovementRepository extends BaseRepository {
             if (startDate && endDate) {
                 whereConditions.push(`m.movement_date BETWEEN $1 AND $2`);
                 queryParams.push(startDate, endDate);
+            }
+
+            // Filtro de busca textual
+            if (search) {
+                const searchTerm = `%${search}%`;
+                whereConditions.push(`(
+                    m.description ILIKE $${queryParams.length + 1} OR 
+                    p.full_name ILIKE $${queryParams.length + 2}
+                )`);
+                queryParams.push(searchTerm, searchTerm);
             }
 
             // Construir cláusula WHERE
