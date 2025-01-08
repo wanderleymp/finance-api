@@ -1190,7 +1190,331 @@ const options = {
                         }
                     }
                 }
-            }
+            },
+            '/invoices': {
+                post: {
+                    summary: 'Criar uma nova fatura (invoice)',
+                    description: 'Endpoint para criação de uma nova fatura com todos os detalhes necessários',
+                    tags: ['Invoices', 'Financeiro'],
+                    requestBody: {
+                        required: true,
+                        content: {
+                            'application/json': {
+                                schema: {
+                                    type: 'object',
+                                    properties: {
+                                        reference_id: { 
+                                            type: 'string', 
+                                            description: 'Identificador único da fatura',
+                                            example: 'INV-2025-0001'
+                                        },
+                                        type: { 
+                                            type: 'string', 
+                                            description: 'Tipo de fatura',
+                                            enum: ['entrada', 'saida', 'servico'],
+                                            example: 'entrada'
+                                        },
+                                        number: { 
+                                            type: 'string', 
+                                            description: 'Número da fatura',
+                                            example: '12345'
+                                        },
+                                        series: { 
+                                            type: 'string', 
+                                            description: 'Série da fatura',
+                                            example: '1'
+                                        },
+                                        status: { 
+                                            type: 'string', 
+                                            description: 'Status atual da fatura',
+                                            enum: ['pendente', 'pago', 'cancelado'],
+                                            example: 'pendente'
+                                        },
+                                        environment: { 
+                                            type: 'string', 
+                                            description: 'Ambiente de emissão da fatura',
+                                            enum: ['producao', 'homologacao'],
+                                            example: 'producao'
+                                        },
+                                        pdf_url: { 
+                                            type: 'string', 
+                                            description: 'URL do arquivo PDF da fatura',
+                                            example: 'https://example.com/invoice.pdf'
+                                        },
+                                        xml_url: { 
+                                            type: 'string', 
+                                            description: 'URL do arquivo XML da fatura',
+                                            example: 'https://example.com/invoice.xml'
+                                        },
+                                        total_amount: { 
+                                            type: 'number', 
+                                            description: 'Valor total da fatura',
+                                            example: 1500.50
+                                        },
+                                        movement_id: { 
+                                            type: 'integer', 
+                                            description: 'ID do movimento relacionado',
+                                            example: 123
+                                        },
+                                        emitente_person_id: { 
+                                            type: 'integer', 
+                                            description: 'ID da pessoa emitente da fatura',
+                                            example: 456
+                                        },
+                                        destinatario_person_id: { 
+                                            type: 'integer', 
+                                            description: 'ID da pessoa destinatária da fatura',
+                                            example: 789
+                                        }
+                                    },
+                                    required: ['reference_id', 'type']
+                                }
+                            }
+                        }
+                    },
+                    responses: {
+                        '201': { 
+                            description: 'Fatura criada com sucesso',
+                            content: {
+                                'application/json': {
+                                    schema: {
+                                        type: 'object',
+                                        properties: {
+                                            invoice_id: { type: 'integer' },
+                                            reference_id: { type: 'string' },
+                                            total_amount: { type: 'number' }
+                                        }
+                                    }
+                                }
+                            }
+                        },
+                        '400': { description: 'Dados inválidos fornecidos' },
+                        '500': { description: 'Erro interno do servidor' }
+                    }
+                },
+                get: {
+                    summary: 'Listar faturas',
+                    description: 'Recupera uma lista de faturas com suporte a filtros e paginação',
+                    tags: ['Invoices', 'Financeiro'],
+                    parameters: [
+                        { 
+                            name: 'page', 
+                            in: 'query', 
+                            schema: { type: 'integer', default: 1 },
+                            description: 'Número da página para paginação'
+                        },
+                        { 
+                            name: 'limit', 
+                            in: 'query', 
+                            schema: { type: 'integer', default: 10 },
+                            description: 'Número de itens por página'
+                        },
+                        { 
+                            name: 'status', 
+                            in: 'query', 
+                            schema: { 
+                                type: 'string', 
+                                enum: ['pendente', 'pago', 'cancelado'] 
+                            },
+                            description: 'Filtrar faturas por status'
+                        },
+                        { 
+                            name: 'type', 
+                            in: 'query', 
+                            schema: { 
+                                type: 'string', 
+                                enum: ['entrada', 'saida', 'servico'] 
+                            },
+                            description: 'Filtrar faturas por tipo'
+                        },
+                        { 
+                            name: 'startDate', 
+                            in: 'query', 
+                            schema: { type: 'string', format: 'date' },
+                            description: 'Data inicial para filtro de faturas'
+                        },
+                        { 
+                            name: 'endDate', 
+                            in: 'query', 
+                            schema: { type: 'string', format: 'date' },
+                            description: 'Data final para filtro de faturas'
+                        }
+                    ],
+                    responses: {
+                        '200': { 
+                            description: 'Lista de faturas recuperada com sucesso',
+                            content: {
+                                'application/json': {
+                                    schema: {
+                                        type: 'object',
+                                        properties: {
+                                            count: { type: 'integer' },
+                                            rows: { 
+                                                type: 'array',
+                                                items: {
+                                                    type: 'object',
+                                                    properties: {
+                                                        invoice_id: { type: 'integer' },
+                                                        reference_id: { type: 'string' },
+                                                        total_amount: { type: 'number' },
+                                                        status: { type: 'string' }
+                                                    }
+                                                }
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                        },
+                        '500': { description: 'Erro interno do servidor' }
+                    }
+                }
+            },
+            '/invoices/{id}': {
+                get: {
+                    summary: 'Recuperar fatura específica',
+                    description: 'Busca os detalhes completos de uma fatura pelo seu ID',
+                    tags: ['Invoices', 'Financeiro'],
+                    parameters: [
+                        { 
+                            name: 'id', 
+                            in: 'path', 
+                            required: true, 
+                            schema: { type: 'integer' },
+                            description: 'ID da fatura a ser recuperada'
+                        }
+                    ],
+                    responses: {
+                        '200': { 
+                            description: 'Detalhes da fatura recuperados com sucesso',
+                            content: {
+                                'application/json': {
+                                    schema: {
+                                        type: 'object',
+                                        properties: {
+                                            invoice_id: { type: 'integer' },
+                                            reference_id: { type: 'string' },
+                                            type: { type: 'string' },
+                                            total_amount: { type: 'number' },
+                                            status: { type: 'string' },
+                                            emitente: { 
+                                                type: 'object',
+                                                properties: {
+                                                    person_id: { type: 'integer' },
+                                                    name: { type: 'string' }
+                                                }
+                                            },
+                                            destinatario: { 
+                                                type: 'object',
+                                                properties: {
+                                                    person_id: { type: 'integer' },
+                                                    name: { type: 'string' }
+                                                }
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                        },
+                        '404': { description: 'Fatura não encontrada' },
+                        '500': { description: 'Erro interno do servidor' }
+                    }
+                },
+                put: {
+                    summary: 'Atualizar fatura',
+                    description: 'Atualiza os detalhes de uma fatura existente',
+                    tags: ['Invoices', 'Financeiro'],
+                    parameters: [
+                        { 
+                            name: 'id', 
+                            in: 'path', 
+                            required: true, 
+                            schema: { type: 'integer' },
+                            description: 'ID da fatura a ser atualizada'
+                        }
+                    ],
+                    requestBody: {
+                        required: true,
+                        content: {
+                            'application/json': {
+                                schema: {
+                                    type: 'object',
+                                    properties: {
+                                        type: { 
+                                            type: 'string', 
+                                            description: 'Tipo de fatura',
+                                            enum: ['entrada', 'saida', 'servico']
+                                        },
+                                        status: { 
+                                            type: 'string', 
+                                            description: 'Status da fatura',
+                                            enum: ['pendente', 'pago', 'cancelado']
+                                        },
+                                        total_amount: { 
+                                            type: 'number', 
+                                            description: 'Valor total da fatura'
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    },
+                    responses: {
+                        '200': { 
+                            description: 'Fatura atualizada com sucesso',
+                            content: {
+                                'application/json': {
+                                    schema: {
+                                        type: 'object',
+                                        properties: {
+                                            invoice_id: { type: 'integer' },
+                                            reference_id: { type: 'string' },
+                                            total_amount: { type: 'number' }
+                                        }
+                                    }
+                                }
+                            }
+                        },
+                        '400': { description: 'Dados inválidos fornecidos' },
+                        '404': { description: 'Fatura não encontrada' },
+                        '500': { description: 'Erro interno do servidor' }
+                    }
+                },
+                delete: {
+                    summary: 'Excluir fatura',
+                    description: 'Remove uma fatura específica pelo seu ID',
+                    tags: ['Invoices', 'Financeiro'],
+                    parameters: [
+                        { 
+                            name: 'id', 
+                            in: 'path', 
+                            required: true, 
+                            schema: { type: 'integer' },
+                            description: 'ID da fatura a ser excluída'
+                        }
+                    ],
+                    responses: {
+                        '200': { 
+                            description: 'Fatura excluída com sucesso',
+                            content: {
+                                'application/json': {
+                                    schema: {
+                                        type: 'object',
+                                        properties: {
+                                            message: { 
+                                                type: 'string', 
+                                                example: 'Invoice deleted successfully' 
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                        },
+                        '404': { description: 'Fatura não encontrada' },
+                        '500': { description: 'Erro interno do servidor' }
+                    }
+                }
+            },
         }
     },
     apis: ['./src/routes/*.js', './src/modules/*/*.routes.js']
