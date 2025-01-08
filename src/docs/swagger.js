@@ -133,29 +133,42 @@ const options = {
                     properties: {
                         movement_id: {
                             type: 'integer',
-                            description: 'ID do movimento'
+                            description: 'ID único do movimento'
                         },
                         person_id: {
                             type: 'integer',
                             description: 'ID da pessoa associada ao movimento'
                         },
+                        person_name: {
+                            type: 'string',
+                            description: 'Nome da pessoa associada ao movimento'
+                        },
+                        movement_type_id: {
+                            type: 'integer',
+                            description: 'ID do tipo de movimento'
+                        },
+                        movement_type_name: {
+                            type: 'string',
+                            description: 'Nome do tipo de movimento',
+                            enum: ['INCOME', 'EXPENSE']
+                        },
+                        movement_status_id: {
+                            type: 'integer',
+                            description: 'ID do status do movimento'
+                        },
+                        movement_status_name: {
+                            type: 'string',
+                            description: 'Nome do status do movimento',
+                            enum: ['PENDING', 'PAID', 'CANCELLED']
+                        },
                         description: {
                             type: 'string',
                             description: 'Descrição detalhada do movimento'
                         },
-                        type: {
+                        movement_date: {
                             type: 'string',
-                            enum: ['INCOME', 'EXPENSE'],
-                            description: 'Tipo do movimento (Receita ou Despesa)'
-                        },
-                        status: {
-                            type: 'string',
-                            enum: ['PENDING', 'PAID', 'CANCELLED'],
-                            description: 'Status atual do movimento'
-                        },
-                        total_value: {
-                            type: 'number',
-                            description: 'Valor total do movimento'
+                            format: 'date',
+                            description: 'Data do movimento'
                         },
                         created_at: {
                             type: 'string',
@@ -166,6 +179,105 @@ const options = {
                             type: 'string',
                             format: 'date-time',
                             description: 'Data e hora da última atualização'
+                        },
+                        total_amount: {
+                            type: 'number',
+                            description: 'Valor total do movimento'
+                        },
+                        payments: {
+                            type: 'array',
+                            description: 'Lista de pagamentos associados ao movimento',
+                            items: {
+                                type: 'object',
+                                properties: {
+                                    payment_id: {
+                                        type: 'integer',
+                                        description: 'ID do pagamento'
+                                    },
+                                    movement_id: {
+                                        type: 'integer',
+                                        description: 'ID do movimento associado'
+                                    },
+                                    payment_type: {
+                                        type: 'string',
+                                        description: 'Tipo de pagamento'
+                                    },
+                                    total_amount: {
+                                        type: 'number',
+                                        description: 'Valor total do pagamento'
+                                    },
+                                    installments_number: {
+                                        type: 'integer',
+                                        description: 'Número de parcelas'
+                                    },
+                                    created_at: {
+                                        type: 'string',
+                                        format: 'date-time',
+                                        description: 'Data de criação do pagamento'
+                                    },
+                                    installments: {
+                                        type: 'array',
+                                        description: 'Lista de parcelas do pagamento',
+                                        items: {
+                                            type: 'object',
+                                            properties: {
+                                                installment_id: {
+                                                    type: 'integer',
+                                                    description: 'ID da parcela'
+                                                },
+                                                payment_id: {
+                                                    type: 'integer',
+                                                    description: 'ID do pagamento associado'
+                                                },
+                                                due_date: {
+                                                    type: 'string',
+                                                    format: 'date',
+                                                    description: 'Data de vencimento da parcela'
+                                                },
+                                                amount: {
+                                                    type: 'number',
+                                                    description: 'Valor da parcela'
+                                                },
+                                                status: {
+                                                    type: 'string',
+                                                    description: 'Status da parcela',
+                                                    enum: ['PENDING', 'PAID', 'OVERDUE']
+                                                },
+                                                installment_number: {
+                                                    type: 'integer',
+                                                    description: 'Número da parcela'
+                                                },
+                                                boletos: {
+                                                    type: 'array',
+                                                    description: 'Lista de boletos associados à parcela',
+                                                    items: {
+                                                        type: 'object',
+                                                        properties: {
+                                                            boleto_id: {
+                                                                type: 'integer',
+                                                                description: 'ID do boleto'
+                                                            },
+                                                            status: {
+                                                                type: 'string',
+                                                                description: 'Status do boleto'
+                                                            },
+                                                            generated_at: {
+                                                                type: 'string',
+                                                                format: 'date-time',
+                                                                description: 'Data de geração do boleto'
+                                                            },
+                                                            boleto_number: {
+                                                                type: 'string',
+                                                                description: 'Número do boleto'
+                                                            }
+                                                        }
+                                                    }
+                                                }
+                                            }
+                                        }
+                                    }
+                                }
+                            }
                         }
                     }
                 }

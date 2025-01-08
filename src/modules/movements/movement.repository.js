@@ -55,6 +55,7 @@ class MovementRepository extends BaseRepository {
                     m.movement_date,
                     m.description,
                     m.created_at,
+                    COALESCE(SUM(mp.total_amount), 0) as total_amount,
                     ms.status_name,
                     mt.type_name,
                     p.full_name as person_name
@@ -62,7 +63,13 @@ class MovementRepository extends BaseRepository {
                 LEFT JOIN movement_statuses ms ON m.movement_status_id = ms.movement_status_id
                 LEFT JOIN movement_types mt ON m.movement_type_id = mt.movement_type_id
                 LEFT JOIN persons p ON m.person_id = p.person_id
+                LEFT JOIN movement_payments mp ON m.movement_id = mp.movement_id
                 ${whereClause}
+                GROUP BY 
+                    m.movement_id, 
+                    ms.status_name, 
+                    mt.type_name, 
+                    p.full_name
                 ORDER BY m.${mappedOrderBy} ${orderDirection}
             `;
 

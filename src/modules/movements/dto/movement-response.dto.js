@@ -50,7 +50,7 @@ class MovementResponseDTO {
         this.movement_status_id = data.movement_status_id;
         this.movement_status_name = data.movement_status_name;
         this.description = data.description;
-        this.total_amount = data.total_amount;
+        this.total_amount = data.total_amount || 0;
         this.movement_date = data.movement_date;
         this.created_at = data.created_at;
         this.updated_at = data.updated_at;
