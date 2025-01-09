@@ -376,15 +376,54 @@ class MovementRepository extends BaseRepository {
 
     async findBoletosByInstallmentIds(installmentIds) {
         try {
+            if (!installmentIds || installmentIds.length === 0) {
+                return [];
+            }
+
+            logger.debug('Repository: Buscando boletos por IDs de parcelas', { 
+                installmentIds,
+                count: installmentIds.length 
+            });
+
             const query = `
-                SELECT * FROM boletos 
-                WHERE installment_id = ANY($1)
+                WITH RankedBoletos AS (
+                    SELECT 
+                        b.*,
+                        ROW_NUMBER() OVER (
+                            PARTITION BY b.installment_id 
+                            ORDER BY b.boleto_id DESC
+                        ) as row_num
+                    FROM boletos b
+                    WHERE b.installment_id = ANY($1)
+                )
+                SELECT 
+                    installment_id,
+                    boleto_id,
+                    boleto_number,
+                    boleto_url,
+                    status,
+                    generated_at,
+                    codigo_barras,
+                    linha_digitavel,
+                    pix_copia_e_cola,
+                    external_boleto_id
+                FROM RankedBoletos
+                WHERE row_num = 1
             `;
+
             const result = await this.pool.query(query, [installmentIds]);
+            
+            logger.debug('Repository: Boletos encontrados', { 
+                count: result.rows.length 
+            });
+
             return result.rows;
         } catch (error) {
-            logger.error('Erro ao buscar boletos', { error: error.message });
-            return [];
+            logger.error('Repository: Erro ao buscar boletos por IDs de parcelas', {
+                error: error.message,
+                installmentIds
+            });
+            throw error;
         }
     }
 
