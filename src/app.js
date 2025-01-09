@@ -123,7 +123,7 @@ userModule.register(app);
 app.use('/boletos', boletoModule);
 app.use('/movements', movementRoutes);
 app.use('/movement-payments', movementPaymentRoutes);
-app.use('/payment-methods', paymentMethodModule.getRouter());
+app.use('/payment-method', paymentMethodModule.getRouter());
 app.use('/addresses', addressRoutes);
 ContactModule.register(app);
 PersonContactModule.registerRoutes(app);
