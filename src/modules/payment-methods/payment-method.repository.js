@@ -163,7 +163,7 @@ class PaymentMethodRepository extends BaseRepository {
                 SELECT *
                 FROM ${this.tableName}
                 ${whereClause}
-                ORDER BY created_at DESC
+                ORDER BY method_name ASC
                 LIMIT $${paramCount + 1} OFFSET $${paramCount + 2}
             `;
 
