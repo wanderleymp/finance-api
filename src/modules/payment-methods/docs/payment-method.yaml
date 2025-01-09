@@ -1,0 +1,247 @@
+paths:
+  /payment-methods:
+    get:
+      summary: Listar formas de pagamento
+      tags:
+        - Formas de Pagamento
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: query
+          name: page
+          schema:
+            type: integer
+            default: 1
+          description: Número da página
+        - in: query
+          name: limit
+          schema:
+            type: integer
+            default: 10
+          description: Número de itens por página
+      responses:
+        '200':
+          description: Lista de formas de pagamento
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  items:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/PaymentMethod'
+                  total:
+                    type: integer
+                  page:
+                    type: integer
+                  limit:
+                    type: integer
+                  pages:
+                    type: integer
+        '401':
+          description: Não autorizado
+    
+    post:
+      summary: Criar nova forma de pagamento
+      tags:
+        - Formas de Pagamento
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PaymentMethodCreate'
+      responses:
+        '201':
+          description: Forma de pagamento criada com sucesso
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PaymentMethod'
+        '400':
+          description: Dados inválidos
+        '401':
+          description: Não autorizado
+
+  /payment-methods/{id}:
+    get:
+      summary: Buscar forma de pagamento por ID
+      tags:
+        - Formas de Pagamento
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+          description: ID da forma de pagamento
+      responses:
+        '200':
+          description: Detalhes da forma de pagamento
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PaymentMethod'
+        '404':
+          description: Forma de pagamento não encontrada
+        '401':
+          description: Não autorizado
+
+    put:
+      summary: Atualizar forma de pagamento
+      tags:
+        - Formas de Pagamento
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+          description: ID da forma de pagamento
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PaymentMethodUpdate'
+      responses:
+        '200':
+          description: Forma de pagamento atualizada com sucesso
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PaymentMethod'
+        '400':
+          description: Dados inválidos
+        '401':
+          description: Não autorizado
+        '404':
+          description: Forma de pagamento não encontrada
+
+    delete:
+      summary: Remover forma de pagamento
+      tags:
+        - Formas de Pagamento
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+          description: ID da forma de pagamento
+      responses:
+        '204':
+          description: Forma de pagamento removida com sucesso
+        '401':
+          description: Não autorizado
+        '404':
+          description: Forma de pagamento não encontrada
+
+components:
+  schemas:
+    PaymentMethod:
+      type: object
+      properties:
+        payment_method_id:
+          type: string
+        method_name:
+          type: string
+        description:
+          type: string
+        has_entry:
+          type: boolean
+        installment_count:
+          type: integer
+        days_between_installments:
+          type: integer
+        first_due_date_days:
+          type: integer
+        account_entry_id:
+          type: string
+        integration_mapping_id:
+          type: string
+        payment_document_type_id:
+          type: string
+        credential_id:
+          type: string
+        bank_account_id:
+          type: string
+        active:
+          type: boolean
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+        deleted_at:
+          type: string
+          format: date-time
+
+    PaymentMethodCreate:
+      type: object
+      required:
+        - method_name
+      properties:
+        method_name:
+          type: string
+        description:
+          type: string
+        has_entry:
+          type: boolean
+        installment_count:
+          type: integer
+        days_between_installments:
+          type: integer
+        first_due_date_days:
+          type: integer
+        account_entry_id:
+          type: string
+        integration_mapping_id:
+          type: string
+        payment_document_type_id:
+          type: string
+        credential_id:
+          type: string
+        bank_account_id:
+          type: string
+        active:
+          type: boolean
+          default: true
+
+    PaymentMethodUpdate:
+      type: object
+      properties:
+        method_name:
+          type: string
+        description:
+          type: string
+        has_entry:
+          type: boolean
+        installment_count:
+          type: integer
+        days_between_installments:
+          type: integer
+        first_due_date_days:
+          type: integer
+        account_entry_id:
+          type: string
+        integration_mapping_id:
+          type: string
+        payment_document_type_id:
+          type: string
+        credential_id:
+          type: string
+        bank_account_id:
+          type: string
+        active:
+          type: boolean
