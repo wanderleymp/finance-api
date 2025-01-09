@@ -2,7 +2,7 @@ const { logger } = require('../../middlewares/logger');
 const { ValidationError } = require('../../utils/errors');
 const IMovementPaymentService = require('./interfaces/IMovementPaymentService');
 const { MovementPaymentResponseDTO } = require('./dto/movement-payment.dto');
-const PaymentMethodsService = require('../../services/paymentMethodsService');
+const PaymentMethodService = require('../payment-methods/payment-method.service');
 const InstallmentGenerator = require('../installments/installment.generator');
 const InstallmentService = require('../installments/installment.service');
 const InstallmentRepository = require('../installments/installment.repository');
@@ -28,7 +28,9 @@ class MovementPaymentService extends IMovementPaymentService {
         this.boletoService = boletoService;
         
         // Inicializa outros serviços necessários
-        this.paymentMethodsService = new PaymentMethodsService();
+        this.paymentMethodsService = new PaymentMethodService({
+            paymentMethodRepository: null // Passar repositório se necessário
+        });
         
         // Instanciar o InstallmentService
         this.installmentService = new InstallmentService({ 

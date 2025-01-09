@@ -1,16 +1,17 @@
 const { logger } = require('../../middlewares/logger');
-const { validateRequest } = require('../../middlewares/validator');
+const { handleResponse, handleError } = require('../../utils/responseHandler');
 const paymentMethodSchema = require('./schemas/payment-method.schema');
+const { validateRequest } = require('../../middlewares/validator');
 
 class PaymentMethodController {
-    constructor({ paymentMethodService }) {
-        this.paymentMethodService = paymentMethodService;
+    constructor(paymentMethodService) {
+        this.service = paymentMethodService;
     }
 
     /**
      * Lista formas de pagamento
      */
-    async index(req, res, next) {
+    async findAll(req, res) {
         try {
             // Valida os parâmetros da requisição
             await validateRequest(req, 'query', paymentMethodSchema.list);
@@ -18,84 +19,78 @@ class PaymentMethodController {
             const { page = 1, limit = 10, ...filters } = req.query;
             logger.info('Controller: Listando formas de pagamento', { page, limit, filters });
 
-            const result = await this.paymentMethodService.findAll(
+            const result = await this.service.findAll(
                 parseInt(page),
                 parseInt(limit),
                 filters
             );
 
-            return res.json(result);
+            handleResponse(res, result);
         } catch (error) {
-            next(error);
+            handleError(res, error);
         }
     }
 
     /**
      * Busca forma de pagamento por ID
      */
-    async show(req, res, next) {
+    async findById(req, res) {
         try {
             // Valida os parâmetros da requisição
             await validateRequest(req, 'params', paymentMethodSchema.getById);
 
             const { id } = req.params;
-            logger.info('Controller: Buscando forma de pagamento', { id });
+            logger.info('Controller: Buscando forma de pagamento por ID', { id });
 
-            const result = await this.paymentMethodService.findById(parseInt(id));
-            if (!result) {
-                return res.status(404).json({ message: 'Forma de pagamento não encontrada' });
-            }
-
-            return res.json(result);
+            const result = await this.service.findById(id);
+            handleResponse(res, result);
         } catch (error) {
-            next(error);
+            handleError(res, error);
         }
     }
 
     /**
      * Cria uma nova forma de pagamento
      */
-    async store(req, res, next) {
+    async create(req, res) {
         try {
             // Valida os parâmetros da requisição
             await validateRequest(req, 'body', paymentMethodSchema.create);
 
-            logger.info('Controller: Criando forma de pagamento', { data: req.body });
+            const data = req.body;
+            logger.info('Controller: Criando forma de pagamento', { data });
 
-            const result = await this.paymentMethodService.create(req.body);
-            return res.status(201).json(result);
+            const result = await this.service.create(data);
+            handleResponse(res, result, 201);
         } catch (error) {
-            next(error);
+            handleError(res, error);
         }
     }
 
     /**
      * Atualiza uma forma de pagamento
      */
-    async update(req, res, next) {
+    async update(req, res) {
         try {
             // Valida os parâmetros da requisição
             await validateRequest(req, 'params', paymentMethodSchema.getById);
             await validateRequest(req, 'body', paymentMethodSchema.update);
 
             const { id } = req.params;
-            logger.info('Controller: Atualizando forma de pagamento', { id, data: req.body });
+            const data = req.body;
+            logger.info('Controller: Atualizando forma de pagamento', { id, data });
 
-            const result = await this.paymentMethodService.update(parseInt(id), req.body);
-            if (!result) {
-                return res.status(404).json({ message: 'Forma de pagamento não encontrada' });
-            }
-
-            return res.json(result);
+            const result = await this.service.update(id, data);
+            handleResponse(res, result);
         } catch (error) {
-            next(error);
+            handleError(res, error);
         }
     }
 
     /**
      * Remove uma forma de pagamento
      */
-    async destroy(req, res, next) {
+    async delete(req, res) {
         try {
             // Valida os parâmetros da requisição
             await validateRequest(req, 'params', paymentMethodSchema.delete);
@@ -103,14 +98,10 @@ class PaymentMethodController {
             const { id } = req.params;
             logger.info('Controller: Removendo forma de pagamento', { id });
 
-            const result = await this.paymentMethodService.delete(parseInt(id));
-            if (!result) {
-                return res.status(404).json({ message: 'Forma de pagamento não encontrada' });
-            }
-
-            return res.json(result);
+            await this.service.delete(id);
+            handleResponse(res, null, 204);
         } catch (error) {
-            next(error);
+            handleError(res, error);
         }
     }
 }
