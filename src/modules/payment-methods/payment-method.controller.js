@@ -1,7 +1,6 @@
 const { logger } = require('../../middlewares/logger');
 const { handleResponse, handleError } = require('../../utils/responseHandler');
 const paymentMethodSchema = require('./schemas/payment-method.schema');
-const { validateRequest } = require('../../middlewares/requestValidator');
 
 class PaymentMethodController {
     constructor(paymentMethodService) {
