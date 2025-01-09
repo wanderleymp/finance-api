@@ -22,11 +22,11 @@ class PaymentMethodService {
             );
 
             return {
-                items: result.rows.map(row => new PaymentMethodResponseDTO(row)),
-                total: result.count,
+                items: result.data.map(row => new PaymentMethodResponseDTO(row)),
+                total: result.total,
                 page,
                 limit,
-                pages: Math.ceil(result.count / limit)
+                pages: Math.ceil(result.total / limit)
             };
         } catch (error) {
             logger.error('Erro ao listar formas de pagamento no serviço', {

@@ -1,7 +1,7 @@
 const { logger } = require('../../middlewares/logger');
 const { handleResponse, handleError } = require('../../utils/responseHandler');
 const paymentMethodSchema = require('./schemas/payment-method.schema');
-const { validateRequest } = require('../../middlewares/validator');
+const { validateRequest } = require('../../middlewares/requestValidator');
 
 class PaymentMethodController {
     constructor(paymentMethodService) {
@@ -13,9 +13,6 @@ class PaymentMethodController {
      */
     async findAll(req, res) {
         try {
-            // Valida os parâmetros da requisição
-            await validateRequest(req, 'query', paymentMethodSchema.list);
-
             const { page = 1, limit = 10, ...filters } = req.query;
             logger.info('Controller: Listando formas de pagamento', { page, limit, filters });
 
@@ -36,9 +33,6 @@ class PaymentMethodController {
      */
     async findById(req, res) {
         try {
-            // Valida os parâmetros da requisição
-            await validateRequest(req, 'params', paymentMethodSchema.getById);
-
             const { id } = req.params;
             logger.info('Controller: Buscando forma de pagamento por ID', { id });
 
@@ -54,9 +48,6 @@ class PaymentMethodController {
      */
     async create(req, res) {
         try {
-            // Valida os parâmetros da requisição
-            await validateRequest(req, 'body', paymentMethodSchema.create);
-
             const data = req.body;
             logger.info('Controller: Criando forma de pagamento', { data });
 
@@ -72,10 +63,6 @@ class PaymentMethodController {
      */
     async update(req, res) {
         try {
-            // Valida os parâmetros da requisição
-            await validateRequest(req, 'params', paymentMethodSchema.getById);
-            await validateRequest(req, 'body', paymentMethodSchema.update);
-
             const { id } = req.params;
             const data = req.body;
             logger.info('Controller: Atualizando forma de pagamento', { id, data });
@@ -92,9 +79,6 @@ class PaymentMethodController {
      */
     async delete(req, res) {
         try {
-            // Valida os parâmetros da requisição
-            await validateRequest(req, 'params', paymentMethodSchema.delete);
-
             const { id } = req.params;
             logger.info('Controller: Removendo forma de pagamento', { id });
 

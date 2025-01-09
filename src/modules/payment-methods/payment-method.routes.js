@@ -7,38 +7,38 @@ const router = Router();
 
 module.exports = (controller) => {
     // Lista formas de pagamento
-    router.get('/payment-methods', 
+    router.get('/', 
         authMiddleware, 
-        validateRequest('query', paymentMethodSchema.list),
+        validateRequest(paymentMethodSchema.list, 'query'),
         controller.findAll.bind(controller)
     );
 
     // Busca forma de pagamento por ID
-    router.get('/payment-methods/:id', 
+    router.get('/:id', 
         authMiddleware, 
-        validateRequest('params', paymentMethodSchema.findById),
+        validateRequest(paymentMethodSchema.getById, 'params'),
         controller.findById.bind(controller)
     );
 
     // Cria uma nova forma de pagamento
-    router.post('/payment-methods', 
+    router.post('/', 
         authMiddleware, 
-        validateRequest('body', paymentMethodSchema.create),
+        validateRequest(paymentMethodSchema.create, 'body'),
         controller.create.bind(controller)
     );
 
     // Atualiza uma forma de pagamento
-    router.put('/payment-methods/:id', 
+    router.put('/:id', 
         authMiddleware, 
-        validateRequest('params', paymentMethodSchema.findById),
-        validateRequest('body', paymentMethodSchema.update),
+        validateRequest(paymentMethodSchema.getById, 'params'),
+        validateRequest(paymentMethodSchema.update, 'body'),
         controller.update.bind(controller)
     );
 
     // Remove uma forma de pagamento
-    router.delete('/payment-methods/:id', 
+    router.delete('/:id', 
         authMiddleware, 
-        validateRequest('params', paymentMethodSchema.findById),
+        validateRequest(paymentMethodSchema.getById, 'params'),
         controller.delete.bind(controller)
     );
 
