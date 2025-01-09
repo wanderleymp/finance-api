@@ -51,9 +51,9 @@ class MovementService extends IMovementService {
     /**
      * Busca movimento por ID
      */
-    async getMovementById(id, detailed = false) {
+    async getMovementById(id, detailed = false, include = []) {
         try {
-            logger.info('Serviço: Buscando movimento por ID', { id, detailed });
+            logger.info('Serviço: Buscando movimento por ID', { id, detailed, include });
             
             let movement;
             const cacheKey = this.cacheService?.generateKey(
@@ -70,7 +70,7 @@ class MovementService extends IMovementService {
                 }
             }
 
-            const data = await this.findById(id, detailed);
+            const data = await this.findById(id, detailed, include);
 
             if (!data) {
                 throw new ValidationError('Movimento não encontrado');
@@ -99,12 +99,12 @@ class MovementService extends IMovementService {
     /**
      * Busca um movimento por ID
      */
-    async findById(id, detailed = false) {
+    async findById(id, detailed = false, include = '') {
         try {
-            logger.info('Service: Buscando movimento por ID', { id, detailed });
+            logger.info('Service: Buscando movimento por ID', { id, detailed, include });
 
             // Busca movimento base
-            const movement = await this.movementRepository.findById(id);
+            const movement = await this.movementRepository.findById(id, detailed);
 
             if (!movement) {
                 logger.warn('Service: Movimento não encontrado', { id });
@@ -118,54 +118,42 @@ class MovementService extends IMovementService {
                 person_id: movement.person_id 
             });
 
-            // Se não for detailed, retorna movimento básico
-            if (!detailed) {
-                return movement;
+            // Parse include parameter
+            const includes = include ? include.split(',') : [];
+            const includePayments = includes.some(i => i.startsWith('payments'));
+            const includeItems = includes.includes('items');
+
+            // Busca pagamentos se solicitado
+            let payments = [];
+            if (includePayments) {
+                payments = await this.movementPaymentService.findByMovementId(movement.movement_id, true);
             }
 
-            // Se detailed, carrega installments e boletos
-            const [person, type, status, payments] = await Promise.all([
-                this.personRepository.findById(movement.person_id),
-                this.movementTypeRepository.findById(movement.movement_type_id),
-                this.movementStatusRepository.findById(movement.movement_status_id),
-                this.movementPaymentService.findByMovementId(movement.movement_id, true) // Passa detailed true
-            ]);
-
-            // Log dos resultados das promises
-            logger.info('Service: Resultados das promises', {
-                person_found: !!person,
-                type_found: !!type,
-                status_found: !!status,
-                payments_count: payments.length
-            });
+            // Busca items se solicitado
+            let items = [];
+            if (includeItems) {
+                items = await this.movementRepository.findItems(movement.movement_id);
+            }
 
             // Calcula totais
             const total_paid = payments
-                .filter(p => p.status_id === 2) // Status "Confirmado"
+                .filter(p => p.status_id === 2)
                 .reduce((sum, p) => sum + p.amount, 0);
 
             const total_value = payments.reduce((sum, p) => sum + p.amount, 0);
 
-            const enrichedPerson = person ? {
-                ...person,
-                contacts: await this.personRepository.findContacts(person.person_id)
-            } : null;
-
-            // Log do movimento enriquecido
-            logger.info('Service: Movimento enriquecido', {
-                movement_id: movement.movement_id,
+            // Log dos resultados
+            logger.info('Service: Resultados das buscas', {
+                payments_count: payments.length,
+                items_count: items.length,
                 total_paid,
-                total_value,
-                remaining_amount: total_value - total_paid
+                total_value
             });
 
             return {
                 ...movement,
-                person_name: person?.full_name,
-                type_name: type?.type_name,
-                status_name: status?.status_name,
-                person: enrichedPerson,
-                payments,
+                payments: includePayments ? payments : undefined,
+                items: includeItems ? items : undefined,
                 total_paid,
                 total_value,
                 remaining_amount: total_value - total_paid
@@ -266,7 +254,7 @@ class MovementService extends IMovementService {
      * Cria um novo movimento
      */
     async create(data) {
-        return this.movementRepository.transaction(async (client) => {
+        return this.movementPaymentRepository.transaction(async (client) => {
             logger.info('Service: Criando novo movimento', { data });
 
             // Separar dados do movimento e do pagamento
@@ -316,21 +304,19 @@ class MovementService extends IMovementService {
             const PersonService = require('../persons/person.service');
             const personService = new PersonService();
             
-            logger.info('Buscando contatos da pessoa', {
+            logger.info('Buscando detalhes da pessoa', {
                 personId: person.person_id
             });
 
-            const contactsResult = await personService.findContacts(person.person_id);
-            const contacts = contactsResult.items || [];
+            const personDetails = await personService.findById(person.person_id, true);
             
-            logger.info('Contatos encontrados', {
+            logger.info('Detalhes encontrados', {
                 movementId: movement.movement_id,
                 personId: person.person_id,
-                contactCount: contacts.length
             });
 
             // Processa mensagem
-            await this.billingMessageService.processBillingMessage(movement, person, contacts);
+            await this.billingMessageService.processBillingMessage(movement, person, personDetails.contacts);
             
             logger.info('Mensagem de faturamento enviada com sucesso', {
                 movementId: movement.movement_id,

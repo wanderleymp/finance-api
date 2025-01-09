@@ -140,6 +140,50 @@ class BoletoRepository extends BaseRepository {
             throw error;
         }
     }
+
+    /**
+     * Busca boletos por ID do pagamento
+     * @param {number} paymentId - ID do pagamento
+     * @returns {Promise<Array>} Lista de boletos
+     */
+    async findByPaymentId(paymentId) {
+        try {
+            logger.info('Repository: Buscando boletos por payment ID', { paymentId });
+
+            const query = `
+                SELECT 
+                    b.*,
+                    i.due_date,
+                    i.amount,
+                    i.installment_number,
+                    i.total_installments
+                FROM boletos b
+                JOIN installments i ON b.installment_id = i.installment_id
+                WHERE i.payment_id = $1
+                ORDER BY i.installment_number ASC
+            `;
+
+            const result = await this.pool.query(query, [paymentId]);
+            
+            logger.info('Repository: Boletos encontrados', { 
+                paymentId,
+                count: result.rows.length
+            });
+
+            return result.rows;
+        } catch (error) {
+            logger.error('Repository: Erro ao buscar boletos por payment ID', {
+                error: error.message,
+                paymentId
+            });
+            // Se a tabela não existir, retorna array vazio
+            if (error.code === '42P01') {
+                logger.warn('Repository: Tabela boletos não existe', { paymentId });
+                return [];
+            }
+            throw error;
+        }
+    }
 }
 
 module.exports = BoletoRepository;

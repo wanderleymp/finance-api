@@ -46,18 +46,25 @@ class MovementResponseDTO {
         this.person_name = data.person_name;
         this.person_document = data.person_document;
         this.movement_type_id = data.movement_type_id;
-        this.movement_type_name = data.movement_type_name;
+        this.type_name = data.type_name;
         this.movement_status_id = data.movement_status_id;
-        this.movement_status_name = data.movement_status_name;
-        this.description = data.description;
-        this.total_amount = data.total_amount || 0;
+        this.status_name = data.status_name;
         this.movement_date = data.movement_date;
+        this.description = data.description;
         this.created_at = data.created_at;
         this.updated_at = data.updated_at;
+        this.total_paid = data.total_paid || 0;
+        this.total_value = data.total_value || 0;
+        this.remaining_amount = data.remaining_amount || 0;
 
         // Inclui pagamentos se existirem
         if (data.payments) {
             this.payments = data.payments.map(payment => new PaymentDTO(payment));
+        }
+
+        // Inclui items se existirem
+        if (data.items) {
+            this.items = data.items;
         }
     }
 }

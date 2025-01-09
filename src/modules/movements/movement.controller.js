@@ -43,13 +43,15 @@ class MovementController {
         try {
             const id = parseInt(req.params.id);
             const detailed = req.query.detailed === 'true';
+            const include = req.query.include;
 
             logger.info('Controller: Buscando movimento por ID', {
                 id,
-                detailed
+                detailed,
+                include
             });
 
-            const result = await this.service.getMovementById(id, detailed);
+            const result = await this.service.getMovementById(id, detailed, include);
             return res.json(result);
         } catch (error) {
             logger.error('Controller: Erro ao buscar movimento', {
@@ -57,6 +59,7 @@ class MovementController {
                 error_stack: error.stack,
                 id: req.params.id,
                 detailed: req.query.detailed,
+                include: req.query.include,
                 error_full: JSON.stringify(error, Object.getOwnPropertyNames(error))
             });
             return res.status(500).json({

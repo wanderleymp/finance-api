@@ -201,6 +201,44 @@ class InstallmentRepository {
         }
     }
 
+    async findByPaymentId(paymentId) {
+        try {
+            logger.info('Repository: Buscando parcelas por payment ID', { paymentId });
+
+            const query = `
+                SELECT 
+                    i.*,
+                    ae.status as entry_status,
+                    ae.amount as entry_amount,
+                    ae.entry_date
+                FROM ${this.tableName} i
+                LEFT JOIN account_entries ae ON ae.entry_id = i.account_entry_id
+                WHERE i.payment_id = $1
+                ORDER BY i.installment_number ASC
+            `;
+
+            const result = await this.pool.query(query, [paymentId]);
+            
+            logger.info('Repository: Parcelas encontradas', { 
+                paymentId,
+                count: result.rows.length
+            });
+
+            return result.rows;
+        } catch (error) {
+            logger.error('Repository: Erro ao buscar parcelas por payment ID', {
+                error: error.message,
+                paymentId
+            });
+            // Se a tabela não existir, retorna array vazio
+            if (error.code === '42P01') {
+                logger.warn('Repository: Tabela installments não existe', { paymentId });
+                return [];
+            }
+            throw error;
+        }
+    }
+
     async create(data) {
         const client = await this.pool.connect();
         try {

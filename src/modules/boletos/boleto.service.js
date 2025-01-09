@@ -100,6 +100,22 @@ class BoletoService {
             throw new DatabaseError('Erro ao atualizar boleto');
         }
     }
+
+    /**
+     * Busca boletos por ID do pagamento
+     * @param {number} paymentId - ID do pagamento
+     * @returns {Promise<Array>} Lista de boletos
+     */
+    async findByPaymentId(paymentId) {
+        try {
+            logger.info('Serviço: Buscando boletos por payment ID', { paymentId });
+            return await this.repository.findByPaymentId(paymentId);
+        } catch (error) {
+            logger.error('Erro ao buscar boletos por payment ID', { error: error.message, paymentId });
+            // Se houver erro, retorna array vazio
+            return [];
+        }
+    }
 }
 
 module.exports = BoletoService;

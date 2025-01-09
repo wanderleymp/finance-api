@@ -145,33 +145,36 @@ class MovementPaymentService extends IMovementPaymentService {
                         return data.map(payment => new MovementPaymentResponseDTO(payment));
                     }
 
-                    // Se detailed, carrega installments e boletos
+                    // Se detailed, carrega installments
                     const paymentsWithDetails = await Promise.all(
                         data.map(async (payment) => {
                             logger.info('Serviço: Carregando detalhes para pagamento', { 
                                 payment_id: payment.payment_id 
                             });
 
-                            const [installments, boletos] = await Promise.all([
-                                this.installmentRepository.findByPaymentId(payment.payment_id),
-                                this.boletoService.findByPaymentId(payment.payment_id)
-                            ]);
+                            try {
+                                const installments = await this.installmentRepository.findByPaymentId(payment.payment_id);
 
-                            logger.info('Serviço: Detalhes carregados', { 
-                                payment_id: payment.payment_id,
-                                installments_count: installments.length,
-                                boletos_count: boletos.length
-                            });
+                                logger.info('Serviço: Detalhes carregados', { 
+                                    payment_id: payment.payment_id,
+                                    installments_count: installments.length
+                                });
 
-                            return {
-                                ...payment,
-                                installments,
-                                boletos
-                            };
+                                return new MovementPaymentResponseDTO({
+                                    ...payment,
+                                    installments
+                                });
+                            } catch (error) {
+                                logger.error('Erro ao carregar detalhes do pagamento', {
+                                    error: error.message,
+                                    payment_id: payment.payment_id
+                                });
+                                return new MovementPaymentResponseDTO(payment);
+                            }
                         })
                     );
 
-                    return paymentsWithDetails.map(payment => new MovementPaymentResponseDTO(payment));
+                    return paymentsWithDetails;
                 },
                 this.cacheTTL.detail
             );

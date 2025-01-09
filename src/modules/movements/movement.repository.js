@@ -170,22 +170,40 @@ class MovementRepository extends BaseRepository {
         }
     }
 
-    async findById(id) {
+    async findById(id, detailed = false) {
         try {
-            logger.info('Repository: Buscando movimento por ID', { id });
+            logger.info('Repository: Buscando movimento por ID', { id, detailed });
 
-            const query = `
-                SELECT 
-                    m.movement_id,
-                    m.movement_type_id,
-                    m.movement_status_id,
-                    m.person_id,
-                    m.movement_date,
-                    m.description,
-                    m.created_at
-                FROM movements m
-                WHERE m.movement_id = $1
-            `;
+            let query;
+            if (detailed) {
+                query = `
+                    SELECT 
+                        m.*,
+                        mt.type_name,
+                        ms.status_name,
+                        p.full_name as person_name,
+                        p.document_number as person_document,
+                        p.email as person_email
+                    FROM movements m
+                    LEFT JOIN movement_types mt ON mt.movement_type_id = m.movement_type_id
+                    LEFT JOIN movement_statuses ms ON ms.movement_status_id = m.movement_status_id
+                    LEFT JOIN persons p ON p.person_id = m.person_id
+                    WHERE m.movement_id = $1
+                `;
+            } else {
+                query = `
+                    SELECT 
+                        m.movement_id,
+                        m.movement_type_id,
+                        m.movement_status_id,
+                        m.person_id,
+                        m.movement_date,
+                        m.description,
+                        m.created_at
+                    FROM movements m
+                    WHERE m.movement_id = $1
+                `;
+            }
 
             logger.info('Repository: Executando query', { 
                 query, 
@@ -200,34 +218,21 @@ class MovementRepository extends BaseRepository {
                 hasRows: rows.length > 0 
             });
 
-            const movement = rows[0];
+            if (rowCount === 0) {
+                return null;
+            }
 
-            logger.info('Repository: Movimento encontrado', { 
-                movement: movement ? {
-                    movement_id: movement.movement_id,
-                    movement_type_id: movement.movement_type_id,
-                    person_id: movement.person_id
-                } : null 
-            });
-
-            return movement;
+            return rows[0];
         } catch (error) {
-            logger.error('Repository: Erro ao buscar registro por ID', {
+            logger.error('Repository: Erro ao buscar movimento por ID', {
                 error: error.message,
                 error_stack: error.stack,
-                tableName: this.tableName,
                 id
             });
             throw error;
         }
     }
 
-    /**
-     * Cria um movimento com cliente de transação
-     * @param {Object} client - Cliente de transação
-     * @param {Object} data - Dados do movimento
-     * @returns {Promise<Object>} Movimento criado
-     */
     async createWithClient(client, data) {
         try {
             logger.info('Repository: Criando movimento com cliente de transação', { data });
@@ -259,13 +264,6 @@ class MovementRepository extends BaseRepository {
         }
     }
 
-    /**
-     * Atualiza movimento com cliente de transação
-     * @param {Object} client - Cliente de transação
-     * @param {number} id - ID do movimento
-     * @param {Object} data - Dados para atualização
-     * @returns {Promise<Object>} Movimento atualizado
-     */
     async updateWithClient(client, id, data) {
         try {
             logger.info('Repository: Atualizando movimento com cliente de transação', { 
@@ -308,12 +306,6 @@ class MovementRepository extends BaseRepository {
         }
     }
 
-    /**
-     * Remove movimento com cliente de transação
-     * @param {Object} client - Cliente de transação
-     * @param {number} id - ID do movimento
-     * @returns {Promise<Object>} Movimento removido
-     */
     async deleteWithClient(client, id) {
         try {
             logger.info('Repository: Removendo movimento com cliente de transação', { id });
@@ -393,6 +385,48 @@ class MovementRepository extends BaseRepository {
         } catch (error) {
             logger.error('Erro ao buscar boletos', { error: error.message });
             return [];
+        }
+    }
+
+    /**
+     * Busca items de um movimento
+     * @param {number} movementId - ID do movimento
+     * @returns {Promise<Array>} Lista de items
+     */
+    async findItems(movementId) {
+        try {
+            logger.info('Repository: Buscando items do movimento', { movementId });
+
+            const query = `
+                SELECT 
+                    mi.*,
+                    i.description as item_description,
+                    i.code as item_code
+                FROM movement_items mi
+                LEFT JOIN items i ON i.item_id = mi.item_id
+                WHERE mi.movement_id = $1
+                ORDER BY mi.created_at DESC
+            `;
+
+            const result = await this.pool.query(query, [movementId]);
+            
+            logger.info('Repository: Items encontrados', { 
+                movementId,
+                count: result.rows.length
+            });
+
+            return result.rows;
+        } catch (error) {
+            logger.error('Repository: Erro ao buscar items do movimento', {
+                error: error.message,
+                movementId
+            });
+            // Se a tabela não existir, retorna array vazio
+            if (error.code === '42P01') {
+                logger.warn('Repository: Tabela movement_items não existe', { movementId });
+                return [];
+            }
+            throw error;
         }
     }
 }
