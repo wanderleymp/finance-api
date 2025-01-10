@@ -30,9 +30,10 @@ class BoletoResponseDTO {
         this.due_date = data.due_date;
         this.amount = data.amount;
         this.status = data.status;
-        this.url = data.url;
-        this.barcode = data.barcode;
-        this.our_number = data.our_number;
+        this.boleto_url = data.boleto_url;
+        this.codigo_barras = data.codigo_barras;
+        this.linha_digitavel = data.linha_digitavel;
+        this.pix_copia_e_cola = data.pix_copia_e_cola;
         this.created_at = data.created_at;
         this.updated_at = data.updated_at;
     }

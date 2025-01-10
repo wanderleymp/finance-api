@@ -122,6 +122,40 @@ class TaskController {
             return res.status(500).json({ error: 'Erro interno do servidor' });
         }
     }
+
+    /**
+     * Reagenda uma task para execução
+     */
+    async rescheduleTask(req, res) {
+        try {
+            const { taskId } = req.params;
+
+            logger.info('Reagendando task para execução', { taskId });
+
+            const task = await this.service.findById(taskId);
+            if (!task) {
+                return res.status(404).json({ message: 'Task não encontrada' });
+            }
+
+            // Reseta contadores e status
+            await this.service.update(taskId, {
+                status: 'pending',
+                retries: 0,
+                retry_count: 0,
+                next_retry_at: new Date(),
+                error_message: null,
+                last_error: null
+            });
+
+            res.status(200).json({ message: 'Task reagendada com sucesso' });
+        } catch (error) {
+            logger.error('Erro ao reagendar task', {
+                error: error.message,
+                stack: error.stack
+            });
+            res.status(500).json({ message: 'Erro ao reagendar task' });
+        }
+    }
 }
 
 module.exports = TaskController;

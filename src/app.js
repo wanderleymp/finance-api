@@ -107,6 +107,9 @@ taskTypesModule.register(app);
 taskDependenciesModule.register(app);
 taskLogsModule.register(app);
 
+// Registra o módulo de boletos depois que o taskService estiver disponível
+app.use('/boletos', boletoModule(app));
+
 // Registra o módulo de mensagens depois que o taskModule estiver registrado
 const messagesModuleInstance = new MessagesModule(app);
 messagesModuleInstance.initialize().catch(error => {
@@ -120,7 +123,6 @@ messagesModuleInstance.initialize().catch(error => {
 const userModule = require('./modules/user/user.module');
 userModule.register(app);
 
-app.use('/boletos', boletoModule);
 app.use('/movements', movementRoutes);
 app.use('/movement-payments', movementPaymentRoutes);
 app.use('/payment-method', paymentMethodModule.getRouter());

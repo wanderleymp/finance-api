@@ -28,7 +28,12 @@ const boletoSchema = {
 
     // Schema para atualização
     updateBoleto: Joi.object({
-        status: Joi.string().valid('A_RECEBER', 'PAGO', 'CANCELADO', 'EMITIDO').required()
+        status: Joi.string().valid('A_RECEBER', 'PAGO', 'CANCELADO', 'EMITIDO').optional(),
+        boleto_url: Joi.string().uri().max(255).optional(),
+        codigo_barras: Joi.string().max(255).optional(),
+        linha_digitavel: Joi.string().max(255).optional(),
+        pix_copia_e_cola: Joi.string().max(1024).optional(),
+        external_boleto_id: Joi.string().max(255).optional()
     }).unknown(false),
 
     // Schema para cancelamento

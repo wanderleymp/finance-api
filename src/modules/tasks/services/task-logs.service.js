@@ -18,10 +18,12 @@ class TaskLogsService {
         const params = [];
         let query = `
             SELECT 
-                id,
+                log_id,
                 task_id,
-                level,
+                status,
                 message,
+                execution_time_ms,
+                error_message,
                 metadata,
                 created_at
             FROM task_logs
@@ -45,7 +47,7 @@ class TaskLogsService {
 
         if (level) {
             params.push(level);
-            query += ` AND level = $${params.length}`;
+            query += ` AND status = $${params.length}`;
         }
 
         // Count total
@@ -75,14 +77,16 @@ class TaskLogsService {
     async findLogById(id) {
         const result = await this.pool.query(
             `SELECT 
-                id,
+                log_id,
                 task_id,
-                level,
+                status,
                 message,
+                execution_time_ms,
+                error_message,
                 metadata,
                 created_at
             FROM task_logs
-            WHERE id = $1`,
+            WHERE log_id = $1`,
             [id]
         );
 

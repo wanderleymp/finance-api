@@ -35,6 +35,30 @@ class TaskRoutes {
         // Todas as rotas são protegidas
         this.router.use(authMiddleware);
 
+        // Rotas de logs (precisam vir antes das rotas com :id)
+        this.router
+            .get('/logs',
+                (req, res, next) => validateSchema(TaskLogsSchema.query, req.query)
+                    .then(() => next())
+                    .catch(next),
+                this.taskLogsController.findLogs.bind(this.taskLogsController)
+            )
+            .get('/logs/:id',
+                this.taskLogsController.findLogById.bind(this.taskLogsController)
+            );
+
+        // Rotas específicas (também precisam vir antes das rotas com :id)
+        this.router
+            .get('/pending',
+                this.taskController.findPendingTasks.bind(this.taskController)
+            )
+            .post('/:id/process',
+                this.taskController.processTask.bind(this.taskController)
+            )
+            .post('/:taskId/reschedule',
+                this.taskController.rescheduleTask.bind(this.taskController)
+            );
+
         // Rotas RESTful básicas
         this.router
             .get('/', 
@@ -63,27 +87,6 @@ class TaskRoutes {
             )
             .delete('/:id',
                 this.taskController.delete.bind(this.taskController)
-            );
-
-        // Rotas específicas
-        this.router
-            .get('/pending',
-                this.taskController.findPendingTasks.bind(this.taskController)
-            )
-            .post('/:id/process',
-                this.taskController.processTask.bind(this.taskController)
-            );
-
-        // Rotas de logs
-        this.router
-            .get('/logs',
-                (req, res, next) => validateSchema(TaskLogsSchema.query, req.query)
-                    .then(() => next())
-                    .catch(next),
-                this.taskLogsController.findLogs.bind(this.taskLogsController)
-            )
-            .get('/logs/:id',
-                this.taskLogsController.findLogById.bind(this.taskLogsController)
             );
     }
 

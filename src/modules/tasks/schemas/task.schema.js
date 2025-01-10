@@ -19,7 +19,9 @@ const TaskSchema = {
         max_retries: Joi.number().integer().min(0).max(10).default(3)
             .description('Número máximo de tentativas'),
         dependencies: Joi.array().items(Joi.number().integer())
-            .description('IDs das tasks que precisam ser concluídas antes desta')
+            .description('IDs das tasks que precisam ser concluídas antes desta'),
+        last_error: Joi.string().allow(null)
+            .description('Último erro ocorrido')
     }),
 
     update: Joi.object({
@@ -38,7 +40,9 @@ const TaskSchema = {
         scheduled_for: Joi.date()
             .description('Data/hora agendada para execução'),
         max_retries: Joi.number().integer().min(0).max(10)
-            .description('Número máximo de tentativas')
+            .description('Número máximo de tentativas'),
+        last_error: Joi.string().allow(null)
+            .description('Último erro ocorrido')
     }),
 
     find: Joi.object({

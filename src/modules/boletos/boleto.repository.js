@@ -101,6 +101,32 @@ class BoletoRepository extends BaseRepository {
      * @param {object} data - Dados para atualização
      * @returns {Promise<object>} Boleto atualizado
      */
+    async update(boletoId, data) {
+        try {
+            logger.debug('Atualizando boleto', { boletoId, data });
+            const query = `
+                UPDATE boletos 
+                SET ${Object.keys(data).map((key, i) => `${key} = $${i + 2}`).join(', ')},
+                    updated_at = NOW()
+                WHERE boleto_id = $1
+                RETURNING *
+            `;
+            
+            const values = [boletoId, ...Object.values(data)];
+            const result = await this.pool.query(query, values);
+            return result.rows[0];
+        } catch (error) {
+            logger.error('Erro ao atualizar boleto', { error: error.message, boletoId, data });
+            throw error;
+        }
+    }
+
+    /**
+     * Atualiza um boleto existente
+     * @param {number} boletoId - ID do boleto
+     * @param {object} data - Dados para atualização
+     * @returns {Promise<object>} Boleto atualizado
+     */
     async updateBoleto(boletoId, data) {
         try {
             logger.debug('Atualizando boleto', { boletoId, data });
@@ -179,6 +205,72 @@ class BoletoRepository extends BaseRepository {
                 logger.warn('Repository: Tabela boletos não existe', { paymentId });
                 return [];
             }
+            throw error;
+        }
+    }
+
+    /**
+     * Busca dados da parcela relacionada ao boleto
+     * @param {number} boletoId - ID do boleto
+     * @returns {Promise<object>} Dados da parcela
+     */
+    async findInstallmentByBoletoId(boletoId) {
+        try {
+            logger.debug('Buscando dados da parcela por ID do boleto', { boletoId });
+
+            const query = `
+                SELECT 
+                    i.installment_id,
+                    i.amount as valor,
+                    i.due_date as data_vencimento,
+                    p.pessoa_id
+                FROM boletos b
+                JOIN installments i ON b.installment_id = i.installment_id
+                JOIN payments py ON i.payment_id = py.payment_id
+                JOIN pessoas p ON py.pessoa_id = p.pessoa_id
+                WHERE b.boleto_id = $1
+            `;
+
+            const result = await this.pool.query(query, [boletoId]);
+            return result.rows[0];
+        } catch (error) {
+            logger.error('Erro ao buscar dados da parcela', { 
+                error: error.message, 
+                boletoId 
+            });
+            throw error;
+        }
+    }
+
+    /**
+     * Busca dados necessários para emissão do boleto
+     * @param {number} boletoId - ID do boleto
+     * @returns {Promise<object>} Dados para emissão
+     */
+    async findBoletoDataForEmission(boletoId) {
+        try {
+            logger.debug('Buscando dados para emissão do boleto', { boletoId });
+
+            const query = `
+                SELECT 
+                    b.boleto_id,
+                    b.installment_id,
+                    py.payment_id,
+                    m.movement_id
+                FROM boletos b
+                JOIN installments i ON b.installment_id = i.installment_id
+                JOIN movement_payments py ON i.payment_id = py.payment_id
+                JOIN movements m ON py.movement_id = m.movement_id
+                WHERE b.boleto_id = $1
+            `;
+
+            const result = await this.pool.query(query, [boletoId]);
+            return result.rows[0];
+        } catch (error) {
+            logger.error('Erro ao buscar dados para emissão', { 
+                error: error.message, 
+                boletoId 
+            });
             throw error;
         }
     }

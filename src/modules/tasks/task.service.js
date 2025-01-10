@@ -53,6 +53,46 @@ class TaskService {
         }
     }
 
+    async getTaskTypeName(typeId) {
+        try {
+            logger.info('TaskService: Buscando nome do tipo de task', { 
+                typeId 
+            });
+
+            // Hardcoded mapping for task types (inverso do getTypeIdByName)
+            const taskTypeMap = {
+                1: 'boleto',
+                2: 'nfse',
+                3: 'email',
+                4: 'backup',
+                5: 'sync'
+            };
+
+            if (!taskTypeMap[typeId]) {
+                logger.warn('ID do tipo de task não encontrado', {
+                    typeId,
+                    availableTypes: Object.keys(taskTypeMap)
+                });
+                throw new Error(`ID do tipo de task não encontrado: ${typeId}`);
+            }
+
+            const typeName = taskTypeMap[typeId];
+
+            logger.debug('TaskService: Nome do tipo de task encontrado', { 
+                typeId,
+                typeName 
+            });
+
+            return typeName;
+        } catch (error) {
+            logger.error('Erro ao buscar nome do tipo de task', {
+                error: error.message,
+                typeId
+            });
+            throw error;
+        }
+    }
+
     async create(data) {
         try {
             logger.info('TaskService: Iniciando criação de task', { 

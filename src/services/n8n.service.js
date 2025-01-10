@@ -45,7 +45,7 @@ class N8NService {
             boletoId: boletoData.boleto_id
         });
 
-        return this._sendRequest('create-boleto', boletoData);
+        return this._sendRequest('vendas/boleto', boletoData);
     }
 
     /**

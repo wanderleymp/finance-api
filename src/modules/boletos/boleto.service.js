@@ -134,11 +134,9 @@ class BoletoService {
                     name: `Emissão de Boleto #${newBoleto.boleto_id}`,
                     description: `Processamento de boleto bancário para ID ${newBoleto.boleto_id}`,
                     payload: {
-                        billing: {
-                            boleto_id: newBoleto.boleto_id,
-                            installment_id: newBoleto.installment_id,
-                            movement_id: data.movement_id
-                        }
+                        boleto_id: newBoleto.boleto_id,
+                        installment_id: newBoleto.installment_id,
+                        movement_id: data.movement_id
                     }
                 });
 
@@ -251,9 +249,7 @@ class BoletoService {
             });
 
             return await this.repository.update(boletoId, {
-                status: 'Erro de Emissão',
-                error_message: errorMessage,
-                updated_at: new Date()
+                status: 'Erro de Emissão'
             });
         } catch (error) {
             logger.error('Erro ao marcar boleto como falho', {
@@ -272,29 +268,37 @@ class BoletoService {
                 boletoId: boleto.boleto_id 
             });
 
-            // Validações de dados do boleto
-            if (!boleto.valor || !boleto.data_vencimento || !boleto.pessoa_id) {
-                throw new Error('Dados do boleto incompletos');
+            // Buscar dados necessários
+            const boletoData = await this.repository.findBoletoDataForEmission(boleto.boleto_id);
+            if (!boletoData) {
+                throw new Error('Dados do boleto não encontrados');
+            }
+
+            if (!boletoData.movement_id) {
+                logger.error('Movimento não encontrado', { boletoData });
+                throw new Error('Movimento não encontrado');
             }
 
             // Preparar payload para N8N
             const payload = {
-                boleto_id: boleto.boleto_id,
-                valor: boleto.valor,
-                data_vencimento: boleto.data_vencimento,
-                pessoa_id: boleto.pessoa_id
+                boleto_id: boletoData.boleto_id,
+                installment_id: boletoData.installment_id,
+                payment_id: boletoData.payment_id,
+                movement_id: boletoData.movement_id
             };
 
             // Chamar serviço N8N
             const n8nResponse = await this.n8nService.createBoleto(payload);
 
             // Atualizar boleto com dados da emissão
-            return this.updateBoleto(boleto.boleto_id, {
-                status: 'Emitido',
-                url_boleto: n8nResponse.url,
+            const updateData = {
                 linha_digitavel: n8nResponse.linha_digitavel,
-                nosso_numero: n8nResponse.nosso_numero
-            });
+                boleto_url: n8nResponse.url_boleto,
+                status: 'Emitido',
+                codigo_barras: n8nResponse.nosso_numero
+            };
+
+            return this.updateBoleto(boleto.boleto_id, updateData);
 
         } catch (error) {
             logger.error('Erro na emissão de boleto via N8N', {

@@ -6,11 +6,18 @@ const fs = require('fs');
 const path = require('path');
 const { logger } = require('./middlewares/logger');
 const { systemDatabase } = require('./config/database');
+const { initializeTaskWorker } = require('./modules/tasks/init');
 
 async function startServer() {
     try {
         // Testar conexão com banco
         await systemDatabase.testConnection();
+
+        // Inicializar TaskWorker
+        const worker = initializeTaskWorker();
+        logger.info('TaskWorker iniciado', {
+            availableProcessors: Array.from(worker.processors.keys())
+        });
 
         const port = process.env.PORT || 3000;
         

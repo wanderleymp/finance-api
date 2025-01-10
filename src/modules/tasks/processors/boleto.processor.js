@@ -5,10 +5,16 @@ class BoletoProcessor extends BaseProcessor {
     constructor(taskService, boletoService) {
         super(taskService);
         this.boletoService = boletoService;
+        logger.info('BoletoProcessor construído', {
+            hasTaskService: !!taskService,
+            hasBoletoService: !!boletoService
+        });
     }
 
     getTaskType() {
-        return 'boleto';
+        const type = 'boleto';
+        logger.debug('BoletoProcessor.getTaskType() chamado', { type });
+        return type;
     }
 
     async validatePayload(payload) {
@@ -21,6 +27,9 @@ class BoletoProcessor extends BaseProcessor {
         const { boleto_id } = task.payload;
         
         try {
+            // Atualizar status para running
+            await this.updateTaskStatus(task.task_id, 'running');
+
             // Buscar boleto
             const boleto = await this.boletoService.getBoletoById(boleto_id);
             if (!boleto) {
@@ -55,11 +64,11 @@ class BoletoProcessor extends BaseProcessor {
         await this.boletoService.markAsFailed(task.payload.boleto_id, error.message);
     }
 
-    async canRetry(task) {
+    async canRetry(task, error) {
         // Lógica específica para retry de boletos
         const maxRetries = 3;
         return task.retries < maxRetries && 
-               !error.message.includes('Boleto não encontrado');
+               (!error || !error.message.includes('Boleto não encontrado'));
     }
 }
 

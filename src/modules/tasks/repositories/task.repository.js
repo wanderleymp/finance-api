@@ -94,25 +94,19 @@ class TaskRepository extends BaseRepository {
     async findPendingTasks(limit = 10) {
         const client = await this.pool.connect();
         try {
-            // Removido o log desnecessário
-            
             const query = `
                 SELECT t.*, tt.name as type_name
                 FROM tasks t
                 JOIN task_types tt ON t.type_id = tt.type_id
                 WHERE t.status = 'pending'
-                AND (t.scheduled_for IS NULL OR t.scheduled_for <= NOW())
-                AND NOT EXISTS (
-                    SELECT 1
-                    FROM task_dependencies td
-                    JOIN tasks dt ON td.dependency_id = dt.task_id
-                    WHERE td.task_id = t.task_id
-                    AND dt.status NOT IN ('completed')
+                AND (
+                    t.next_retry_at IS NULL
+                    OR t.next_retry_at <= NOW()
                 )
                 ORDER BY t.priority DESC, t.created_at ASC
                 LIMIT $1
             `;
-
+            
             const result = await client.query(query, [limit]);
             return result.rows;
         } catch (error) {
