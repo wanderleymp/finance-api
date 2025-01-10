@@ -45,9 +45,16 @@ class MovementPaymentService extends IMovementPaymentService {
         // Inicializa o gerador de parcelas com o serviço de boleto
         if (!boletoService) {
             const BoletoService = require('../boletos/boleto.service');
+            const N8nService = require('../../services/n8n.service');
+            const n8nService = N8nService;
+            const TaskService = require('../tasks/services/task.service');
+            const TaskRepository = require('../tasks/repositories/task.repository');
+            const taskRepository = new TaskRepository();
+            const taskService = new TaskService({ taskRepository });
             boletoService = new BoletoService({
                 boletoRepository: new (require('../boletos/boleto.repository'))(),
-                personRepository: new (require('../persons/person.repository'))()
+                n8nService,
+                taskService
             });
             logger.info('MovementPaymentService: BoletoService criado automaticamente', {
                 boletoServiceExists: !!boletoService

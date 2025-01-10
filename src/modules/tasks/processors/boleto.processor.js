@@ -8,7 +8,7 @@ class BoletoProcessor extends BaseProcessor {
     }
 
     getTaskType() {
-        return 'BOLETO';
+        return 'boleto';
     }
 
     async validatePayload(payload) {

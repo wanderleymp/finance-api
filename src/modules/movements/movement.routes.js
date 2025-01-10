@@ -121,6 +121,11 @@ module.exports = (controller) => {
         }
     });
 
+    // Nova rota para criar boletos de um movimento
+    router.post('/:id/boletos', 
+        controller.createBoletos.bind(controller)
+    );
+
     // Adiciona rotas de items
     router.use('/:id/items', movementItemRoutes(controller));
 

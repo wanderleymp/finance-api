@@ -790,6 +790,73 @@ class MovementService extends IMovementService {
 
         return validatedData;
     }
+
+    /**
+     * Cria boletos para um movimento
+     * @param {number} movementId - ID do movimento
+     * @returns {Promise<Array>} Boletos criados
+     */
+    async createBoletosMovimento(movementId) {
+        try {
+            logger.info('Service: Criando boletos para movimento', { movementId });
+
+            // Buscar parcelas do movimento
+            const parcelas = await this.installmentRepository.findByMovementId(movementId);
+            
+            logger.info('Service: Parcelas encontradas', { 
+                movementId, 
+                quantidadeParcelas: parcelas.length,
+                parcelas: parcelas.map(p => p.installment_id)
+            });
+
+            if (!parcelas || parcelas.length === 0) {
+                logger.warn('Service: Nenhuma parcela encontrada para o movimento', { movementId });
+                return [];
+            }
+
+            // Filtrar parcelas sem boleto
+            const parcelasSemBoleto = [];
+            for (const parcela of parcelas) {
+                const query = 'SELECT COUNT(*) as count FROM boletos WHERE installment_id = $1';
+                const result = await this.boletoRepository.pool.query(query, [parcela.installment_id]);
+                
+                if (result.rows[0].count === '0') {
+                    parcelasSemBoleto.push(parcela);
+                }
+            }
+
+            if (parcelasSemBoleto.length === 0) {
+                logger.info('Service: Todas as parcelas já possuem boleto', { movementId });
+                return [];
+            }
+
+            // Criar boletos para parcelas sem boleto
+            const boletos = [];
+            for (const parcela of parcelasSemBoleto) {
+                const boletoData = {
+                    installment_id: parcela.installment_id,
+                    status: 'A_EMITIR'
+                };
+
+                const boleto = await this.boletoRepository.createBoleto(boletoData);
+                boletos.push(boleto);
+            }
+
+            logger.info('Service: Boletos criados com sucesso', { 
+                movementId,
+                quantidadeBoletos: boletos.length
+            });
+
+            return boletos;
+        } catch (error) {
+            logger.error('Erro ao criar boletos para movimento', {
+                movementId,
+                errorMessage: error.message,
+                errorStack: error.stack
+            });
+            throw error;
+        }
+    }
 }
 
 module.exports = MovementService;

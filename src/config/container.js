@@ -12,12 +12,15 @@ const PaymentMethodRepository = require('../modules/payment-methods/payment-meth
 const InstallmentRepository = require('../modules/installments/installment.repository');
 const BoletoRepository = require('../modules/boletos/boleto.repository');
 const TaskRepository = require('../modules/tasks/repositories/task.repository');
+const TaskLogsService = require('../modules/tasks/services/task-logs.service');
+const TaskDependenciesService = require('../modules/taskdependencies/taskdependencies.service');
+const TaskTypesRepository = require('../modules/tasktypes/tasktypes.repository');
 
 // Services
 const MovementPaymentService = require('../modules/movement-payments/movement-payment.service');
 const BoletoService = require('../modules/boletos/boleto.service');
 const InstallmentService = require('../modules/installments/installment.service');
-const TaskService = require('../modules/tasks/services/task.service');
+const TaskService = require('../modules/tasks/task.service');
 const MovementService = require('../modules/movements/movement.service');
 
 // Controllers
@@ -49,12 +52,15 @@ container.register({
     installmentRepository: asClass(InstallmentRepository).singleton(),
     boletoRepository: asClass(BoletoRepository).singleton(),
     taskRepository: asClass(TaskRepository).singleton(),
+    taskTypesRepository: asClass(TaskTypesRepository).singleton(),
 
     // Services
     movementPaymentService: asClass(MovementPaymentService).singleton(),
     boletoService: asClass(BoletoService).singleton(),
     installmentService: asClass(InstallmentService).singleton(),
     taskService: asClass(TaskService).singleton(),
+    taskLogsService: asClass(TaskLogsService).singleton(),
+    taskDependenciesService: asClass(TaskDependenciesService).singleton(),
     movementService: asClass(MovementService).singleton(),
 
     // Controllers

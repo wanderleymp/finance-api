@@ -136,7 +136,6 @@ class InstallmentRepository {
 
     async findByMovementId(movementId) {
         try {
-            const { whereClause, queryParams } = this.buildWhereClause({ movement_id: movementId });
             const query = `
                 SELECT 
                     i.installment_id,
@@ -147,20 +146,14 @@ class InstallmentRepository {
                     i.balance,
                     i.status,
                     i.account_entry_id,
-                    i.expected_date,
-                    m.movement_id,
-                    m.description as movement_description,
-                    m.movement_type_id as movement_type,
-                    m.movement_status_id as movement_status
+                    i.expected_date
                 FROM installments i
                 JOIN movement_payments mp ON i.payment_id = mp.payment_id
-                JOIN movements m ON mp.movement_id = m.movement_id
-                LEFT JOIN persons p ON m.person_id = p.person_id
-                ${whereClause}
+                WHERE mp.movement_id = $1
                 ORDER BY i.installment_number
             `;
 
-            const { rows } = await this.pool.query(query, queryParams);
+            const { rows } = await this.pool.query(query, [movementId]);
             return rows;
         } catch (error) {
             logger.error('Erro ao buscar parcelas do movimento', {

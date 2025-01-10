@@ -98,6 +98,9 @@ app.use('/docs', swaggerUi.serve, swaggerUi.setup(swaggerSpec));
 app.use('/health', healthRoutes);
 authModule.register(app); // Registra rotas de autenticação antes do middleware
 
+// Middleware de autenticação para todas as rotas protegidas
+app.use(authMiddleware);
+
 // Registra o módulo de tasks e seus auxiliares primeiro
 taskModule.register(app);
 taskTypesModule.register(app);
@@ -112,9 +115,6 @@ messagesModuleInstance.initialize().catch(error => {
         stack: error.stack
     });
 });
-
-// Middleware de autenticação para todas as outras rotas
-app.use(authMiddleware);
 
 // Registra outros módulos (que precisam de autenticação)
 const userModule = require('./modules/user/user.module');

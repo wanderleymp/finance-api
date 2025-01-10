@@ -381,6 +381,21 @@ class MovementController {
             });
         }
     }
+
+    /**
+     * Cria boletos para um movimento
+     */
+    async createBoletos(req, res, next) {
+        try {
+            const { id } = req.params;
+            logger.info('Controller: Criando boletos para movimento', { id });
+            
+            const boletos = await this.service.createBoletosMovimento(parseInt(id));
+            res.status(201).json(boletos);
+        } catch (error) {
+            next(error);
+        }
+    }
 }
 
 module.exports = MovementController;

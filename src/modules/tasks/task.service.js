@@ -57,49 +57,62 @@ class TaskService {
         try {
             logger.info('TaskService: Iniciando criação de task', { 
                 taskType: data.type,
-                payload: data.payload
+                payload: JSON.stringify(data.payload),
+                name: data.name,
+                description: data.description
             });
 
-            // Busca o tipo de task
-            const taskTypeId = await this.getTypeIdByName(data.type);
+            console.log('DEBUG TaskService: Dados da task', { 
+                taskType: data.type,
+                payload: JSON.stringify(data.payload),
+                name: data.name,
+                description: data.description
+            });
 
-            logger.debug('TaskService: Tipo de task encontrado', { 
+            // Mapear tipos de tarefas para IDs fixos
+            const taskTypeMap = {
+                'boleto': 1,
+                'email': 2,
+                'nfse': 3,
+                'backup': 4,
+                'sync': 5
+            };
+
+            // Busca o tipo de task
+            const taskTypeId = taskTypeMap[data.type];
+
+            if (!taskTypeId) {
+                throw new Error(`Tipo de tarefa "${data.type}" não encontrado no mapeamento`);
+            }
+
+            logger.info('TaskService: Tipo de task identificado', { 
                 taskType: data.type,
                 taskTypeId 
             });
 
-            // Gera um nome para a task baseado no tipo e payload
-            const generateTaskName = (type, payload) => {
-                switch (type) {
-                    case 'email':
-                        return `Email para ${payload.to || 'destinatário'}`;
-                    case 'boleto':
-                        return `Boleto ${payload.documentNumber || 'sem número'}`;
-                    case 'nfse':
-                        return `NFSE ${payload.serviceDescription || 'sem descrição'}`;
-                    case 'backup':
-                        return `Backup ${new Date().toISOString().split('T')[0]}`;
-                    case 'sync':
-                        return `Sincronização ${payload.entityType || 'geral'}`;
-                    default:
-                        return `Task ${type} ${new Date().getTime()}`;
-                }
-            };
-
             // Prepara dados da task
             const taskData = {
                 type_id: taskTypeId,
-                name: generateTaskName(data.type, data.payload),
+                name: data.name || this.generateTaskName(data.type, data.payload),
                 status: 'pending',
                 payload: JSON.stringify(data.payload),
                 created_at: new Date(),
                 updated_at: new Date()
             };
 
-            logger.debug('TaskService: Dados da task preparados', { taskData });
+            logger.info('TaskService: Dados da task preparados', { taskData });
 
             // Cria task
             const result = await this.repository.create(taskData);
+
+            if (!result || !result.task_id) {
+                logger.error('TaskService: Falha na criação da tarefa', {
+                    taskData: JSON.stringify(taskData),
+                    repositoryMethod: !!this.repository.create,
+                    repositoryInstance: !!this.repository
+                });
+                throw new Error('Falha ao criar tarefa: resultado inválido');
+            }
 
             logger.info('TaskService: Task criada com sucesso', { 
                 taskId: result.task_id,
@@ -116,13 +129,32 @@ class TaskService {
 
             return result;
         } catch (error) {
-            logger.error('TaskService: Erro ao criar task', {
+            logger.error('TaskService: Erro crítico ao criar task', {
                 error: error.message,
                 errorStack: error.stack,
                 taskType: data.type,
-                payload: data.payload
+                payload: JSON.stringify(data.payload),
+                repository: !!this.repository,
+                logsService: !!this.logsService
             });
             throw error;
+        }
+    }
+
+    generateTaskName(type, payload) {
+        switch (type) {
+            case 'email':
+                return `Email para ${payload.to || 'destinatário'}`;
+            case 'boleto':
+                return `Boleto ${payload.billing?.boleto_id || 'sem número'}`;
+            case 'nfse':
+                return `NFSE ${payload.serviceDescription || 'sem descrição'}`;
+            case 'backup':
+                return `Backup ${new Date().toISOString().split('T')[0]}`;
+            case 'sync':
+                return `Sincronização ${payload.entityType || 'geral'}`;
+            default:
+                return `Task ${type} ${new Date().getTime()}`;
         }
     }
 

@@ -6,6 +6,8 @@ const TaskTypesRepository = require('./repositories/task-types.repository');
 const TaskLogsService = require('../tasklogs/tasklogs.service');
 const TaskDependenciesService = require('../taskdependencies/taskdependencies.service');
 const TaskWorker = require('./workers/task.worker');
+const BoletoProcessor = require('./processors/boleto.processor');
+const BoletoService = require('../boletos/boleto.service');
 const { logger } = require('../../middlewares/logger');
 
 class TaskModule {
@@ -27,6 +29,14 @@ class TaskModule {
             interval: 5000,
             batchSize: 10
         });
+        
+        // Registra o processador de boleto
+        const boletoService = new BoletoService({
+            boletoRepository: require('../boletos/boleto.repository'),
+            taskService: this.service
+        });
+        const boletoProcessor = new BoletoProcessor(this.service, boletoService);
+        this.worker.registerProcessor(boletoProcessor);
         
         this.controller = new TaskController(this.service);
         this.routes = TaskRoutes;

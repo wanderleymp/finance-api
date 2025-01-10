@@ -127,6 +127,21 @@ class BoletoController {
             next(error);
         }
     }
+
+    /**
+     * Cria boletos para um movimento
+     */
+    async createBoletosMovimento(req, res, next) {
+        try {
+            const { movimentoId } = req.params;
+            logger.info('Controller: Criando boletos para movimento', { movimentoId });
+            
+            const boletos = await this.boletoService.emitirBoletosMovimento(parseInt(movimentoId));
+            res.status(201).json(boletos);
+        } catch (error) {
+            next(error);
+        }
+    }
 }
 
 module.exports = BoletoController;
