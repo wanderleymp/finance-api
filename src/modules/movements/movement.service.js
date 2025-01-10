@@ -258,11 +258,39 @@ class MovementService extends IMovementService {
             logger.info('Service: Criando novo movimento', { data });
 
             // Separar dados do movimento e do pagamento
-            const { payment_method_id, ...movementData } = data;
+            const { payment_method_id, items, ...movementData } = data;
 
-            // Criar movimento
-            const movement = await this.movementRepository.createWithClient(client, movementData);
+            // Definir data do movimento se não fornecida
+            movementData.movement_date = movementData.movement_date || new Date().toISOString().split('T')[0];
+            
+            // Definir status padrão se não fornecido
+            movementData.movement_status_id = movementData.movement_status_id || 2; // Assumindo que 2 é o status padrão
+
+            // Criar movimento usando o cliente de transação
+            const movement = await this.movementRepository.create(movementData);
             logger.info('Service: Movimento criado', { movement });
+
+            // Criar itens do movimento
+            if (items && items.length > 0) {
+                const MovementItemService = require('../movement-items/movement-item.service');
+                const movementItemService = new MovementItemService();
+
+                for (const item of items) {
+                    try {
+                        await movementItemService.create({
+                            ...item,
+                            movement_id: movement.movement_id
+                        });
+                    } catch (error) {
+                        logger.error('Service: Erro ao criar item de movimento', {
+                            error: error.message,
+                            item,
+                            movementId: movement.movement_id
+                        });
+                        throw error;
+                    }
+                }
+            }
 
             // Se tiver payment_method_id, criar o movimento_payment usando a rota existente
             if (payment_method_id) {
@@ -315,8 +343,17 @@ class MovementService extends IMovementService {
                 personId: person.person_id,
             });
 
+            // Verifica se contacts existe e é um array antes de processar
+            const contacts = personDetails.contacts || [];
+            
+            // Log adicional para detalhes de contatos
+            logger.info('Detalhes de contatos', {
+                totalContacts: contacts.length,
+                contactTypes: contacts.map(c => c.type)
+            });
+
             // Processa mensagem
-            await this.billingMessageService.processBillingMessage(movement, person, personDetails.contacts);
+            await this.billingMessageService.processBillingMessage(movement, person, contacts);
             
             logger.info('Mensagem de faturamento enviada com sucesso', {
                 movementId: movement.movement_id,
@@ -490,14 +527,27 @@ class MovementService extends IMovementService {
             // Validar dados do pagamento
             const validatedPaymentData = await this.validatePaymentData(paymentData);
 
+            // Usar o serviço de pagamento de movimento
+            const MovementPaymentService = require('../movement-payments/movement-payment.service');
+            const movementPaymentService = new MovementPaymentService({
+                movementPaymentRepository: this.movementPaymentRepository,
+                cacheService: this.cacheService,
+                installmentRepository: this.installmentRepository,
+                boletoService: this.boletoService
+            });
+
+            // Usar o serviço de métodos de pagamento
+            const PaymentMethodService = require('../payment-methods/payment-method.service');
+            const paymentMethodService = new PaymentMethodService({
+                paymentMethodRepository: this.paymentMethodRepository,
+                cacheService: this.cacheService
+            });
+
             // Criar pagamento
-            const payment = await this.movementPaymentRepository.createWithClient(
-                client, 
-                { 
-                    ...validatedPaymentData, 
-                    movement_id: movementId 
-                }
-            );
+            const payment = await movementPaymentService.create({
+                ...validatedPaymentData, 
+                movement_id: movementId 
+            });
 
             // Se houver parcelas, criar parcelas
             if (paymentData.installments && paymentData.installments.length > 0) {
@@ -540,6 +590,40 @@ class MovementService extends IMovementService {
                 error: error.message,
                 movementId,
                 paymentId
+            });
+            throw error;
+        }
+    }
+
+    /**
+     * Atualiza o status do movimento
+     */
+    async updateMovementStatus(client, movementId, payment) {
+        try {
+            logger.info('Service: Atualizando status do movimento', { 
+                movementId, 
+                paymentStatus: payment?.status 
+            });
+
+            // Lógica para atualizar o status do movimento baseado no pagamento
+            // Por exemplo, se o pagamento for concluído, atualizar o status do movimento
+            const newStatus = payment?.status === 'Concluído' ? 3 : 2; // Assumindo que 2 é pendente e 3 é concluído
+
+            const updatedMovement = await this.movementRepository.update(movementId, {
+                movement_status_id: newStatus
+            });
+
+            logger.info('Service: Status do movimento atualizado', { 
+                movementId, 
+                newStatus 
+            });
+
+            return updatedMovement;
+        } catch (error) {
+            logger.error('Service: Erro ao atualizar status do movimento', {
+                error: error.message,
+                movementId,
+                errorStack: error.stack
             });
             throw error;
         }
@@ -665,6 +749,46 @@ class MovementService extends IMovementService {
         }
 
         return preparedFilters;
+    }
+
+    /**
+     * Valida os dados de pagamento
+     */
+    async validatePaymentData(paymentData) {
+        logger.info('Service: Validando dados de pagamento', { paymentData });
+
+        // Validar payment_method_id
+        if (!paymentData.payment_method_id) {
+            throw new ValidationError('ID do método de pagamento é obrigatório');
+        }
+
+        // Verificar se o método de pagamento existe
+        const paymentMethodExists = await this.paymentMethodRepository.findById(paymentData.payment_method_id);
+        if (!paymentMethodExists) {
+            throw new ValidationError('Método de pagamento não encontrado');
+        }
+
+        // Validar total_amount
+        if (!paymentData.total_amount || paymentData.total_amount <= 0) {
+            throw new ValidationError('Valor total do pagamento deve ser maior que zero');
+        }
+
+        // Preparar dados validados
+        const validatedData = {
+            payment_method_id: paymentData.payment_method_id,
+            total_amount: paymentData.total_amount
+        };
+
+        // Adicionar campos opcionais se existirem
+        if (paymentData.payment_date) {
+            validatedData.payment_date = paymentData.payment_date;
+        }
+
+        if (paymentData.observation) {
+            validatedData.observation = paymentData.observation;
+        }
+
+        return validatedData;
     }
 }
 

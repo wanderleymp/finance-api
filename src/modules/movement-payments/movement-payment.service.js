@@ -28,8 +28,12 @@ class MovementPaymentService extends IMovementPaymentService {
         this.boletoService = boletoService;
         
         // Inicializa outros serviços necessários
+        const PaymentMethodRepository = require('../payment-methods/payment-method.repository');
+        const paymentMethodRepository = new PaymentMethodRepository();
+
         this.paymentMethodsService = new PaymentMethodService({
-            paymentMethodRepository: null // Passar repositório se necessário
+            paymentMethodRepository,
+            cacheService: this.cacheService
         });
         
         // Instanciar o InstallmentService
@@ -39,6 +43,24 @@ class MovementPaymentService extends IMovementPaymentService {
         });
         
         // Inicializa o gerador de parcelas com o serviço de boleto
+        if (!boletoService) {
+            const BoletoService = require('../boletos/boleto.service');
+            boletoService = new BoletoService({
+                boletoRepository: new (require('../boletos/boleto.repository'))(),
+                personRepository: new (require('../persons/person.repository'))()
+            });
+            logger.info('MovementPaymentService: BoletoService criado automaticamente', {
+                boletoServiceExists: !!boletoService
+            });
+            logger.debug('MovementPaymentService: BoletoService criado automaticamente - detalhes', {
+                boletoService: boletoService
+            });
+        }
+
+        logger.info('MovementPaymentService: Inicializando InstallmentGenerator', {
+            boletoServiceExists: !!boletoService
+        });
+
         this.installmentGenerator = new InstallmentGenerator(
             installmentRepository,
             boletoService
@@ -206,49 +228,86 @@ class MovementPaymentService extends IMovementPaymentService {
 
             // Buscar o payment method para ver o número de parcelas
             const paymentMethod = await this.paymentMethodsService.findById(data.payment_method_id);
-            logger.info('Service: Payment method encontrado', { paymentMethod });
+            
+            // Log detalhado do método de pagamento encontrado
+            logger.info('Service: Payment method encontrado', { 
+                paymentMethod,
+                paymentMethodId: data.payment_method_id 
+            });
 
             // Gerar parcelas
             let installments = [];
-            if (paymentMethod.type === 'BOLETO') {
+            
+            // Verificação segura dos atributos do método de pagamento
+            if (!paymentMethod) {
+                throw new ValidationError('Método de pagamento não encontrado', {
+                    paymentMethodId: data.payment_method_id
+                });
+            }
+
+            // Verificar o tipo de documento de pagamento
+            const isBoletoPagamento = paymentMethod.payment_document_type_id === 1;
+            const installmentCount = paymentMethod.installment_count || 1;
+
+            if (isBoletoPagamento) {
                 // Se for boleto, usa o InstallmentGenerator que já cuida da criação do boleto
                 installments = await this.installmentGenerator.generateInstallments(payment, paymentMethod);
             } else {
                 // Para outros métodos de pagamento, usa o InstallmentService
-                const installmentAmount = data.total_amount / (paymentMethod.max_installments || 1);
+                const installmentAmount = data.total_amount / installmentCount;
                 
-                for (let i = 1; i <= (paymentMethod.max_installments || 1); i++) {
+                for (let i = 1; i <= installmentCount; i++) {
                     const dueDate = new Date();
                     dueDate.setMonth(dueDate.getMonth() + i - 1);
 
                     const installment = await this.installmentService.createInstallment({
                         payment_id: payment.payment_id,
                         installment_number: i,
-                        total_installments: paymentMethod.max_installments,
+                        total_installments: installmentCount,
                         amount: installmentAmount,
                         balance: installmentAmount,
                         due_date: dueDate.toISOString().split('T')[0],
                         status: 'PENDING',
-                        account_entry_id: paymentMethod.data.account_entry_id
+                        account_entry_id: paymentMethod.account_entry_id
                     });
 
                     installments.push(installment);
                 }
             }
 
-            logger.info('Service: Parcelas geradas', { installments });
+            logger.info('Service: Parcelas geradas', { 
+                installmentsCount: installments.length,
+                paymentId: payment.payment_id 
+            });
 
             return {
                 ...payment,
                 installments
             };
         } catch (error) {
+            // Log detalhado do erro
             logger.error('Service: Erro ao criar movimento_payment', {
                 error: error.message,
+                errorName: error.constructor.name,
                 error_stack: error.stack,
-                data
+                inputData: data,
+                paymentMethodId: data?.payment_method_id
             });
-            throw error;
+
+            // Tratamento de erro para frontend
+            if (error instanceof ValidationError) {
+                throw error; // Já é um erro tratado
+            }
+
+            // Erros genéricos
+            if (error.message.includes('payment_method_id')) {
+                throw new ValidationError('Método de pagamento inválido', {
+                    paymentMethodId: data?.payment_method_id
+                });
+            }
+
+            // Erro genérico para o frontend
+            throw new Error('Erro ao processar pagamento. Por favor, tente novamente.');
         }
     }
 

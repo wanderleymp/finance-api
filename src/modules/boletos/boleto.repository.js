@@ -124,10 +124,8 @@ class BoletoRepository extends BaseRepository {
             const query = `
                 INSERT INTO boletos (
                     installment_id,
-                    status,
-                    created_at,
-                    updated_at
-                ) VALUES ($1, $2, NOW(), NOW())
+                    status
+                ) VALUES ($1, $2)
                 RETURNING *
             `;
             const result = await this.pool.query(query, [
