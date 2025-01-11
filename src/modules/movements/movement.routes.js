@@ -126,6 +126,9 @@ module.exports = (controller) => {
         controller.createBoletos.bind(controller)
     );
 
+    // Rota para cancelar movimento
+    router.post('/:id/cancel', controller.cancel.bind(controller));
+
     // Adiciona rotas de items
     router.use('/:id/items', movementItemRoutes(controller));
 

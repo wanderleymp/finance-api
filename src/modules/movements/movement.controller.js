@@ -396,6 +396,36 @@ class MovementController {
             next(error);
         }
     }
+
+    /**
+     * Cancela um movimento
+     * @param {Object} req - Requisição HTTP
+     * @param {Object} res - Resposta HTTP
+     * @returns {Object} Resposta com resultado do cancelamento
+     */
+    async cancel(req, res) {
+        try {
+            const { id } = req.params;
+            
+            // Chama o método de cancelamento no serviço
+            const canceledMovement = await this.service.cancelMovement(id);
+            
+            return res.json(canceledMovement);
+        } catch (error) {
+            // Tratamento de erro
+            logger.error('Erro ao cancelar movimento', { 
+                movementId: req.params.id, 
+                error: error.message 
+            });
+            
+            // Verifica se é um erro de validação
+            if (error instanceof ValidationError) {
+                return res.status(400).json({ error: error.message });
+            }
+            
+            return res.status(500).json({ error: 'Erro interno ao cancelar movimento' });
+        }
+    }
 }
 
 module.exports = MovementController;

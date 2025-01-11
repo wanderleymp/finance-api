@@ -7,6 +7,7 @@ const MovementStatusRepository = require('../movement-statuses/movement-status.r
 const MovementPaymentRepository = require('../movement-payments/movement-payment.repository');
 const PaymentMethodRepository = require('../payment-methods/payment-method.repository');
 const InstallmentRepository = require('../installments/installment.repository');
+const InstallmentService = require('../installments/installment.service');
 const MovementPaymentService = require('../movement-payments/movement-payment.service');
 const BoletoService = require('../boletos/boleto.service');
 const BoletoRepository = require('../boletos/boleto.repository');
@@ -40,6 +41,15 @@ const boletoService = new BoletoService({
     cacheService
 });
 
+// Instancia o InstallmentService
+const installmentService = new InstallmentService({ 
+    installmentRepository,
+    cacheService,
+    boletoRepository,
+    boletoService,
+    n8nService
+});
+
 // Instancia o MovementPaymentService
 const movementPaymentService = new MovementPaymentService({ 
     movementPaymentRepository,
@@ -60,7 +70,9 @@ const service = new MovementService({
     installmentRepository,
     personContactRepository,
     movementPaymentRepository,
-    boletoRepository
+    boletoRepository,
+    boletoService,
+    installmentService
 });
 
 // Instancia o controller

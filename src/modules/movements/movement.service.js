@@ -24,7 +24,9 @@ class MovementService extends IMovementService {
         movementPaymentService,
         personContactRepository,
         boletoRepository,
-        movementPaymentRepository // Adicionando este parâmetro
+        boletoService, // Adicionar boletoService
+        movementPaymentRepository, // Adicionando este parâmetro
+        installmentService // Adicionar installmentService
     }) {
         super();
         
@@ -38,7 +40,9 @@ class MovementService extends IMovementService {
         this.movementPaymentService = movementPaymentService;
         this.personContactRepository = personContactRepository;
         this.boletoRepository = boletoRepository;
+        this.boletoService = boletoService; // Adicionar atribuição
         this.movementPaymentRepository = movementPaymentRepository; // Adicionando esta linha
+        this.installmentService = installmentService; // Adicionar atribuição
         this.billingMessageService = new BillingMessageService();
 
         this.cachePrefix = 'movements';
@@ -856,6 +860,74 @@ class MovementService extends IMovementService {
             });
             throw error;
         }
+    }
+
+    /**
+     * Cancela um movimento
+     * @param {number} movementId - ID do movimento a ser cancelado
+     * @returns {Promise<Object>} Resultado do cancelamento
+     */
+    async cancelMovement(movementId) {
+        // Verifica se o movimento existe
+        const movement = await this.findById(movementId);
+        if (!movement) {
+            throw new ValidationError('Movimento não encontrado');
+        }
+
+        // Valida se o movimento já não está cancelado
+        if (movement.movement_status_id === 99) {
+            throw new ValidationError('Movimento já está cancelado');
+        }
+
+        // Atualiza status do movimento para 99 (cancelado)
+        await this.movementRepository.update(movementId, { 
+            movement_status_id: 99 
+        });
+
+        // Busca installments do movimento
+        const installments = await this.installmentRepository.findByMovementId(movementId);
+        
+        // Log para rastrear parcelas
+        logger.info('Parcelas encontradas para cancelamento', {
+            movementId,
+            installmentsCount: installments.length,
+            installmentIds: installments.map(i => i.installment_id)
+        });
+
+        // Processamento assíncrono para cancelar boletos
+        const cancelResults = await Promise.all(installments.map(async (installment) => {
+            try {
+                // Cancela boletos da parcela
+                const canceledBoletos = await this.installmentService.cancelInstallmentBoletos(installment.installment_id);
+                
+                logger.info('Boletos cancelados da parcela', {
+                    installmentId: installment.installment_id,
+                    canceledBoletosCount: canceledBoletos.length
+                });
+
+                return {
+                    installmentId: installment.installment_id,
+                    canceledBoletosCount: canceledBoletos.length
+                };
+            } catch (error) {
+                // Log de erro, mas não interrompe o processamento
+                logger.error('Erro ao processar cancelamento de boletos da parcela', { 
+                    installmentId: installment.installment_id, 
+                    error: error.message 
+                });
+
+                return {
+                    installmentId: installment.installment_id,
+                    error: error.message
+                };
+            }
+        }));
+
+        return { 
+            message: 'Movimento cancelado com sucesso', 
+            movement_id: movementId,
+            cancelResults 
+        };
     }
 }
 
