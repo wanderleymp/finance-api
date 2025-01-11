@@ -500,7 +500,6 @@ class InstallmentRepository {
                 method: 'findInstallmentWithDetails' 
             });
 
-            const { whereClause, queryParams } = this.buildWhereClause({ installment_id: id });
             const query = `
                 SELECT 
                     p.full_name,
@@ -533,9 +532,11 @@ class InstallmentRepository {
                         status,
                         generated_at
                     FROM boletos
+                    WHERE status = 'A_RECEBER'
                     ORDER BY installment_id, boleto_id DESC
                 ) b ON b.installment_id = i.installment_id
-                ${whereClause ? whereClause + ' AND ' : 'WHERE '}m.movement_status_id = 2
+                WHERE i.installment_id = $1 
+                AND m.movement_status_id = 2
             `;
 
             logger.info('Executando query de detalhes da parcela', { 
@@ -543,7 +544,7 @@ class InstallmentRepository {
                 id 
             });
 
-            const { rows } = await this.pool.query(query, queryParams);
+            const { rows } = await this.pool.query(query, [id]);
             
             logger.info('Resultado da busca de detalhes da parcela', { 
                 rowCount: rows.length,

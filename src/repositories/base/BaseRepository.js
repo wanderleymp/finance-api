@@ -75,7 +75,7 @@ class BaseRepository {
             // Executa as queries
             const [dataResult, countResult] = await Promise.all([
                 this.pool.query(query, queryParams),
-                this.pool.query(countQuery, options.queryParams || [])
+                this.pool.query(countQuery, queryParams.slice(0, -2)) // Remove os últimos dois parâmetros de paginação
             ]);
 
             // Log dos resultados
@@ -457,7 +457,7 @@ class BaseRepository {
         return {
             whereClause,
             queryParams,
-            paramCount
+            paramCount: queryParams.length
         };
     }
 }

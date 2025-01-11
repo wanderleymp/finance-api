@@ -18,7 +18,42 @@ class BoletoService {
     async listBoletos(page = 1, limit = 10, filters = {}) {
         try {
             logger.info('Serviço: Listando boletos', { page, limit, filters });
-            return await this.repository.findAll(page, limit, filters);
+
+            // Mapeamento de chaves de filtro
+            const keyMap = {
+                installment_id: 'installment_id',
+                status: 'status'
+            };
+
+            const formattedFilters = {};
+
+            // Converter filtros
+            Object.keys(filters).forEach(key => {
+                const mappedKey = keyMap[key] || key;
+                formattedFilters[mappedKey] = filters[key];
+            });
+
+            logger.debug('Serviço: Filtros formatados', { 
+                originalFilters: filters, 
+                formattedFilters 
+            });
+
+            const result = await this.repository.findAll(page, limit, formattedFilters);
+
+            logger.info('Serviço: Resultado da listagem de boletos', { 
+                total: result.total,
+                page: result.page,
+                limit: result.limit,
+                itemsCount: result.data?.length
+            });
+
+            // Transformar resultado para manter compatibilidade
+            return {
+                total: result.total,
+                page: result.page,
+                limit: result.limit,
+                items: result.data || []
+            };
         } catch (error) {
             logger.error('Erro ao listar boletos', { error: error.message, filters });
             throw new DatabaseError('Erro ao listar boletos');
@@ -177,6 +212,13 @@ class BoletoService {
         try {
             logger.info('Buscando boleto por ID', { boletoId });
             const boleto = await this.repository.findById(boletoId);
+            
+            logger.debug('Resultado da busca de boleto por ID', { 
+                boletoId, 
+                boleto,
+                hasExternalData: !!boleto?.external_data,
+                externalDataKeys: boleto ? Object.keys(boleto.external_data || {}) : null
+            });
             
             if (!boleto) {
                 throw new Error(`Boleto com ID ${boletoId} não encontrado`);

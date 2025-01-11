@@ -9,15 +9,19 @@ class InstallmentService {
     constructor({ 
         installmentRepository, 
         cacheService,
-        boletoService
+        boletoService,
+        boletoRepository,
+        n8nService
     } = {}) {
         this.repository = installmentRepository;
         this.cacheService = cacheService;
         this.boletoService = boletoService;
+        this.boletoRepository = boletoRepository;
+        this.n8nService = n8nService;
         this.cachePrefix = 'installments';
         this.cacheTTL = {
             list: 300, // 5 minutos
-            detail: 600 // 10 minutos
+            detail: 300 // 5 minutos
         };
     }
 
@@ -392,6 +396,80 @@ class InstallmentService {
                 error: error.message,
                 error_stack: error.stack,
                 installmentId
+            });
+            throw error;
+        }
+    }
+
+    /**
+     * Cancela boletos de uma parcela
+     * @param {number} installmentId - ID da parcela
+     * @returns {Promise<Array>} Boletos cancelados
+     */
+    async cancelInstallmentBoletos(installmentId) {
+        try {
+            logger.info('Serviço: Cancelando boletos da parcela', { installmentId });
+
+            // Busca detalhes da parcela com boletos
+            const installmentDetails = await this.repository.findInstallmentWithDetails(installmentId);
+            
+            if (!installmentDetails) {
+                logger.warn('Parcela não encontrada para cancelamento', { installmentId });
+                return [];
+            }
+
+            // Verifica se há boleto para cancelar
+            if (!installmentDetails.boleto_id) {
+                logger.info('Nenhum boleto encontrado para cancelamento', { installmentId });
+                return [];
+            }
+
+            const canceledBoletos = [];
+
+            try {
+                // Recupera external_boleto_id
+                const boletoDetails = await this.boletoService.findById(installmentDetails.boleto_id);
+                
+                // Extrair external_boleto_id de diferentes formatos
+                const externalBoletoId = 
+                    boletoDetails.external_boleto_id || 
+                    boletoDetails.external_data?.boleto_id || 
+                    boletoDetails.external_data;
+                
+                if (!externalBoletoId) {
+                    logger.warn('Boleto sem external_boleto_id', { 
+                        boletoId: installmentDetails.boleto_id,
+                        boletoDetails 
+                    });
+                    return [];
+                }
+
+                // Chama serviço do N8N para cancelamento
+                const n8nResponse = await this.n8nService.cancelBoleto({
+                    external_boleto_id: externalBoletoId
+                });
+
+                // Atualiza status do boleto
+                const updatedBoleto = await this.boletoService.updateBoleto(installmentDetails.boleto_id, {
+                    status: 'Cancelado'
+                });
+
+                canceledBoletos.push(updatedBoleto);
+
+            } catch (boletoError) {
+                logger.error('Erro ao cancelar boleto individual', {
+                    installmentId,
+                    boletoId: installmentDetails.boleto_id,
+                    error: boletoError.message
+                });
+            }
+
+            return canceledBoletos;
+        } catch (error) {
+            logger.error('Erro ao cancelar boletos da parcela', {
+                installmentId,
+                error: error.message,
+                stack: error.stack
             });
             throw error;
         }

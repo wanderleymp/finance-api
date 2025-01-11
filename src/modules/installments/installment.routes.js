@@ -62,5 +62,12 @@ module.exports = (installmentController) => {
         installmentController.registerPayment.bind(installmentController)
     );
 
+    // Cancela boletos de uma parcela
+    router.put('/:id/boleto/cancelar', 
+        authMiddleware,
+        validateRequest(installmentSchema.cancelBoletos),
+        installmentController.cancelInstallmentBoletos.bind(installmentController)
+    );
+
     return router;
 };

@@ -1,6 +1,8 @@
 const { logger } = require('../../middlewares/logger');
+const { ValidationError } = require('../../utils/errors');
 const installmentSchema = require('./schemas/installment.schema'); 
 const UpdateInstallmentDTO = require('./dto/update-installment.dto'); 
+const InstallmentService = require('./installment.service');
 
 class InstallmentController {
     /**
@@ -29,10 +31,22 @@ class InstallmentController {
                 filters
             );
 
-            return res.json(result);
+            return res.json({
+                success: true,
+                data: result
+            });
         } catch (error) {
             logger.error('Erro ao listar parcelas', { error: error.message });
-            return res.status(500).json({ message: 'Erro ao listar parcelas' });
+            return res.status(500).json({
+                success: false,
+                message: 'Erro interno ao listar parcelas',
+                errors: [
+                    {
+                        code: 'LIST_INSTALLMENTS_ERROR',
+                        message: error.message
+                    }
+                ]
+            });
         }
     }
 
@@ -47,10 +61,22 @@ class InstallmentController {
             
             const result = await this.service.getInstallmentById(parseInt(id));
             
-            return res.json(result);
+            return res.json({
+                success: true,
+                data: result
+            });
         } catch (error) {
             logger.error('Erro ao buscar parcela', { error: error.message });
-            return res.status(500).json({ message: 'Erro ao buscar parcela' });
+            return res.status(500).json({
+                success: false,
+                message: 'Erro interno ao buscar parcela',
+                errors: [
+                    {
+                        code: 'GET_INSTALLMENT_ERROR',
+                        message: error.message
+                    }
+                ]
+            });
         }
     }
 
@@ -65,10 +91,22 @@ class InstallmentController {
             
             const result = await this.service.getInstallmentDetails(parseInt(id));
             
-            return res.json(result);
+            return res.json({
+                success: true,
+                data: result
+            });
         } catch (error) {
             logger.error('Erro ao buscar detalhes da parcela', { error: error.message });
-            return res.status(500).json({ message: 'Erro ao buscar detalhes da parcela' });
+            return res.status(500).json({
+                success: false,
+                message: 'Erro interno ao buscar detalhes da parcela',
+                errors: [
+                    {
+                        code: 'GET_INSTALLMENT_DETAILS_ERROR',
+                        message: error.message
+                    }
+                ]
+            });
         }
     }
 
@@ -83,10 +121,22 @@ class InstallmentController {
 
             const boleto = await this.service.generateBoleto(id);
 
-            return res.status(201).json(boleto);
+            return res.status(201).json({
+                success: true,
+                data: boleto
+            });
         } catch (error) {
             logger.error('Erro ao gerar boleto', { error: error.message });
-            return res.status(500).json({ message: 'Erro ao gerar boleto' });
+            return res.status(500).json({
+                success: false,
+                message: 'Erro interno ao gerar boleto',
+                errors: [
+                    {
+                        code: 'GENERATE_BOLETO_ERROR',
+                        message: error.message
+                    }
+                ]
+            });
         }
     }
 
@@ -141,14 +191,26 @@ class InstallmentController {
             if (error.message.includes('obrigatória') || error.message.includes('inválida')) {
                 return res.status(400).json({
                     success: false,
-                    message: error.message
+                    message: error.message,
+                    errors: [
+                        {
+                            code: 'VALIDATION_ERROR',
+                            message: error.message
+                        }
+                    ]
                 });
             }
 
             // Outros erros
             return res.status(500).json({
                 success: false,
-                message: 'Erro interno ao atualizar parcela'
+                message: 'Erro interno ao atualizar parcela',
+                errors: [
+                    {
+                        code: 'UPDATE_INSTALLMENT_ERROR',
+                        message: error.message
+                    }
+                ]
             });
         }
     }
@@ -169,12 +231,42 @@ class InstallmentController {
             );
 
             // Retorna a parcela atualizada
-            res.status(200).json({
+            return res.status(200).json({
                 success: true,
                 data: updatedInstallment
             });
         } catch (error) {
-            next(error);
+            logger.error('Erro ao atualizar parcela', {
+                error: error.message,
+                body: req.body,
+                stack: error.stack
+            });
+
+            // Trata erros de validação
+            if (error.message.includes('obrigatória') || error.message.includes('inválida')) {
+                return res.status(400).json({
+                    success: false,
+                    message: error.message,
+                    errors: [
+                        {
+                            code: 'VALIDATION_ERROR',
+                            message: error.message
+                        }
+                    ]
+                });
+            }
+
+            // Outros erros
+            return res.status(500).json({
+                success: false,
+                message: 'Erro interno ao atualizar parcela',
+                errors: [
+                    {
+                        code: 'UPDATE_INSTALLMENT_ERROR',
+                        message: error.message
+                    }
+                ]
+            });
         }
     }
 
@@ -191,7 +283,13 @@ class InstallmentController {
             if (isNaN(id)) {
                 return res.status(400).json({
                     success: false,
-                    message: 'ID de parcela inválido'
+                    message: 'ID de parcela inválido',
+                    errors: [
+                        {
+                            code: 'INVALID_ID',
+                            message: 'ID de parcela inválido'
+                        }
+                    ]
                 });
             }
 
@@ -229,7 +327,7 @@ class InstallmentController {
             );
 
             // Retorna a parcela atualizada
-            res.status(200).json({
+            return res.status(200).json({
                 success: true,
                 data: updatedInstallment
             });
@@ -245,14 +343,116 @@ class InstallmentController {
             if (error instanceof ValidationError) {
                 return res.status(400).json({
                     success: false,
-                    message: error.message
+                    message: error.message,
+                    errors: [
+                        {
+                            code: 'VALIDATION_ERROR',
+                            message: error.message
+                        }
+                    ]
                 });
             }
 
             // Outros erros
             return res.status(500).json({
                 success: false,
-                message: 'Erro interno ao registrar pagamento da parcela'
+                message: 'Erro interno ao registrar pagamento da parcela',
+                errors: [
+                    {
+                        code: 'REGISTER_PAYMENT_ERROR',
+                        message: error.message
+                    }
+                ]
+            });
+        }
+    }
+
+    /**
+     * Cancela boletos de uma parcela
+     * @route POST /installments/:id/boleto/cancelar
+     */
+    async cancelBoleto(req, res) {
+        try {
+            const { id } = req.params;
+            logger.info(`Controller: Cancelando boletos da parcela ${id}`);
+
+            const installmentService = new InstallmentService();
+            const canceledBoletos = await installmentService.cancelInstallmentBoletos(id);
+
+            if (canceledBoletos.length === 0) {
+                return res.status(400).json({
+                    success: false,
+                    message: 'Não foi possível cancelar os boletos',
+                    errors: [{
+                        code: 'NO_BOLETOS_CANCELED',
+                        message: 'Nenhum boleto encontrado ou cancelado'
+                    }]
+                });
+            }
+
+            return res.status(200).json({
+                success: true,
+                message: 'Boletos cancelados com sucesso',
+                data: canceledBoletos
+            });
+        } catch (error) {
+            logger.error('Erro no cancelamento de boletos', {
+                errorMessage: error.message,
+                errorStack: error.stack
+            });
+
+            return res.status(500).json({
+                success: false,
+                message: 'Erro interno ao processar o cancelamento de boletos',
+                errors: [
+                    {
+                        code: 'CANCEL_BOLETO_ERROR',
+                        message: error.message
+                    }
+                ]
+            });
+        }
+    }
+
+    async cancelInstallmentBoletos(req, res) {
+        try {
+            const { id } = req.params;
+            logger.info(`Controller: Cancelando boletos da parcela ${id}`);
+
+            const installmentService = new InstallmentService();
+            const canceledBoletos = await installmentService.cancelInstallmentBoletos(id);
+
+            if (canceledBoletos.length === 0) {
+                return res.status(400).json({
+                    success: false,
+                    message: 'Não foi possível cancelar os boletos',
+                    errors: [{
+                        code: 'NO_BOLETOS_CANCELED',
+                        message: 'Nenhum boleto encontrado ou cancelado'
+                    }]
+                });
+            }
+
+            return res.status(200).json({
+                success: true,
+                message: 'Boletos cancelados com sucesso',
+                data: canceledBoletos
+            });
+        } catch (error) {
+            logger.error('Erro no cancelamento de boletos', {
+                errorMessage: error.message,
+                errorStack: error.stack
+            });
+
+            return res.status(500).json({
+                success: false,
+                message: 'Erro interno ao processar o cancelamento de boletos',
+                errors: [
+                    {
+                        code: 'CANCEL_BOLETO_ERROR',
+                        message: error.message
+                    }
+                ]
             });
         }
     }

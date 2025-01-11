@@ -56,6 +56,13 @@ const installmentSchema = {
     // Esquema para parâmetros de pagamento de parcela
     registerPaymentParams: Joi.object({
         id: Joi.number().integer().positive().required()
+    }),
+
+    // Cancelamento de boletos
+    cancelBoletos: Joi.object({
+        params: Joi.object({
+            id: Joi.number().integer().positive().required()
+        })
     })
 };
 
