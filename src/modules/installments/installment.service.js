@@ -345,6 +345,15 @@ class InstallmentService {
             // Busca os detalhes atualizados da parcela
             const updatedInstallment = await this.repository.findInstallmentWithDetails(id);
 
+            // Chamada assíncrona para cancelar boleto
+            this.cancelInstallmentBoletoAsync(id)
+                .catch(error => {
+                    logger.error('Erro ao cancelar boleto de forma assíncrona', {
+                        installmentId: id,
+                        errorMessage: error.message
+                    });
+                });
+
             return new InstallmentResponseDTO(updatedInstallment);
         } catch (error) {
             await client.query('ROLLBACK');
@@ -357,6 +366,33 @@ class InstallmentService {
             throw error;
         } finally {
             client.release();
+        }
+    }
+
+    /**
+     * Método auxiliar para cancelar boleto de forma assíncrona
+     * @param {number} installmentId - ID da parcela
+     * @returns {Promise<void>}
+     */
+    async cancelInstallmentBoletoAsync(installmentId) {
+        try {
+            logger.info('Iniciando cancelamento de boleto de forma assíncrona', { installmentId });
+
+            const canceledBoletos = await this.cancelInstallmentBoletos(installmentId);
+
+            if (canceledBoletos.length > 0) {
+                logger.info('Boleto cancelado com sucesso de forma assíncrona', { 
+                    installmentId, 
+                    canceledBoletosCount: canceledBoletos.length 
+                });
+            }
+        } catch (error) {
+            logger.error('Erro no cancelamento assíncrono de boleto', {
+                installmentId,
+                errorMessage: error.message,
+                errorStack: error.stack
+            });
+            // Não relança o erro para não afetar o fluxo principal de pagamento
         }
     }
 

@@ -19,26 +19,22 @@ class InstallmentController {
      */
     async index(req, res, next) {
         try {
-            const { page, limit, ...filters } = req.query;
+            const { page = 1, limit = 10, ...filters } = req.query;
             
             logger.info('Controller: Listando parcelas', { 
                 filters 
             });
 
             const result = await this.service.listInstallments(
-                parseInt(page) || 1, 
-                parseInt(limit) || 10, 
+                parseInt(page), 
+                parseInt(limit), 
                 filters
             );
 
-            return res.json({
-                success: true,
-                data: result
-            });
+            return res.json(result);
         } catch (error) {
             logger.error('Erro ao listar parcelas', { error: error.message });
             return res.status(500).json({
-                success: false,
                 message: 'Erro interno ao listar parcelas',
                 errors: [
                     {
@@ -61,14 +57,10 @@ class InstallmentController {
             
             const result = await this.service.getInstallmentById(parseInt(id));
             
-            return res.json({
-                success: true,
-                data: result
-            });
+            return res.json(result);
         } catch (error) {
             logger.error('Erro ao buscar parcela', { error: error.message });
             return res.status(500).json({
-                success: false,
                 message: 'Erro interno ao buscar parcela',
                 errors: [
                     {
@@ -91,14 +83,10 @@ class InstallmentController {
             
             const result = await this.service.getInstallmentDetails(parseInt(id));
             
-            return res.json({
-                success: true,
-                data: result
-            });
+            return res.json(result);
         } catch (error) {
             logger.error('Erro ao buscar detalhes da parcela', { error: error.message });
             return res.status(500).json({
-                success: false,
                 message: 'Erro interno ao buscar detalhes da parcela',
                 errors: [
                     {
@@ -121,14 +109,10 @@ class InstallmentController {
 
             const boleto = await this.service.generateBoleto(id);
 
-            return res.status(201).json({
-                success: true,
-                data: boleto
-            });
+            return res.status(201).json(boleto);
         } catch (error) {
             logger.error('Erro ao gerar boleto', { error: error.message });
             return res.status(500).json({
-                success: false,
                 message: 'Erro interno ao gerar boleto',
                 errors: [
                     {
@@ -176,10 +160,7 @@ class InstallmentController {
             );
 
             // Retorna resposta
-            return res.status(200).json({
-                success: true,
-                data: updatedInstallment
-            });
+            return res.status(200).json(updatedInstallment);
         } catch (error) {
             logger.error('Erro ao atualizar vencimento da parcela', {
                 error: error.message,
@@ -190,7 +171,6 @@ class InstallmentController {
             // Trata erros de validação
             if (error.message.includes('obrigatória') || error.message.includes('inválida')) {
                 return res.status(400).json({
-                    success: false,
                     message: error.message,
                     errors: [
                         {
@@ -203,7 +183,6 @@ class InstallmentController {
 
             // Outros erros
             return res.status(500).json({
-                success: false,
                 message: 'Erro interno ao atualizar parcela',
                 errors: [
                     {
@@ -222,30 +201,18 @@ class InstallmentController {
     async updateInstallment(req, res, next) {
         try {
             const { id } = req.params;
-            const { due_date, amount } = req.body;
+            const updateData = req.body;
 
-            // Chama o serviço para atualizar
-            const updatedInstallment = await this.service.updateInstallment(
-                Number(id), 
-                { due_date, amount }
-            );
+            const updatedInstallment = await this.service.updateInstallment(id, updateData);
 
-            // Retorna a parcela atualizada
-            return res.status(200).json({
-                success: true,
-                data: updatedInstallment
-            });
+            // Retorna resposta
+            return res.status(200).json(updatedInstallment);
         } catch (error) {
-            logger.error('Erro ao atualizar parcela', {
-                error: error.message,
-                body: req.body,
-                stack: error.stack
-            });
+            logger.error('Erro ao atualizar parcela', { error: error.message });
 
             // Trata erros de validação
             if (error.message.includes('obrigatória') || error.message.includes('inválida')) {
                 return res.status(400).json({
-                    success: false,
                     message: error.message,
                     errors: [
                         {
@@ -258,7 +225,6 @@ class InstallmentController {
 
             // Outros erros
             return res.status(500).json({
-                success: false,
                 message: 'Erro interno ao atualizar parcela',
                 errors: [
                     {
@@ -282,7 +248,6 @@ class InstallmentController {
             // Verifica se o ID é um número válido
             if (isNaN(id)) {
                 return res.status(400).json({
-                    success: false,
                     message: 'ID de parcela inválido',
                     errors: [
                         {
@@ -327,10 +292,7 @@ class InstallmentController {
             );
 
             // Retorna a parcela atualizada
-            return res.status(200).json({
-                success: true,
-                data: updatedInstallment
-            });
+            return res.status(200).json(updatedInstallment);
         } catch (error) {
             logger.error('Erro ao registrar pagamento de parcela', {
                 error: error.message,
@@ -342,7 +304,6 @@ class InstallmentController {
             // Trata erros de validação
             if (error instanceof ValidationError) {
                 return res.status(400).json({
-                    success: false,
                     message: error.message,
                     errors: [
                         {
@@ -355,7 +316,6 @@ class InstallmentController {
 
             // Outros erros
             return res.status(500).json({
-                success: false,
                 message: 'Erro interno ao registrar pagamento da parcela',
                 errors: [
                     {
@@ -374,14 +334,11 @@ class InstallmentController {
     async cancelBoleto(req, res) {
         try {
             const { id } = req.params;
-            logger.info(`Controller: Cancelando boletos da parcela ${id}`);
 
-            const installmentService = new InstallmentService();
-            const canceledBoletos = await installmentService.cancelInstallmentBoletos(id);
+            const canceledBoletos = await this.service.cancelInstallmentBoletos(id);
 
             if (canceledBoletos.length === 0) {
                 return res.status(400).json({
-                    success: false,
                     message: 'Não foi possível cancelar os boletos',
                     errors: [{
                         code: 'NO_BOLETOS_CANCELED',
@@ -391,18 +348,16 @@ class InstallmentController {
             }
 
             return res.status(200).json({
-                success: true,
                 message: 'Boletos cancelados com sucesso',
                 data: canceledBoletos
             });
         } catch (error) {
-            logger.error('Erro no cancelamento de boletos', {
-                errorMessage: error.message,
-                errorStack: error.stack
+            logger.error('Erro ao cancelar boletos', {
+                error: error.message,
+                stack: error.stack
             });
 
             return res.status(500).json({
-                success: false,
                 message: 'Erro interno ao processar o cancelamento de boletos',
                 errors: [
                     {
@@ -417,27 +372,30 @@ class InstallmentController {
     async cancelInstallmentBoletos(req, res) {
         try {
             const { id } = req.params;
-            logger.info(`Controller: Cancelando boletos da parcela ${id}`);
 
             const canceledBoletos = await this.service.cancelInstallmentBoletos(id);
 
             if (canceledBoletos.length === 0) {
-                throw new Error('Não foi possível cancelar os boletos');
+                return res.status(400).json({
+                    message: 'Não foi possível cancelar os boletos',
+                    errors: [{
+                        code: 'NO_BOLETOS_CANCELED',
+                        message: 'Nenhum boleto encontrado ou cancelado'
+                    }]
+                });
             }
 
             return res.status(200).json({
-                success: true,
                 message: 'Boletos cancelados com sucesso',
                 data: canceledBoletos
             });
         } catch (error) {
-            logger.error('Erro no cancelamento de boletos', {
-                errorMessage: error.message,
-                errorStack: error.stack
+            logger.error('Erro ao cancelar boletos', {
+                error: error.message,
+                stack: error.stack
             });
 
             return res.status(500).json({
-                success: false,
                 message: 'Erro interno ao processar o cancelamento de boletos',
                 errors: [
                     {
