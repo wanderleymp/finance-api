@@ -95,26 +95,25 @@ class BoletoService {
 
             // Chama serviço do N8N para emissão de boleto
             const n8nResponse = await this.n8nService.createBoleto({
-                ...boletoPayload,
+                dados: boletoPayload,
                 installment_id: data.installment_id
             });
 
             logger.info('Resposta do N8N para criação de boleto', { 
-                url: n8nResponse.url,
-                nossoNumero: n8nResponse.nosso_numero
+                fullResponse: n8nResponse
             });
+
+            if (!n8nResponse || !n8nResponse.boleto_id) {
+                throw new Error('Resposta do N8N inválida: boleto_id não encontrado');
+            }
 
             // Cria registro do boleto no banco
             const newBoleto = await this.repository.create({
                 installment_id: data.installment_id,
                 generated_at: new Date(),
                 last_status_update: new Date(),
-                status: 'A_EMITIR',
-                external_data: {
-                    url: n8nResponse.url,
-                    linha_digitavel: n8nResponse.linha_digitavel,
-                    nosso_numero: n8nResponse.nosso_numero
-                }
+                status: n8nResponse.status || 'A_EMITIR',
+                external_data: n8nResponse
             });
 
             return newBoleto;

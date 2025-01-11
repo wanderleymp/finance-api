@@ -1,6 +1,6 @@
 const axios = require('axios');
 const { logger } = require('../middlewares/logger');
-const { BusinessError } = require('../utils/errors');
+const { DatabaseError } = require('../utils/errors');
 
 class N8NService {
     constructor() {
@@ -28,6 +28,16 @@ class N8NService {
             }
 
             const url = `${this.baseURL}/${workflow}`;
+            logger.debug('Detalhes da requisição N8N', {
+                url,
+                payload: JSON.stringify(payload),
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-API-KEY': this.apiKey ? 'PRESENTE' : 'AUSENTE',
+                    'X-API-SECRET': this.apiSecret ? 'PRESENTE' : 'AUSENTE'
+                }
+            });
+
             const response = await axios.post(url, payload, {
                 headers: {
                     'Content-Type': 'application/json',
@@ -46,9 +56,10 @@ class N8NService {
             logger.error('Erro ao enviar requisição para N8N', {
                 workflow,
                 error: error.message,
-                errorStack: error.stack
+                errorStack: error.stack,
+                errorResponse: error.response ? JSON.stringify(error.response.data) : 'Sem resposta'
             });
-            throw new BusinessError('Erro ao processar requisição no N8N');
+            throw new DatabaseError('Erro ao processar requisição no N8N');
         }
     }
 

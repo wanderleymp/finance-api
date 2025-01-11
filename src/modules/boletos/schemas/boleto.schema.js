@@ -19,11 +19,7 @@ const boletoSchema = {
 
     // Schema para criação
     createBoleto: Joi.object({
-        installment_id: Joi.number().integer().positive().required(),
-        due_date: Joi.date().iso().required(),
-        amount: Joi.number().positive().required(),
-        payer_id: Joi.number().integer().positive().required(),
-        description: Joi.string().max(255).optional()
+        installment_id: Joi.number().integer().positive().required()
     }).unknown(false),
 
     // Schema para atualização
