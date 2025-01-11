@@ -1,0 +1,172 @@
+{
+    "openapi": "3.0.0",
+    "info": {
+        "title": "Agile Finance API",
+        "version": "1.0.0",
+        "description": "API para gerenciamento financeiro"
+    },
+    "paths": {
+        "/movements": {
+            "get": {
+                "summary": "Listar movimentos",
+                "parameters": [
+                    {"name": "page", "in": "query", "schema": {"type": "integer", "minimum": 1}},
+                    {"name": "limit", "in": "query", "schema": {"type": "integer", "minimum": 1, "maximum": 100}},
+                    {"name": "detailed", "in": "query", "schema": {"type": "string", "enum": ["true", "false"]}},
+                    {"name": "status", "in": "query", "schema": {"type": "string", "enum": ["PENDING", "PAID", "CANCELED"]}},
+                    {"name": "type", "in": "query", "schema": {"type": "string", "enum": ["INCOME", "EXPENSE"]}},
+                    {"name": "person_id", "in": "query", "schema": {"type": "integer"}},
+                    {"name": "start_date", "in": "query", "schema": {"type": "string", "format": "date"}},
+                    {"name": "end_date", "in": "query", "schema": {"type": "string", "format": "date"}},
+                    {"name": "include", "in": "query", "schema": {"type": "string", "enum": ["payments", "payments.installments", "payments.installments.boletos"]}}
+                ],
+                "responses": {
+                    "200": {"description": "Lista de movimentos"}
+                }
+            },
+            "post": {
+                "summary": "Criar movimento",
+                "requestBody": {
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "type": "object",
+                                "required": ["description", "type", "status", "value", "due_date", "person_id"],
+                                "properties": {
+                                    "description": {"type": "string", "minLength": 3, "maxLength": 255},
+                                    "type": {"type": "string", "enum": ["INCOME", "EXPENSE"]},
+                                    "status": {"type": "string", "enum": ["PENDING", "PAID", "CANCELED"]},
+                                    "value": {"type": "number", "minimum": 0},
+                                    "due_date": {"type": "string", "format": "date"},
+                                    "person_id": {"type": "integer", "minimum": 1},
+                                    "installments": {
+                                        "type": "array",
+                                        "items": {
+                                            "type": "object",
+                                            "required": ["installment_number", "value", "due_date"],
+                                            "properties": {
+                                                "installment_number": {"type": "integer", "minimum": 1},
+                                                "value": {"type": "number", "minimum": 0},
+                                                "due_date": {"type": "string", "format": "date"}
+                                            }
+                                        }
+                                    },
+                                    "payments": {
+                                        "type": "array",
+                                        "items": {
+                                            "type": "object",
+                                            "required": ["value", "payment_date", "payment_method"],
+                                            "properties": {
+                                                "value": {"type": "number", "minimum": 0},
+                                                "payment_date": {"type": "string", "format": "date"},
+                                                "payment_method": {"type": "string", "enum": ["CASH", "CREDIT_CARD", "DEBIT_CARD", "TRANSFER", "PIX", "BOLETO"]}
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                },
+                "responses": {
+                    "201": {"description": "Movimento criado com sucesso"}
+                }
+            }
+        },
+        "/movements/{id}": {
+            "get": {
+                "summary": "Buscar movimento por ID",
+                "parameters": [
+                    {"name": "id", "in": "path", "required": true, "schema": {"type": "string", "pattern": "^[0-9]+$"}}
+                ],
+                "responses": {
+                    "200": {"description": "Detalhes do movimento"}
+                }
+            },
+            "put": {
+                "summary": "Atualizar movimento",
+                "parameters": [
+                    {"name": "id", "in": "path", "required": true, "schema": {"type": "string", "pattern": "^[0-9]+$"}}
+                ],
+                "requestBody": {
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "type": "object",
+                                "properties": {
+                                    "description": {"type": "string", "minLength": 3, "maxLength": 255},
+                                    "status": {"type": "string", "enum": ["PENDING", "PAID", "CANCELED"]},
+                                    "value": {"type": "number", "minimum": 0},
+                                    "due_date": {"type": "string", "format": "date"}
+                                }
+                            }
+                        }
+                    }
+                },
+                "responses": {
+                    "200": {"description": "Movimento atualizado com sucesso"}
+                }
+            },
+            "delete": {
+                "summary": "Excluir movimento",
+                "parameters": [
+                    {"name": "id", "in": "path", "required": true, "schema": {"type": "string", "pattern": "^[0-9]+$"}}
+                ],
+                "responses": {
+                    "204": {"description": "Movimento excluído com sucesso"}
+                }
+            }
+        },
+        "/movements/{id}/cancel": {
+            "post": {
+                "summary": "Cancelar movimento",
+                "parameters": [
+                    {"name": "id", "in": "path", "required": true, "schema": {"type": "string", "pattern": "^[0-9]+$"}}
+                ],
+                "responses": {
+                    "200": {"description": "Movimento cancelado com sucesso"}
+                }
+            }
+        },
+        "/installments": {
+            "get": {
+                "summary": "Listar parcelas",
+                "parameters": [
+                    {"name": "page", "in": "query", "schema": {"type": "integer", "minimum": 1}},
+                    {"name": "limit", "in": "query", "schema": {"type": "integer", "minimum": 1, "maximum": 100}},
+                    {"name": "status", "in": "query", "schema": {"type": "string"}},
+                    {"name": "payment_id", "in": "query", "schema": {"type": "integer"}},
+                    {"name": "start_date", "in": "query", "schema": {"type": "string", "format": "date"}},
+                    {"name": "end_date", "in": "query", "schema": {"type": "string", "format": "date"}},
+                    {"name": "include", "in": "query", "schema": {"type": "string", "enum": ["boletos"]}},
+                    {"name": "full_name", "in": "query", "schema": {"type": "string"}}
+                ],
+                "responses": {
+                    "200": {"description": "Lista de parcelas"}
+                }
+            }
+        },
+        "/installments/{id}": {
+            "get": {
+                "summary": "Buscar parcela por ID",
+                "parameters": [
+                    {"name": "id", "in": "path", "required": true, "schema": {"type": "integer"}}
+                ],
+                "responses": {
+                    "200": {"description": "Detalhes da parcela"}
+                }
+            }
+        },
+        "/installments/{id}/boleto/cancelar": {
+            "put": {
+                "summary": "Cancelar boletos de uma parcela",
+                "parameters": [
+                    {"name": "id", "in": "path", "required": true, "schema": {"type": "integer"}}
+                ],
+                "responses": {
+                    "200": {"description": "Boletos cancelados com sucesso"}
+                }
+            }
+        }
+    }
+}
