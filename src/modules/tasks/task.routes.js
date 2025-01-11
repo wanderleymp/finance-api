@@ -2,9 +2,20 @@ const { Router } = require('express');
 const { authMiddleware } = require('../../middlewares/auth');
 const { validateSchema } = require('../../utils/validateSchema');
 const TaskSchema = require('./schemas/task.schema');
+const { logger } = require('../../middlewares/logger');
 
 class TaskRoutes {
     constructor(taskController) {
+        logger.info('Inicializando TaskRoutes', {
+            controllerExists: !!taskController,
+            controllerType: typeof taskController,
+            controllerMethods: taskController ? Object.keys(taskController) : 'N/A'
+        });
+
+        if (!taskController) {
+            throw new Error('TaskController não pode ser undefined');
+        }
+
         this.router = Router();
         this.taskController = taskController;
         this.setupRoutes();
@@ -41,7 +52,7 @@ class TaskRoutes {
                 this.taskController.delete.bind(this.taskController)
             )
             .post('/:id/reschedule',
-                this.taskController.reschedule.bind(this.taskController)
+                this.taskController.rescheduleTask.bind(this.taskController)
             );
     }
 

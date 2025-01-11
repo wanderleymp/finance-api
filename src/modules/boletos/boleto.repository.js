@@ -140,27 +140,50 @@ class BoletoRepository extends BaseRepository {
     }
 
     /**
-     * Cria um novo boleto
+     * Cria um novo boleto com dados externos
      * @param {object} data - Dados do boleto
      * @returns {Promise<object>} Boleto criado
      */
-    async createBoleto(data) {
+    async create(data) {
         try {
-            logger.debug('Criando boleto', { data });
+            logger.debug('Criando boleto com dados externos', { data });
             const query = `
                 INSERT INTO boletos (
                     installment_id,
-                    status
-                ) VALUES ($1, $2)
+                    status,
+                    generated_at,
+                    last_status_update,
+                    external_data
+                ) VALUES ($1, $2, $3, $4, $5)
                 RETURNING *
             `;
             const result = await this.pool.query(query, [
                 data.installment_id,
-                data.status || 'A_RECEBER'
+                data.status || 'A_EMITIR',
+                data.generated_at || new Date(),
+                data.last_status_update || new Date(),
+                JSON.stringify(data.external_data || {})
             ]);
             return result.rows[0];
         } catch (error) {
-            logger.error('Erro ao criar boleto', { error: error.message, data });
+            logger.error('Erro ao criar boleto com dados externos', { error: error.message, data });
+            throw error;
+        }
+    }
+
+    /**
+     * Gera payload do boleto via função do Postgres
+     * @param {number} installmentId - ID da parcela
+     * @returns {Promise<object>} Payload do boleto
+     */
+    async generateBoletoJson(installmentId) {
+        try {
+            logger.debug('Gerando payload do boleto', { installmentId });
+            const query = 'SELECT public.fn_generate_boleto_json($1) as payload';
+            const result = await this.pool.query(query, [installmentId]);
+            return result.rows[0].payload;
+        } catch (error) {
+            logger.error('Erro ao gerar payload do boleto', { error: error.message, installmentId });
             throw error;
         }
     }

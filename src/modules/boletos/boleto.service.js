@@ -80,78 +80,42 @@ class BoletoService {
     async createBoleto(data) {
         try {
             logger.info('Serviço: Criando boleto', { data });
+            
+            // Validação básica
+            if (!data.installment_id) {
+                throw new Error('installment_id é obrigatório');
+            }
+
+            // Chama função do postgres para gerar payload do boleto
+            const boletoPayload = await this.repository.generateBoletoJson(data.installment_id);
+
+            if (!boletoPayload) {
+                throw new Error('Falha ao gerar payload do boleto');
+            }
+
+            // Chama serviço do N8N para emissão de boleto
+            const n8nResponse = await this.n8nService.createBoleto({
+                ...boletoPayload,
+                installment_id: data.installment_id
+            });
+
+            logger.info('Resposta do N8N para criação de boleto', { 
+                url: n8nResponse.url,
+                nossoNumero: n8nResponse.nosso_numero
+            });
+
+            // Cria registro do boleto no banco
             const newBoleto = await this.repository.create({
-                ...data,
+                installment_id: data.installment_id,
                 generated_at: new Date(),
                 last_status_update: new Date(),
-                status: 'A_EMITIR'
-            });
-
-            logger.info('BoletoService: Boleto criado, preparando criação de task', {
-                boleto_id: newBoleto.boleto_id,
-                installment_id: newBoleto.installment_id,
-                movement_id: data.movement_id
-            });
-
-            // Criar tarefa para processamento do boleto
-            try {
-                logger.info('BoletoService: Verificando taskService', {
-                    hasTaskService: !!this.taskService,
-                    taskServiceMethods: this.taskService ? Object.keys(this.taskService) : [],
-                    taskServiceType: this.taskService ? typeof this.taskService : 'undefined'
-                });
-
-                if (!this.taskService) {
-                    logger.error('BoletoService: TaskService não definido');
-                    return newBoleto;
+                status: 'A_EMITIR',
+                external_data: {
+                    url: n8nResponse.url,
+                    linha_digitavel: n8nResponse.linha_digitavel,
+                    nosso_numero: n8nResponse.nosso_numero
                 }
-
-                // Verificar se o método create existe, caso contrário usar createTask
-                const createMethod = this.taskService.create || this.taskService.createTask;
-
-                logger.info('BoletoService: Método de criação identificado', {
-                    hasCreateMethod: !!createMethod,
-                    methodName: createMethod === this.taskService.create ? 'create' : 'createTask'
-                });
-
-                if (!createMethod) {
-                    logger.error('BoletoService: Método de criação de tarefa não encontrado', {
-                        availableMethods: Object.keys(this.taskService)
-                    });
-                    return newBoleto;
-                }
-
-                logger.info('BoletoService: Criando task com payload', {
-                    type: 'boleto',
-                    name: `Emissão de Boleto #${newBoleto.boleto_id}`,
-                    boleto_id: newBoleto.boleto_id,
-                    installment_id: newBoleto.installment_id,
-                    movement_id: data.movement_id
-                });
-
-                const taskCreated = await createMethod.call(this.taskService, {
-                    type: 'boleto',
-                    name: `Emissão de Boleto #${newBoleto.boleto_id}`,
-                    description: `Processamento de boleto bancário para ID ${newBoleto.boleto_id}`,
-                    payload: {
-                        boleto_id: newBoleto.boleto_id,
-                        installment_id: newBoleto.installment_id,
-                        movement_id: data.movement_id
-                    }
-                });
-
-                logger.info('BoletoService: Tarefa criada com sucesso', {
-                    taskId: taskCreated?.task_id || 'ID não disponível',
-                    boletoId: newBoleto.boleto_id
-                });
-            } catch (error) {
-                logger.error('BoletoService: Erro ao criar tarefa de boleto', {
-                    error: error.message,
-                    errorStack: error.stack,
-                    boletoId: newBoleto.boleto_id
-                });
-                // Não lança o erro para não interromper o fluxo de criação do boleto
-            }
+            });
 
             return newBoleto;
         } catch (error) {

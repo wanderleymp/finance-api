@@ -2,7 +2,30 @@ const { logger } = require('../../middlewares/logger');
 
 class TaskController {
     constructor(taskService) {
+        logger.info('Construindo TaskController', {
+            serviceExists: !!taskService,
+            serviceMethods: taskService ? Object.keys(taskService) : 'N/A'
+        });
+
+        if (!taskService) {
+            throw new Error('TaskService não pode ser undefined');
+        }
+
         this.service = taskService;
+
+        // Bind dos métodos para garantir o contexto correto
+        this.create = this.create.bind(this);
+        this.findAll = this.findAll.bind(this);
+        this.findById = this.findById.bind(this);
+        this.update = this.update.bind(this);
+        this.delete = this.delete.bind(this);
+        this.findPendingTasks = this.findPendingTasks.bind(this);
+        this.processTask = this.processTask.bind(this);
+        this.rescheduleTask = this.rescheduleTask.bind(this);
+
+        logger.info('TaskController inicializado', {
+            controllerMethods: Object.keys(this)
+        });
     }
 
     async create(req, res) {

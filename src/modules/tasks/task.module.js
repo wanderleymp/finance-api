@@ -21,6 +21,13 @@ class TaskModule {
         this.taskLogsService = new TaskLogsService();
         this.taskDependenciesService = new TaskDependenciesService();
         
+        logger.info('Preparando para criar TaskService', {
+            repositoryExists: !!this.repository,
+            taskTypesRepositoryExists: !!this.taskTypesRepository,
+            taskLogsServiceExists: !!this.taskLogsService,
+            taskDependenciesServiceExists: !!this.taskDependenciesService
+        });
+
         this.service = new TaskService({ 
             taskRepository: this.repository,
             taskTypesRepository: this.taskTypesRepository,
@@ -28,7 +35,10 @@ class TaskModule {
             taskDependenciesService: this.taskDependenciesService
         });
 
-        logger.info('TaskService criado');
+        logger.info('TaskService criado', {
+            serviceMethods: Object.keys(this.service),
+            serviceMethodsCount: Object.keys(this.service).length
+        });
 
         this.worker = new TaskWorker({
             taskService: this.service,
@@ -60,12 +70,50 @@ class TaskModule {
         // Inicia o worker
         this.worker.start();
 
+        // Cria o controller ANTES das rotas
         this.controller = new TaskController(this.service);
+        
+        logger.info('TaskController criado', {
+            serviceMethods: Object.keys(this.service),
+            controllerMethods: Object.keys(this.controller)
+        });
+        
+        // Cria as rotas DEPOIS do controller
         this.routes = new TaskRoutes(this.controller);
+
+        logger.info('TaskRoutes criado', {
+            controllerMethods: Object.keys(this.controller),
+            routesMethods: Object.keys(this.routes)
+        });
+
+        logger.info('TaskModule inicializado completamente');
     }
 
     getRouter() {
         return this.routes.getRouter();
+    }
+
+    register(app) {
+        logger.info('Registrando TaskModule', {
+            appExists: !!app
+        });
+
+        if (!app) {
+            throw new Error('Aplicação Express não pode ser undefined');
+        }
+
+        // Registra o serviço de tasks na aplicação para uso em outros módulos
+        app.set('taskService', this.service);
+
+        // Registra as rotas do módulo de tasks
+        app.use('/tasks', this.getRouter());
+
+        logger.info('TaskModule registrado com sucesso', {
+            routePath: '/tasks',
+            taskServiceRegistered: !!app.get('taskService')
+        });
+
+        return this;
     }
 }
 
