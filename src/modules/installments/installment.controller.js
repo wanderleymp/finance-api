@@ -419,8 +419,7 @@ class InstallmentController {
             const { id } = req.params;
             logger.info(`Controller: Cancelando boletos da parcela ${id}`);
 
-            const installmentService = new InstallmentService();
-            const canceledBoletos = await installmentService.cancelInstallmentBoletos(id);
+            const canceledBoletos = await this.service.cancelInstallmentBoletos(id);
 
             if (canceledBoletos.length === 0) {
                 return res.status(400).json({

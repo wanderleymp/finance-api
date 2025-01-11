@@ -410,6 +410,12 @@ class InstallmentService {
         try {
             logger.info('Serviço: Cancelando boletos da parcela', { installmentId });
 
+            // Verifica se o repositório existe
+            if (!this.repository || typeof this.repository.findInstallmentWithDetails !== 'function') {
+                logger.warn('Repositório não configurado corretamente', { installmentId });
+                return [];
+            }
+
             // Busca detalhes da parcela com boletos
             const installmentDetails = await this.repository.findInstallmentWithDetails(installmentId);
             
