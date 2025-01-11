@@ -202,29 +202,26 @@ class InstallmentService {
         try {
             await client.query('BEGIN');
 
-            // Verificar se parcela existe
-            const existing = await this.repository.findById(id);
-            if (!existing) {
-                throw new ValidationError('Parcela não encontrada');
-            }
-
             // Criar DTO e validar
             const dto = new UpdateInstallmentDTO(data);
             dto.validate();
 
             // Atualizar parcela
-            const updated = await this.repository.update(id, dto);
+            const updatedInstallment = await this.repository.updateWithClient(client, id, {
+                due_date: dto.due_date,
+                amount: dto.amount
+            });
 
             await client.query('COMMIT');
 
             // Invalidar cache
-            await this.cacheService.del(`${this.cachePrefix}:list:*`);
             await this.cacheService.del(`${this.cachePrefix}:detail:${id}`);
-            
-            return new InstallmentResponseDTO(updated);
+            await this.cacheService.del(`${this.cachePrefix}:list:*`);
+
+            return new InstallmentResponseDTO(updatedInstallment);
         } catch (error) {
             await client.query('ROLLBACK');
-            logger.error('Erro ao atualizar parcela', { error });
+            logger.error('Erro ao atualizar parcela', { error, id, data });
             throw error;
         } finally {
             client.release();
@@ -284,6 +281,73 @@ class InstallmentService {
                 id, 
                 dueDate, 
                 amount,
+                stack: error.stack 
+            });
+            throw error;
+        } finally {
+            client.release();
+        }
+    }
+
+    /**
+     * Registra o pagamento de uma parcela
+     * @param {number} id - ID da parcela
+     * @param {Object} paymentData - Dados do pagamento
+     * @param {string} [paymentData.payment_date] - Data do pagamento (opcional, padrão é hoje)
+     * @param {number} paymentData.value - Valor pago
+     * @param {number} [paymentData.bank_id=2] - ID do banco (opcional, padrão 2)
+     * @param {number} [paymentData.juros=0] - Juros (opcional, padrão 0)
+     * @param {number} [paymentData.descontos=0] - Descontos (opcional, padrão 0)
+     * @returns {Promise<Object>} Parcela atualizada após pagamento
+     */
+    async registerInstallmentPayment(id, paymentData) {
+        const client = await this.repository.pool.connect();
+        try {
+            await client.query('BEGIN');
+
+            // Valores padrão
+            const paymentDetails = {
+                installment_id: id,
+                valor_pago: paymentData.value,
+                bank_id: paymentData.bank_id || 2,
+                juros: paymentData.juros || 0,
+                descontos: paymentData.descontos || 0,
+                payment_date: paymentData.payment_date || new Date().toISOString().split('T')[0]
+            };
+
+            logger.info('Registrando pagamento de parcela via função do banco de dados', { paymentDetails });
+
+            // Chama a função do banco de dados para registrar o pagamento
+            const result = await client.query(
+                `SELECT fn_installment_receive_payment(
+                    $1, $2, $3, $4, $5, $6::DATE
+                )`,
+                [
+                    paymentDetails.installment_id, 
+                    paymentDetails.valor_pago, 
+                    paymentDetails.bank_id, 
+                    paymentDetails.juros, 
+                    paymentDetails.descontos, 
+                    paymentDetails.payment_date
+                ]
+            );
+
+            await client.query('COMMIT');
+
+            // Invalidar cache
+            await this.cacheService.del(`${this.cachePrefix}:detail:${id}`);
+            await this.cacheService.del(`${this.cachePrefix}:list:*`);
+
+            // Busca os detalhes atualizados da parcela
+            const updatedInstallment = await this.repository.findInstallmentWithDetails(id);
+
+            return new InstallmentResponseDTO(updatedInstallment);
+        } catch (error) {
+            await client.query('ROLLBACK');
+            logger.error('Erro ao registrar pagamento da parcela', { 
+                error: error.message, 
+                id, 
+                paymentData,
                 stack: error.stack 
             });
             throw error;

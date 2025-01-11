@@ -55,5 +55,12 @@ module.exports = (installmentController) => {
         installmentController.updateInstallment.bind(installmentController)
     );
 
+    // Registra o pagamento de uma parcela
+    router.put('/:id/payment',
+        validateRequest(installmentSchema.registerPaymentParams, 'params'),
+        validateRequest(installmentSchema.registerPayment, 'body'),
+        installmentController.registerPayment.bind(installmentController)
+    );
+
     return router;
 };

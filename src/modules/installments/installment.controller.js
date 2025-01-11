@@ -177,6 +177,85 @@ class InstallmentController {
             next(error);
         }
     }
+
+    /**
+     * Registra o pagamento de uma parcela
+     * @route PUT /installments/:id/payment
+     */
+    async registerPayment(req, res, next) {
+        try {
+            // Converte o ID para número, garantindo que seja um número válido
+            const id = Number(req.params.id);
+
+            // Verifica se o ID é um número válido
+            if (isNaN(id)) {
+                return res.status(400).json({
+                    success: false,
+                    message: 'ID de parcela inválido'
+                });
+            }
+
+            const { 
+                date, 
+                valor, 
+                bank_id, 
+                juros, 
+                descontos,
+                installment_id
+            } = req.body;
+
+            logger.info('Controller: Registrando pagamento de parcela', { 
+                installmentId: id, 
+                paymentData: { 
+                    date, 
+                    valor, 
+                    bank_id, 
+                    juros, 
+                    descontos,
+                    installment_id
+                } 
+            });
+
+            // Chama o serviço para registrar o pagamento
+            const updatedInstallment = await this.service.registerInstallmentPayment(
+                id, 
+                { 
+                    payment_date: date, 
+                    value: valor, 
+                    bank_id, 
+                    juros, 
+                    descontos 
+                }
+            );
+
+            // Retorna a parcela atualizada
+            res.status(200).json({
+                success: true,
+                data: updatedInstallment
+            });
+        } catch (error) {
+            logger.error('Erro ao registrar pagamento de parcela', {
+                error: error.message,
+                body: req.body,
+                params: req.params,
+                stack: error.stack
+            });
+
+            // Trata erros de validação
+            if (error instanceof ValidationError) {
+                return res.status(400).json({
+                    success: false,
+                    message: error.message
+                });
+            }
+
+            // Outros erros
+            return res.status(500).json({
+                success: false,
+                message: 'Erro interno ao registrar pagamento da parcela'
+            });
+        }
+    }
 }
 
 module.exports = InstallmentController;

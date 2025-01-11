@@ -42,6 +42,21 @@ const installmentSchema = {
             Joi.string().regex(/^\d+(\.\d{1,2})?$/)
         ).optional()
     }).or('due_date', 'amount').unknown(false),
+
+    // Esquema para registro de pagamento de parcela
+    registerPayment: Joi.object({
+        valor: Joi.number().positive().required(),
+        date: Joi.date().iso().optional().default(() => new Date().toISOString().split('T')[0]),
+        bank_id: Joi.number().integer().optional().default(2),
+        juros: Joi.number().min(0).optional().default(0),
+        descontos: Joi.number().min(0).optional().default(0),
+        installment_id: Joi.number().integer().optional()
+    }),
+
+    // Esquema para parâmetros de pagamento de parcela
+    registerPaymentParams: Joi.object({
+        id: Joi.number().integer().positive().required()
+    })
 };
 
 module.exports = installmentSchema;
