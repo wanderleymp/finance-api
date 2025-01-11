@@ -493,12 +493,7 @@ class InstallmentService {
 
                 // Verifica se o cancelamento foi bem-sucedido
                 if (n8nResponse && Object.keys(n8nResponse).length > 0) {
-                    // Atualiza status do boleto
-                    const updatedBoleto = await this.boletoService.updateBoleto(installmentDetails.boleto_id, {
-                        status: 'Cancelado'
-                    });
-
-                    canceledBoletos.push(updatedBoleto);
+                    canceledBoletos.push(installmentDetails.boleto_id);
                 }
 
             } catch (boletoError) {

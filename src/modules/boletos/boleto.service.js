@@ -185,7 +185,12 @@ class BoletoService {
     async updateBoleto(id, data) {
         try {
             logger.info('Serviço: Atualizando boleto', { id, data });
-            return await this.repository.updateBoleto(id, data);
+            const result = await this.repository.updateBoleto(id, { status: data.status });
+            logger.debug('Boleto atualizado com sucesso', { 
+                id, 
+                newStatus: data.status 
+            });
+            return result;
         } catch (error) {
             logger.error('Erro ao atualizar boleto', { error: error.message, id, data });
             throw new DatabaseError('Erro ao atualizar boleto');
@@ -242,17 +247,14 @@ class BoletoService {
                 updateData 
             });
 
-            const updatedBoleto = await this.repository.update(boletoId, {
-                ...updateData,
-                updated_at: new Date()
-            });
+            const result = await this.repository.updateBoleto(boletoId, updateData);
 
             logger.debug('Boleto atualizado com sucesso', { 
                 boletoId, 
                 newStatus: updateData.status 
             });
 
-            return updatedBoleto;
+            return result;
         } catch (error) {
             logger.error('Erro ao atualizar boleto', {
                 error: error.message,
