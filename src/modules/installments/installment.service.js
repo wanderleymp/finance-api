@@ -455,12 +455,15 @@ class InstallmentService {
                     external_boleto_id: externalBoletoId
                 });
 
-                // Atualiza status do boleto
-                const updatedBoleto = await this.boletoService.updateBoleto(installmentDetails.boleto_id, {
-                    status: 'Cancelado'
-                });
+                // Verifica se o cancelamento foi bem-sucedido
+                if (n8nResponse && Object.keys(n8nResponse).length > 0) {
+                    // Atualiza status do boleto
+                    const updatedBoleto = await this.boletoService.updateBoleto(installmentDetails.boleto_id, {
+                        status: 'Cancelado'
+                    });
 
-                canceledBoletos.push(updatedBoleto);
+                    canceledBoletos.push(updatedBoleto);
+                }
 
             } catch (boletoError) {
                 logger.error('Erro ao cancelar boleto individual', {
@@ -468,6 +471,7 @@ class InstallmentService {
                     boletoId: installmentDetails.boleto_id,
                     error: boletoError.message
                 });
+                throw boletoError;
             }
 
             return canceledBoletos;

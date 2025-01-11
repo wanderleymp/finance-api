@@ -169,13 +169,13 @@ class N8NService {
 
         // Ajusta o payload para o formato do curl
         const payload = {
-            codigoSolicitacao: boletoData.external_boleto_id
+            external_boleto_id: boletoData.external_boleto_id
         };
 
         logger.info('Payload gerado para cancelamento de boleto', {
             payload,
             keys: Object.keys(payload),
-            codigoSolicitacao: payload.codigoSolicitacao
+            externalBoletoId: payload.external_boleto_id
         });
 
         try {
@@ -200,11 +200,8 @@ class N8NService {
         } catch (error) {
             logger.error('Erro no cancelamento de boleto', {
                 errorMessage: error.message,
-                errorResponse: error.response ? error.response.data : 'Sem resposta',
-                errorStatus: error.response ? error.response.status : 'Sem status',
-                requestHeaders: error.config?.headers
+                errorStack: error.stack
             });
-
             throw error;
         }
     }

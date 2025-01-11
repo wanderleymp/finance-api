@@ -422,14 +422,7 @@ class InstallmentController {
             const canceledBoletos = await this.service.cancelInstallmentBoletos(id);
 
             if (canceledBoletos.length === 0) {
-                return res.status(400).json({
-                    success: false,
-                    message: 'Não foi possível cancelar os boletos',
-                    errors: [{
-                        code: 'NO_BOLETOS_CANCELED',
-                        message: 'Nenhum boleto encontrado ou cancelado'
-                    }]
-                });
+                throw new Error('Não foi possível cancelar os boletos');
             }
 
             return res.status(200).json({
