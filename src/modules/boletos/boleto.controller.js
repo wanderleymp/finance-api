@@ -19,7 +19,16 @@ class BoletoController {
             
             res.json(result);
         } catch (error) {
-            next(error);
+            logger.error('Erro no controller ao listar boletos', {
+                error: error.message,
+                stack: error.stack,
+                errorName: error.name
+            });
+
+            return res.status(error.statusCode || 500).json({
+                error: 'Erro ao listar boletos',
+                message: error.message
+            });
         }
     }
 
@@ -35,7 +44,16 @@ class BoletoController {
             
             res.json(result);
         } catch (error) {
-            next(error);
+            logger.error('Erro no controller ao listar boletos com detalhes', {
+                error: error.message,
+                stack: error.stack,
+                errorName: error.name
+            });
+
+            return res.status(error.statusCode || 500).json({
+                error: 'Erro ao listar boletos com detalhes',
+                message: error.message
+            });
         }
     }
 
@@ -54,7 +72,16 @@ class BoletoController {
             
             res.json(boleto);
         } catch (error) {
-            next(error);
+            logger.error('Erro no controller ao buscar boleto por ID', {
+                error: error.message,
+                stack: error.stack,
+                errorName: error.name
+            });
+
+            return res.status(error.statusCode || 500).json({
+                error: 'Erro ao buscar boleto por ID',
+                message: error.message
+            });
         }
     }
 
@@ -73,7 +100,16 @@ class BoletoController {
             
             res.json(boleto);
         } catch (error) {
-            next(error);
+            logger.error('Erro no controller ao buscar boleto por ID com detalhes', {
+                error: error.message,
+                stack: error.stack,
+                errorName: error.name
+            });
+
+            return res.status(error.statusCode || 500).json({
+                error: 'Erro ao buscar boleto por ID com detalhes',
+                message: error.message
+            });
         }
     }
 
@@ -87,7 +123,15 @@ class BoletoController {
             const boleto = await this.boletoService.createBoleto(req.body);
             res.status(201).json(boleto);
         } catch (error) {
-            next(error);
+            logger.error('Erro no controller ao criar boleto', {
+                error: error.message,
+                stack: error.stack
+            });
+
+            return res.status(400).json({
+                error: 'Erro ao criar boleto',
+                message: error.message
+            });
         }
     }
 
@@ -106,7 +150,16 @@ class BoletoController {
             
             res.json(boleto);
         } catch (error) {
-            next(error);
+            logger.error('Erro no controller ao atualizar boleto', {
+                error: error.message,
+                stack: error.stack,
+                errorName: error.name
+            });
+
+            return res.status(error.statusCode || 500).json({
+                error: 'Erro ao atualizar boleto',
+                message: error.message
+            });
         }
     }
 
@@ -124,7 +177,16 @@ class BoletoController {
             
             return res.json(result);
         } catch (error) {
-            next(error);
+            logger.error('Erro no controller ao cancelar boleto', {
+                error: error.message,
+                stack: error.stack,
+                errorName: error.name
+            });
+
+            return res.status(error.statusCode || 500).json({
+                error: 'Erro ao cancelar boleto',
+                message: error.message
+            });
         }
     }
 
@@ -139,7 +201,16 @@ class BoletoController {
             const boletos = await this.boletoService.emitirBoletosMovimento(parseInt(movimentoId));
             res.status(201).json(boletos);
         } catch (error) {
-            next(error);
+            logger.error('Erro no controller ao criar boletos para movimento', {
+                error: error.message,
+                stack: error.stack,
+                errorName: error.name
+            });
+
+            return res.status(error.statusCode || 500).json({
+                error: 'Erro ao criar boletos para movimento',
+                message: error.message
+            });
         }
     }
 }

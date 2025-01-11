@@ -103,23 +103,41 @@ class BoletoService {
                 fullResponse: n8nResponse
             });
 
-            if (!n8nResponse || !n8nResponse.boleto_id) {
-                throw new Error('Resposta do N8N inválida: boleto_id não encontrado');
+            // Verifica se a resposta contém dados válidos
+            if (!n8nResponse || !Array.isArray(n8nResponse) || n8nResponse.length === 0 || !n8nResponse[0].boleto_id) {
+                const errorMessage = "Não foi possível criar o boleto. Resposta do N8N inválida.";
+                
+                logger.error(errorMessage, { 
+                    fullResponse: n8nResponse 
+                });
+
+                throw new Error(errorMessage);
             }
+
+            // Usa o primeiro item do array
+            const boletoData = n8nResponse[0];
 
             // Cria registro do boleto no banco
             const newBoleto = await this.repository.create({
                 installment_id: data.installment_id,
                 generated_at: new Date(),
                 last_status_update: new Date(),
-                status: n8nResponse.status || 'A_EMITIR',
-                external_data: n8nResponse
+                status: boletoData.status || 'A_EMITIR',
+                external_data: boletoData
             });
 
             return newBoleto;
         } catch (error) {
-            logger.error('Erro ao criar boleto', { error: error.message, data });
-            throw new DatabaseError('Erro ao criar boleto');
+            const n8nErrorMessage = error.response?.data?.message || error.message;
+            
+            logger.error('Erro ao criar boleto', { 
+                error: error.message, 
+                installmentId: data.installment_id,
+                n8nErrorMessage: n8nErrorMessage
+            });
+
+            // Lança um erro com a mensagem específica do N8N
+            throw new Error(n8nErrorMessage);
         }
     }
 
