@@ -95,7 +95,7 @@ class InstallmentRepository {
                 LEFT JOIN movement_payments mp ON i.payment_id = mp.payment_id
                 LEFT JOIN movements m ON mp.movement_id = m.movement_id
                 LEFT JOIN persons p ON m.person_id = p.person_id
-                ${whereClause ? whereClause + ' AND ' : 'WHERE '}m.movement_status_id = 2
+                ${whereClause ? whereClause + ' AND ' : 'WHERE '}m.movement_status_id = 2 AND m.is_template = false
                 ORDER BY i.due_date DESC, i.installment_number
                 LIMIT $${queryParams.length + 2} OFFSET $${queryParams.length + 3}
             `;
@@ -106,7 +106,7 @@ class InstallmentRepository {
                 LEFT JOIN movement_payments mp ON i.payment_id = mp.payment_id
                 LEFT JOIN movements m ON mp.movement_id = m.movement_id
                 LEFT JOIN persons p ON m.person_id = p.person_id
-                ${whereClause ? whereClause + ' AND ' : 'WHERE '}m.movement_status_id = 2
+                ${whereClause ? whereClause + ' AND ' : 'WHERE '}m.movement_status_id = 2 AND m.is_template = false
             `;
 
             const fullQueryParams = [...queryParams, includeBoletos, parsedLimit, offset];
