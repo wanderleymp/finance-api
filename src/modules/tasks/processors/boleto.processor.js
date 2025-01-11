@@ -11,12 +11,6 @@ class BoletoProcessor extends BaseProcessor {
         });
     }
 
-    getTaskType() {
-        const type = 'boleto';
-        logger.debug('BoletoProcessor.getTaskType() chamado', { type });
-        return type;
-    }
-
     async validatePayload(payload) {
         if (!payload.boleto_id) {
             throw new Error('boleto_id é obrigatório');
@@ -28,7 +22,7 @@ class BoletoProcessor extends BaseProcessor {
         
         try {
             // Atualizar status para running
-            await this.updateTaskStatus(task.task_id, 'running');
+            await this.taskService.update(task.id, { status: 'running' });
 
             // Buscar boleto
             const boleto = await this.boletoService.getBoletoById(boleto_id);
@@ -40,35 +34,29 @@ class BoletoProcessor extends BaseProcessor {
             await this.boletoService.emitirBoletoN8N(boleto);
 
             // Atualizar status
-            await this.updateTaskStatus(task.task_id, 'completed');
+            await this.taskService.update(task.id, { status: 'completed' });
 
             logger.info('Boleto processado com sucesso', {
-                taskId: task.task_id,
+                taskId: task.id,
                 boletoId: boleto_id
             });
 
             return { success: true, boleto_id };
         } catch (error) {
-            // Registrar erro
-            await this.handleFailure(task, error);
-            
-            // Propagar erro para tratamento no worker
+            logger.error('Erro ao processar boleto', {
+                taskId: task.id,
+                boletoId: boleto_id,
+                error: error.message,
+                stack: error.stack
+            });
+
+            await this.taskService.update(task.id, { 
+                status: 'failed',
+                error_message: error.message
+            });
+
             throw error;
         }
-    }
-
-    async handleFailure(task, error) {
-        await super.handleFailure(task, error);
-        
-        // Lógica específica de falha para boletos
-        await this.boletoService.markAsFailed(task.payload.boleto_id, error.message);
-    }
-
-    async canRetry(task, error) {
-        // Lógica específica para retry de boletos
-        const maxRetries = 3;
-        return task.retries < maxRetries && 
-               (!error || !error.message.includes('Boleto não encontrado'));
     }
 }
 

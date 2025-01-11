@@ -8,6 +8,8 @@ const TaskDependenciesService = require('../taskdependencies/taskdependencies.se
 const TaskWorker = require('./workers/task.worker');
 const BoletoProcessor = require('./processors/boleto.processor');
 const BoletoService = require('../boletos/boleto.service');
+const BoletoRepository = require('../boletos/boleto.repository');
+const n8nService = require('../../services/n8n.service');
 const { logger } = require('../../middlewares/logger');
 
 class TaskModule {
@@ -37,8 +39,6 @@ class TaskModule {
         logger.info('TaskWorker criado');
         
         // Registra o processador de boleto
-        const BoletoRepository = require('../boletos/boleto.repository');
-        const n8nService = require('../n8n/n8n.service');
         const boletoService = new BoletoService({
             boletoRepository: new BoletoRepository(),
             taskService: this.service,
@@ -48,45 +48,24 @@ class TaskModule {
         logger.info('BoletoService criado');
 
         const boletoProcessor = new BoletoProcessor(this.service, boletoService);
-        logger.info('Criando processador de boleto', {
-            hasProcessor: !!boletoProcessor,
-            type: boletoProcessor.getTaskType(),
-            methods: Object.keys(boletoProcessor)
-        });
-
-        // Registra o processador
-        this.worker.registerProcessor(boletoProcessor);
-        logger.info('Processador de boleto registrado');
         
-        this.controller = new TaskController(this.service);
-        this.routes = TaskRoutes;
-
-        // Inicia o worker DEPOIS de registrar todos os processadores
-        logger.info('Iniciando worker de tasks', {
-            processors: Array.from(this.worker.processors.keys())
+        logger.info('BoletoProcessor construído', {
+            hasBoletoService: !!boletoService,
+            hasTaskService: !!this.service
         });
+
+        // Registra o processador no worker
+        this.worker.registerProcessor(boletoProcessor);
+        
+        // Inicia o worker
         this.worker.start();
 
-        logger.info('TaskModule construído com sucesso');
+        this.controller = new TaskController(this.service);
+        this.routes = new TaskRoutes(this.controller);
     }
 
-    register(app) {
-        logger.info('Registrando módulo de tasks');
-        app.use('/tasks', this.routes.getRouter());
-        
-        // Expõe o service e worker para outros módulos
-        app.set('taskService', this.service);
-        app.set('taskWorker', this.worker);
-        
-        logger.info('Módulo de tasks registrado com sucesso');
-    }
-
-    getService() {
-        return this.service;
-    }
-
-    getWorker() {
-        return this.worker;
+    getRouter() {
+        return this.routes.getRouter();
     }
 }
 
