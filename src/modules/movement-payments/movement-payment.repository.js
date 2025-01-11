@@ -108,8 +108,7 @@ class MovementPaymentRepository extends BaseRepository {
             const query = `
                 SELECT 
                     mp.*,
-                    pm.method_name,
-                    pm.type as payment_method_type
+                    pm.method_name
                 FROM movement_payments mp
                 LEFT JOIN payment_methods pm ON pm.payment_method_id = mp.payment_method_id
                 WHERE mp.movement_id = $1

@@ -180,26 +180,16 @@ class MovementRepository extends BaseRepository {
                     SELECT 
                         m.*,
                         mt.type_name,
-                        ms.status_name,
-                        p.full_name as person_name,
-                        p.document_number as person_document,
-                        p.email as person_email
+                        ms.status_name
                     FROM movements m
                     LEFT JOIN movement_types mt ON mt.movement_type_id = m.movement_type_id
                     LEFT JOIN movement_statuses ms ON ms.movement_status_id = m.movement_status_id
-                    LEFT JOIN persons p ON p.person_id = m.person_id
                     WHERE m.movement_id = $1
                 `;
             } else {
                 query = `
                     SELECT 
-                        m.movement_id,
-                        m.movement_type_id,
-                        m.movement_status_id,
-                        m.person_id,
-                        m.movement_date,
-                        m.description,
-                        m.created_at
+                        m.*
                     FROM movements m
                     WHERE m.movement_id = $1
                 `;

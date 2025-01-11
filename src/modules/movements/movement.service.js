@@ -74,7 +74,7 @@ class MovementService extends IMovementService {
                 }
             }
 
-            const data = await this.findById(id, detailed, include);
+            const data = await this.findById(id, true);
 
             if (!data) {
                 throw new ValidationError('Movimento não encontrado');
@@ -86,7 +86,7 @@ class MovementService extends IMovementService {
                 await this.cacheService.set(
                     cacheKey, 
                     movement, 
-                    detailed ? this.cacheTTL.detail : this.cacheTTL.list
+                    true ? this.cacheTTL.detail : this.cacheTTL.list
                 );
             }
             
@@ -108,7 +108,7 @@ class MovementService extends IMovementService {
             logger.info('Service: Buscando movimento por ID', { id, detailed, include });
 
             // Busca movimento base
-            const movement = await this.movementRepository.findById(id, detailed);
+            const movement = await this.movementRepository.findById(id, true);
 
             if (!movement) {
                 logger.warn('Service: Movimento não encontrado', { id });
@@ -122,22 +122,8 @@ class MovementService extends IMovementService {
                 person_id: movement.person_id 
             });
 
-            // Parse include parameter
-            const includes = include ? include.split(',') : [];
-            const includePayments = includes.some(i => i.startsWith('payments'));
-            const includeItems = includes.includes('items');
-
-            // Busca pagamentos se solicitado
-            let payments = [];
-            if (includePayments) {
-                payments = await this.movementPaymentService.findByMovementId(movement.movement_id, true);
-            }
-
-            // Busca items se solicitado
-            let items = [];
-            if (includeItems) {
-                items = await this.movementRepository.findItems(movement.movement_id);
-            }
+            // Busca pagamentos com installments e boletos
+            const payments = await this.movementPaymentService.findByMovementId(movement.movement_id, true);
 
             // Calcula totais
             const total_paid = payments
@@ -145,28 +131,20 @@ class MovementService extends IMovementService {
                 .reduce((sum, p) => sum + p.amount, 0);
 
             const total_value = payments.reduce((sum, p) => sum + p.amount, 0);
+            const remaining_amount = total_value - total_paid;
 
-            // Log dos resultados
-            logger.info('Service: Resultados das buscas', {
-                payments_count: payments.length,
-                items_count: items.length,
-                total_paid,
-                total_value
-            });
-
+            // Retorna movimento com todas as informações
             return {
                 ...movement,
-                payments: includePayments ? payments : undefined,
-                items: includeItems ? items : undefined,
+                payments: payments,
                 total_paid,
                 total_value,
-                remaining_amount: total_value - total_paid
+                remaining_amount
             };
         } catch (error) {
             logger.error('Erro ao buscar movimento por ID', {
                 error: error.message,
-                id,
-                detailed,
+                movementId: id,
                 error_stack: error.stack
             });
             throw error;
