@@ -1,33 +1,22 @@
-const NFSeController = require('./nfse.controller');
-const NFSeRoutes = require('./nfse.routes.js');
-const NFSeService = require('./services/nfse.service');
-const NFSeRepository = require('./repositories/nfse.repository');
+const NfseRoutes = require('./nfse.routes');
+const NfseService = require('./nfse.service');
+const NfseRepository = require('./nfse.repository');
+const NfseController = require('./nfse.controller');
 const { logger } = require('../../middlewares/logger');
 
-class NFSeModule {
-  constructor(app) {
-    this.app = app;
-    this.controller = new NFSeController({
-      nfseService: new NFSeService({
-        nfseRepository: new NFSeRepository()
-      })
-    });
-    logger.info('NFSeModule: Controlador criado', {
-      controllerMethods: Object.getOwnPropertyNames(Object.getPrototypeOf(this.controller))
-    });
-  }
+class NfseModule {
+    constructor() {
+        this.repository = new NfseRepository();
+        this.service = new NfseService(this.repository);
+        this.controller = new NfseController(this.service);
+        this.routes = new NfseRoutes(this.controller);
+    }
 
-  register() {
-    logger.info('NFSeModule: Registrando rotas', {
-      controllerMethods: Object.getOwnPropertyNames(Object.getPrototypeOf(this.controller))
-    });
-    this.app.use('/nfse', NFSeRoutes(this.controller));
-  }
-
-  static register(app) {
-    const nfseModule = new NFSeModule(app);
-    nfseModule.register();
-  }
+    register(app) {
+        logger.info('Registrando módulo de NFSes');
+        app.use('/nfses', this.routes.getRouter());
+        logger.info('Módulo de NFSes registrado com sucesso');
+    }
 }
 
-module.exports = NFSeModule;
+module.exports = new NfseModule();

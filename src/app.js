@@ -212,21 +212,34 @@ app.use((req, res, next) => {
     next();
 });
 
+// Middleware para redirecionar /nfse para /nfses
+app.use((req, res, next) => {
+    logger.debug('Redirect Middleware Debug:', {
+        path: req.path,
+        originalUrl: req.originalUrl,
+        method: req.method
+    });
+    if (req.path === '/nfse') {
+        logger.debug('Redirecting /nfse to /nfses');
+        return res.redirect('/nfses');
+    }
+    next();
+});
+
 // Registra o módulo de parcelas
 const installmentModule = require('./modules/installments/installment.module');
 app.use('/installments', installmentModule(app));
 
-// Registra o módulo de NFSe
-NFSeModule.register(app);
+// Registra o módulo de NFSes
+const nfseModule = require('./modules/nfse/nfse.module');
+nfseModule.register(app);
 
 // Registra o módulo de serviços
 app.use('/services', servicesRoutes);
 
-// Registra o módulo de invoices
-invoicesModule.register(app);
-
-// Registra o módulo de eventos de invoice
+// Registra os módulos de invoice e invoice events
 invoiceEventModule.register(app);
+invoicesModule.register(app);
 
 // Rota 404 para capturar requisições não encontradas
 app.use((req, res, next) => {
