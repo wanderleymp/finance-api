@@ -94,6 +94,20 @@ class NFSeController {
       next(error);
     }
   }
+
+  async criarNfseParaMovimento(req, res, next) {
+    try {
+      const { id } = req.params;
+      const nfse = await this.nfseService.emitirNfseParaMovimento(id);
+      res.status(201).json(nfse);
+    } catch (error) {
+      logger.error('Erro ao criar NFSe para movimento', { 
+        movementId: req.params.id,
+        error: error.message 
+      });
+      next(error);
+    }
+  }
 }
 
 module.exports = NFSeController;

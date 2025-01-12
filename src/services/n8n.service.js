@@ -4,22 +4,18 @@ const { DatabaseError } = require('../utils/errors');
 
 class N8NService {
     constructor() {
-        this.baseURL = process.env.N8N_URL;
-        this.apiKey = 'ffcaa89a3e19bd98e911475c7974309b';
-        this.apiSecret = 'apikey';
+        this.baseURL = process.env.N8N_URL || 'https://n8n.webhook.agilefinance.com.br/webhook';
+        this.apiKey = process.env.N8N_API_KEY || '';
+        this.apiSecret = process.env.N8N_API_SECRET || '';
 
-        logger.error('Inicialização do N8NService', {
+        logger.info('Inicialização do N8NService', {
             baseURL: this.baseURL,
-            apiKeyLength: this.apiKey.length,
-            apiSecretLength: this.apiSecret.length
+            apiKeyConfigured: !!this.apiKey,
+            apiSecretConfigured: !!this.apiSecret
         });
 
-        if (!this.baseURL || !this.apiKey || !this.apiSecret) {
-            logger.warn('Configurações incompletas do N8N', {
-                baseURL: !!this.baseURL,
-                apiKey: !!this.apiKey,
-                apiSecret: !!this.apiSecret
-            });
+        if (!this.baseURL) {
+            logger.warn('URL do N8N não configurada');
         }
     }
 

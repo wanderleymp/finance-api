@@ -183,6 +183,31 @@ class NFSeService {
       throw error;
     }
   }
+
+  async emitirNfseParaMovimento(movementId) {
+    try {
+      logger.info('Emitindo NFSe para movimento', { movementId });
+      
+      const emissaoNfseService = require('./emissao-nfse.service');
+      const nfseEmissao = new emissaoNfseService();
+      
+      const nfse = await nfseEmissao.emitirNfseParaMovimento(movementId);
+      
+      logger.info('NFSe emitida para movimento', { 
+        movementId, 
+        nfse 
+      });
+      
+      return nfse;
+    } catch (error) {
+      logger.error('Erro ao emitir NFSe para movimento', { 
+        movementId,
+        error: error.message,
+        stack: error.stack 
+      });
+      throw error;
+    }
+  }
 }
 
 module.exports = NFSeService;

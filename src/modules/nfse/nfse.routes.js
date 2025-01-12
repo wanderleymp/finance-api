@@ -55,5 +55,14 @@ module.exports = (controller) => {
         controller.cancel.bind(controller)
     );
 
+    router.post('/movements/:id', 
+        controller.criarNfseParaMovimento.bind(controller)
+    );
+
+    router.patch('/:id/cancel', 
+        validateRequest(cancelNFSeSchema, 'body'),
+        controller.cancel.bind(controller)
+    );
+
     return router;
 };

@@ -21,6 +21,10 @@ class NFSeModule {
     logger.info('NFSeModule: Registrando rotas', {
       controllerMethods: Object.getOwnPropertyNames(Object.getPrototypeOf(this.controller))
     });
+    if (!this.controller) {
+      logger.error('Controlador não inicializado');
+      throw new Error('Controlador não inicializado');
+    }
     this.app.use('/nfse', NFSeRoutes(this.controller));
   }
 

@@ -5,7 +5,8 @@ const {
     listMovementsSchema,
     createMovementSchema,
     updateMovementSchema,
-    updateStatusSchema
+    updateStatusSchema,
+    createNFSeSchema
 } = require('./validators/movement.validator');
 const movementItemRoutes = require('./movement-items.routes');
 
@@ -128,6 +129,12 @@ module.exports = (controller) => {
 
     // Rota para cancelar movimento
     router.post('/:id/cancel', controller.cancel.bind(controller));
+
+    // Rota para emitir NFSe para movimento
+    router.post('/:id/nfse', 
+        validateRequest(createNFSeSchema, 'body'),
+        controller.criarNfseParaMovimento.bind(controller)
+    );
 
     // Adiciona rotas de items
     router.use('/:id/items', movementItemRoutes(controller));

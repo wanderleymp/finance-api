@@ -1,10 +1,12 @@
-const { logger } = require('../../middlewares/logger');
+const { logger } = require('/root/finance-api/src/middlewares/logger');
 const { createMovementSchema } = require('./validators/movement.validator');
 const { ValidationError } = require('../../utils/errors');
+const EmissaoNfseService = require('../nfse/services/emissao-nfse.service');
 
 class MovementController {
-    constructor({ movementService }) {
-        this.service = movementService;
+    constructor({ movementService, emissaoNfseService } = {}) {
+        this.service = movementService || new MovementService();
+        this.emissaoNfseService = emissaoNfseService || new EmissaoNfseService();
     }
 
     async index(req, res) {
@@ -424,6 +426,33 @@ class MovementController {
             }
             
             return res.status(500).json({ error: 'Erro interno ao cancelar movimento' });
+        }
+    }
+
+    async criarNfseParaMovimento(req, res) {
+        try {
+            const { id } = req.params;
+
+            // Emite NFSe para o movimento
+            const nfse = await this.emissaoNfseService.emitirNfseParaMovimento(id);
+
+            // Resposta de sucesso
+            res.status(201).json({
+                message: 'NFSe emitida com sucesso para o movimento',
+                nfse
+            });
+        } catch (error) {
+            // Log do erro
+            logger.error('Erro ao criar NFSe para movimento', {
+                movementId: req.params.id,
+                error: error.message
+            });
+
+            // Resposta de erro
+            res.status(error.response?.status || 500).json({
+                message: 'Erro ao emitir NFSe para movimento',
+                error: error.message
+            });
         }
     }
 }
