@@ -5,8 +5,10 @@ const webhookRoutes = require('./routes/webhook.routes');
 const chatModule = require('./chat.module');
 
 class MessagesModule {
-    constructor(app) {
+    constructor(app, { taskService, taskWorker } = {}) {
         this.app = app;
+        this.taskService = taskService;
+        this.taskWorker = taskWorker;
         this.subscriptionRenewalJob = new SubscriptionRenewalJob();
     }
 
@@ -15,7 +17,10 @@ class MessagesModule {
         this.app.use('/messages/webhooks', webhookRoutes);
 
         // Registrar módulo de chat (que inclui as rotas de teste)
-        chatModule(this.app);
+        chatModule(this.app, {
+            taskService: this.taskService,
+            taskWorker: this.taskWorker
+        });
 
         logger.info('Rotas do módulo de mensagens registradas', {
             routes: [

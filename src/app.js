@@ -28,6 +28,7 @@ const taskTypesModule = require('./modules/tasktypes/tasktypes.module');
 const taskDependenciesModule = require('./modules/taskdependencies/taskdependencies.module');
 const taskLogsModule = require('./modules/tasklogs/tasklogs.module');
 const MessagesModule = require('./modules/messages/messages.module');
+const NFSeModule = require('./modules/nfse/nfse.module');
 
 const app = express();
 
@@ -107,11 +108,18 @@ taskTypesModule.register(app);
 taskDependenciesModule.register(app);
 taskLogsModule.register(app);
 
+// Obtém os serviços do TaskModule
+const taskService = app.get('taskService');
+const taskWorker = app.get('taskWorker');
+
 // Registra o módulo de boletos depois que o taskService estiver disponível
 app.use('/boletos', boletoModule(app));
 
-// Registra o módulo de mensagens depois que o taskModule estiver registrado
-const messagesModuleInstance = new MessagesModule(app);
+// Registra o módulo de mensagens depois que o TaskModule estiver registrado
+const messagesModuleInstance = new MessagesModule(app, {
+    taskService,
+    taskWorker
+});
 messagesModuleInstance.initialize().catch(error => {
     logger.error('Erro ao inicializar módulo de mensagens', {
         error: error.message,
@@ -140,6 +148,9 @@ app.use('/movement-items', movementItemModule.getRouter());
 // Registra o módulo de parcelas
 const installmentModule = require('./modules/installments/installment.module');
 installmentModule.register(app);
+
+// Registra o módulo de NFSe
+NFSeModule.register(app);
 
 // Rota 404 para capturar requisições não encontradas
 app.use((req, res, next) => {

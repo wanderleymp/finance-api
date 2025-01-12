@@ -3,24 +3,29 @@ const chatController = require('./chat.controller');
 const registerProcessors = require('./register-processors');
 const { logger } = require('../../middlewares/logger');
 
-module.exports = (app) => {
-    logger.info('Registrando módulo de mensagens');
+module.exports = (app, { taskService, taskWorker } = {}) => {
+    logger.info('Registrando módulo de mensagens', { 
+        taskService: !!taskService, 
+        taskWorker: !!taskWorker 
+    });
     
-    // Pega o taskService e taskWorker do app
-    const taskService = app.get('taskService');
-    const taskWorker = app.get('taskWorker');
-    if (!taskService || !taskWorker) {
-        throw new Error('TaskService e TaskWorker não encontrados. O módulo de tasks deve ser registrado antes do módulo de mensagens.');
+    // Se não receber taskService e taskWorker, tenta obter do app
+    const appTaskService = taskService || app.get('taskService');
+    const appTaskWorker = taskWorker || app.get('taskWorker');
+
+    if (!appTaskService || !appTaskWorker) {
+        logger.warn('TaskService ou TaskWorker não encontrados. O módulo de tasks pode não estar completamente inicializado.');
+        return;
     }
     
     // Registra processadores de tasks
-    registerProcessors(taskService, taskWorker);
+    registerProcessors(appTaskService, appTaskWorker);
     
     // Registra rotas de chat
     app.use('/messages/chat', chatController);
     
     // Registra rotas de teste
-    app.use('/messages/test', testRoutes(taskService));
+    app.use('/messages/test', testRoutes(appTaskService));
 
     logger.info('Módulo de mensagens registrado com sucesso', {
         routes: [
