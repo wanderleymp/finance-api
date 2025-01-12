@@ -65,14 +65,16 @@ class TemporaryTokenService {
       // Obtém novo token (exemplo para Nuvem Fiscal, adapte conforme necessário)
       const response = await axios.post(
         'https://auth.nuvemfiscal.com.br/oauth/token',
-        {
+        new URLSearchParams({
           grant_type: 'client_credentials',
           client_id: client_id,
-          client_secret: client_secret
-        },
+          client_secret: client_secret,
+          scope: 'cep cnpj nfse empresa nfse nfe distribuicao-nfe'
+        }),
         {
           headers: {
-            'Content-Type': 'application/json'
+            'Content-Type': 'application/x-www-form-urlencoded',
+            'Accept': 'application/json'
           }
         }
       );
