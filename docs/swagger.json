@@ -167,6 +167,381 @@
                     "200": {"description": "Boletos cancelados com sucesso"}
                 }
             }
+        },
+        "/services": {
+            "post": {
+                "summary": "Criar um novo serviço",
+                "tags": ["Serviços"],
+                "requestBody": {
+                    "required": true,
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "type": "object",
+                                "properties": {
+                                    "item_id": {
+                                        "type": "integer",
+                                        "description": "ID do item associado ao serviço"
+                                    },
+                                    "service_group_id": {
+                                        "type": "integer",
+                                        "description": "ID do grupo de serviço"
+                                    },
+                                    "description": {
+                                        "type": "string",
+                                        "description": "Descrição do serviço"
+                                    },
+                                    "active": {
+                                        "type": "boolean",
+                                        "description": "Status do serviço",
+                                        "default": true
+                                    }
+                                },
+                                "required": ["item_id"]
+                            }
+                        }
+                    }
+                },
+                "responses": {
+                    "201": {
+                        "description": "Serviço criado com sucesso",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/Service"
+                                }
+                            }
+                        }
+                    },
+                    "400": {
+                        "description": "Erro de validação"
+                    },
+                    "500": {
+                        "description": "Erro interno do servidor"
+                    }
+                }
+            },
+            "get": {
+                "summary": "Listar serviços",
+                "tags": ["Serviços"],
+                "parameters": [
+                    {
+                        "name": "page",
+                        "in": "query",
+                        "schema": {
+                            "type": "integer",
+                            "default": 1
+                        }
+                    },
+                    {
+                        "name": "limit",
+                        "in": "query",
+                        "schema": {
+                            "type": "integer",
+                            "default": 10
+                        }
+                    },
+                    {
+                        "name": "item_id",
+                        "in": "query",
+                        "schema": {
+                            "type": "integer"
+                        }
+                    },
+                    {
+                        "name": "service_group_id",
+                        "in": "query",
+                        "schema": {
+                            "type": "integer"
+                        }
+                    },
+                    {
+                        "name": "active",
+                        "in": "query",
+                        "schema": {
+                            "type": "boolean"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Lista de serviços",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "type": "array",
+                                            "items": {
+                                                "$ref": "#/components/schemas/Service"
+                                            }
+                                        },
+                                        "total": {
+                                            "type": "integer"
+                                        },
+                                        "page": {
+                                            "type": "integer"
+                                        },
+                                        "limit": {
+                                            "type": "integer"
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    },
+                    "500": {
+                        "description": "Erro interno do servidor"
+                    }
+                }
+            }
+        },
+        "/services/{id}": {
+            "put": {
+                "summary": "Atualizar um serviço",
+                "tags": ["Serviços"],
+                "parameters": [
+                    {
+                        "name": "id",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "integer"
+                        }
+                    }
+                ],
+                "requestBody": {
+                    "required": true,
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "type": "object",
+                                "properties": {
+                                    "item_id": {
+                                        "type": "integer",
+                                        "description": "ID do item associado ao serviço"
+                                    },
+                                    "service_group_id": {
+                                        "type": "integer",
+                                        "description": "ID do grupo de serviço"
+                                    },
+                                    "description": {
+                                        "type": "string",
+                                        "description": "Descrição do serviço"
+                                    },
+                                    "active": {
+                                        "type": "boolean",
+                                        "description": "Status do serviço"
+                                    }
+                                }
+                            }
+                        }
+                    }
+                },
+                "responses": {
+                    "200": {
+                        "description": "Serviço atualizado com sucesso",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/Service"
+                                }
+                            }
+                        }
+                    },
+                    "400": {
+                        "description": "Erro de validação"
+                    },
+                    "500": {
+                        "description": "Erro interno do servidor"
+                    }
+                }
+            },
+            "delete": {
+                "summary": "Remover um serviço",
+                "tags": ["Serviços"],
+                "parameters": [
+                    {
+                        "name": "id",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "integer"
+                        }
+                    }
+                ],
+                "responses": {
+                    "204": {
+                        "description": "Serviço removido com sucesso"
+                    },
+                    "500": {
+                        "description": "Erro interno do servidor"
+                    }
+                }
+            }
+        },
+        "/services/details/{itemId}": {
+            "get": {
+                "summary": "Buscar detalhes de um serviço por item ID",
+                "tags": ["Serviços"],
+                "parameters": [
+                    {
+                        "name": "itemId",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "integer"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Detalhes do serviço",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "type": "object",
+                                    "properties": {
+                                        "item_id": {
+                                            "type": "integer"
+                                        },
+                                        "item_name": {
+                                            "type": "string"
+                                        },
+                                        "item_description": {
+                                            "type": "string"
+                                        },
+                                        "municipality_code": {
+                                            "type": "string"
+                                        },
+                                        "lc116_code": {
+                                            "type": "string"
+                                        },
+                                        "lc116_description": {
+                                            "type": "string"
+                                        },
+                                        "cnae": {
+                                            "type": "string"
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    },
+                    "404": {
+                        "description": "Serviço não encontrado"
+                    },
+                    "500": {
+                        "description": "Erro interno do servidor"
+                    }
+                }
+            }
+        },
+        "/services/details": {
+            "post": {
+                "summary": "Buscar detalhes de múltiplos serviços",
+                "tags": ["Serviços"],
+                "requestBody": {
+                    "required": true,
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "type": "object",
+                                "properties": {
+                                    "itemIds": {
+                                        "type": "array",
+                                        "items": {
+                                            "type": "integer"
+                                        }
+                                    }
+                                },
+                                "required": ["itemIds"]
+                            }
+                        }
+                    }
+                },
+                "responses": {
+                    "200": {
+                        "description": "Detalhes dos serviços",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "type": "array",
+                                    "items": {
+                                        "type": "object",
+                                        "properties": {
+                                            "item_id": {
+                                                "type": "integer"
+                                            },
+                                            "item_name": {
+                                                "type": "string"
+                                            },
+                                            "item_description": {
+                                                "type": "string"
+                                            },
+                                            "municipality_code": {
+                                                "type": "string"
+                                            },
+                                            "lc116_code": {
+                                                "type": "string"
+                                            },
+                                            "lc116_description": {
+                                                "type": "string"
+                                            },
+                                            "cnae": {
+                                                "type": "string"
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    },
+                    "400": {
+                        "description": "Entrada inválida"
+                    },
+                    "500": {
+                        "description": "Erro interno do servidor"
+                    }
+                }
+            }
+        }
+    },
+    "components": {
+        "schemas": {
+            "Service": {
+                "type": "object",
+                "properties": {
+                    "service_id": {
+                        "type": "integer"
+                    },
+                    "item_id": {
+                        "type": "integer"
+                    },
+                    "service_group_id": {
+                        "type": "integer"
+                    },
+                    "description": {
+                        "type": "string"
+                    },
+                    "active": {
+                        "type": "boolean"
+                    },
+                    "created_at": {
+                        "type": "string",
+                        "format": "date-time"
+                    },
+                    "updated_at": {
+                        "type": "string",
+                        "format": "date-time"
+                    },
+                    "deleted_at": {
+                        "type": "string",
+                        "format": "date-time"
+                    }
+                }
+            }
         }
     }
 }

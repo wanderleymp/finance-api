@@ -194,6 +194,51 @@ class MovementItemRepository extends BaseRepository {
             throw error;
         }
     }
+
+    /**
+     * Busca itens de movimento com detalhes de serviço
+     * @param {number} movementId - ID do movimento
+     * @returns {Promise<Array>} Itens do movimento com detalhes de serviço
+     */
+    async findDetailedByMovementId(movementId) {
+        try {
+            const query = `
+                SELECT 
+                    mi.*,
+                    vw.cnae,
+                    vw.cod_tributacao,
+                    vw.descricao_servico,
+                    vw.aliquota_iss,
+                    vw.valor_iss,
+                    i.name as item_name
+                FROM movement_items mi
+                JOIN vw_services_details vw ON vw.item_id = mi.item_id
+                LEFT JOIN items i ON mi.item_id = i.item_id
+                WHERE mi.movement_id = $1
+            `;
+
+            const result = await this.pool.query(query, [movementId]);
+
+            return result.rows.map(row => ({
+                ...row,
+                total_value: parseFloat(row.quantity) * parseFloat(row.unit_value),
+                servico: {
+                    cnae: row.cnae,
+                    cod_tributacao: row.cod_tributacao,
+                    descricao_servico: row.descricao_servico,
+                    aliquota_iss: parseFloat(row.aliquota_iss),
+                    valor_iss: parseFloat(row.valor_iss)
+                }
+            }));
+        } catch (error) {
+            logger.error('Erro ao buscar itens detalhados do movimento:', {
+                movementId,
+                error: error.message,
+                stack: error.stack
+            });
+            throw error;
+        }
+    }
 }
 
 module.exports = MovementItemRepository;

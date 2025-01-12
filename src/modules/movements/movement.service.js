@@ -13,6 +13,7 @@ const MovementPaymentService = require('../movement-payments/movement-payment.se
 const BoletoRepository = require('../boletos/boleto.repository'); // Adicionado o BoletoRepository
 const LicenseRepository = require('../../repositories/licenseRepository');
 const MovementItemRepository = require('../movement-items/movement-item.repository');
+const ServiceRepository = require('../services/service.repository'); // Adicionado o ServiceRepository
 
 class MovementService extends IMovementService {
     constructor({ 
@@ -31,7 +32,8 @@ class MovementService extends IMovementService {
         installmentService, // Adicionar installmentService
         licenseRepository, // Adicionar licenseRepository
         movementItemRepository, // Adicionar movementItemRepository
-        nfseService // Adicionar nfseService
+        nfseService, // Adicionar nfseService
+        serviceRepository // Adicionar serviceRepository
     }) {
         super();
         
@@ -51,6 +53,7 @@ class MovementService extends IMovementService {
         this.licenseRepository = licenseRepository; // Adicionar atribuição
         this.movementItemRepository = movementItemRepository; // Adicionar atribuição
         this.nfseService = nfseService; // Adicionar atribuição
+        this.serviceRepository = serviceRepository; // Adicionar atribuição
         this.billingMessageService = new BillingMessageService();
 
         this.cachePrefix = 'movements';
@@ -950,7 +953,15 @@ class MovementService extends IMovementService {
             throw new Error(`Nenhum item encontrado para o movimento ${movementId}`);
         }
 
-        // 5. Preparar payload para NFSE
+        // 5. Buscar detalhes dos serviços
+        const itemIds = movementItems.map(item => item.item_id);
+        const serviceDetails = await this.serviceRepository.findMultipleServiceDetails(itemIds);
+        const serviceDetailsMap = serviceDetails.reduce((acc, service) => {
+            acc[service.item_id] = service;
+            return acc;
+        }, {});
+
+        // 6. Preparar payload para NFSE
         const nfsePayload = {
             reference_id: movementId.toString(),
             prestador_cnpj: license.cnpj,
@@ -963,15 +974,24 @@ class MovementService extends IMovementService {
             valor_servicos: movement.total_amount,
             ambiente: ambiente,
             
-            items: movementItems.map(item => ({
-                descricao: item.description,
-                quantidade: item.quantity || 1,
-                valor_unitario: item.unit_value,
-                valor_total: item.total_value
-            }))
+            items: movementItems.map(item => {
+                const serviceInfo = serviceDetailsMap[item.item_id] || {};
+                return {
+                    descricao: item.description || serviceInfo.item_description,
+                    quantidade: item.quantity || 1,
+                    valor_unitario: item.unit_value,
+                    valor_total: item.quantity * item.unit_value,
+                    
+                    // Detalhes fiscais
+                    cnae: serviceInfo.cnae,
+                    cod_tributacao: serviceInfo.lc116_code,
+                    cod_municipio: serviceInfo.municipality_code,
+                    descricao_servico: serviceInfo.lc116_description
+                };
+            })
         };
 
-        // 6. Chamar serviço de NFSE para criar
+        // 7. Chamar serviço de NFSE para criar
         const nfse = await this.nfseService.create(nfsePayload);
 
         return nfse;
