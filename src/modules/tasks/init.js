@@ -50,13 +50,16 @@ function initializeTaskWorker() {
             availableProcessors: Array.from(worker.processors.keys())
         });
 
-        return worker;
+        // Adicionar taskService ao worker para ser acessível
+        worker.taskService = taskService;
+
+        return worker; // Retornar o worker
     } catch (error) {
         logger.error('Erro ao inicializar TaskWorker', {
             error: error.message,
             stack: error.stack
         });
-        throw error;
+        throw error; // Propagar o erro
     }
 }
 

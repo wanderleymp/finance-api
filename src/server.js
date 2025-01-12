@@ -13,11 +13,8 @@ async function startServer() {
         // Testar conexão com banco
         await systemDatabase.testConnection();
 
-        // Inicializar TaskWorker
-        const worker = initializeTaskWorker();
-        logger.info('TaskWorker iniciado', {
-            availableProcessors: Array.from(worker.processors.keys())
-        });
+        // Definir ambiente padrão se não estiver configurado
+        process.env.NODE_ENV = process.env.NODE_ENV || 'development';
 
         const port = process.env.PORT || 3000;
         
