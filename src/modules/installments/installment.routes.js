@@ -9,6 +9,19 @@ const installmentSchema = require('./schemas/installment.schema');
 module.exports = (installmentController) => {
     const router = express.Router();
 
+    // Log de debug para todas as rotas
+    router.use((req, res, next) => {
+        console.log('Installments Route Debug:', {
+            method: req.method,
+            path: req.path,
+            originalUrl: req.originalUrl,
+            body: req.body,
+            params: req.params,
+            query: req.query
+        });
+        next();
+    });
+
     // Middleware de autenticação para todas as rotas
     router.use(authMiddleware);
 

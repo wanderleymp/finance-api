@@ -129,6 +129,11 @@ module.exports = (controller) => {
     // Rota para cancelar movimento
     router.post('/:id/cancel', controller.cancel.bind(controller));
 
+    // Nova rota para criação de NFSE para um movimento
+    router.post('/:id/nfse', 
+        controller.createMovementNFSe.bind(controller)
+    );
+
     // Adiciona rotas de items
     router.use('/:id/items', movementItemRoutes(controller));
 

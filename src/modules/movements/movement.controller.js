@@ -426,6 +426,41 @@ class MovementController {
             return res.status(500).json({ error: 'Erro interno ao cancelar movimento' });
         }
     }
+
+    /**
+     * Cria uma NFSE para um movimento específico
+     * @param {Request} req - Requisição HTTP
+     * @param {Response} res - Resposta HTTP
+     */
+    async createMovementNFSe(req, res) {
+        try {
+            const { id } = req.params;
+            const { ambiente } = req.body;
+
+            logger.info('Criando NFSE para movimento', { 
+                movementId: id, 
+                ambiente 
+            });
+
+            const nfse = await this.service.createMovementNFSe(parseInt(id), { ambiente });
+
+            return res.status(201).json({
+                success: true,
+                message: 'NFSE criada com sucesso',
+                nfse
+            });
+        } catch (error) {
+            logger.error('Erro ao criar NFSE para movimento', { 
+                error: error.message,
+                stack: error.stack 
+            });
+
+            return res.status(400).json({
+                success: false,
+                message: error.message
+            });
+        }
+    }
 }
 
 module.exports = MovementController;

@@ -195,9 +195,23 @@ ItemModule.register(app);
 const movementItemModule = new MovementItemModule();
 app.use('/movement-items', movementItemModule.getRouter());
 
+// Middleware para redirecionar /instalments para /installments
+app.use((req, res, next) => {
+    logger.debug('Redirect Middleware Debug:', {
+        path: req.path,
+        originalUrl: req.originalUrl,
+        method: req.method
+    });
+    if (req.path === '/instalments') {
+        logger.debug('Redirecting /instalments to /installments');
+        return res.redirect('/installments');
+    }
+    next();
+});
+
 // Registra o módulo de parcelas
 const installmentModule = require('./modules/installments/installment.module');
-installmentModule.register(app);
+app.use('/installments', installmentModule(app));
 
 // Registra o módulo de NFSe
 NFSeModule.register(app);

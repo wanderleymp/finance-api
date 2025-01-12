@@ -87,7 +87,7 @@ class InstallmentRepository {
                         WHEN $${queryParams.length + 1} = true THEN (
                             SELECT json_agg(b.*)
                             FROM boletos b
-                            WHERE b.installment_id = i.installment_id
+                            WHERE b.installment_id = i.installment_id AND b.status = 'A_RECEBER'
                         )
                         ELSE NULL
                     END as boletos
@@ -622,7 +622,7 @@ class InstallmentRepository {
                     (
                         SELECT json_agg(b.*)
                         FROM boletos b
-                        WHERE b.installment_id = i.installment_id
+                        WHERE b.installment_id = i.installment_id AND b.status = 'A_RECEBER'
                     ) as boletos
                 FROM installments i
                 LEFT JOIN movement_payments mp ON i.payment_id = mp.payment_id

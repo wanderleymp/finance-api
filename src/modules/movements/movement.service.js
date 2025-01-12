@@ -11,6 +11,8 @@ const IMovementService = require('./interfaces/IMovementService');
 const MovementResponseDTO = require('./dto/movement-response.dto');
 const MovementPaymentService = require('../movement-payments/movement-payment.service');
 const BoletoRepository = require('../boletos/boleto.repository'); // Adicionado o BoletoRepository
+const LicenseRepository = require('../../repositories/licenseRepository');
+const MovementItemRepository = require('../movement-items/movement-item.repository');
 
 class MovementService extends IMovementService {
     constructor({ 
@@ -26,7 +28,10 @@ class MovementService extends IMovementService {
         boletoRepository,
         boletoService, // Adicionar boletoService
         movementPaymentRepository, // Adicionando este parâmetro
-        installmentService // Adicionar installmentService
+        installmentService, // Adicionar installmentService
+        licenseRepository, // Adicionar licenseRepository
+        movementItemRepository, // Adicionar movementItemRepository
+        nfseService // Adicionar nfseService
     }) {
         super();
         
@@ -43,6 +48,9 @@ class MovementService extends IMovementService {
         this.boletoService = boletoService; // Adicionar atribuição
         this.movementPaymentRepository = movementPaymentRepository; // Adicionando esta linha
         this.installmentService = installmentService; // Adicionar atribuição
+        this.licenseRepository = licenseRepository; // Adicionar atribuição
+        this.movementItemRepository = movementItemRepository; // Adicionar atribuição
+        this.nfseService = nfseService; // Adicionar atribuição
         this.billingMessageService = new BillingMessageService();
 
         this.cachePrefix = 'movements';
@@ -906,6 +914,67 @@ class MovementService extends IMovementService {
             movement_id: movementId,
             cancelResults 
         };
+    }
+
+    /**
+     * Cria uma NFSE para um movimento específico
+     * @param {number} movementId - ID do movimento
+     * @param {object} [options] - Opções adicionais
+     * @param {string} [options.ambiente='HOMOLOGACAO'] - Ambiente de emissão da NFSE
+     * @returns {Promise<Object>} NFSE criada
+     */
+    async createMovementNFSe(movementId, options = {}) {
+        const { ambiente = 'HOMOLOGACAO' } = options;
+
+        // 1. Buscar movimento completo
+        const movement = await this.movementRepository.findById(movementId, true);
+        if (!movement) {
+            throw new Error(`Movimento com ID ${movementId} não encontrado`);
+        }
+
+        // 2. Buscar licença do prestador (usando license_id do movimento)
+        const license = await this.licenseRepository.findById(movement.license_id);
+        if (!license) {
+            throw new Error(`Licença não encontrada para o movimento ${movementId}`);
+        }
+
+        // 3. Buscar pessoa do movimento (tomador)
+        const person = await this.personRepository.findById(movement.person_id);
+        if (!person) {
+            throw new Error(`Pessoa não encontrada para o movimento ${movementId}`);
+        }
+
+        // 4. Buscar itens do movimento
+        const movementItems = await this.movementItemRepository.findByMovementId(movementId);
+        if (!movementItems || movementItems.length === 0) {
+            throw new Error(`Nenhum item encontrado para o movimento ${movementId}`);
+        }
+
+        // 5. Preparar payload para NFSE
+        const nfsePayload = {
+            reference_id: movementId.toString(),
+            prestador_cnpj: license.cnpj,
+            prestador_razao_social: license.company_name,
+            
+            tomador_cnpj: person.document_number, // Pode ser CNPJ ou CPF
+            tomador_razao_social: person.name,
+            
+            valor_total: movement.total_amount,
+            valor_servicos: movement.total_amount,
+            ambiente: ambiente,
+            
+            items: movementItems.map(item => ({
+                descricao: item.description,
+                quantidade: item.quantity || 1,
+                valor_unitario: item.unit_value,
+                valor_total: item.total_value
+            }))
+        };
+
+        // 6. Chamar serviço de NFSE para criar
+        const nfse = await this.nfseService.create(nfsePayload);
+
+        return nfse;
     }
 }
 
