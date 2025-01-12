@@ -99,26 +99,31 @@ class BaseRepository {
             // Log dos resultados
             logger.debug('BaseRepository.findAll - Resultados', {
                 dataResultCount: dataResult.rows.length,
-                totalItems
+                totalItems: parseInt(countResult.rows[0]?.total || 0),
+                query,
+                queryParams,
+                data: dataResult.rows
             });
 
+            // Retornar resultado no padrão RESTful
             return {
                 items: dataResult.rows,
                 meta: {
-                    totalItems,
+                    currentPage: parsedPage,
                     itemCount: dataResult.rows.length,
                     itemsPerPage: parsedLimit,
-                    totalPages,
-                    currentPage: parsedPage
+                    totalItems,
+                    totalPages
                 },
                 links
             };
         } catch (error) {
-            logger.error('Erro no BaseRepository findAll', { 
-                error: error.message, 
-                stack: error.stack,
-                tableName: this.tableName,
-                options
+            logger.error('Erro ao buscar registros', { 
+                error, 
+                tableName: this.tableName, 
+                page, 
+                limit, 
+                filters 
             });
             throw error;
         }
