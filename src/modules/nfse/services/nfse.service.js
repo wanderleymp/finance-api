@@ -2,6 +2,7 @@ const axios = require('axios');
 const { logger } = require('../../../middlewares/logger');
 const NFSeRepository = require('../repositories/nfse.repository');
 const NFSeDTO = require('../dto/nfse.dto');
+const nuvemFiscalTokenService = require('./nuvem-fiscal-token.service');
 
 class NFSeService {
   constructor(deps = {}) {
@@ -10,48 +11,77 @@ class NFSeService {
 
   async createNFSe(nfseData) {
     try {
+      logger.info('Criando NFSe', { 
+        dadosRecebidos: nfseData 
+      });
+
       // Validar dados
       const validatedData = NFSeDTO.validate(
         nfseData, 
         NFSeDTO.create()
       );
 
+      logger.info('Dados validados', { 
+        dadosValidados: validatedData 
+      });
+
       // Emitir NFSe na Nuvem Fiscal
-      const nfseEmitida = await this.emitirNFSeNuvemFiscal(
-        {}, 
-        validatedData
-      );
+      const nfseEmitida = await this.emitirNFSeNuvemFiscal(validatedData);
+
+      logger.info('NFSe emitida', { 
+        nfseEmitida 
+      });
 
       // Salvar no banco
-      return this.nfseRepository.createNFSe({
+      const nfseSalva = await this.nfseRepository.createNFSe({
         ...validatedData,
         ...nfseEmitida
       });
+
+      logger.info('NFSe salva no banco', { 
+        nfseSalva 
+      });
+
+      return nfseSalva;
     } catch (error) {
       logger.error('Erro ao criar NFSe', { 
         error: error.message, 
-        dados: nfseData 
+        dados: nfseData,
+        stack: error.stack 
       });
       throw error;
     }
   }
 
-  async emitirNFSeNuvemFiscal(credenciais, dadosNFSe) {
+  async emitirNFSeNuvemFiscal(dadosNFSe) {
     try {
-      // Configurações de mock para desenvolvimento
-      const mockCredenciais = {
-        client_id: process.env.NUVEM_FISCAL_CLIENT_ID || 'mock_client_id',
-        client_secret: process.env.NUVEM_FISCAL_CLIENT_SECRET || 'mock_client_secret'
-      };
+      // Obter token de autenticação
+      const token = await nuvemFiscalTokenService.obterToken();
+
+      logger.info('Token obtido para emissão de NFSe', {
+        tokenValido: !!token
+      });
+
+      // Configurar payload para Nuvem Fiscal
+      const payload = this.mapearPayloadNFSe(dadosNFSe);
+
+      logger.info('Payload para emissão de NFSe', { payload });
 
       // Enviar requisição para emissão de NFSe
-      const response = {
-        data: {
-          numero: 'MOCK_NUMERO_NFSE',
-          codigoVerificacao: 'MOCK_CODIGO_VERIFICACAO',
-          linkNFSe: 'https://mock.nuvemfiscal.com.br/nfse/mock'
+      const response = await axios.post(
+        'https://api.nuvemfiscal.com.br/nfse/emissao', 
+        payload,
+        {
+          headers: {
+            'Authorization': `Bearer ${token}`,
+            'Content-Type': 'application/json'
+          }
         }
-      };
+      );
+
+      logger.info('Resposta da Nuvem Fiscal', { 
+        data: response.data 
+      });
 
       return {
         numero_nfse: response.data.numero,
@@ -61,10 +91,33 @@ class NFSeService {
       };
     } catch (error) {
       logger.error('Erro ao emitir NFSe na Nuvem Fiscal', { 
-        error: error.message 
+        error: error.message,
+        response: error.response?.data,
+        stack: error.stack
       });
       throw error;
     }
+  }
+
+  mapearPayloadNFSe(dadosNFSe) {
+    return {
+      prestador: {
+        cnpj: dadosNFSe.prestador_cnpj,
+        razaoSocial: dadosNFSe.prestador_razao_social
+      },
+      tomador: {
+        cnpj: dadosNFSe.tomador_cnpj,
+        cpf: dadosNFSe.tomador_cpf,
+        razaoSocial: dadosNFSe.tomador_razao_social
+      },
+      servicos: dadosNFSe.itens.map(item => ({
+        descricao: item.descricao,
+        quantidade: item.quantidade,
+        valorUnitario: item.valor_unitario,
+        valorTotal: item.valor_total
+      })),
+      valorTotal: dadosNFSe.valor_total
+    };
   }
 
   async findNFSe(nfseId) {
