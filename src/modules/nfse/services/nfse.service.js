@@ -3,6 +3,7 @@ const { logger } = require('../../../middlewares/logger');
 const NFSeRepository = require('../repositories/nfse.repository');
 const NFSeDTO = require('../dto/nfse.dto');
 const nuvemFiscalTokenService = require('./nuvem-fiscal-token.service');
+const temporaryTokenService = require('../../tokens/services/temporary-token.service');
 
 class NFSeService {
   constructor(deps = {}) {
@@ -136,6 +137,51 @@ class NFSeService {
 
   async cancelNFSe(nfseId, motivoCancelamento) {
     return this.nfseRepository.cancelNFSe(nfseId, motivoCancelamento);
+  }
+
+  /**
+   * Lista NFSe para um determinado CNPJ
+   * @param {string} cnpjEmitente - CNPJ do emitente
+   * @param {Object} [filtros={}] - Filtros opcionais para a busca
+   * @returns {Promise<Object>} Resultado da busca de NFSe
+   */
+  async listarNfse(cnpjEmitente, filtros = {}) {
+    try {
+      // Obtém token válido
+      const token = await temporaryTokenService.obterToken('Nuvem Fiscal');
+
+      // Configurações padrão de filtro
+      const params = {
+        cpf_cnpj: cnpjEmitente,
+        ambiente: 'producao',
+        ...filtros
+      };
+
+      // Remove undefined values
+      Object.keys(params).forEach(key => params[key] === undefined && delete params[key]);
+
+      // Faz a requisição para a API da Nuvem Fiscal
+      const response = await axios.get('https://api.nuvemfiscal.com.br/nfse', {
+        headers: {
+          'Authorization': `Bearer ${token}`
+        },
+        params: params
+      });
+
+      // Mapeia a resposta para o formato esperado
+      return {
+        total: response.data.data.length || 0,
+        items: response.data.data || [],
+        pages: 1
+      };
+    } catch (error) {
+      logger.error('Erro ao listar NFSe', {
+        error: error.message,
+        cnpjEmitente,
+        errorResponse: error.response?.data
+      });
+      throw error;
+    }
   }
 }
 
