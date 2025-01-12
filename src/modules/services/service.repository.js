@@ -21,7 +21,7 @@ class ServiceRepository extends BaseRepository {
             const query = `
                 INSERT INTO ${this.tableName} (${fields.join(', ')}, created_at, updated_at)
                 VALUES (${placeholders}, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
-                RETURNING service_id, item_id, service_group_id, description, active, created_at, updated_at
+                RETURNING service_id, item_id, service_group_id, description AS service_description, active, created_at, updated_at
             `;
             
             const result = await this.pool.query(query, values);
@@ -48,7 +48,7 @@ class ServiceRepository extends BaseRepository {
                 UPDATE ${this.tableName}
                 SET ${setClause}, updated_at = CURRENT_TIMESTAMP
                 WHERE service_id = $${fields.length + 1} AND deleted_at IS NULL
-                RETURNING service_id, item_id, service_group_id, description, active, created_at, updated_at
+                RETURNING service_id, item_id, service_group_id, description AS service_description, active, created_at, updated_at
             `;
             
             const result = await this.pool.query(query, [...values, id]);
@@ -92,42 +92,46 @@ class ServiceRepository extends BaseRepository {
 
             let query = `
                 SELECT 
-                    s.*, 
-                    i.name as item_name, 
-                    sg.name as service_group_name,
+                    s.service_id, 
+                    s.item_id, 
+                    s.service_group_id, 
+                    i.description,
+                    i.name,
+                    i.active, 
+                    i.created_at, 
+                    i.updated_at,
+                    i.name AS item_name,
+                    i.description AS item_description,
+                    (SELECT name FROM service_groups WHERE service_group_id = s.service_group_id) AS service_group_name,
                     COUNT(*) OVER() as total_count
-                FROM ${this.tableName} s
-                LEFT JOIN items i ON s.item_id = i.item_id
-                LEFT JOIN service_groups sg ON s.service_group_id = sg.service_group_id
-                WHERE s.deleted_at IS NULL
+                FROM services s
+                JOIN items i ON s.item_id = i.item_id
+                WHERE i.deleted_at IS NULL
             `;
             const values = [];
             let paramCount = 1;
 
-            // Filtros dinâmicos
             if (filters.item_id) {
-                query += ` AND s.item_id = $${paramCount}`;
+                query += ` AND s.item_id = $${paramCount++}`;
                 values.push(filters.item_id);
-                paramCount++;
             }
 
             if (filters.service_group_id) {
-                query += ` AND s.service_group_id = $${paramCount}`;
+                query += ` AND s.service_group_id = $${paramCount++}`;
                 values.push(filters.service_group_id);
-                paramCount++;
+            }
+
+            if (filters.description) {
+                query += ` AND i.description ILIKE $${paramCount++}`;
+                values.push(`%${filters.description}%`);
             }
 
             if (filters.active !== undefined) {
-                query += ` AND s.active = $${paramCount}`;
+                query += ` AND i.active = $${paramCount++}`;
                 values.push(filters.active);
-                paramCount++;
             }
 
-            // Ordenação
-            query += ` ORDER BY s.created_at DESC`;
-
-            // Paginação
-            query += ` LIMIT $${paramCount} OFFSET $${paramCount + 1}`;
+            query += ` ORDER BY i.created_at DESC LIMIT $${paramCount++} OFFSET $${paramCount++}`;
             values.push(limit, offset);
 
             const result = await this.pool.query(query, values);
@@ -139,13 +143,20 @@ class ServiceRepository extends BaseRepository {
                 limit
             };
         } catch (error) {
-            logger.error('Erro ao buscar serviços', { error, filters });
+            logger.error('Erro ao buscar serviços', { 
+                error: error.message, 
+                filters,
+                page,
+                limit,
+                query: query,
+                values: values
+            });
             throw new DatabaseError('Erro ao buscar serviços', error);
         }
     }
 
     /**
-     * Busca detalhes de serviço com informações fiscais
+     * Busca detalhes de serviço
      * @param {number} itemId - ID do item de serviço
      * @returns {Promise<Object>} Detalhes do serviço
      */
@@ -153,7 +164,14 @@ class ServiceRepository extends BaseRepository {
         try {
             const query = `
                 SELECT 
-                    i.item_id,
+                    s.service_id,
+                    s.item_id,
+                    s.service_group_id,
+                    i.description,
+                    i.name,
+                    i.active,
+                    i.created_at,
+                    i.updated_at,
                     i.name AS item_name,
                     i.description AS item_description,
                     sm.ctribmun AS municipality_code,
@@ -165,17 +183,15 @@ class ServiceRepository extends BaseRepository {
                 LEFT JOIN service_groups sg ON s.service_group_id = sg.service_group_id
                 LEFT JOIN service_municipality sm ON sg.service_municipality_id = sm.service_municipality_id
                 LEFT JOIN service_lc116 sl ON sm.service_lc116_id = sl.service_lc116_id
-                WHERE i.item_id = $1 AND s.deleted_at IS NULL
+                WHERE s.item_id = $1 AND i.deleted_at IS NULL
             `;
 
             const result = await this.pool.query(query, [itemId]);
-
             return result.rows[0] || null;
         } catch (error) {
-            logger.error('Erro ao buscar detalhes do serviço', {
-                itemId,
-                error: error.message,
-                stack: error.stack
+            logger.error('Erro ao buscar detalhes do serviço', { 
+                error: error.message, 
+                itemId 
             });
             throw new DatabaseError('Erro ao buscar detalhes do serviço', error);
         }
@@ -194,7 +210,14 @@ class ServiceRepository extends BaseRepository {
 
             const query = `
                 SELECT 
-                    i.item_id,
+                    s.service_id,
+                    s.item_id,
+                    s.service_group_id,
+                    i.description,
+                    i.name,
+                    i.active,
+                    i.created_at,
+                    i.updated_at,
                     i.name AS item_name,
                     i.description AS item_description,
                     sm.ctribmun AS municipality_code,
@@ -206,17 +229,15 @@ class ServiceRepository extends BaseRepository {
                 LEFT JOIN service_groups sg ON s.service_group_id = sg.service_group_id
                 LEFT JOIN service_municipality sm ON sg.service_municipality_id = sm.service_municipality_id
                 LEFT JOIN service_lc116 sl ON sm.service_lc116_id = sl.service_lc116_id
-                WHERE i.item_id = ANY($1) AND s.deleted_at IS NULL
+                WHERE s.item_id = ANY($1) AND i.deleted_at IS NULL
             `;
 
             const result = await this.pool.query(query, [itemIds]);
-
             return result.rows;
         } catch (error) {
-            logger.error('Erro ao buscar detalhes de múltiplos serviços', {
-                itemIds,
-                error: error.message,
-                stack: error.stack
+            logger.error('Erro ao buscar detalhes de múltiplos serviços', { 
+                error: error.message, 
+                itemIds 
             });
             throw new DatabaseError('Erro ao buscar detalhes de múltiplos serviços', error);
         }

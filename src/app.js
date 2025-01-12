@@ -29,6 +29,7 @@ const taskDependenciesModule = require('./modules/taskdependencies/taskdependenc
 const taskLogsModule = require('./modules/tasklogs/tasklogs.module');
 const MessagesModule = require('./modules/messages/messages.module');
 const NFSeModule = require('./modules/nfse/nfse.module');
+const servicesRoutes = require('./modules/services/service.routes');
 
 const app = express();
 
@@ -215,6 +216,9 @@ app.use('/installments', installmentModule(app));
 
 // Registra o módulo de NFSe
 NFSeModule.register(app);
+
+// Registra o módulo de serviços
+app.use('/services', servicesRoutes);
 
 // Rota 404 para capturar requisições não encontradas
 app.use((req, res, next) => {
