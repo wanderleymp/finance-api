@@ -45,13 +45,54 @@ app.use((req, res, next) => {
     next();
 });
 
+// Middleware de log de CORS
+app.use((req, res, next) => {
+    logger.info('Detalhes de CORS', {
+        origin: req.headers.origin,
+        method: req.method,
+        path: req.path,
+        headers: {
+            origin: req.headers.origin,
+            'access-control-request-method': req.headers['access-control-request-method'],
+            'access-control-request-headers': req.headers['access-control-request-headers']
+        }
+    });
+    next();
+});
+
 // Configurações básicas
 app.use(cors({
-    origin: ['https://dev.agilefinance.com.br', 'https://api.agilefinance.com.br', 'http://localhost:3000', 'http://localhost:5173'],
+    origin: function(origin, callback){
+        // Permitir requisições sem origem (como mobile ou curl)
+        if(!origin) return callback(null, true);
+        
+        // Lista de origens permitidas
+        const allowedOrigins = [
+            'https://dev.agilefinance.com.br', 
+            'https://api.agilefinance.com.br', 
+            /^http:\/\/localhost:\d+$/,  // Qualquer porta localhost
+            /^http:\/\/127\.0\.0\.1:\d+$/ // Qualquer porta 127.0.0.1
+        ];
+
+        // Verifica se a origem está na lista
+        const isAllowed = allowedOrigins.some(allowed => {
+            if (allowed instanceof RegExp) {
+                return allowed.test(origin);
+            }
+            return allowed === origin;
+        });
+
+        if (isAllowed) {
+            callback(null, true);
+        } else {
+            callback(new Error('CORS não permitido'));
+        }
+    },
     methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS'],
-    allowedHeaders: ['Content-Type', 'Authorization', 'Accept'],
+    allowedHeaders: ['Content-Type', 'Authorization', 'Accept', 'Origin', 'X-Requested-With'],
     credentials: true,
-    optionsSuccessStatus: 200
+    optionsSuccessStatus: 200,
+    preflightContinue: false
 }));
 
 app.use(
