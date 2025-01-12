@@ -8,6 +8,7 @@
 5. [Documentação](#documentação)
 6. [Banco de Dados](#banco-de-dados)
 7. [Segurança](#segurança)
+8. [Repositórios e Padrão de Paginação](#repositórios-e-padrão-de-paginação)
 
 ## Estrutura do Projeto
 
@@ -168,6 +169,77 @@ describe('ModuleTest', () => {
 - Usar HTTPS em produção
 - Implementar rate limiting
 - Validar permissões de acesso
+
+## Repositórios e Padrão de Paginação
+
+### Estrutura de Repositórios
+
+#### Interface Base de Repositório
+Todos os repositórios devem implementar a interface `IBaseRepository`, que define um contrato padrão para operações CRUD e paginação:
+
+```typescript
+interface IBaseRepository<T> {
+  findAll(
+    page?: number, 
+    limit?: number, 
+    filters?: object, 
+    options?: { 
+      customQuery?: string, 
+      countQuery?: string,
+      queryParams?: any[] 
+    }
+  ): Promise<{
+    items: T[];
+    meta: {
+      totalItems: number;
+      itemCount: number;
+      itemsPerPage: number;
+      totalPages: number;
+      currentPage: number;
+    }
+  }>;
+  
+  findById(id: number): Promise<T | null>;
+  create(data: Partial<T>): Promise<T>;
+  update(id: number, data: Partial<T>): Promise<T>;
+  delete(id: number): Promise<boolean>;
+}
+```
+
+#### Padrão de Paginação RESTful
+Todos os métodos de listagem devem seguir o padrão RESTful com:
+- Retorno de `items` contendo os dados
+- Objeto `meta` com informações de paginação
+- Parâmetros padrão:
+  - `page`: Página atual (padrão: 1)
+  - `limit`: Itens por página (padrão: 10)
+  - `filters`: Filtros de busca
+  - `options`: Opções customizadas para queries
+
+#### Exemplo de Implementação
+```javascript
+class ServiceRepository implements IBaseRepository<Service> {
+  async findAll(page = 1, limit = 10, filters = {}) {
+    // Implementação seguindo o padrão RESTful
+    return {
+      items: resultRows,
+      meta: {
+        totalItems: totalCount,
+        itemCount: resultRows.length,
+        itemsPerPage: limit,
+        totalPages: Math.ceil(totalCount / limit),
+        currentPage: page
+      }
+    };
+  }
+}
+```
+
+### Boas Práticas
+- Use sempre queries parametrizadas
+- Implemente tratamento de erros
+- Documente métodos com JSDoc
+- Mantenha a consistência entre repositórios
 
 ## Contribuindo
 

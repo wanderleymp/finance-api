@@ -86,6 +86,14 @@ class ServiceController {
                 active
             } = req.query;
 
+            logger.debug('ServiceController.findAll - Entrada', {
+                page,
+                limit,
+                item_id,
+                service_group_id,
+                active
+            });
+
             const filters = {};
             if (item_id) filters.item_id = Number(item_id);
             if (service_group_id) filters.service_group_id = Number(service_group_id);
@@ -97,10 +105,25 @@ class ServiceController {
                 Number(limit)
             );
             
-            res.json(result);
+            logger.debug('ServiceController.findAll - Resultado', {
+                resultKeys: Object.keys(result),
+                itemsCount: result.items ? result.items.length : 'Sem items',
+                meta: result.meta
+            });
+
+            // Garantir resposta RESTful
+            res.json({
+                items: result.items,
+                meta: result.meta,
+                links: result.links
+            });
         } catch (error) {
-            logger.error('Erro ao buscar serviços', { error, query: req.query });
-            res.status(500).json({ error: 'Erro interno do servidor' });
+            logger.error('Erro ao buscar serviços', { 
+                error: error.message, 
+                stack: error.stack,
+                query: req.query 
+            });
+            res.status(500).json({ error: 'Erro interno do servidor', details: error.message });
         }
     }
 

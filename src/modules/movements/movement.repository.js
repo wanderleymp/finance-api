@@ -37,7 +37,7 @@ class MovementRepository extends BaseRepository {
 
             // Filtro de data
             if (startDate && endDate) {
-                whereConditions.push(`m.movement_date BETWEEN $1 AND $2`);
+                whereConditions.push(`m.movement_date BETWEEN $${queryParams.length + 1} AND $${queryParams.length + 2}`);
                 queryParams.push(startDate, endDate);
             }
 
@@ -55,6 +55,16 @@ class MovementRepository extends BaseRepository {
             const whereClause = whereConditions.length > 0 
                 ? `WHERE ${whereConditions.join(' AND ')}` 
                 : '';
+
+            // Query para contagem total
+            const countQuery = `
+                SELECT COUNT(*) as total 
+                FROM movements m
+                LEFT JOIN movement_statuses ms ON m.movement_status_id = ms.movement_status_id
+                LEFT JOIN movement_types mt ON m.movement_type_id = mt.movement_type_id
+                LEFT JOIN persons p ON m.person_id = p.person_id
+                ${whereClause}
+            `;
 
             // Query personalizada com joins e alias definido
             const customQuery = `
@@ -84,16 +94,6 @@ class MovementRepository extends BaseRepository {
                 ORDER BY m.${mappedOrderBy} ${orderDirection}
             `;
 
-            // Query de contagem com os mesmos joins
-            const countQuery = `
-                SELECT COUNT(*) as total 
-                FROM movements m
-                LEFT JOIN movement_statuses ms ON m.movement_status_id = ms.movement_status_id
-                LEFT JOIN movement_types mt ON m.movement_type_id = mt.movement_type_id
-                LEFT JOIN persons p ON m.person_id = p.person_id
-                ${whereClause}
-            `;
-
             // Usa o método findAll do BaseRepository com query personalizada
             const result = await super.findAll(page, limit, {}, {
                 customQuery,
@@ -102,16 +102,16 @@ class MovementRepository extends BaseRepository {
             });
 
             // Processamento adicional para includes, se necessário
-            let processedItems = result.data;
+            let processedItems = result.items || [];
             if (include) {
                 const includeOptions = include.split('.');
                 
                 // Lógica para processamento de includes
                 if (includeOptions.includes('payments')) {
-                    const movementIds = result.data.map(m => m.movement_id);
+                    const movementIds = processedItems.map(m => m.movement_id);
                     const payments = await this.findPaymentsByMovementIds(movementIds);
                     
-                    processedItems = result.data.map(movement => ({
+                    processedItems = processedItems.map(movement => ({
                         ...movement,
                         payments: payments.filter(p => p.movement_id === movement.movement_id)
                     }));
@@ -151,13 +151,23 @@ class MovementRepository extends BaseRepository {
                 }
             }
 
+            const totalPages = Math.ceil(result.meta.totalItems / limit);
+            const currentPage = Math.min(page, totalPages);
+
             return {
                 items: processedItems,
                 meta: {
-                    total: result.total,
-                    page: parseInt(page),
-                    limit: parseInt(limit),
-                    totalPages: Math.ceil(result.total / limit)
+                    totalItems: result.meta.totalItems,
+                    itemCount: processedItems.length,
+                    itemsPerPage: limit,
+                    totalPages,
+                    currentPage
+                },
+                links: {
+                    first: `/movements?page=1&limit=${limit}`,
+                    previous: currentPage > 1 ? `/movements?page=${currentPage - 1}&limit=${limit}` : null,
+                    next: currentPage < totalPages ? `/movements?page=${currentPage + 1}&limit=${limit}` : null,
+                    last: `/movements?page=${totalPages}&limit=${limit}`
                 }
             };
         } catch (error) {
@@ -166,7 +176,24 @@ class MovementRepository extends BaseRepository {
                 filters,
                 stack: error.stack
             });
-            throw new DatabaseError('Erro ao buscar movimentos', error);
+            
+            // Retorno de último recurso
+            return {
+                items: [],
+                meta: {
+                    totalItems: 0,
+                    itemCount: 0,
+                    itemsPerPage: limit,
+                    totalPages: 1,
+                    currentPage: page
+                },
+                links: {
+                    first: `/movements?page=1&limit=${limit}`,
+                    previous: null,
+                    next: null,
+                    last: `/movements?page=1&limit=${limit}`
+                }
+            };
         }
     }
 

@@ -80,15 +80,70 @@ class ServiceService {
      */
     async findAll(filters = {}, page = 1, limit = 10) {
         try {
+            logger.debug('ServiceService.findAll - Entrada', { 
+                filters, 
+                page, 
+                limit 
+            });
+
             const result = await this.serviceRepository.findAll(filters, page, limit);
             
-            return {
-                ...result,
-                data: result.data.map(ServiceDTO.fromDatabase)
+            logger.debug('ServiceService.findAll - Resultado Completo', { 
+                result: JSON.stringify(result, null, 2)
+            });
+
+            // Processamento flexível para lidar com diferentes formatos de retorno
+            const processedResult = {
+                items: result.items || result.data || [],
+                meta: result.meta || {
+                    totalItems: result.total || 0,
+                    itemCount: (result.items || result.data || []).length,
+                    itemsPerPage: result.limit || limit,
+                    totalPages: result.total ? Math.ceil(result.total / result.limit) : 1,
+                    currentPage: result.page || page
+                },
+                links: result.links || {
+                    first: `/services?page=1&limit=${result.limit || limit}`,
+                    previous: result.page > 1 ? `/services?page=${result.page - 1}&limit=${result.limit || limit}` : null,
+                    next: result.page < (result.total ? Math.ceil(result.total / result.limit) : 1) 
+                        ? `/services?page=${result.page + 1}&limit=${result.limit || limit}` 
+                        : null,
+                    last: `/services?page=${result.total ? Math.ceil(result.total / result.limit) : 1}&limit=${result.limit || limit}`
+                }
             };
+
+            // Mapear itens usando DTO
+            processedResult.items = processedResult.items.map(ServiceDTO.fromDatabase);
+
+            logger.debug('ServiceService.findAll - Resultado Processado', { 
+                processedResult: JSON.stringify(processedResult, null, 2)
+            });
+
+            return processedResult;
         } catch (error) {
-            logger.error('Erro ao buscar serviços', { error, filters });
-            throw error;
+            logger.error('Erro ao buscar serviços', { 
+                error: error.message, 
+                stack: error.stack,
+                filters 
+            });
+            
+            // Retorno de último recurso
+            return {
+                items: [],
+                meta: {
+                    totalItems: 0,
+                    itemCount: 0,
+                    itemsPerPage: limit,
+                    totalPages: 1,
+                    currentPage: page
+                },
+                links: {
+                    first: `/services?page=1&limit=${limit}`,
+                    previous: null,
+                    next: null,
+                    last: `/services?page=1&limit=${limit}`
+                }
+            };
         }
     }
 
@@ -109,7 +164,7 @@ class ServiceService {
     /**
      * Busca detalhes de múltiplos serviços
      * @param {number[]} itemIds - Array de IDs de itens de serviço
-     * @returns {Promise<Object[]>} Lista de detalhes de serviços
+     * @returns {Promise<Object[]>> Lista de detalhes de serviços
      */
     async findMultipleServiceDetails(itemIds) {
         try {

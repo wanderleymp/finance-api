@@ -9,23 +9,28 @@ class BaseRepository {
     }
 
     /**
-     * Lista todos os registros
+     * Lista todos os registros seguindo padrão RESTful
+     * @param {number} page - Número da página
+     * @param {number} limit - Quantidade de itens por página
+     * @param {Object} filters - Filtros para busca
+     * @param {Object} options - Opções adicionais para query
+     * @returns {Promise<Object>} Resultado da busca no padrão RESTful
      */
     async findAll(page, limit, filters = {}, options = {}) {
         try {
+            // Garantir que page e limit sejam números positivos
+            const parsedPage = Math.max(1, Number(page) || 1);
+            const parsedLimit = Math.max(1, Number(limit) || 10);
+            const offset = (parsedPage - 1) * parsedLimit;
+
             // Log detalhado de entrada
             logger.debug('BaseRepository.findAll - Entrada', {
-                page,
-                limit,
+                page: parsedPage,
+                limit: parsedLimit,
                 filters: JSON.stringify(filters),
                 tableName: this.tableName,
                 customQuery: !!options.customQuery
             });
-
-            // Parâmetros padrão
-            const parsedPage = parseInt(page) || 1;
-            const parsedLimit = parseInt(limit) || 10;
-            const offset = (parsedPage - 1) * parsedLimit;
 
             // Preparar query e parâmetros
             let query, countQuery, queryParams;
@@ -78,17 +83,35 @@ class BaseRepository {
                 this.pool.query(countQuery, queryParams.slice(0, -2)) // Remove os últimos dois parâmetros de paginação
             ]);
 
+            // Calcular total de páginas
+            const totalItems = parseInt(countResult.rows[0]?.total || 0);
+            const totalPages = Math.ceil(totalItems / parsedLimit);
+
+            // Construir links de paginação
+            const baseUrl = `/${this.tableName}`; // Ajuste conforme necessário
+            const links = {
+                first: `${baseUrl}?page=1&limit=${parsedLimit}`,
+                previous: parsedPage > 1 ? `${baseUrl}?page=${parsedPage - 1}&limit=${parsedLimit}` : null,
+                next: parsedPage < totalPages ? `${baseUrl}?page=${parsedPage + 1}&limit=${parsedLimit}` : null,
+                last: `${baseUrl}?page=${totalPages}&limit=${parsedLimit}`
+            };
+
             // Log dos resultados
             logger.debug('BaseRepository.findAll - Resultados', {
                 dataResultCount: dataResult.rows.length,
-                totalItems: countResult.rows[0]?.total
+                totalItems
             });
 
             return {
-                data: dataResult.rows,
-                total: parseInt(countResult.rows[0]?.total || 0),
-                page: parsedPage,
-                limit: parsedLimit
+                items: dataResult.rows,
+                meta: {
+                    totalItems,
+                    itemCount: dataResult.rows.length,
+                    itemsPerPage: parsedLimit,
+                    totalPages,
+                    currentPage: parsedPage
+                },
+                links
             };
         } catch (error) {
             logger.error('Erro no BaseRepository findAll', { 
@@ -451,7 +474,7 @@ class BaseRepository {
         logger.debug('BaseRepository.buildWhereClause - Resultado Final', {
             whereClause,
             queryParams,
-            paramCount
+            paramCount: queryParams.length
         });
 
         return {

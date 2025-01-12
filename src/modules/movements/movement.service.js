@@ -203,43 +203,109 @@ class MovementService extends IMovementService {
 
     /**
      * Lista movimentos com paginação e filtros
+     * @param {Object} filters - Filtros para busca
+     * @param {number} page - Número da página
+     * @param {number} limit - Limite de itens por página
+     * @param {boolean} detailed - Flag para busca detalhada
+     * @returns {Promise<Object>} Lista paginada de movimentos
      */
     async findAll(page = 1, limit = 10, filters = {}, detailed = false) {
         try {
-            logger.info('Serviço: Listando movimentos', { 
-                page, 
-                limit, 
-                filters,
-                detailed 
-            });
-
-            const result = await this.movementRepository.findAll(page, limit, filters);
-
-            if (detailed) {
-                // Se detailed for true, adiciona informações adicionais para cada movimento
-                const detailedItems = await Promise.all(
-                    result.items.map(async (movement) => {
-                        const movementPayments = await this.movementPaymentRepository.findByMovementId(movement.movement_id);
-                        return {
-                            ...movement,
-                            payments: movementPayments
-                        };
-                    })
-                );
-
-                result.items = detailedItems;
+            // Normaliza parâmetros
+            if (typeof page === 'object') {
+                [filters, page, limit, detailed] = [page, 1, 10, false];
             }
 
-            return result;
-        } catch (error) {
-            logger.error('Serviço: Erro ao listar movimentos', {
-                error: error.message,
-                error_stack: error.stack,
-                page,
+            page = Number(page) || 1;
+            limit = Number(limit) || 10;
+
+            logger.debug('MovementService.findAll - Entrada DETALHADA', { 
+                filters: JSON.stringify(filters), 
+                page, 
                 limit,
-                filters
+                detailed,
+                filtersType: typeof filters,
+                pageType: typeof page,
+                limitType: typeof limit
             });
-            throw error;
+
+            // Executa busca no repositório
+            const result = await this.movementRepository.findAll(page, limit, filters);
+            
+            logger.debug('MovementService.findAll - Resultado Repositório DETALHADO', { 
+                resultKeys: Object.keys(result),
+                itemsCount: result.items ? result.items.length : 0,
+                resultJSON: JSON.stringify(result)
+            });
+
+            // Se detailed for true, adiciona detalhes de cada movimento
+            const processedItems = detailed 
+                ? await Promise.all(
+                    (result.items || []).map(async (movement) => {
+                        try {
+                            const detailedMovement = await this.findById(movement.movement_id, true);
+                            return detailedMovement;
+                        } catch (error) {
+                            logger.warn('Erro ao buscar detalhes do movimento', { 
+                                movementId: movement.movement_id,
+                                error: error.message 
+                            });
+                            return movement;
+                        }
+                    })
+                )
+                : (result.items || []);
+
+            // Prepara resultado final
+            const processedResult = {
+                items: processedItems,
+                meta: result.meta || {
+                    totalItems: 0,
+                    itemCount: 0,
+                    itemsPerPage: limit,
+                    totalPages: 1,
+                    currentPage: page
+                },
+                links: result.links || {
+                    first: `/movements?page=1&limit=${limit}`,
+                    previous: null,
+                    next: null,
+                    last: `/movements?page=1&limit=${limit}`
+                }
+            };
+
+            logger.debug('MovementService.findAll - Resultado Processado DETALHADO', { 
+                processedResultKeys: Object.keys(processedResult),
+                processedItemsCount: processedResult.items.length,
+                processedResultJSON: JSON.stringify(processedResult)
+            });
+
+            return processedResult;
+        } catch (error) {
+            logger.error('Erro ao buscar movimentos', { 
+                error: error.message, 
+                stack: error.stack,
+                filters: JSON.stringify(filters),
+                errorObject: JSON.stringify(error, Object.getOwnPropertyNames(error))
+            });
+            
+            // Retorno de último recurso
+            return {
+                items: [],
+                meta: {
+                    totalItems: 0,
+                    itemCount: 0,
+                    itemsPerPage: limit,
+                    totalPages: 1,
+                    currentPage: page
+                },
+                links: {
+                    first: `/movements?page=1&limit=${limit}`,
+                    previous: null,
+                    next: null,
+                    last: `/movements?page=1&limit=${limit}`
+                }
+            };
         }
     }
 
