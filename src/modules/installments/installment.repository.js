@@ -17,11 +17,18 @@ class InstallmentRepository {
         const params = [];
         let paramCount = 0;
 
-        if (filters.start_date && filters.end_date) {
-            const startDate = moment(filters.start_date).startOf('day').toISOString();
-            const endDate = moment(filters.end_date).endOf('day').toISOString();
+        // Normaliza o filtro de nome para full_name
+        const fullName = filters.full_name || filters.fullName;
+        
+        // Normaliza filtros de data
+        const startDate = filters.start_date || filters.startDate;
+        const endDate = filters.end_date || filters.endDate;
+
+        if (startDate && endDate) {
+            const formattedStartDate = moment(startDate).startOf('day').toISOString();
+            const formattedEndDate = moment(endDate).endOf('day').toISOString();
             conditions.push(`i.due_date BETWEEN $${++paramCount} AND $${++paramCount}`);
-            params.push(startDate, endDate);
+            params.push(formattedStartDate, formattedEndDate);
         }
 
         if (filters.status) {
@@ -44,9 +51,9 @@ class InstallmentRepository {
             params.push(filters.amount);
         }
 
-        if (filters.full_name) {
+        if (fullName) {
             conditions.push(`p.full_name ILIKE $${++paramCount}`);
-            params.push(`%${filters.full_name}%`);
+            params.push(`%${fullName}%`);
         }
 
         const whereClause = conditions.length > 0 
@@ -60,6 +67,13 @@ class InstallmentRepository {
         try {
             const includeBoletos = filters.include === 'boletos';
             const { whereClause, queryParams } = this.buildWhereClause(filters);
+            
+            // Log de depuração
+            logger.info('Filtros de parcelas', { 
+                filters, 
+                whereClause, 
+                queryParams 
+            });
             
             // Calculamos o offset aqui para garantir que está correto
             const parsedPage = parseInt(page) || 1;

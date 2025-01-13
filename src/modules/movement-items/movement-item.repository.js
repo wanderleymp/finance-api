@@ -2,6 +2,7 @@ const { systemDatabase } = require('../../config/database');
 const { logger } = require('../../middlewares/logger');
 const BaseRepository = require('../../repositories/base/BaseRepository');
 const MovementItemDTO = require('./dto/movement-item.dto');
+const ServiceRepository = require('../services/service.repository');
 
 class MovementItemRepository extends BaseRepository {
     constructor() {
@@ -205,31 +206,31 @@ class MovementItemRepository extends BaseRepository {
             const query = `
                 SELECT 
                     mi.*,
-                    vw.cnae,
-                    vw.cod_tributacao,
-                    vw.descricao_servico,
-                    vw.aliquota_iss,
-                    vw.valor_iss,
                     i.name as item_name
                 FROM movement_items mi
-                JOIN vw_services_details vw ON vw.item_id = mi.item_id
                 LEFT JOIN items i ON mi.item_id = i.item_id
                 WHERE mi.movement_id = $1
             `;
 
             const result = await this.pool.query(query, [movementId]);
 
-            return result.rows.map(row => ({
-                ...row,
-                total_value: parseFloat(row.quantity) * parseFloat(row.unit_value),
-                servico: {
-                    cnae: row.cnae,
-                    cod_tributacao: row.cod_tributacao,
-                    descricao_servico: row.descricao_servico,
-                    aliquota_iss: parseFloat(row.aliquota_iss),
-                    valor_iss: parseFloat(row.valor_iss)
-                }
-            }));
+            const serviceRepository = new ServiceRepository();
+            const serviceDetailsPromises = result.rows.map(async (row) => {
+                const serviceDetails = await serviceRepository.findServiceDetails(row.item_id);
+                return {
+                    ...row,
+                    total_value: parseFloat(row.quantity) * parseFloat(row.unit_value),
+                    servico: serviceDetails ? {
+                        cnae: serviceDetails.cnae,
+                        cod_tributacao: serviceDetails.lc116_code,
+                        descricao_servico: serviceDetails.item_description,
+                        aliquota_iss: parseFloat(serviceDetails.tax_rate || 0.05),
+                        valor_iss: parseFloat(row.quantity) * parseFloat(row.unit_value) * parseFloat(serviceDetails.tax_rate || 0.05)
+                    } : null
+                };
+            });
+
+            return await Promise.all(serviceDetailsPromises);
         } catch (error) {
             logger.error('Erro ao buscar itens detalhados do movimento:', {
                 movementId,

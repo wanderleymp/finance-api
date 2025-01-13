@@ -18,6 +18,9 @@ const n8nService = require('../../services/n8n.service');
 const CacheService = require('../../services/cache.service');
 const express = require('express');
 const { systemDatabase } = require('../../config/database');
+const NfseService = require('../nfse/nfse.service');
+const NfseRepository = require('../nfse/nfse.repository');
+const ServiceRepository = require('../services/service.repository');
 
 // Instancia os repositórios
 const personRepository = new PersonRepository();
@@ -31,6 +34,8 @@ const boletoRepository = new BoletoRepository(systemDatabase.pool);
 const taskRepository = new TaskRepository();
 const personContactRepository = new PersonContactRepository();
 const cacheService = new CacheService('movements');
+const nfseRepository = new NfseRepository();
+const serviceRepository = new ServiceRepository();
 
 // Instancia os serviços auxiliares
 const taskService = new TaskService({ taskRepository });
@@ -58,6 +63,9 @@ const movementPaymentService = new MovementPaymentService({
     boletoService
 });
 
+// Instancia o serviço de NFSe
+const nfseService = new NfseService(nfseRepository);
+
 // Instancia o serviço principal
 const service = new MovementService({ 
     movementRepository: repository,
@@ -72,7 +80,9 @@ const service = new MovementService({
     movementPaymentRepository,
     boletoRepository,
     boletoService,
-    installmentService
+    installmentService,
+    nfseService,
+    serviceRepository
 });
 
 // Instancia o controller

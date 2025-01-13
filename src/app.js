@@ -73,6 +73,7 @@ app.use(cors({
         const allowedOrigins = [
             'https://dev.agilefinance.com.br', 
             'https://api.agilefinance.com.br', 
+            'https://app.agilefinance.com.br',  
             /^http:\/\/localhost:\d+$/,  // Qualquer porta localhost
             /^http:\/\/127\.0\.0\.1:\d+$/ // Qualquer porta 127.0.0.1
         ];

@@ -132,6 +132,41 @@ class NfseController {
             return errorResponse(res, 400, 'Erro ao remover NFSe', error);
         }
     }
+
+    /**
+     * Emitir NFS-e via Nuvem Fiscal
+     * @param {Object} req - Requisição HTTP
+     * @param {Object} res - Resposta HTTP
+     * @returns {Promise<void>}
+     */
+    async emitirNfse(req, res) {
+        try {
+            const nfseData = req.body;
+            logger.info('Recebendo dados para emissão de NFSe', { 
+                dadosRecebidos: JSON.stringify(nfseData, null, 2) 
+            });
+
+            const result = await this.service.emitirNfseNuvemFiscal(nfseData);
+            
+            res.status(201).json({
+                message: 'NFS-e emitida com sucesso',
+                data: result
+            });
+        } catch (error) {
+            logger.error('Erro detalhado na emissão de NFSe', {
+                errorMessage: error.message,
+                errorStack: error.stack,
+                errorObject: JSON.stringify(error, Object.getOwnPropertyNames(error))
+            });
+
+            res.status(400).json({
+                success: false,
+                message: 'Falha na emissão de NFS-e',
+                error: error.message,
+                details: error.stack
+            });
+        }
+    }
 }
 
 module.exports = NfseController;

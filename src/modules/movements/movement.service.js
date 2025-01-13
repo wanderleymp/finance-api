@@ -10,10 +10,11 @@ const { ValidationError } = require('../../utils/errors');
 const IMovementService = require('./interfaces/IMovementService');
 const MovementResponseDTO = require('./dto/movement-response.dto');
 const MovementPaymentService = require('../movement-payments/movement-payment.service');
-const BoletoRepository = require('../boletos/boleto.repository'); // Adicionado o BoletoRepository
+const BoletoRepository = require('../boletos/boleto.repository'); 
 const LicenseRepository = require('../../repositories/licenseRepository');
 const MovementItemRepository = require('../movement-items/movement-item.repository');
-const ServiceRepository = require('../services/service.repository'); // Adicionado o ServiceRepository
+const ServiceRepository = require('../services/service.repository'); 
+const { systemDatabase } = require('../../config/database');
 
 class MovementService extends IMovementService {
     constructor({ 
@@ -27,13 +28,14 @@ class MovementService extends IMovementService {
         movementPaymentService,
         personContactRepository,
         boletoRepository,
-        boletoService, // Adicionar boletoService
-        movementPaymentRepository, // Adicionando este parâmetro
-        installmentService, // Adicionar installmentService
-        licenseRepository, // Adicionar licenseRepository
-        movementItemRepository, // Adicionar movementItemRepository
-        nfseService, // Adicionar nfseService
-        serviceRepository // Adicionar serviceRepository
+        boletoService,
+        movementPaymentRepository,
+        installmentService,
+        licenseRepository,
+        movementItemRepository,
+        nfseService,
+        serviceRepository,
+        billingMessageService
     }) {
         super();
         
@@ -47,15 +49,16 @@ class MovementService extends IMovementService {
         this.movementPaymentService = movementPaymentService;
         this.personContactRepository = personContactRepository;
         this.boletoRepository = boletoRepository;
-        this.boletoService = boletoService; // Adicionar atribuição
-        this.movementPaymentRepository = movementPaymentRepository; // Adicionando esta linha
-        this.installmentService = installmentService; // Adicionar atribuição
-        this.licenseRepository = licenseRepository; // Adicionar atribuição
-        this.movementItemRepository = movementItemRepository; // Adicionar atribuição
-        this.nfseService = nfseService; // Adicionar atribuição
-        this.serviceRepository = serviceRepository; // Adicionar atribuição
-        this.billingMessageService = new BillingMessageService();
-
+        this.boletoService = boletoService;
+        this.movementPaymentRepository = movementPaymentRepository;
+        this.installmentService = installmentService;
+        this.licenseRepository = licenseRepository;
+        this.movementItemRepository = movementItemRepository;
+        this.nfseService = nfseService;
+        this.serviceRepository = serviceRepository;
+        this.billingMessageService = billingMessageService;
+        this.pool = systemDatabase.pool;
+        
         this.cachePrefix = 'movements';
         this.cacheTTL = {
             list: 5 * 60, // 5 minutos
@@ -132,6 +135,9 @@ class MovementService extends IMovementService {
                 movement_type_id: movement.movement_type_id,
                 person_id: movement.person_id 
             });
+
+            // Definir provider_id como o mesmo que person_id se não existir
+            movement.provider_id = movement.provider_id || movement.person_id;
 
             // Busca pagamentos com installments e boletos
             const payments = await this.movementPaymentService.findByMovementId(movement.movement_id, true);
@@ -822,8 +828,11 @@ class MovementService extends IMovementService {
         }
 
         // Verificar se o método de pagamento existe
-        const paymentMethodExists = await this.paymentMethodRepository.findById(paymentData.payment_method_id);
-        if (!paymentMethodExists) {
+        const paymentMethodExists = await this.pool.query(`
+            SELECT * FROM payment_methods WHERE payment_method_id = $1
+        `, [paymentData.payment_method_id]);
+
+        if (paymentMethodExists.rows.length === 0) {
             throw new ValidationError('Método de pagamento não encontrado');
         }
 
@@ -860,24 +869,26 @@ class MovementService extends IMovementService {
             logger.info('Service: Criando boletos para movimento', { movementId });
 
             // Buscar parcelas do movimento
-            const parcelas = await this.installmentRepository.findByMovementId(movementId);
+            const parcelas = await this.pool.query(`
+                SELECT * FROM installments WHERE movement_id = $1
+            `, [movementId]);
             
             logger.info('Service: Parcelas encontradas', { 
                 movementId, 
-                quantidadeParcelas: parcelas.length,
-                parcelas: parcelas.map(p => p.installment_id)
+                quantidadeParcelas: parcelas.rows.length,
+                parcelas: parcelas.rows.map(p => p.installment_id)
             });
 
-            if (!parcelas || parcelas.length === 0) {
+            if (parcelas.rows.length === 0) {
                 logger.warn('Service: Nenhuma parcela encontrada para o movimento', { movementId });
                 return [];
             }
 
             // Filtrar parcelas sem boleto
             const parcelasSemBoleto = [];
-            for (const parcela of parcelas) {
+            for (const parcela of parcelas.rows) {
                 const query = 'SELECT COUNT(*) as count FROM boletos WHERE installment_id = $1';
-                const result = await this.boletoRepository.pool.query(query, [parcela.installment_id]);
+                const result = await this.pool.query(query, [parcela.installment_id]);
                 
                 if (result.rows[0].count === '0') {
                     parcelasSemBoleto.push(parcela);
@@ -940,17 +951,19 @@ class MovementService extends IMovementService {
         });
 
         // Busca installments do movimento
-        const installments = await this.installmentRepository.findByMovementId(movementId);
+        const installments = await this.pool.query(`
+            SELECT * FROM installments WHERE movement_id = $1
+        `, [movementId]);
         
         // Log para rastrear parcelas
         logger.info('Parcelas encontradas para cancelamento', {
             movementId,
-            installmentsCount: installments.length,
-            installmentIds: installments.map(i => i.installment_id)
+            installmentsCount: installments.rows.length,
+            installmentIds: installments.rows.map(i => i.installment_id)
         });
 
         // Processamento assíncrono para cancelar boletos
-        const cancelResults = await Promise.all(installments.map(async (installment) => {
+        const cancelResults = await Promise.all(installments.rows.map(async (installment) => {
             try {
                 // Cancela boletos da parcela
                 const canceledBoletos = await this.installmentService.cancelInstallmentBoletos(installment.installment_id);
@@ -989,78 +1002,165 @@ class MovementService extends IMovementService {
      * Cria uma NFSE para um movimento específico
      * @param {number} movementId - ID do movimento
      * @param {object} [options] - Opções adicionais
-     * @param {string} [options.ambiente='HOMOLOGACAO'] - Ambiente de emissão da NFSE
+     * @param {string} [options.ambiente='homologacao'] - Ambiente de emissão da NFSE
      * @returns {Promise<Object>} NFSE criada
      */
     async createMovementNFSe(movementId, options = {}) {
-        const { ambiente = 'HOMOLOGACAO' } = options;
+        const { ambiente = 'homologacao' } = options;
 
-        // 1. Buscar movimento completo
-        const movement = await this.movementRepository.findById(movementId, true);
-        if (!movement) {
-            throw new Error(`Movimento com ID ${movementId} não encontrado`);
-        }
+        try {
+            logger.info('Iniciando criação de NFSE para movimento', { 
+                movementId, 
+                ambiente, 
+                poolExists: !!this.pool 
+            });
 
-        // 2. Buscar licença do prestador (usando license_id do movimento)
-        const license = await this.licenseRepository.findById(movement.license_id);
-        if (!license) {
-            throw new Error(`Licença não encontrada para o movimento ${movementId}`);
-        }
-
-        // 3. Buscar pessoa do movimento (tomador)
-        const person = await this.personRepository.findById(movement.person_id);
-        if (!person) {
-            throw new Error(`Pessoa não encontrada para o movimento ${movementId}`);
-        }
-
-        // 4. Buscar itens do movimento
-        const movementItems = await this.movementItemRepository.findByMovementId(movementId);
-        if (!movementItems || movementItems.length === 0) {
-            throw new Error(`Nenhum item encontrado para o movimento ${movementId}`);
-        }
-
-        // 5. Buscar detalhes dos serviços
-        const itemIds = movementItems.map(item => item.item_id);
-        const serviceDetails = await this.serviceRepository.findMultipleServiceDetails(itemIds);
-        const serviceDetailsMap = serviceDetails.reduce((acc, service) => {
-            acc[service.item_id] = service;
-            return acc;
-        }, {});
-
-        // 6. Preparar payload para NFSE
-        const nfsePayload = {
-            reference_id: movementId.toString(),
-            prestador_cnpj: license.cnpj,
-            prestador_razao_social: license.company_name,
+            // 1. Buscar dados do movimento
+            const movementData = await this.findById(movementId, true);
             
-            tomador_cnpj: person.document_number, // Pode ser CNPJ ou CPF
-            tomador_razao_social: person.name,
+            logger.info('Dados do Movimento', { 
+                movementId, 
+                providerId: movementData.provider_id,
+                personId: movementData.person_id 
+            });
+
+            // 2. Buscar prestador (pessoa que emite a nota)
+            const prestadorDetails = await this.personRepository.findById(movementData.provider_id);
             
-            valor_total: movement.total_amount,
-            valor_servicos: movement.total_amount,
-            ambiente: ambiente,
+            logger.info('Detalhes do Prestador', { 
+                prestadorDetails: JSON.stringify(prestadorDetails, null, 2)
+            });
+
+            if (!prestadorDetails) {
+                throw new Error(`Prestador com ID ${movementData.provider_id} não encontrado`);
+            }
+
+            // 3. Buscar tomador (pessoa que recebe o serviço)
+            const tomadorDetails = await this.personRepository.findById(movementData.person_id);
             
-            items: movementItems.map(item => {
-                const serviceInfo = serviceDetailsMap[item.item_id] || {};
-                return {
-                    descricao: item.description || serviceInfo.item_description,
-                    quantidade: item.quantity || 1,
-                    valor_unitario: item.unit_value,
-                    valor_total: item.quantity * item.unit_value,
+            logger.info('Detalhes do Tomador', { 
+                tomadorDetails: JSON.stringify(tomadorDetails, null, 2)
+            });
+
+            if (!tomadorDetails) {
+                throw new Error(`Tomador com ID ${movementData.person_id} não encontrado`);
+            }
+
+            // 4. Buscar itens detalhados do movimento
+            const movementItemsRepository = new (require('../movement-items/movement-item.repository'))();
+            const movementItems = await movementItemsRepository.findDetailedByMovementId(movementId);
+            
+            logger.info('Itens do Movimento', { 
+                movementItems: JSON.stringify(movementItems, null, 2)
+            });
+
+            // 5. Agregar serviços
+            const servicosAgrupados = movementItems.reduce((acc, item) => {
+                if (item.servico) {
+                    const servicoExistente = acc.find(s => s.cod_tributacao === item.servico.cod_tributacao);
                     
-                    // Detalhes fiscais
-                    cnae: serviceInfo.cnae,
-                    cod_tributacao: serviceInfo.lc116_code,
-                    cod_municipio: serviceInfo.municipality_code,
-                    descricao_servico: serviceInfo.lc116_description
-                };
-            })
-        };
+                    if (servicoExistente) {
+                        servicoExistente.total_value += item.total_value;
+                        servicoExistente.valor_iss += item.servico.valor_iss;
+                    } else {
+                        acc.push({
+                            ...item.servico,
+                            total_value: item.total_value
+                        });
+                    }
+                }
+                return acc;
+            }, []);
 
-        // 7. Chamar serviço de NFSE para criar
-        const nfse = await this.nfseService.create(nfsePayload);
+            // Usar primeiro serviço ou criar padrão
+            const servicoPrincipal = servicosAgrupados[0] || {
+                cod_tributacao: '0000',
+                descricao_servico: 'Serviço não especificado',
+                aliquota_iss: 0.02,
+                total_value: movementData.total_amount
+            };
 
-        return nfse;
+            // Buscar código IBGE do endereço do prestador
+            const ibgeCode = prestadorDetails.address_city_ibge_code || 
+                             prestadorDetails.city_ibge_code || 
+                             '1100205'; // Porto Velho como padrão
+
+            logger.info('Código IBGE', { 
+                ibgeCode,
+                prestadorDetails: {
+                    addressCityIbgeCode: prestadorDetails.address_city_ibge_code,
+                    cityIbgeCode: prestadorDetails.city_ibge_code
+                }
+            });
+
+            // Função para limpar documento
+            const limparDocumento = (doc) => {
+                if (!doc) return '';
+                return typeof doc === 'string' ? doc.replace(/[^\d]/g, '') : '';
+            };
+
+            const nfsePayload = {
+                prest: {
+                    cpfCnpj: limparDocumento(prestadorDetails.cnpj || prestadorDetails.document_value),
+                    razaoSocial: prestadorDetails.name || prestadorDetails.full_name,
+                    inscricaoMunicipal: prestadorDetails.municipal_registration || '1',
+                    endereco: {
+                        logradouro: prestadorDetails.address_street || prestadorDetails.street,
+                        numero: prestadorDetails.address_number || prestadorDetails.number,
+                        complemento: prestadorDetails.address_complement || prestadorDetails.complement,
+                        bairro: prestadorDetails.address_neighborhood || prestadorDetails.neighborhood,
+                        codigoMunicipio: ibgeCode,
+                        uf: prestadorDetails.address_state || prestadorDetails.state,
+                        cep: prestadorDetails.address_zip_code || prestadorDetails.postal_code
+                    }
+                },
+                toma: {
+                    cpfCnpj: limparDocumento(tomadorDetails.cnpj || tomadorDetails.document_value),
+                    razaoSocial: tomadorDetails.name || tomadorDetails.full_name,
+                    endereco: {
+                        logradouro: tomadorDetails.address_street || tomadorDetails.street,
+                        numero: tomadorDetails.address_number || tomadorDetails.number,
+                        complemento: tomadorDetails.address_complement || tomadorDetails.complement,
+                        bairro: tomadorDetails.address_neighborhood || tomadorDetails.neighborhood,
+                        codigoMunicipio: ibgeCode,
+                        uf: tomadorDetails.address_state || tomadorDetails.state,
+                        cep: tomadorDetails.address_zip_code || tomadorDetails.postal_code
+                    }
+                },
+                serv: {
+                    codServico: servicoPrincipal.cod_tributacao,
+                    codMunicipio: ibgeCode,
+                    descricao: servicoPrincipal.descricao_servico,
+                    valorServico: servicoPrincipal.total_value
+                },
+                valores: {
+                    valorServicos: servicoPrincipal.total_value,
+                    valorDeducoes: 0
+                },
+                infDPS: {
+                    tpAmb: ambiente === 'homologacao' ? 2 : 1,
+                    dhEmi: new Date().toISOString(),
+                    dCompet: movementData.movement_date ? new Date(movementData.movement_date).toISOString().split('T')[0] : new Date().toISOString().split('T')[0]
+                }
+            };
+
+            logger.info('Payload NFSe Completo', {
+                prestadorDetails,
+                payload: JSON.stringify(nfsePayload, null, 2)
+            });
+
+            // 6. Chamar serviço de NFSE para criar
+            const nfse = await this.nfseService.emitirNfseNuvemFiscal(nfsePayload);
+
+            return nfse;
+        } catch (error) {
+            logger.error('Erro ao criar NFSE para movimento', {
+                error: error.message,
+                movementId,
+                stack: error.stack
+            });
+            throw error;
+        }
     }
 }
 

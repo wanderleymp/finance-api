@@ -59,6 +59,12 @@ class NfseRoutes {
             this.controller.create.bind(this.controller)
         );
 
+        // Emitir NFSe
+        this.router.post('/emitir', 
+            validateRequest(createNFSeSchema, 'body'),
+            this.controller.emitirNfse.bind(this.controller)
+        );
+
         // Atualizar status do NFSe
         this.router.patch('/:id/status', 
             validateRequest(updateStatusSchema, 'body'),

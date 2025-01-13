@@ -439,10 +439,11 @@ class MovementController {
 
             logger.info('Criando NFSE para movimento', { 
                 movementId: id, 
-                ambiente 
+                ambiente,
+                bodyCompleto: JSON.stringify(req.body, null, 2)
             });
 
-            const nfse = await this.service.createMovementNFSe(parseInt(id), { ambiente });
+            const nfse = await this.service.createMovementNFSe(parseInt(id), req.body);
 
             return res.status(201).json({
                 success: true,
