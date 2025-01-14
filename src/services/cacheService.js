@@ -4,23 +4,46 @@ const { logger } = require('../middlewares/logger');
 class CacheService {
     constructor() {
         try {
+            console.log('REDIS_HOST:', process.env.REDIS_HOST);
+            console.log('REDIS_PORT:', process.env.REDIS_PORT);
+            console.log('REDIS_DB:', process.env.REDIS_DB);
+            console.log('REDIS_PASSWORD_LENGTH:', process.env.REDIS_PASSWORD ? process.env.REDIS_PASSWORD.length : 'NO PASSWORD');
+
             this.redis = new Redis({
                 host: process.env.REDIS_HOST || 'localhost',
-                port: process.env.REDIS_PORT || 6379,
-                password: process.env.REDIS_PASSWORD || undefined,
-                db: parseInt(process.env.REDIS_DB || '0'),
+                port: parseInt(process.env.REDIS_PORT || '6379'),
+                password: process.env.REDIS_PASSWORD,
+                db: parseInt(process.env.REDIS_DB || '0')
             });
 
             this.defaultTTL = parseInt(process.env.REDIS_CACHE_TTL || '3600');
 
             this.redis.on('error', (error) => {
+                console.error('DETAILED REDIS ERROR:', {
+                    message: error.message,
+                    name: error.name,
+                    stack: error.stack,
+                    code: error.code,
+                    host: process.env.REDIS_HOST || 'localhost',
+                    port: process.env.REDIS_PORT || 6379
+                });
+                console.error('REDIS CONNECTION ATTEMPT FAILED');
                 logger.error('Erro na conexão com Redis', { 
                     error: error.message,
                     host: process.env.REDIS_HOST || 'localhost',
                     port: process.env.REDIS_PORT || 6379
                 });
             });
+
+            this.redis.on('connect', () => {
+                console.log('Redis connected successfully');
+            });
         } catch (error) {
+            console.error('FATAL ERROR INITIALIZING REDIS:', {
+                message: error.message,
+                name: error.name,
+                stack: error.stack
+            });
             logger.error('Falha ao inicializar serviço de cache', { 
                 error: error.message 
             });
