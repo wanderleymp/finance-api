@@ -43,7 +43,9 @@ class InstallmentResponseDTO {
         this.days_overdue = Math.floor(timeDiff / (1000 * 3600 * 24));
 
         // Adiciona boletos
-        this.boletos = [];
+        this.boletos = data.boleto_id || (Array.isArray(data.boletos) && data.boletos.length > 0) 
+            ? [] 
+            : undefined;
 
         // Adiciona boleto diretamente se existir
         if (data.boleto_id) {
@@ -59,7 +61,7 @@ class InstallmentResponseDTO {
         // Se já existirem boletos, adiciona
         if (Array.isArray(data.boletos)) {
             this.boletos = [
-                ...this.boletos, 
+                ...this.boletos || [], 
                 ...data.boletos.map(boleto => ({
                     boleto_id: boleto.boleto_id,
                     boleto_number: boleto.boleto_number,

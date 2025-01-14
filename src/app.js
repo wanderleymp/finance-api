@@ -37,6 +37,14 @@ const app = express();
 
 // Middleware de logging para todas as requisições
 app.use((req, res, next) => {
+    console.log('DEBUG: Nova requisição recebida', {
+        method: req.method,
+        url: req.url,
+        path: req.path,
+        originalUrl: req.originalUrl,
+        ip: req.ip,
+        headers: req.headers
+    });
     logger.info('Nova requisição recebida', {
         method: req.method,
         url: req.url,

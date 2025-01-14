@@ -200,25 +200,35 @@ class PersonRepository extends IPersonRepository {
                     p.created_at,
                     p.updated_at,
                     json_agg(DISTINCT jsonb_build_object(
-                        'address_id', a.id,
+                        'address_id', a.address_id,
+                        'person_id', a.person_id,
                         'street', a.street,
                         'number', a.number,
                         'complement', a.complement,
                         'neighborhood', a.neighborhood,
                         'city', a.city,
                         'state', a.state,
-                        'zip_code', a.zip_code,
-                        'is_main', a.is_main
+                        'postal_code', a.postal_code,
+                        'country', a.country,
+                        'reference', a.reference,
+                        'ibge', a.ibge
                     )) as addresses,
                     json_agg(DISTINCT jsonb_build_object(
-                        'contact_id', c.id,
-                        'type', c.type,
-                        'contact', c.contact,
-                        'is_main', c.is_main
-                    )) as contacts
+                        'contact_id', c.contact_id,
+                        'contact_value', c.contact_value,
+                        'contact_name', c.contact_name,
+                        'contact_type', c.contact_type
+                    )) as contacts,
+                    json_agg(DISTINCT jsonb_build_object(
+                        'person_document_id', pd.person_document_id,
+                        'document_type', pd.document_type,
+                        'document_value', pd.document_value
+                    )) as documents
                 FROM ${this.tableName} p
-                LEFT JOIN addresses a ON a.person_id = p.person_id
-                LEFT JOIN person_contacts c ON c.person_id = p.person_id
+                LEFT JOIN person_addresses a ON a.person_id = p.person_id
+                LEFT JOIN person_contacts pc ON pc.person_id = p.person_id
+                LEFT JOIN contacts c ON c.contact_id = pc.contact_id
+                LEFT JOIN person_documents pd ON pd.person_id = p.person_id
                 WHERE p.person_id = $1
                 GROUP BY p.person_id
             `;
@@ -226,9 +236,12 @@ class PersonRepository extends IPersonRepository {
             
             if (!result.rows[0]) return null;
 
+            logger.debug('Consulta de detalhes da pessoa', { query, id, result: JSON.stringify(result.rows) });
+
             const personWithDetails = result.rows[0];
             personWithDetails.addresses = personWithDetails.addresses[0].address_id ? personWithDetails.addresses : [];
             personWithDetails.contacts = personWithDetails.contacts[0].contact_id ? personWithDetails.contacts : [];
+            personWithDetails.documents = personWithDetails.documents[0].person_document_id ? personWithDetails.documents : [];
 
             return PersonResponseDTO.fromDatabase(personWithDetails);
         } catch (error) {

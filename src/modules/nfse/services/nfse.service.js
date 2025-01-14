@@ -101,16 +101,25 @@ class NFSeService {
   }
 
   mapearPayloadNFSe(dadosNFSe) {
+    const tomadorDocument = dadosNFSe.tomador_documento;
+    const tomadorDocumentType = dadosNFSe.tomador_documento_type;
+
+    const tomadorPayload = {
+      razaoSocial: dadosNFSe.tomador_razao_social
+    };
+
+    if (tomadorDocumentType === 'CNPJ') {
+      tomadorPayload.cnpj = tomadorDocument;
+    } else if (tomadorDocumentType === 'CPF') {
+      tomadorPayload.cpf = tomadorDocument;
+    }
+
     return {
       prestador: {
         cnpj: dadosNFSe.prestador_cnpj,
         razaoSocial: dadosNFSe.prestador_razao_social
       },
-      tomador: {
-        cnpj: dadosNFSe.tomador_cnpj,
-        cpf: dadosNFSe.tomador_cpf,
-        razaoSocial: dadosNFSe.tomador_razao_social
-      },
+      tomador: tomadorPayload,
       servicos: dadosNFSe.itens.map(item => ({
         descricao: item.descricao,
         quantidade: item.quantidade,

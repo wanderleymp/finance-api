@@ -2,7 +2,7 @@ const MovementPaymentRepository = require('../movement-payments/movement-payment
 const MovementTypeRepository = require('../movement-types/movement-type.repository');
 const MovementStatusRepository = require('../movement-statuses/movement-status.repository');
 const InstallmentRepository = require('../installments/installment.repository');
-const PersonRepository = require('../persons/person.repository');
+const PersonRepository = require('../persons/person.repository'); 
 const PaymentMethodRepository = require('../payment-methods/payment-method.repository');
 const BillingMessageService = require('../messages/billing/billing-message.service');
 const { logger } = require('../../middlewares/logger');
@@ -11,9 +11,10 @@ const IMovementService = require('./interfaces/IMovementService');
 const MovementResponseDTO = require('./dto/movement-response.dto');
 const MovementPaymentService = require('../movement-payments/movement-payment.service');
 const BoletoRepository = require('../boletos/boleto.repository'); 
-const LicenseRepository = require('../../repositories/licenseRepository');
+const LicenseRepository = require('../../repositories/licenseRepository'); 
 const MovementItemRepository = require('../movement-items/movement-item.repository');
 const ServiceRepository = require('../services/service.repository'); 
+const NfseService = require('../nfse/nfse.service');
 const { systemDatabase } = require('../../config/database');
 
 class MovementService extends IMovementService {
@@ -52,7 +53,8 @@ class MovementService extends IMovementService {
         this.boletoService = boletoService;
         this.movementPaymentRepository = movementPaymentRepository;
         this.installmentService = installmentService;
-        this.licenseRepository = licenseRepository;
+        // Manter a lógica de fallback para criação do licenseRepository
+        this.licenseRepository = licenseRepository || new LicenseRepository();
         this.movementItemRepository = movementItemRepository;
         this.nfseService = nfseService;
         this.serviceRepository = serviceRepository;
@@ -139,24 +141,9 @@ class MovementService extends IMovementService {
             // Definir provider_id como o mesmo que person_id se não existir
             movement.provider_id = movement.provider_id || movement.person_id;
 
-            // Busca pagamentos com installments e boletos
-            const payments = await this.movementPaymentService.findByMovementId(movement.movement_id, true);
-
-            // Calcula totais
-            const total_paid = payments
-                .filter(p => p.status_id === 2)
-                .reduce((sum, p) => sum + p.amount, 0);
-
-            const total_value = payments.reduce((sum, p) => sum + p.amount, 0);
-            const remaining_amount = total_value - total_paid;
-
             // Retorna movimento com todas as informações
             return {
-                ...movement,
-                payments: payments,
-                total_paid,
-                total_value,
-                remaining_amount
+                ...movement
             };
         } catch (error) {
             logger.error('Erro ao buscar movimento por ID', {
@@ -183,18 +170,72 @@ class MovementService extends IMovementService {
                 return null;
             }
 
-            // Busca pessoa do movimento
-            const person = await this.personRepository.findById(movement.person_id);
+            logger.info('Buscando dados do tomador', {
+                personId: movement.person_id,
+                repositoryMethod: 'findPersonWithDetails'
+            });
+
+            const personDetails = await this.personRepository.findPersonDetailsById(movement.person_id);
             
+            // Log detalhado para verificar todos os campos recuperados
+            logger.debug('Detalhes completos da pessoa recuperados', {
+              personId: movement.person_id,
+              fullPersonDetails: JSON.stringify(personDetails, null, 2),
+              personDetailsKeys: Object.keys(personDetails[0] || {}),
+              personDetailsType: typeof personDetails,
+              personDetailsLength: personDetails.length
+            });
+
+            // Log específico para documentos
+            logger.debug('Documentos da pessoa', {
+              personId: movement.person_id,
+              documentFields: {
+                personType: personDetails[0]?.person_type,
+                documentField: personDetails[0]?.document,
+                cnpj: personDetails[0]?.cnpj,
+                cpf: personDetails[0]?.cpf,
+                rawPersonDetails: JSON.stringify(personDetails[0], null, 2)
+              }
+            });
+
+            logger.info('Retorno completo do repositório de pessoas', {
+                personId: movement.person_id,
+                personData: JSON.stringify(personDetails, null, 2),
+                personKeys: Object.keys(personDetails || {})
+            });
+
+            logger.info('Dados do Tomador', {
+                tomadorId: movement.person_id,
+                tomadorDetalhes: JSON.stringify(personDetails, null, 2)
+            });
+
+            logger.info('Dados detalhados do Tomador', {
+                tomadorId: movement.person_id,
+                tomadorDetalhes: JSON.stringify(personDetails, null, 2)
+            });
+
+            // Extrair documento e endereço dos detalhes
+            const tomadorDocumento = person.documents && person.documents.length > 0 
+                ? `CPF: ${person.documents.find(doc => doc.document_type === 'CPF')?.document_value}`
+                : null;
+            
+            const tomadorEndereco = person.addresses && person.addresses.length > 0 
+                ? person.addresses.find(addr => addr.is_main) || person.addresses[0]
+                : null;
+
             // Adiciona pessoa ao movimento
-            movement.person = person;
+            movement.person = {
+                person_id: movement.person_id,
+                document: tomadorDocumento,
+                address: tomadorEndereco
+            };
 
             // Busca outros detalhes se necessário
             // Por exemplo, installments, payments, etc.
 
             logger.info('Movimento encontrado', { 
                 movementId: id,
-                personId: person?.person_id 
+                personId: movement.person_id 
             });
 
             return movement;
@@ -323,7 +364,7 @@ class MovementService extends IMovementService {
             logger.info('Service: Criando novo movimento', { data });
 
             // Separar dados do movimento e do pagamento
-            const { payment_method_id, items, ...movementData } = data;
+            const { items, ...movementData } = data;
 
             // Definir data do movimento se não fornecida
             movementData.movement_date = movementData.movement_date || new Date().toISOString().split('T')[0];
@@ -357,22 +398,8 @@ class MovementService extends IMovementService {
                 }
             }
 
-            // Se tiver payment_method_id, criar o movimento_payment usando a rota existente
-            if (payment_method_id) {
-                logger.info('Service: Criando movimento_payment via createPayment', {
-                    movement_id: movement.movement_id,
-                    payment_method_id,
-                    total_amount: data.total_amount
-                });
-
-                await this.createPayment(movement.movement_id, {
-                    payment_method_id,
-                    total_amount: data.total_amount
-                });
-            }
-
             // Após criar o movimento, envia mensagem de faturamento
-            const person = await this.personRepository.findById(data.person_id);
+            const person = await this.personRepository.findPersonById(data.person_id);
             await this._processBillingMessage(movement, person);
 
             // Invalidar cache
@@ -530,56 +557,6 @@ class MovementService extends IMovementService {
     }
 
     /**
-     * Busca pagamentos de um movimento
-     */
-    async findPaymentsByMovementId(id) {
-        try {
-            logger.info('Service: Buscando pagamentos do movimento', { id });
-
-            // Busca os pagamentos
-            const payments = await this.movementPaymentRepository.findByMovementId(id);
-            return payments || [];
-            
-        } catch (error) {
-            logger.error('Service: Erro ao buscar pagamentos do movimento', {
-                error: error.message,
-                id
-            });
-            throw error;
-        }
-    }
-
-    /**
-     * Busca parcelas de um pagamento específico
-     */
-    async findInstallmentsByPaymentId(movementId, paymentId) {
-        try {
-            logger.info('Service: Buscando parcelas do pagamento', { 
-                movementId,
-                paymentId 
-            });
-
-            // Primeiro verifica se o pagamento pertence ao movimento
-            const payment = await this.movementPaymentRepository.findByMovementId(movementId);
-            if (!payment || !payment.find(p => p.payment_id === paymentId)) {
-                throw new ValidationError('Pagamento não encontrado para este movimento');
-            }
-
-            // Busca as parcelas
-            const installments = await this.installmentRepository.findByPaymentId(paymentId);
-            return installments || [];
-            
-        } catch (error) {
-            logger.error('Service: Erro ao buscar parcelas do pagamento', {
-                error: error.message,
-                movementId,
-                paymentId
-            });
-            throw error;
-        }
-    }
-
-    /**
      * Cria um novo pagamento para o movimento
      */
     async createPayment(movementId, paymentData) {
@@ -592,15 +569,6 @@ class MovementService extends IMovementService {
             // Validar dados do pagamento
             const validatedPaymentData = await this.validatePaymentData(paymentData);
 
-            // Usar o serviço de pagamento de movimento
-            const MovementPaymentService = require('../movement-payments/movement-payment.service');
-            const movementPaymentService = new MovementPaymentService({
-                movementPaymentRepository: this.movementPaymentRepository,
-                cacheService: this.cacheService,
-                installmentRepository: this.installmentRepository,
-                boletoService: this.boletoService
-            });
-
             // Usar o serviço de métodos de pagamento
             const PaymentMethodService = require('../payment-methods/payment-method.service');
             const paymentMethodService = new PaymentMethodService({
@@ -609,18 +577,10 @@ class MovementService extends IMovementService {
             });
 
             // Criar pagamento
-            const payment = await movementPaymentService.create({
+            const payment = await this.movementPaymentService.create({
                 ...validatedPaymentData, 
                 movement_id: movementId 
             });
-
-            // Se houver parcelas, criar parcelas
-            if (paymentData.installments && paymentData.installments.length > 0) {
-                await this.createInstallments(client, payment.movement_payment_id, paymentData.installments);
-            }
-
-            // Atualizar status do movimento se necessário
-            await this.updateMovementStatus(client, movementId, payment);
 
             logger.info('Service: Pagamento criado com sucesso', { 
                 movementId, 
@@ -629,35 +589,6 @@ class MovementService extends IMovementService {
 
             return payment;
         });
-    }
-
-    /**
-     * Remove um pagamento do movimento
-     */
-    async deletePayment(movementId, paymentId) {
-        try {
-            logger.info('Service: Removendo pagamento do movimento', { 
-                movementId,
-                paymentId 
-            });
-
-            // Verifica se o pagamento pertence ao movimento
-            const payment = await this.movementPaymentRepository.findByMovementId(movementId);
-            if (!payment || !payment.find(p => p.payment_id === paymentId)) {
-                throw new ValidationError('Pagamento não encontrado para este movimento');
-            }
-
-            // Remove o pagamento
-            await this.movementPaymentRepository.delete(paymentId);
-            
-        } catch (error) {
-            logger.error('Service: Erro ao remover pagamento', {
-                error: error.message,
-                movementId,
-                paymentId
-            });
-            throw error;
-        }
     }
 
     /**
@@ -955,7 +886,6 @@ class MovementService extends IMovementService {
             SELECT * FROM installments WHERE movement_id = $1
         `, [movementId]);
         
-        // Log para rastrear parcelas
         logger.info('Parcelas encontradas para cancelamento', {
             movementId,
             installmentsCount: installments.rows.length,
@@ -1015,152 +945,113 @@ class MovementService extends IMovementService {
                 poolExists: !!this.pool 
             });
 
-            // 1. Buscar dados do movimento
-            const movementData = await this.findById(movementId, true);
-            
-            logger.info('Dados do Movimento', { 
-                movementId, 
-                providerId: movementData.provider_id,
-                personId: movementData.person_id 
-            });
-
-            // 2. Buscar prestador (pessoa que emite a nota)
-            const prestadorDetails = await this.personRepository.findById(movementData.provider_id);
-            
-            logger.info('Detalhes do Prestador', { 
-                prestadorDetails: JSON.stringify(prestadorDetails, null, 2)
-            });
-
-            if (!prestadorDetails) {
-                throw new Error(`Prestador com ID ${movementData.provider_id} não encontrado`);
+            const movement = await this.findById(movementId, true);
+            if (!movement) {
+                throw new Error('Movimento não encontrado');
             }
 
-            // 3. Buscar tomador (pessoa que recebe o serviço)
-            const tomadorDetails = await this.personRepository.findById(movementData.person_id);
-            
-            logger.info('Detalhes do Tomador', { 
-                tomadorDetails: JSON.stringify(tomadorDetails, null, 2)
+            // Buscar licença para obter CNPJ do prestador
+            const license = await this.licenseRepository.findById(movement.license_id);
+
+            logger.info('Dados da Licença para NFSe', {
+                licenseId: movement.license_id,
+                licenseDocument: license?.person_document,
+                licenseData: JSON.stringify(license, null, 2)
             });
 
-            if (!tomadorDetails) {
-                throw new Error(`Tomador com ID ${movementData.person_id} não encontrado`);
-            }
+            // Buscar dados completos do tomador
+            const person = await this.personRepository.findPersonWithDetails(movement.person_id);
+            
+            logger.info('Dados do Tomador', {
+                tomadorId: movement.person_id,
+                tomadorDetalhes: JSON.stringify(person, null, 2)
+            });
 
-            // 4. Buscar itens detalhados do movimento
+            logger.info('Dados detalhados do Tomador', {
+                tomadorId: movement.person_id,
+                tomadorDetalhes: JSON.stringify(person, null, 2)
+            });
+
+            // Extrair documento e endereço dos detalhes
+            const tomadorDocumento = person.documents && person.documents.length > 0 
+                ? `CPF: ${person.documents.find(doc => doc.document_type === 'CPF')?.document_value}`
+                : null;
+            
+            const tomadorEndereco = person.addresses && person.addresses.length > 0 
+                ? person.addresses.find(addr => addr.is_main) || person.addresses[0]
+                : null;
+
+            // Buscar itens detalhados do movimento
             const movementItemsRepository = new (require('../movement-items/movement-item.repository'))();
-            const movementItems = await movementItemsRepository.findDetailedByMovementId(movementId);
-            
-            logger.info('Itens do Movimento', { 
-                movementItems: JSON.stringify(movementItems, null, 2)
+            const items = await movementItemsRepository.findDetailedByMovementId(movementId);
+
+            // Buscar detalhes do serviço
+            const servicoDetalhado = items.length > 0 
+                ? await this.serviceRepository.findServiceDetails(items[0].servico.item_id) 
+                : null;
+
+            logger.info('Detalhes do Serviço', {
+                servicoDetalhado: JSON.stringify(servicoDetalhado, null, 2)
             });
 
-            // 5. Agregar serviços
-            const servicosAgrupados = movementItems.reduce((acc, item) => {
-                if (item.servico) {
-                    const servicoExistente = acc.find(s => s.cod_tributacao === item.servico.cod_tributacao);
-                    
-                    if (servicoExistente) {
-                        servicoExistente.total_value += item.total_value;
-                        servicoExistente.valor_iss += item.servico.valor_iss;
-                    } else {
-                        acc.push({
-                            ...item.servico,
-                            total_value: item.total_value
-                        });
-                    }
-                }
-                return acc;
-            }, []);
-
-            // Usar primeiro serviço ou criar padrão
-            const servicoPrincipal = servicosAgrupados[0] || {
-                cod_tributacao: '0000',
-                descricao_servico: 'Serviço não especificado',
-                aliquota_iss: 0.02,
-                total_value: movementData.total_amount
-            };
-
-            // Buscar código IBGE do endereço do prestador
-            const ibgeCode = prestadorDetails.address_city_ibge_code || 
-                             prestadorDetails.city_ibge_code || 
-                             '1100205'; // Porto Velho como padrão
-
-            logger.info('Código IBGE', { 
-                ibgeCode,
-                prestadorDetails: {
-                    addressCityIbgeCode: prestadorDetails.address_city_ibge_code,
-                    cityIbgeCode: prestadorDetails.city_ibge_code
-                }
-            });
-
-            // Função para limpar documento
-            const limparDocumento = (doc) => {
-                if (!doc) return '';
-                return typeof doc === 'string' ? doc.replace(/[^\d]/g, '') : '';
-            };
-
-            const nfsePayload = {
-                prest: {
-                    cpfCnpj: limparDocumento(prestadorDetails.cnpj || prestadorDetails.document_value),
-                    razaoSocial: prestadorDetails.name || prestadorDetails.full_name,
-                    inscricaoMunicipal: prestadorDetails.municipal_registration || '1',
+            const nfseData = {
+                movimento: {
+                    id: movement.movement_id,
+                    data: movement.created_at,
+                    referencia: `${new Date().getFullYear()}-${movement.movement_id}-1`
+                },
+                prestador: {
+                    cnpj: license?.person_document ? license.person_document.replace(/\D/g, '') : null,
+                    nome: license?.full_name || 'Nome não disponível',
                     endereco: {
-                        logradouro: prestadorDetails.address_street || prestadorDetails.street,
-                        numero: prestadorDetails.address_number || prestadorDetails.number,
-                        complemento: prestadorDetails.address_complement || prestadorDetails.complement,
-                        bairro: prestadorDetails.address_neighborhood || prestadorDetails.neighborhood,
-                        codigoMunicipio: ibgeCode,
-                        uf: prestadorDetails.address_state || prestadorDetails.state,
-                        cep: prestadorDetails.address_zip_code || prestadorDetails.postal_code
+                        logradouro: 'Não informado',
+                        numero: 'S/N',
+                        complemento: '',
+                        bairro: 'Não informado',
+                        cidade: {
+                            codigo_ibge: '',
+                            nome: 'Não informado'
+                        },
+                        uf: '',
+                        cep: ''
                     }
                 },
-                toma: {
-                    cpfCnpj: limparDocumento(tomadorDetails.cnpj || tomadorDetails.document_value),
-                    razaoSocial: tomadorDetails.name || tomadorDetails.full_name,
-                    endereco: {
-                        logradouro: tomadorDetails.address_street || tomadorDetails.street,
-                        numero: tomadorDetails.address_number || tomadorDetails.number,
-                        complemento: tomadorDetails.address_complement || tomadorDetails.complement,
-                        bairro: tomadorDetails.address_neighborhood || tomadorDetails.neighborhood,
-                        codigoMunicipio: ibgeCode,
-                        uf: tomadorDetails.address_state || tomadorDetails.state,
-                        cep: tomadorDetails.address_zip_code || tomadorDetails.postal_code
-                    }
-                },
-                serv: {
-                    codServico: servicoPrincipal.cod_tributacao,
-                    codMunicipio: ibgeCode,
-                    descricao: servicoPrincipal.descricao_servico,
-                    valorServico: servicoPrincipal.total_value
-                },
+                tomador_documento: tomadorDocumento,
+                tomador_documento_type: person.documents && person.documents.length > 0 
+                    ? person.documents[0].document_type
+                    : null,
+                tomador_razao_social: person.full_name,
+                servico: items.map(item => ({
+                    cnae: servicoDetalhado?.cnae || item.servico.cnae,
+                    codTributacaoNacional: servicoDetalhado?.lc116_code,
+                    codTributacaoMunicipal: servicoDetalhado?.municipality_code,
+                    descricao: item.servico.descricao_servico,
+                    valor: item.total_price
+                })),
                 valores: {
-                    valorServicos: servicoPrincipal.total_value,
-                    valorDeducoes: 0
-                },
-                infDPS: {
-                    tpAmb: ambiente === 'homologacao' ? 2 : 1,
-                    dhEmi: new Date().toISOString(),
-                    dCompet: movementData.movement_date ? new Date(movementData.movement_date).toISOString().split('T')[0] : new Date().toISOString().split('T')[0]
+                    servico: items.reduce((total, item) => total + parseFloat(item.total_price), 0),
+                    aliquota: servicoDetalhado?.aliquota_iss || items[0]?.servico?.aliquota_iss || 0
                 }
             };
 
-            logger.info('Payload NFSe Completo', {
-                prestadorDetails,
-                payload: JSON.stringify(nfsePayload, null, 2)
+            logger.info('Payload completo para NFSe', {
+                payloadCompleto: JSON.stringify(nfseData, null, 2)
             });
 
-            // 6. Chamar serviço de NFSE para criar
-            const nfse = await this.nfseService.emitirNfseNuvemFiscal(nfsePayload);
-
-            return nfse;
+            return await this.nfseService.emitirNfse(nfseData);
         } catch (error) {
             logger.error('Erro ao criar NFSE para movimento', {
-                error: error.message,
                 movementId,
+                errorMessage: error.message,
                 stack: error.stack
             });
-            throw error;
+            throw new Error(`Erro ao criar NFSE para movimento: ${error.message}`);
         }
+    }
+
+    async getMovementItems(movementId) {
+        const movementItemsRepository = new (require('../movement-items/movement-item.repository'))();
+        return await movementItemsRepository.findDetailedByMovementId(movementId);
     }
 }
 

@@ -2,8 +2,8 @@ const { successResponse, errorResponse } = require('../../utils/apiResponse');
 const { logger } = require('../../middlewares/logger');
 
 class NfseController {
-    constructor(service) {
-        this.service = service;
+    constructor(nfseService) {
+        this.nfseService = nfseService;
     }
 
     /**
@@ -20,7 +20,7 @@ class NfseController {
                 fullQuery: JSON.stringify(req.query)
             });
 
-            const result = await this.service.list({ page: Number(page), limit: Number(limit), ...filters });
+            const result = await this.nfseService.list({ page: Number(page), limit: Number(limit), ...filters });
             return successResponse(res, 200, result);
         } catch (error) {
             logger.error('NfseController.findAll - Erro', {
@@ -37,7 +37,7 @@ class NfseController {
     async findById(req, res) {
         try {
             const { id } = req.params;
-            const result = await this.service.findById(Number(id));
+            const result = await this.nfseService.findById(Number(id));
             return successResponse(res, 200, result);
         } catch (error) {
             logger.error('NfseController.findById - Erro', {
@@ -54,7 +54,7 @@ class NfseController {
     async findByInvoiceId(req, res) {
         try {
             const { invoiceId } = req.params;
-            const result = await this.service.findByInvoiceId(Number(invoiceId));
+            const result = await this.nfseService.findByInvoiceId(Number(invoiceId));
             return successResponse(res, 200, result);
         } catch (error) {
             logger.error('NfseController.findByInvoiceId - Erro', {
@@ -71,7 +71,7 @@ class NfseController {
     async findByIntegrationId(req, res) {
         try {
             const { integrationId } = req.params;
-            const result = await this.service.findByIntegrationId(integrationId);
+            const result = await this.nfseService.findByIntegrationId(integrationId);
             return successResponse(res, 200, result);
         } catch (error) {
             logger.error('NfseController.findByIntegrationId - Erro', {
@@ -87,7 +87,7 @@ class NfseController {
      */
     async create(req, res) {
         try {
-            const result = await this.service.create(req.body);
+            const result = await this.nfseService.create(req.body);
             return successResponse(res, 201, result);
         } catch (error) {
             logger.error('NfseController.create - Erro', {
@@ -104,7 +104,7 @@ class NfseController {
     async update(req, res) {
         try {
             const { id } = req.params;
-            const result = await this.service.update(Number(id), req.body);
+            const result = await this.nfseService.update(Number(id), req.body);
             return successResponse(res, 200, result);
         } catch (error) {
             logger.error('NfseController.update - Erro', {
@@ -122,7 +122,7 @@ class NfseController {
     async delete(req, res) {
         try {
             const { id } = req.params;
-            await this.service.delete(Number(id));
+            await this.nfseService.delete(Number(id));
             return successResponse(res, 204);
         } catch (error) {
             logger.error('NfseController.delete - Erro', {
@@ -141,29 +141,12 @@ class NfseController {
      */
     async emitirNfse(req, res) {
         try {
-            const nfseData = req.body;
-            logger.info('Recebendo dados para emissão de NFSe', { 
-                dadosRecebidos: JSON.stringify(nfseData, null, 2) 
-            });
-
-            const result = await this.service.emitirNfseNuvemFiscal(nfseData);
-            
-            res.status(201).json({
-                message: 'NFS-e emitida com sucesso',
-                data: result
-            });
+            const result = await this.nfseService.emitirNfse(req.body);
+            return res.json(result);
         } catch (error) {
-            logger.error('Erro detalhado na emissão de NFSe', {
-                errorMessage: error.message,
-                errorStack: error.stack,
-                errorObject: JSON.stringify(error, Object.getOwnPropertyNames(error))
-            });
-
-            res.status(400).json({
+            return res.status(400).json({
                 success: false,
-                message: 'Falha na emissão de NFS-e',
-                error: error.message,
-                details: error.stack
+                message: error.message
             });
         }
     }

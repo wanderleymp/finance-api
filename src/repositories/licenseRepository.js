@@ -121,28 +121,30 @@ class LicenseRepository {
                     l.end_date,
                     l.status,
                     l.timezone,
-                    p.full_name
+                    p.full_name,
+                    pd.document_value as person_document
                 FROM licenses l
                 LEFT JOIN persons p ON p.person_id = l.person_id
+                LEFT JOIN person_documents pd ON pd.person_id = l.person_id AND pd.document_type = 'CNPJ'
                 WHERE l.license_id = $1
             `;
+            
             const result = await this.pool.query(query, [id]);
             
             logger.info('REPOSITORY: Resultado da busca por ID', { 
                 rowCount: result.rowCount,
-                resultRows: result.rows
+                resultRows: result.rows,
+                personDocument: result.rows[0]?.person_document
             });
-
+            
             return result.rowCount > 0 ? result.rows[0] : null;
         } catch (error) {
-            logger.error('REPOSITORY: Erro ao buscar licença por ID', { 
-                error: error.message,
-                stack: error.stack,
+            logger.error('REPOSITORY: Erro ao buscar licença por ID', {
                 id,
-                errorName: error.name,
-                errorCode: error.code
+                errorMessage: error.message,
+                stack: error.stack
             });
-            throw new DatabaseError('Erro ao buscar licença por ID');
+            throw new DatabaseError(`Erro ao buscar licença: ${error.message}`);
         }
     }
 
@@ -276,4 +278,4 @@ class LicenseRepository {
     }
 }
 
-module.exports = new LicenseRepository();
+module.exports = LicenseRepository;
