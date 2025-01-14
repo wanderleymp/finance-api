@@ -299,7 +299,14 @@ class PersonRepository extends IPersonRepository {
                 UPDATE ${this.tableName}
                 SET ${updateFields.join(', ')}, updated_at = NOW()
                 WHERE person_id = $1
-                RETURNING *
+                RETURNING 
+                    person_id,
+                    full_name,
+                    birth_date,
+                    person_type,
+                    fantasy_name,
+                    created_at,
+                    updated_at
             `;
 
             const values = [
@@ -309,8 +316,30 @@ class PersonRepository extends IPersonRepository {
                     .map(key => data[key])
             ];
 
+            logger.debug('Repository: Atualizando pessoa', { 
+                id, 
+                data, 
+                query, 
+                values 
+            });
+
             const result = await this.pool.query(query, values);
-            return result.rows[0] ? PersonResponseDTO.fromDatabase(result.rows[0]) : null;
+            
+            if (result.rows.length === 0) {
+                logger.warn('Repository: Nenhuma pessoa atualizada', { 
+                    id, 
+                    data 
+                });
+                return null;
+            }
+
+            const updatedPerson = PersonResponseDTO.fromDatabase(result.rows[0]);
+            
+            logger.info('Repository: Pessoa atualizada com sucesso', { 
+                person: updatedPerson 
+            });
+
+            return updatedPerson;
         } catch (error) {
             logger.error('Erro ao atualizar pessoa', {
                 error: error.message,

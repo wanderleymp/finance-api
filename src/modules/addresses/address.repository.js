@@ -57,11 +57,28 @@ class AddressRepository extends BaseRepository {
     async findByPersonId(personId) {
         try {
             const result = await super.findAll(1, 100, { person_id: personId });
-            return result.data.map(AddressResponseDTO.fromDatabase);
+            
+            // Log adicional para debug
+            logger.info('Debug: Resultado findAll no repository', { 
+                personId, 
+                result,
+                resultItems: result?.items,
+                resultType: typeof result,
+                resultItemsType: typeof result?.items
+            });
+
+            // Adiciona verificação adicional
+            if (!result) {
+                logger.warn('Resultado de findAll é undefined', { personId });
+                return [];
+            }
+
+            return result.items ? result.items.map(AddressResponseDTO.fromDatabase) : [];
         } catch (error) {
             logger.error('Erro ao buscar endereços da pessoa', {
                 error: error.message,
-                personId
+                personId,
+                errorStack: error.stack
             });
             throw error;
         }

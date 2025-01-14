@@ -10,13 +10,19 @@ class RedisWrapper {
     }
 
     getConfig() {
-        return {
+        const config = {
             host: process.env.REDIS_HOST || 'localhost',
             port: process.env.REDIS_PORT || 6379,
-            password: process.env.REDIS_PASSWORD || 'lKjvKHE2eN8A0fO7bggSMeZPMqVXk5XwZ64ImOX3/Rc=',
             maxRetriesPerRequest: 1,
             retryStrategy: null // Desabilita tentativas automáticas de reconexão
         };
+
+        // Adiciona autenticação apenas se a senha estiver definida
+        if (process.env.REDIS_PASSWORD) {
+            config.password = process.env.REDIS_PASSWORD;
+        }
+
+        return config;
     }
 
     async connect() {

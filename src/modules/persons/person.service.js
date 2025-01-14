@@ -472,35 +472,34 @@ class PersonService {
             const addressRepository = new AddressRepository();
             const existingAddresses = await addressRepository.findByPersonId(personId);
 
+            // Log adicional para debug
+            logger.info('Debug: Endereços existentes', { 
+                personId, 
+                existingAddresses,
+                addressData 
+            });
+
             // Limpa o CEP para comparação
             const cleanPostalCode = addressData.postal_code?.replace(/[^\d]/g, '');
 
             // Verifica se já existe um endereço com os mesmos dados
-            existingAddress = existingAddresses.find(address => {
+            existingAddress = existingAddresses.length > 0 ? existingAddresses.find(address => {
                 // Normaliza os dados para comparação
                 const existingPostalCode = address.postal_code?.replace(/[^\d]/g, '');
                 const existingStreet = address.street?.trim().toUpperCase();
                 const newStreet = addressData.street?.trim().toUpperCase();
                 const existingNumber = String(address.number).trim();
                 const newNumber = String(addressData.number).trim();
-                const existingComplement = address.complement?.trim().toUpperCase() || '';
-                const newComplement = addressData.complement?.trim().toUpperCase() || '';
-                const existingNeighborhood = address.neighborhood?.trim().toUpperCase();
-                const newNeighborhood = addressData.neighborhood?.trim().toUpperCase();
-                const existingCity = address.city?.trim().toUpperCase();
-                const newCity = addressData.city?.trim().toUpperCase();
-                const existingState = address.state?.trim().toUpperCase();
-                const newState = addressData.state?.trim().toUpperCase();
+                const existingComplement = address.complement?.trim().toUpperCase();
+                const newComplement = addressData.complement?.trim().toUpperCase();
 
-                // Compara todos os campos normalizados
-                return existingStreet === newStreet &&
+                return (
+                    existingPostalCode === cleanPostalCode &&
+                    existingStreet === newStreet &&
                     existingNumber === newNumber &&
-                    existingComplement === newComplement &&
-                    existingNeighborhood === newNeighborhood &&
-                    existingCity === newCity &&
-                    existingState === newState &&
-                    existingPostalCode === cleanPostalCode;
-            });
+                    existingComplement === newComplement
+                );
+            }) : null;
 
             // Se já existe um endereço igual, retorna ele
             if (existingAddress) {
@@ -527,7 +526,9 @@ class PersonService {
             logger.error('Erro ao adicionar endereço à pessoa', {
                 error: error.message,
                 personId,
-                addressData
+                addressData,
+                // Adiciona mais detalhes do erro
+                errorStack: error.stack
             });
             throw error;
         }
@@ -730,23 +731,51 @@ class PersonService {
                 existingPerson = await this.personRepository.findById(existingDocument.person_id);
                 logger.info('Service: Pessoa encontrada por documento', { existingPerson });
             } else {
-                // Se não encontrou por CNPJ, busca por razão social direto do banco
-                const personsByName = await this.personRepository.findAll({ full_name: cnpjData.razao_social });
+                // Se não encontrou por CNPJ, busca por razão social com case-sensitive e correspondência exata
+                const personsByName = await this.personRepository.findAll(
+                    { 
+                        full_name: cnpjData.razao_social.trim(), 
+                        type: 'PJ' 
+                    }, 
+                    1, 
+                    1, 
+                    {}, 
+                    { 
+                        exact: true, 
+                        caseSensitive: true 
+                    }
+                );
+                
                 logger.info('Service: Pessoas encontradas por nome', { 
                     razao_social: cnpjData.razao_social,
-                    total: personsByName?.data?.length || 0,
-                    persons: personsByName?.data || []
+                    total: personsByName?.items?.length || 0,
+                    persons: personsByName?.items || []
                 });
 
                 // Só usa a pessoa encontrada se tiver exatamente uma
-                if (personsByName?.data?.length === 1) {
-                    existingPerson = personsByName.data[0];
+                if (personsByName?.items?.length === 1) {
+                    existingPerson = personsByName.items[0];
                     logger.info('Service: Pessoa encontrada por nome', { existingPerson });
-                } else if (personsByName?.data?.length > 1) {
-                    logger.warn('Service: Múltiplas pessoas encontradas com o mesmo nome, ignorando busca por nome', {
+                } else if (personsByName?.items?.length > 1) {
+                    // Lança um erro específico quando múltiplas pessoas são encontradas
+                    const errorDetails = {
+                        message: 'Múltiplas pessoas encontradas com o mesmo nome',
                         razao_social: cnpjData.razao_social,
-                        total: personsByName.data.length
-                    });
+                        total_persons: personsByName.items.length,
+                        persons: personsByName.items.map(p => ({
+                            person_id: p.person_id,
+                            full_name: p.full_name,
+                            document_type: 'CNPJ'
+                        }))
+                    };
+
+                    logger.error('Service: Erro de duplicidade', errorDetails);
+
+                    const duplicityError = new Error('Múltiplas pessoas encontradas');
+                    duplicityError.name = 'DuplicityError';
+                    duplicityError.details = errorDetails;
+                    
+                    throw duplicityError;
                 }
             }
 
@@ -765,15 +794,24 @@ class PersonService {
                     person_id: existingPerson.id 
                 });
                 // Atualiza direto no banco
-                person = await this.personRepository.update(existingPerson.id, personData);
+                person = await this.personRepository.update(existingPerson.person_id, personData);
+                
+                // Verifica se a atualização foi bem-sucedida
+                if (!person) {
+                    logger.error('Service: Falha ao atualizar pessoa existente', { 
+                        person_id: existingPerson.person_id,
+                        personData
+                    });
+                    throw new Error('Não foi possível atualizar a pessoa');
+                }
                 
                 // Adiciona o documento CNPJ se não existir
                 if (!existingDocument) {
                     logger.info('Service: Adicionando documento CNPJ à pessoa existente', { 
-                        person_id: person.id,
+                        person_id: person.person_id,
                         cnpj: cnpjData.cnpj
                     });
-                    const document = await personDocumentService.create(person.id, {
+                    const document = await personDocumentService.create(person.person_id, {
                         document_type: 'CNPJ',
                         document_value: cnpjData.cnpj
                     });

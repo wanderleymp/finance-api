@@ -49,7 +49,7 @@ class BaseRepository {
                 queryParams = [...queryParams, parsedLimit, offset];
             } else {
                 // Query padrão
-                const { whereClause, queryParams: baseQueryParams } = this.buildWhereClause(filters);
+                const { whereClause, queryParams: baseQueryParams } = this.buildWhereClause(filters, options);
                 queryParams = baseQueryParams;
 
                 query = `
@@ -427,66 +427,67 @@ class BaseRepository {
     /**
      * Constrói uma cláusula WHERE dinâmica para consultas
      * @param {Object} filters - Filtros a serem aplicados
+     * @param {Object} options - Opções de busca
      * @returns {Object} Objeto com cláusula WHERE, parâmetros e contagem de parâmetros
      */
-    buildWhereClause(filters = {}) {
-        const whereConditions = [];
-        const queryParams = [];
+    buildWhereClause(filters = {}, options = {}) {
+        let queryParams = [];
         let paramCount = 1;
+        let whereClauses = [];
 
-        // Log detalhado dos filtros recebidos
-        logger.debug('BaseRepository.buildWhereClause - Filtros recebidos', {
-            filters: JSON.stringify(filters)
-        });
+        // Opções de busca
+        const exact = options.exact || false;
+        const caseSensitive = options.caseSensitive || false;
 
-        // Filtro de data com tratamento específico para due_date
-        if (filters.start_date && filters.end_date) {
-            // Converte para timestamps com início do dia e fim do dia
-            const startDate = new Date(filters.start_date);
-            startDate.setHours(0, 0, 0, 0);
-            
-            const endDate = new Date(filters.end_date);
-            endDate.setHours(23, 59, 59, 999);
-            
-            whereConditions.push(`due_date >= $${paramCount} AND due_date <= $${paramCount + 1}`);
-            queryParams.push(startDate.toISOString(), endDate.toISOString());
-            
-            logger.debug('BaseRepository.buildWhereClause - Filtro de Data', {
-                startDateInput: filters.start_date,
-                startDateConverted: startDate.toISOString(),
-                endDateInput: filters.end_date,
-                endDateConverted: endDate.toISOString()
-            });
-            
-            paramCount += 2;
+        for (const [key, value] of Object.entries(filters)) {
+            if (value === undefined || value === null) continue;
+
+            let paramPlaceholder = `$${paramCount}`;
+            let clause;
+
+            if (typeof value === 'string') {
+                if (exact) {
+                    // Busca exata, considerando case-sensitive se necessário
+                    clause = caseSensitive 
+                        ? `${key} = ${paramPlaceholder}` 
+                        : `UPPER(${key}) = UPPER(${paramPlaceholder})`;
+                } else {
+                    // Busca parcial, considerando case-sensitive se necessário
+                    clause = caseSensitive 
+                        ? `${key} LIKE ${paramPlaceholder}` 
+                        : `UPPER(${key}) LIKE UPPER(${paramPlaceholder})`;
+                    value = exact ? value : `%${value}%`;
+                }
+            } else if (Array.isArray(value)) {
+                // Para arrays, usa IN
+                paramPlaceholder = value.map((_, index) => `$${paramCount + index}`).join(', ');
+                clause = `${key} IN (${paramPlaceholder})`;
+                queryParams.push(...value);
+                paramCount += value.length;
+                continue;
+            } else {
+                // Para outros tipos, usa igualdade direta
+                clause = `${key} = ${paramPlaceholder}`;
+            }
+
+            whereClauses.push(clause);
+            queryParams.push(value);
+            paramCount++;
         }
 
-        // Filtros dinâmicos para outros campos
-        Object.keys(filters).forEach(key => {
-            // Ignorar filtros de data e include
-            if (key !== 'start_date' && key !== 'end_date' && key !== 'include') {
-                whereConditions.push(`${key} = $${paramCount}`);
-                queryParams.push(filters[key]);
-                paramCount++;
-            }
-        });
-
-        // Construção da cláusula WHERE
-        const whereClause = whereConditions.length > 0 
-            ? `WHERE ${whereConditions.join(' AND ')}` 
+        // Constrói a cláusula WHERE
+        const whereClause = whereClauses.length > 0 
+            ? `WHERE ${whereClauses.join(' AND ')}` 
             : '';
 
+        logger.debug('BaseRepository.buildWhereClause - Filtros recebidos', { filters });
         logger.debug('BaseRepository.buildWhereClause - Resultado Final', {
             whereClause,
-            queryParams,
-            paramCount: queryParams.length
+            paramCount,
+            queryParams
         });
 
-        return {
-            whereClause,
-            queryParams,
-            paramCount: queryParams.length
-        };
+        return { whereClause, queryParams, paramCount: queryParams.length };
     }
 }
 

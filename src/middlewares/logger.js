@@ -21,7 +21,8 @@ const logger = winston.createLogger({
       level: 'error',
       maxSize: '20m',
       maxFiles: '14d',
-      handleExceptions: true
+      handleExceptions: true,
+      createSymlink: false // Desabilita criação de symlink para evitar problemas de escrita
     }),
     // Log combinado com rotação diária
     new winston.transports.DailyRotateFile({ 
@@ -29,14 +30,22 @@ const logger = winston.createLogger({
       datePattern: 'YYYY-MM-DD',
       maxSize: '20m',
       maxFiles: '14d',
-      handleExceptions: true
+      handleExceptions: true,
+      createSymlink: false // Desabilita criação de symlink para evitar problemas de escrita
     }),
     // Log no console para desenvolvimento
     new winston.transports.Console({
       format: winston.format.combine(
         winston.format.colorize(),
         winston.format.simple()
-      )
+      ),
+      handleExceptions: true
+    })
+  ],
+  exceptionHandlers: [
+    new winston.transports.File({ 
+      filename: path.join(__dirname, '../../logs/exceptions.log'),
+      handleExceptions: true
     })
   ],
   exitOnError: false
