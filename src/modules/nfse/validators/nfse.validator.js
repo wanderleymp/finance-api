@@ -12,19 +12,13 @@ const listNFSeSchema = Joi.object({
 });
 
 const createNFSeSchema = Joi.object({
-    reference_id: Joi.string().required(),
-    prestador_cnpj: Joi.string().length(14).required(),
-    prestador_razao_social: Joi.string().required(),
-    tomador_cnpj: Joi.string().length(14).optional(),
-    tomador_razao_social: Joi.string().required(),
-    valor_total: Joi.number().positive().required(),
-    descricao_servico: Joi.string().optional(),
-    data_emissao: Joi.date().iso().optional().default(() => new Date()),
-    items: Joi.array().items(Joi.object({
-        descricao: Joi.string().required(),
-        quantidade: Joi.number().positive().required(),
-        valor_unitario: Joi.number().positive().required()
-    })).optional()
+    id: Joi.string().required(),
+    created_at: Joi.date().iso().required(),
+    status: Joi.string().required(),
+    ambiente: Joi.string().valid('producao', 'homologacao').required(),
+    referencia: Joi.string().required(),
+    DPS: Joi.object().optional(),
+    mensagens: Joi.array().optional()
 });
 
 const updateStatusSchema = Joi.object({

@@ -8,21 +8,16 @@ const { formatCNPJ, formatCPF } = require('../../utils/formatters');
 const temporaryTokenService = require('../tokens/services/temporary-token.service');
 const nuvemFiscalTokenService = require('./services/nuvem-fiscal-token.service');
 const nuvemFiscalService = require('./services/nuvem-fiscal.service')(nuvemFiscalTokenService);
+const invoiceRepository = require('../invoices/invoice.repository');
+const invoiceEventRepository = require('../invoices/invoice-event.repository');
 
 class NfseService {
-    constructor(
-        nfseRepository, 
-        configService
-    ) {
-        this.nfseRepository = nfseRepository;
-        this.configService = configService;
+    constructor() {
+        this.nfseRepository = new NfseRepository();
+        this.invoiceRepository = invoiceRepository;
+        this.invoiceEventRepository = invoiceEventRepository;
         this.ambiente = process.env.NFSE_AMBIENTE || 'homologacao';
         this.nuvemFiscalUrl = 'https://api.nuvemfiscal.com.br/nfse/dps';
-
-        // Garantir que os repositórios estejam corretamente injetados
-        if (!this.nfseRepository) {
-            throw new Error('NfseRepository não foi injetado corretamente');
-        }
     }
 
     async emitirNfse(detailedMovement, ambiente = 'homologacao') {
@@ -177,7 +172,7 @@ class NfseService {
     }
 
     async emitirNfseNuvemFiscal(dadosNFSe, licenseData) {
-        let payload; // Declarar payload antes para evitar erro de referência
+        let payload, transaction; // Declarar payload e transação
         try {
             // Obter o primeiro endereço da licença para o código IBGE
             const enderecoLicenca = licenseData.person.addresses[0];
@@ -238,28 +233,70 @@ class NfseService {
 
             const response = await nuvemFiscalService.emitirNfse(payload, "PRODUCAO");
 
-            // Implementar método de salvar no repositório
-            const novoNfse = await this.nfseRepository.create({
-                movement_id: dadosNFSe.referencia,
-                ambiente: response.ambiente,
-                payload: JSON.stringify(payload),
-                response_payload: JSON.stringify(response),
-                status: response.status,
-                integration_nfse_id: response.id,
-                numero_nfse: null, // Ainda não disponível neste retorno
-                codigo_verificacao: null, // Ainda não disponível neste retorno
-                created_at: response.created_at,
-                mensagens: JSON.stringify(response.mensagens)
+            // Iniciar transação
+            transaction = await this.nfseRepository.transaction(async (client) => {
+                // 1. Criar Invoice
+                const invoice = await this.invoiceRepository.createWithClient(client, {
+                    reference_id: dadosNFSe.referencia,
+                    type: 'NFSE',
+                    status: response.status,
+                    environment: response.ambiente,
+                    movement_id: parseInt(dadosNFSe.referencia),
+                    total_amount: dadosNFSe.infDPS.valores.vServPrest.vServ,
+                    created_at: new Date(response.created_at),
+                    updated_at: new Date(response.created_at)
+                });
+
+                // 2. Criar NFSe
+                const nfse = await this.nfseRepository.createWithClient(client, {
+                    invoice_id: invoice.invoice_id,
+                    integration_nfse_id: response.id,
+                    service_value: dadosNFSe.infDPS.valores.vServPrest.vServ,
+                    iss_value: dadosNFSe.infDPS.valores.vServPrest.vServ * (dadosNFSe.infDPS.valores.trib.tribMun.pAliq / 100),
+                    aliquota_service: dadosNFSe.infDPS.valores.trib.tribMun.pAliq
+                });
+
+                // 3. Criar Invoice Event
+                const invoiceEvent = await this.invoiceEventRepository.createWithClient(client, {
+                    invoice_id: invoice.invoice_id,
+                    event_type: 'NFSE_CREATED',
+                    event_date: new Date(response.created_at),
+                    event_data: JSON.stringify(response),
+                    status: response.status,
+                    message: response.mensagens.length > 0 ? response.mensagens[0] : 'NFSe criada com sucesso'
+                });
+
+                return { invoice, nfse, invoiceEvent };
             });
 
             logger.info('NFSe emitida com sucesso', { 
                 movementId: dadosNFSe.referencia,
-                nfseId: novoNfse.nfse_id,
+                invoiceId: transaction.invoice.invoice_id,
+                nfseId: transaction.nfse.nfse_id,
                 integrationId: response.id,
                 status: response.status
             });
 
-            return novoNfse;
+            // Log detalhado dos dados inseridos
+            logger.info('Dados inseridos no banco de dados', {
+                invoice: {
+                    id: transaction.invoice.invoice_id,
+                    referenceId: transaction.invoice.reference_id,
+                    status: transaction.invoice.status
+                },
+                nfse: {
+                    id: transaction.nfse.nfse_id,
+                    invoiceId: transaction.nfse.invoice_id,
+                    integrationNfseId: transaction.nfse.integration_nfse_id
+                },
+                invoiceEvent: {
+                    id: transaction.invoiceEvent.event_id,
+                    invoiceId: transaction.invoiceEvent.invoice_id,
+                    eventType: transaction.invoiceEvent.event_type
+                }
+            });
+
+            return transaction;
         } catch (error) {
             logger.error('Erro ao emitir NFSe na Nuvem Fiscal', { 
                 errorMessage: error.message,
@@ -525,6 +562,192 @@ class NfseService {
                 cnpjEmitente,
                 errorResponse: error.response?.data,
                 errorStack: error.stack
+            });
+            throw error;
+        }
+    }
+
+    async testarEmissaoNfse(movementId) {
+        try {
+            // Buscar movimento detalhado
+            const movementService = require('../movements/movement.service');
+            const detailedMovement = await new movementService().findById(movementId);
+
+            // Usar o retorno de exemplo da Nuvem Fiscal
+            const mockNuvemFiscalResponse = {
+                id: "nfs_3a1781ff32ed49c594a91147c5d05eb3",
+                created_at: "2025-01-15T15:54:04.397Z",
+                status: "processando",
+                ambiente: "producao",
+                referencia: String(movementId),
+                DPS: {},
+                mensagens: []
+            };
+
+            // Preparar payload para emissão de NFSe
+            const nfsePayload = {
+                referencia: String(movementId),
+                infDPS: {
+                    dhEmi: new Date().toISOString(),
+                    dCompet: new Date().toISOString().split('T')[0],
+                    prest: { 
+                        CNPJ: detailedMovement.license.person.documents[0].document_value.replace(/\D/g, '') 
+                    },
+                    toma: {
+                        CPF: detailedMovement.person.documents[0].document_value.replace(/\D/g, ''),
+                        xNome: detailedMovement.person.full_name,
+                    },
+                    valores: {
+                        vServPrest: { 
+                            vServ: detailedMovement.items.reduce((total, item) => total + parseFloat(item.total_price || 0), 0)
+                        },
+                        trib: {
+                            tribMun: {
+                                pAliq: 2 // Alíquota padrão para teste
+                            }
+                        }
+                    }
+                }
+            };
+
+            // Iniciar transação
+            const transaction = await this.nfseRepository.transaction(async (client) => {
+                // 1. Criar Invoice
+                const invoice = await this.invoiceRepository.createWithClient(client, {
+                    reference_id: mockNuvemFiscalResponse.referencia,
+                    type: 'NFSE',
+                    status: mockNuvemFiscalResponse.status,
+                    environment: mockNuvemFiscalResponse.ambiente,
+                    movement_id: parseInt(movementId),
+                    total_amount: nfsePayload.infDPS.valores.vServPrest.vServ,
+                    created_at: new Date(mockNuvemFiscalResponse.created_at),
+                    updated_at: new Date(mockNuvemFiscalResponse.created_at)
+                });
+
+                // 2. Criar NFSe
+                const nfse = await this.nfseRepository.createWithClient(client, {
+                    invoice_id: invoice.invoice_id,
+                    integration_nfse_id: mockNuvemFiscalResponse.id,
+                    service_value: nfsePayload.infDPS.valores.vServPrest.vServ,
+                    iss_value: nfsePayload.infDPS.valores.vServPrest.vServ * (nfsePayload.infDPS.valores.trib.tribMun.pAliq / 100),
+                    aliquota_service: nfsePayload.infDPS.valores.trib.tribMun.pAliq
+                });
+
+                // 3. Criar Invoice Event
+                const invoiceEvent = await this.invoiceEventRepository.createWithClient(client, {
+                    invoice_id: invoice.invoice_id,
+                    event_type: 'NFSE_CREATED',
+                    event_date: new Date(mockNuvemFiscalResponse.created_at),
+                    event_data: JSON.stringify(mockNuvemFiscalResponse),
+                    status: mockNuvemFiscalResponse.status,
+                    message: mockNuvemFiscalResponse.mensagens.length > 0 
+                        ? mockNuvemFiscalResponse.mensagens[0] 
+                        : 'NFSe criada com sucesso'
+                });
+
+                return { invoice, nfse, invoiceEvent, mockNuvemFiscalResponse };
+            });
+
+            // Log detalhado dos dados inseridos
+            logger.info('Dados inseridos no banco de dados', {
+                invoice: {
+                    id: transaction.invoice.invoice_id,
+                    referenceId: transaction.invoice.reference_id,
+                    status: transaction.invoice.status
+                },
+                nfse: {
+                    id: transaction.nfse.nfse_id,
+                    invoiceId: transaction.nfse.invoice_id,
+                    integrationNfseId: transaction.nfse.integration_nfse_id
+                },
+                invoiceEvent: {
+                    id: transaction.invoiceEvent.event_id,
+                    invoiceId: transaction.invoiceEvent.invoice_id,
+                    eventType: transaction.invoiceEvent.event_type
+                },
+                originalResponse: transaction.mockNuvemFiscalResponse
+            });
+
+            return transaction;
+        } catch (error) {
+            logger.error('Erro no teste de emissão de NFSe', { 
+                errorMessage: error.message,
+                errorStack: error.stack
+            });
+            throw error;
+        }
+    }
+
+    async criarNfseComRetorno(nuvemFiscalResponse) {
+        try {
+            // Buscar movimento pelo número de referência
+            const movementService = require('../movements/movement.service');
+            const movementId = parseInt(nuvemFiscalResponse.referencia);
+            const detailedMovement = await new movementService().findById(movementId);
+
+            // Iniciar transação
+            const transaction = await this.nfseRepository.transaction(async (client) => {
+                // 1. Criar Invoice
+                const invoice = await this.invoiceRepository.createWithClient(client, {
+                    reference_id: nuvemFiscalResponse.referencia,
+                    type: 'NFSE',
+                    status: nuvemFiscalResponse.status,
+                    environment: nuvemFiscalResponse.ambiente,
+                    movement_id: movementId,
+                    total_amount: detailedMovement.items.reduce((total, item) => total + parseFloat(item.total_price || 0), 0),
+                    created_at: new Date(nuvemFiscalResponse.created_at),
+                    updated_at: new Date(nuvemFiscalResponse.created_at)
+                });
+
+                // 2. Criar NFSe
+                const nfse = await this.nfseRepository.createWithClient(client, {
+                    invoice_id: invoice.invoice_id,
+                    integration_nfse_id: nuvemFiscalResponse.id,
+                    service_value: detailedMovement.items.reduce((total, item) => total + parseFloat(item.total_price || 0), 0),
+                    iss_value: 0, // TODO: Calcular ISS
+                    aliquota_service: 2 // TODO: Definir alíquota correta
+                });
+
+                // 3. Criar Invoice Event
+                const invoiceEvent = await this.invoiceEventRepository.createWithClient(client, {
+                    invoice_id: invoice.invoice_id,
+                    event_type: 'NFSE_CREATED',
+                    event_date: new Date(nuvemFiscalResponse.created_at),
+                    event_data: JSON.stringify(nuvemFiscalResponse),
+                    status: nuvemFiscalResponse.status,
+                    message: nuvemFiscalResponse.mensagens.length > 0 
+                        ? nuvemFiscalResponse.mensagens[0] 
+                        : 'NFSe criada com sucesso'
+                });
+
+                return { invoice, nfse, invoiceEvent };
+            });
+
+            // Log detalhado dos dados inseridos
+            logger.info('Dados de NFSe inseridos no banco', {
+                invoice: {
+                    id: transaction.invoice.invoice_id,
+                    referenceId: transaction.invoice.reference_id,
+                    status: transaction.invoice.status
+                },
+                nfse: {
+                    id: transaction.nfse.nfse_id,
+                    invoiceId: transaction.nfse.invoice_id,
+                    integrationNfseId: transaction.nfse.integration_nfse_id
+                },
+                invoiceEvent: {
+                    id: transaction.invoiceEvent.event_id,
+                    invoiceId: transaction.invoiceEvent.invoice_id,
+                    eventType: transaction.invoiceEvent.event_type
+                }
+            });
+
+            return transaction;
+        } catch (error) {
+            logger.error('Erro ao criar NFSe com retorno da Nuvem Fiscal', { 
+                errorMessage: error.message,
+                errorStack: error.stack,
+                nuvemFiscalResponse
             });
             throw error;
         }

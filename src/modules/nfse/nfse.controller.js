@@ -150,6 +150,67 @@ class NfseController {
             });
         }
     }
+
+    /**
+     * Método de teste para emissão de NFSe
+     */
+    async testarEmissaoNfse(req, res) {
+        try {
+            const { movementId } = req.params;
+            
+            logger.info('NfseController.testarEmissaoNfse - Iniciando teste', {
+                movementId
+            });
+
+            const result = await this.nfseService.testarEmissaoNfse(Number(movementId));
+            
+            return successResponse(res, 200, {
+                message: 'Teste de emissão de NFSe realizado com sucesso',
+                data: result
+            });
+        } catch (error) {
+            logger.error('NfseController.testarEmissaoNfse - Erro', {
+                error: error.message,
+                movementId: req.params.movementId,
+                stack: error.stack
+            });
+            return errorResponse(res, 500, 'Erro ao testar emissão de NFSe', error);
+        }
+    }
+
+    /**
+     * Criar NFSe a partir do retorno da Nuvem Fiscal
+     */
+    async criarNfseComRetorno(req, res) {
+        try {
+            const nuvemFiscalResponse = req.body;
+            
+            logger.info('NfseController.criarNfseComRetorno - Recebendo retorno da Nuvem Fiscal', {
+                nuvemFiscalResponse
+            });
+
+            // Validar campos obrigatórios
+            if (!nuvemFiscalResponse.id || !nuvemFiscalResponse.referencia) {
+                return errorResponse(res, 400, 'Campos obrigatórios ausentes', {
+                    requiredFields: ['id', 'referencia']
+                });
+            }
+
+            const result = await this.nfseService.criarNfseComRetorno(nuvemFiscalResponse);
+            
+            return successResponse(res, 201, {
+                message: 'NFSe criada com sucesso',
+                data: result
+            });
+        } catch (error) {
+            logger.error('NfseController.criarNfseComRetorno - Erro', {
+                error: error.message,
+                payload: req.body,
+                stack: error.stack
+            });
+            return errorResponse(res, 500, 'Erro ao criar NFSe', error);
+        }
+    }
 }
 
 module.exports = NfseController;

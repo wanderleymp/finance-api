@@ -12,7 +12,7 @@ const path = require('path');
 const healthRoutes = require('./modules/health/health.routes');
 const authModule = require('./modules/auth/auth.module');
 const boletoModule = require('./modules/boletos/boleto.module');
-const movementRoutes = require('./modules/movements/movement.module');
+const movementRoutes = require('./modules/movements/movement.routes');
 const movementPaymentRoutes = require('./modules/movement-payments/movement-payment.module');
 const paymentMethodModule = require('./modules/payment-methods/payment-method.module');
 const addressRoutes = require('./modules/addresses/address.module');
@@ -28,10 +28,10 @@ const taskTypesModule = require('./modules/tasktypes/tasktypes.module');
 const taskDependenciesModule = require('./modules/taskdependencies/taskdependencies.module');
 const taskLogsModule = require('./modules/tasklogs/tasklogs.module');
 const MessagesModule = require('./modules/messages/messages.module');
-const NFSeModule = require('./modules/nfse/nfse.module');
 const servicesRoutes = require('./modules/services/service.routes');
 const invoicesModule = require('./modules/invoices/invoice.module');
 const invoiceEventModule = require('./modules/invoice-events/invoice-event.module');
+const nfseRoutes = require('./modules/nfse/nfse.routes');
 
 const app = express();
 
@@ -242,8 +242,7 @@ const installmentModule = require('./modules/installments/installment.module');
 app.use('/installments', installmentModule(app));
 
 // Registra o módulo de NFSes
-const nfseModule = require('./modules/nfse/nfse.module');
-nfseModule.register(app);
+app.use('/nfses', nfseRoutes);
 
 // Registra o módulo de serviços
 app.use('/services', servicesRoutes);

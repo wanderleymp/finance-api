@@ -65,6 +65,12 @@ class NfseRoutes {
             this.controller.emitirNfse.bind(this.controller)
         );
 
+        // Criar NFSe a partir do retorno da Nuvem Fiscal
+        this.router.post('/criar-nfse', 
+            validateRequest(createNFSeSchema, 'body'),
+            this.controller.criarNfseComRetorno.bind(this.controller)
+        );
+
         // Atualizar status do NFSe
         this.router.patch('/:id/status', 
             validateRequest(updateStatusSchema, 'body'),
