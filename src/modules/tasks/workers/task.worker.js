@@ -55,18 +55,8 @@ class TaskWorker {
 
         while (this.isRunning) {
             try {
-                logger.debug('Buscando tasks pendentes', {
-                    batchSize: this.batchSize,
-                    timestamp: new Date().toISOString()
-                });
-
                 const tasks = await this.taskService.findPendingTasks(this.batchSize);
                 
-                logger.debug('Resultado da busca de tasks', {
-                    tasksCount: tasks.length,
-                    timestamp: new Date().toISOString()
-                });
-
                 if (tasks.length > 0) {
                     logger.info(`Processando lote de ${tasks.length} tasks`);
                     

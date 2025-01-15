@@ -33,11 +33,6 @@ class BoletoService {
                 formattedFilters[mappedKey] = filters[key];
             });
 
-            logger.debug('Serviço: Filtros formatados', { 
-                originalFilters: filters, 
-                formattedFilters 
-            });
-
             const result = await this.repository.findAll(page, limit, formattedFilters);
 
             logger.info('Serviço: Resultado da listagem de boletos', { 

@@ -9,12 +9,6 @@ class ContactRepository extends BaseRepository {
 
     async findAll(page = 1, limit = 10, filters = {}) {
         try {
-            logger.debug('Repository findAll - params:', {
-                page,
-                limit,
-                filters
-            });
-
             // Constrói as condições WHERE
             const conditions = [];
             const params = [];

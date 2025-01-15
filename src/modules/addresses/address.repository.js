@@ -9,17 +9,7 @@ class AddressRepository extends BaseRepository {
 
     async findAll(page = 1, limit = 10, filters = {}) {
         try {
-            logger.debug('Repository findAll - params:', {
-                page,
-                limit,
-                filters
-            });
-
             const result = await super.findAll(page, limit, filters);
-
-            logger.debug('Repository findAll - base result:', {
-                result
-            });
 
             return {
                 items: result.data ? result.data.map(AddressResponseDTO.fromDatabase) : [],

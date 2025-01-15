@@ -14,12 +14,6 @@ class AddressService {
 
     async findAll(page = 1, limit = 10, filters = {}) {
         try {
-            logger.debug('Service findAll - params:', {
-                page,
-                limit,
-                filters
-            });
-
             // Garante que page e limit são números
             const parsedPage = parseInt(page) || 1;
             const parsedLimit = parseInt(limit) || 10;
@@ -49,10 +43,6 @@ class AddressService {
                 parsedLimit,
                 filters
             );
-
-            logger.debug('Service findAll - result:', {
-                result
-            });
 
             // Salva no cache com TTL reduzido
             try {

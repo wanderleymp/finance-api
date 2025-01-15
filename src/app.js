@@ -37,14 +37,6 @@ const app = express();
 
 // Middleware de logging para todas as requisições
 app.use((req, res, next) => {
-    console.log('DEBUG: Nova requisição recebida', {
-        method: req.method,
-        url: req.url,
-        path: req.path,
-        originalUrl: req.originalUrl,
-        ip: req.ip,
-        headers: req.headers
-    });
     logger.info('Nova requisição recebida', {
         method: req.method,
         url: req.url,
@@ -73,7 +65,7 @@ app.use((req, res, next) => {
 
 // Debug de rotas
 app.use((req, res, next) => {
-    console.log('DEBUG: Nova requisição recebida', {
+    logger.info('Nova requisição recebida', {
         method: req.method,
         url: req.url,
         path: req.path,
@@ -87,7 +79,7 @@ app.use((req, res, next) => {
 // Adicionar log de todas as rotas registradas
 const _use = app.use;
 app.use = function(route, handler) {
-    console.log(`DEBUG: Registrando rota: ${route}`);
+    logger.info(`Registrando rota: ${route}`);
     return _use.apply(this, arguments);
 };
 
@@ -231,13 +223,7 @@ app.use('/movement-items', movementItemModule.getRouter());
 
 // Middleware para redirecionar /instalments para /installments
 app.use((req, res, next) => {
-    logger.debug('Redirect Middleware Debug:', {
-        path: req.path,
-        originalUrl: req.originalUrl,
-        method: req.method
-    });
     if (req.path === '/instalments') {
-        logger.debug('Redirecting /instalments to /installments');
         return res.redirect('/installments');
     }
     next();
@@ -245,13 +231,7 @@ app.use((req, res, next) => {
 
 // Middleware para redirecionar /nfse para /nfses
 app.use((req, res, next) => {
-    logger.debug('Redirect Middleware Debug:', {
-        path: req.path,
-        originalUrl: req.originalUrl,
-        method: req.method
-    });
     if (req.path === '/nfse') {
-        logger.debug('Redirecting /nfse to /nfses');
         return res.redirect('/nfses');
     }
     next();

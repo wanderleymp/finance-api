@@ -15,7 +15,6 @@ class BoletoRepository extends BaseRepository {
      */
     async findAll(page = 1, limit = 10, filters = {}) {
         try {
-            logger.debug('Listando boletos', { page, limit, filters });
             return await super.findAll(page, limit, filters, { orderBy: 'boleto_id DESC' });
         } catch (error) {
             logger.error('Erro ao listar boletos', { error: error.message, filters });
@@ -32,8 +31,6 @@ class BoletoRepository extends BaseRepository {
      */
     async findAllWithDetails(page = 1, limit = 10, filters = {}) {
         try {
-            logger.debug('Listando boletos com detalhes', { page, limit, filters });
-            
             const customQuery = `
                 SELECT 
                     b.*,
@@ -60,7 +57,6 @@ class BoletoRepository extends BaseRepository {
      */
     async findById(boletoId) {
         try {
-            logger.debug('Buscando boleto por ID', { boletoId });
             const query = 'SELECT * FROM boletos WHERE boleto_id = $1';
             const result = await this.pool.query(query, [boletoId]);
             return result.rows[0];
@@ -77,7 +73,6 @@ class BoletoRepository extends BaseRepository {
      */
     async findByIdWithDetails(boletoId) {
         try {
-            logger.debug('Buscando boleto por ID com detalhes', { boletoId });
             const query = `
                 SELECT 
                     b.*,
@@ -103,7 +98,6 @@ class BoletoRepository extends BaseRepository {
      */
     async update(boletoId, data) {
         try {
-            logger.debug('Atualizando boleto', { boletoId, data });
             const query = `
                 UPDATE boletos 
                 SET ${Object.keys(data).map((key, i) => `${key} = $${i + 2}`).join(', ')},
@@ -129,7 +123,6 @@ class BoletoRepository extends BaseRepository {
      */
     async updateBoleto(boletoId, data) {
         try {
-            logger.debug('Atualizando boleto', { boletoId, data });
             const query = 'UPDATE boletos SET status = $1, updated_at = NOW() WHERE boleto_id = $2 RETURNING *';
             const result = await this.pool.query(query, [data.status, boletoId]);
             return result.rows[0];
@@ -146,7 +139,6 @@ class BoletoRepository extends BaseRepository {
      */
     async create(data) {
         try {
-            logger.debug('Criando boleto com dados externos', { data });
             const query = `
                 INSERT INTO boletos (
                     installment_id,
@@ -178,7 +170,6 @@ class BoletoRepository extends BaseRepository {
      */
     async generateBoletoJson(installmentId) {
         try {
-            logger.debug('Gerando payload do boleto', { installmentId });
             const query = 'SELECT public.fn_generate_boleto_json($1) as payload';
             const result = await this.pool.query(query, [installmentId]);
             return result.rows[0].payload;
@@ -195,8 +186,6 @@ class BoletoRepository extends BaseRepository {
      */
     async findByPaymentId(paymentId) {
         try {
-            logger.info('Repository: Buscando boletos por payment ID', { paymentId });
-
             const query = `
                 SELECT 
                     b.*,
@@ -212,11 +201,6 @@ class BoletoRepository extends BaseRepository {
 
             const result = await this.pool.query(query, [paymentId]);
             
-            logger.info('Repository: Boletos encontrados', { 
-                paymentId,
-                count: result.rows.length
-            });
-
             return result.rows;
         } catch (error) {
             logger.error('Repository: Erro ao buscar boletos por payment ID', {
@@ -225,7 +209,6 @@ class BoletoRepository extends BaseRepository {
             });
             // Se a tabela não existir, retorna array vazio
             if (error.code === '42P01') {
-                logger.warn('Repository: Tabela boletos não existe', { paymentId });
                 return [];
             }
             throw error;
@@ -239,8 +222,6 @@ class BoletoRepository extends BaseRepository {
      */
     async findInstallmentByBoletoId(boletoId) {
         try {
-            logger.debug('Buscando dados da parcela por ID do boleto', { boletoId });
-
             const query = `
                 SELECT 
                     i.installment_id,
@@ -272,8 +253,6 @@ class BoletoRepository extends BaseRepository {
      */
     async findBoletoDataForEmission(boletoId) {
         try {
-            logger.debug('Buscando dados para emissão do boleto', { boletoId });
-
             const query = `
                 SELECT 
                     b.boleto_id,
