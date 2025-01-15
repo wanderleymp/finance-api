@@ -1,7 +1,7 @@
 const axios = require('axios');
 const { logger } = require('../../../middlewares/logger');
 const database = require('../../../config/database');
-const nuvemFiscalTokenRepository = require('../repositories/nuvem-fiscal-token.repository');
+const temporaryTokenRepository = require('../../tokens/repositories/temporary-token.repository');
 
 class NuvemFiscalTokenService {
   /**
@@ -12,6 +12,7 @@ class NuvemFiscalTokenService {
     try {
       const query = `
         SELECT 
+          ic.credential_id,
           ic.client_id, 
           ic.client_secret
         FROM public.integration_credentials ic
@@ -44,21 +45,24 @@ class NuvemFiscalTokenService {
 
   /**
    * Obtém um token de acesso para a Nuvem Fiscal
-   * @param {string} [ambiente='HOMOLOGACAO'] - Ambiente do token
+   * @param {string} [ambiente='PRODUCAO'] - Ambiente do token
    * @returns {Promise<string>} Token de acesso
    */
-  async obterToken(ambiente = 'HOMOLOGACAO') {
+  async obterToken(ambiente = 'PRODUCAO') {
     try {
-      // Primeiro, tenta obter um token válido do repositório
-      const tokenSalvo = await nuvemFiscalTokenRepository.obterTokenValido(ambiente);
+      // Primeiro, busca as credenciais da Nuvem Fiscal
+      const credenciais = await this.obterCredenciais();
+
+      // Busca um token válido para essa credencial
+      const tokenTemporario = await temporaryTokenRepository.findValidTokenByCredentialId(credenciais.credential_id);
       
-      if (tokenSalvo) {
-        logger.info('Token válido obtido do repositório', { ambiente });
-        return tokenSalvo.access_token;
+      if (tokenTemporario) {
+        logger.info('Token válido encontrado', { ambiente });
+        return tokenTemporario.token;
       }
 
       // Se não há token válido, obtém novas credenciais
-      const { client_id, client_secret } = await this.obterCredenciais();
+      const { client_id, client_secret } = credenciais;
 
       if (!client_id || !client_secret) {
         throw new Error('Credenciais da Nuvem Fiscal incompletas');
@@ -81,16 +85,14 @@ class NuvemFiscalTokenService {
 
       const { access_token, expires_in } = response.data;
 
-      // Salva o token no repositório
-      await nuvemFiscalTokenRepository.criarToken({
-        access_token,
-        expires_in,
-        environment: ambiente
+      // Salva o token no repositório de tokens temporários
+      await temporaryTokenRepository.create({
+        token: access_token,
+        credentialId: credenciais.credential_id,
+        expiresInSeconds: expires_in
       });
 
-      logger.info('Novo token obtido da Nuvem Fiscal', {
-        ambiente
-      });
+      logger.info('Novo token obtido da Nuvem Fiscal', { ambiente });
 
       return access_token;
     } catch (error) {
@@ -109,10 +111,10 @@ class NuvemFiscalTokenService {
    */
   async limparTokenCache(ambiente = 'HOMOLOGACAO') {
     try {
-      const tokenSalvo = await nuvemFiscalTokenRepository.obterTokenValido(ambiente);
+      const tokenSalvo = await temporaryTokenRepository.findValidTokenByCredentialId(credenciais.credential_id);
       
       if (tokenSalvo) {
-        await nuvemFiscalTokenRepository.invalidarToken(tokenSalvo.token_id);
+        await temporaryTokenRepository.invalidarToken(tokenSalvo.token_id);
       }
     } catch (error) {
       logger.error('Erro ao limpar token cache', {

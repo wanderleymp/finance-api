@@ -6,11 +6,23 @@ const UpdateNfseDto = require('./dto/update-nfse.dto');
 const { NotFoundError, ValidationError } = require('../../utils/errors');
 const { formatCNPJ, formatCPF } = require('../../utils/formatters');
 const temporaryTokenService = require('../tokens/services/temporary-token.service');
+const nuvemFiscalTokenService = require('./services/nuvem-fiscal-token.service');
+const nuvemFiscalService = require('./services/nuvem-fiscal.service')(nuvemFiscalTokenService);
 
 class NfseService {
-    constructor() {
+    constructor(
+        nfseRepository, 
+        configService
+    ) {
+        this.nfseRepository = nfseRepository;
+        this.configService = configService;
         this.ambiente = process.env.NFSE_AMBIENTE || 'homologacao';
         this.nuvemFiscalUrl = 'https://api.nuvemfiscal.com.br/nfse/dps';
+
+        // Garantir que os repositórios estejam corretamente injetados
+        if (!this.nfseRepository) {
+            throw new Error('NfseRepository não foi injetado corretamente');
+        }
     }
 
     async emitirNfse(detailedMovement, ambiente = 'homologacao') {
@@ -60,12 +72,13 @@ class NfseService {
             });
 
             // Aqui você adicionaria a chamada para o serviço de emissão de NFSe
-            // const nfseResponse = await this.emitirNfseNaAPI(nfsePayload);
+            const nfseResponse = await this.emitirNfseNuvemFiscal(nfsePayload, detailedMovement.license);
 
             return {
                 success: true,
                 message: 'Payload de NFSe montado com sucesso',
-                payload: nfsePayload
+                payload: nfsePayload,
+                nfseResponse
             };
         } catch (error) {
             logger.error('Erro ao montar payload de NFSe', { 
@@ -108,6 +121,14 @@ class NfseService {
             movimento: data.movimento
         });
 
+        // Verificações de segurança para evitar erros de undefined
+        if (!data.personData || !data.personData.addresses || data.personData.addresses.length === 0) {
+            logger.error('Dados de endereço do tomador incompletos', { personData: data.personData });
+            throw new Error('Dados de endereço do tomador incompletos');
+        }
+
+        const primeiroEndereco = data.personData.addresses[0];
+
         return {
             provedor: "padrao",
             ambiente: "producao",
@@ -124,12 +145,12 @@ class NfseService {
                     xNome: data.tomador_razao_social,
                     end: {
                         endNac: {
-                            cMun: data.personData.addresses[0].ibge,
-                            CEP: data.personData.addresses[0].postal_code
+                            cMun: primeiroEndereco.ibge || null,
+                            CEP: primeiroEndereco.postal_code || null
                         },
-                        xLgr: data.personData.addresses[0].street,
-                        nro: data.personData.addresses[0].number,
-                        xBairro: data.personData.addresses[0].neighborhood
+                        xLgr: primeiroEndereco.street || null,
+                        nro: primeiroEndereco.number || null,
+                        xBairro: primeiroEndereco.neighborhood || null
                     },
                     fone: null,
                     email: ""
@@ -155,47 +176,95 @@ class NfseService {
         };
     }
 
-    async emitirNFSeNuvemFiscal(dadosNFSe) {
+    async emitirNfseNuvemFiscal(dadosNFSe, licenseData) {
+        let payload; // Declarar payload antes para evitar erro de referência
         try {
-            // Obtém token válido usando o serviço de token temporário
-            const token = await temporaryTokenService.obterToken('Nuvem Fiscal');
+            // Obter o primeiro endereço da licença para o código IBGE
+            const enderecoLicenca = licenseData.person.addresses[0];
 
-            logger.info('Token obtido para emissão de NFSe', {
-                tokenValido: !!token
-            });
+            // Buscar primeiro email em contatos
+            const primeiroEmail = licenseData.person.contacts.find(
+                contact => contact.contact_type === 'email'
+            )?.contact_value || null;
 
-            // Construir payload para NFSe
-            const payload = this.construirPayloadNfse(dadosNFSe);
-
-            logger.info('Payload para emissão de NFSe', { payload });
-
-            // Enviar requisição para emissão de NFSe
-            const response = await axios.post(
-                'https://api.nuvemfiscal.com.br/nfse/emissao', 
-                payload,
-                {
-                    headers: {
-                        'Authorization': `Bearer ${token}`,
-                        'Content-Type': 'application/json'
+            payload = {
+                provedor: "padrao",
+                ambiente: "producao",
+                referencia: dadosNFSe.referencia,
+                infDPS: {
+                    tpAmb: 1,
+                    dhEmi: dadosNFSe.infDPS.dhEmi,
+                    dCompet: dadosNFSe.infDPS.dCompet,
+                    prest: {
+                        CNPJ: dadosNFSe.infDPS.prest.CNPJ
+                    },
+                    toma: {
+                        [dadosNFSe.infDPS.toma.CPF ? 'CPF' : 'CNPJ']: dadosNFSe.infDPS.toma.CPF || dadosNFSe.infDPS.toma.CNPJ,
+                        xNome: dadosNFSe.infDPS.toma.xNome,
+                        end: {
+                            endNac: {
+                                cMun: String(dadosNFSe.infDPS.toma.end.endNac.cMun), // Converter para string
+                                CEP: dadosNFSe.infDPS.toma.end.endNac.CEP
+                            },
+                            xLgr: dadosNFSe.infDPS.toma.end.xLgr,
+                            nro: dadosNFSe.infDPS.toma.end.nro,
+                            xBairro: dadosNFSe.infDPS.toma.end.xBairro
+                        },
+                        fone: dadosNFSe.infDPS.toma.fone,
+                        email: primeiroEmail
+                    },
+                    serv: {
+                        cServ: {
+                            cTribNac: dadosNFSe.infDPS.serv.cTribNac,
+                            cTribMun: dadosNFSe.infDPS.serv.cTribMun,
+                            CNAE: dadosNFSe.infDPS.serv.CNAE,
+                            xDescServ: dadosNFSe.infDPS.serv.xDescServ
+                        }
+                    },
+                    valores: {
+                        vServPrest: {
+                            vServ: dadosNFSe.infDPS.valores.vServPrest.vServ
+                        },
+                        trib: {
+                            tribMun: {
+                                tribISSQN: 1,
+                                cLocIncid: String(enderecoLicenca.ibge), // Converter para string
+                                pAliq: dadosNFSe.infDPS.valores.trib.tribMun.pAliq
+                            }
+                        }
                     }
                 }
-            );
+            };
 
-            logger.info('Resposta da Nuvem Fiscal', { 
-                data: response.data 
+            const response = await nuvemFiscalService.emitirNfse(payload, "PRODUCAO");
+
+            // Implementar método de salvar no repositório
+            const novoNfse = await this.nfseRepository.create({
+                movement_id: dadosNFSe.referencia,
+                ambiente: response.ambiente,
+                payload: JSON.stringify(payload),
+                response_payload: JSON.stringify(response),
+                status: response.status,
+                integration_nfse_id: response.id,
+                numero_nfse: null, // Ainda não disponível neste retorno
+                codigo_verificacao: null, // Ainda não disponível neste retorno
+                created_at: response.created_at,
+                mensagens: JSON.stringify(response.mensagens)
             });
 
-            return {
-                numero_nfse: response.data.numero,
-                codigo_verificacao: response.data.codigoVerificacao,
-                link_nfse: response.data.linkNFSe,
-                status: 'EMITIDA'
-            };
+            logger.info('NFSe emitida com sucesso', { 
+                movementId: dadosNFSe.referencia,
+                nfseId: novoNfse.nfse_id,
+                integrationId: response.id,
+                status: response.status
+            });
+
+            return novoNfse;
         } catch (error) {
             logger.error('Erro ao emitir NFSe na Nuvem Fiscal', { 
-                error: error.message,
-                response: error.response?.data,
-                stack: error.stack
+                errorMessage: error.message,
+                errorStack: error.stack,
+                payload: payload ? JSON.stringify(payload) : 'Payload não definido'
             });
             throw error;
         }
@@ -256,7 +325,16 @@ class NfseService {
                 payloadFinal: JSON.stringify(payloadNuvemFiscal, null, 2) 
             });
 
-            const response = await this.nuvemFiscalService.emitirNfse(payloadNuvemFiscal);
+            const response = await axios.post(
+                `${process.env.NUVEM_FISCAL_URL || 'https://api.nuvemfiscal.com.br/nfse'}/dps`, 
+                payloadNuvemFiscal, 
+                { 
+                    headers: {
+                        'Authorization': `Bearer ${this.configService.get('NUVEM_FISCAL_TOKEN')}`,
+                        'Content-Type': 'application/json'
+                    }
+                }
+            );
             return response;
         } catch (error) {
             logger.error('Erro ao emitir NFS-e via Nuvem Fiscal', { 
@@ -398,6 +476,56 @@ class NfseService {
             return true;
         } catch (error) {
             logger.error('Erro ao remover NFSE', { error, id });
+            throw error;
+        }
+    }
+
+    /**
+     * Consulta NFSes na Nuvem Fiscal
+     * @param {string} cnpjEmitente - CNPJ do emitente
+     * @param {Object} [filtros={}] - Filtros opcionais para a busca
+     * @returns {Promise<Object>} Resultado da busca de NFSe
+     */
+    async consultarNfseNuvemFiscal(cnpjEmitente, filtros = {}) {
+        try {
+            // Configurações padrão de filtro
+            const params = {
+                cpf_cnpj: cnpjEmitente,
+                ambiente: filtros.ambiente || this.ambiente,
+                ...filtros
+            };
+
+            // Remove undefined values
+            Object.keys(params).forEach(key => params[key] === undefined && delete params[key]);
+
+            // Configurar cabeçalhos para a requisição
+            const headers = {
+                'Authorization': `Bearer ${this.configService.get('NUVEM_FISCAL_TOKEN')}`,
+                'Content-Type': 'application/json'
+            };
+
+            // Faz a requisição para a API da Nuvem Fiscal
+            const response = await axios.get(
+                `${this.configService.get('NUVEM_FISCAL_URL')}/nfse`, 
+                { 
+                    headers,
+                    params 
+                }
+            );
+
+            // Mapeia a resposta para o formato esperado
+            return {
+                total: response.data.data.length || 0,
+                items: response.data.data || [],
+                pages: 1
+            };
+        } catch (error) {
+            logger.error('Erro ao consultar NFSe na Nuvem Fiscal', {
+                errorMessage: error.message,
+                cnpjEmitente,
+                errorResponse: error.response?.data,
+                errorStack: error.stack
+            });
             throw error;
         }
     }
