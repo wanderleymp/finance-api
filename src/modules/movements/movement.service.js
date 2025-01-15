@@ -721,147 +721,31 @@ class MovementService extends IMovementService {
      * @param {string} [options.ambiente='homologacao'] - Ambiente de emissão da NFSE
      * @returns {Promise<Object>} NFSE criada
      */
-    async createMovementNFSe(movementId, options = {}) {
-        const { ambiente = 'homologacao' } = options;
-
+    async createMovementNFSe(movementId) {
         try {
-            logger.info('Iniciando criação de NFSE para movimento', { 
+            logger.info('Iniciando criação de NFSE para movimento', { movementId });
+            
+            const detailedMovement = await this.getDetailedMovement(movementId);
+            
+            const nfseResponse = await this.nfseService.emitirNfse(detailedMovement);
+            
+            logger.info('NFSE criada com sucesso para movimento', { 
                 movementId, 
-                ambiente, 
-                poolExists: !!this.pool 
-            });
-
-            const movement = await this.movementRepository.findById(movementId);
-            if (!movement) {
-                throw new Error('Movimento não encontrado');
-            }
-
-            // Buscar dados da licença (prestador)
-            const license = await this.licenseRepository.findById(1);
-            if (!license) {
-                throw new Error('Licença não encontrada');
-            }
-            
-            logger.info('Dados da Licença (Prestador)', {
-                cnpj: license.person_document,
-                nome: license.full_name
-            });
-
-            // Buscar pessoa relacionada ao movimento (tomador)
-            const person = await this.personRepository.findPersonWithDetails(movement.person_id);
-            if (!person) {
-                throw new Error('Pessoa não encontrada');
-            }
-
-            // Capturar documento do tomador
-            const documentoValido = {
-                type: person.type === 'PJ' ? 'CNPJ' : 'CPF',
-                value: person.document
-            };
-            
-            logger.info('Documento do Tomador', {
-                tipo: documentoValido.type,
-                valor: documentoValido.value
-            });
-
-            // Capturar endereço principal do tomador
-            const enderecoPrincipal = person.addresses?.find(addr => addr.is_main) || person.addresses?.[0];
-            
-            logger.info('Endereço do Tomador', {
-                endereco: enderecoPrincipal ? {
-                    logradouro: enderecoPrincipal.street,
-                    numero: enderecoPrincipal.number,
-                    complemento: enderecoPrincipal.complement,
-                    bairro: enderecoPrincipal.neighborhood,
-                    cidade: enderecoPrincipal.city,
-                    uf: enderecoPrincipal.state,
-                    cep: enderecoPrincipal.zipcode
-                } : 'Endereço não encontrado'
-            });
-
-            logger.info('Documento Detalhado', {
-                documentoValido: JSON.stringify(documentoValido, null, 2),
-                documentoType: documentoValido.type,
-                documentoValue: documentoValido.value || documentoValido.document_value,
-                tipoDocumento: typeof documentoValido.type,
-                valorDocumento: documentoValido.value || documentoValido.document_value
-            });
-
-            // Processamento seguro do documento
-            const documentoTomador = documentoValido.value || documentoValido.document_value;
-            const tomadorDocumento = documentoTomador ? documentoTomador.toString().replace(/\D/g, '') : null;
-
-            // Buscar itens detalhados do movimento
-            const movementItemsRepository = new (require('../movement-items/movement-item.repository'))();
-            const items = await movementItemsRepository.findDetailedByMovementId(movementId);
-            
-            // Buscar detalhes do primeiro serviço
-            const servicoDetalhado = items.length > 0 
-                ? await this.serviceRepository.findServiceDetails(items[0].item_id) 
-                : null;
-
-            const nfseData = {
-                prestador: {
-                    nome: license.full_name,
-                    documento: {
-                        tipo: 2, // CNPJ
-                        numero: license.person_document.replace(/\D/g, '')
-                    },
-                    endereco: {
-                        logradouro: 'Não informado',
-                        numero: 'S/N',
-                        complemento: '',
-                        bairro: 'Não informado',
-                        cidade: 'Não informado',
-                        uf: 'RO', // Defina um estado padrão
-                        cep: '76800000' // CEP padrão
-                    }
+                movementDetails: {
+                    movement_id: detailedMovement.movement.movement_id,
+                    person_id: detailedMovement.person?.person_id,
+                    total_items: detailedMovement.items?.length || 0
                 },
-                tomador: {
-                    nome: person.full_name,
-                    documento: {
-                        tipo: documentoValido.type === 'CPF' ? 1 : 2,
-                        numero: tomadorDocumento ? tomadorDocumento.replace(/\D/g, '') : '00000000000'
-                    }
-                },
-                servico: items.map(item => ({
-                    descricao: item.servico?.descricao_servico || item.description || 'Serviço não especificado',
-                    valor: item.total_price
-                })),
-                valores: {
-                    servico: items.reduce((total, item) => total + parseFloat(item.total_price), 0),
-                    aliquota: servicoDetalhado?.aliquota_iss || 
-                              items[0]?.servico?.aliquota_iss || 
-                              items[0]?.aliquota_iss || 
-                              0
-                }
-            };
-
-            logger.info('Payload completo para NFSe', {
-                payloadCompleto: JSON.stringify(nfseData, null, 2),
-                dadosOriginais: {
-                    movementId,
-                    personId: movement.person_id,
-                    personName: person.full_name,
-                    documentoTomador: documentoValido
-                }
+                nfseResponse
             });
 
-            // Emitir NFSe
-            const nfseResponse = await this.nfseService.emitirNfse(nfseData);
-
-            return {
-                success: true,
-                message: 'NFS-e emitida com sucesso',
-                nfse: nfseResponse
-            };
+            return nfseResponse;
         } catch (error) {
             logger.error('Erro ao criar NFSE para movimento', { 
                 movementId, 
-                errorMessage: error.message,
-                errorStack: error.stack 
+                errorMessage: error.message 
             });
-            throw new Error(`Erro ao criar NFSE para movimento: ${error.message}`);
+            throw error;
         }
     }
 

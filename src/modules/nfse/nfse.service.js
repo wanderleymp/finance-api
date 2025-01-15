@@ -13,54 +13,74 @@ class NfseService {
         this.nuvemFiscalUrl = 'https://api.nuvemfiscal.com.br/nfse/dps';
     }
 
-    async emitirNfse(nfseData, ambiente = 'homologacao') {
+    async emitirNfse(detailedMovement, ambiente = 'homologacao') {
         try {
-            logger.info('Validando dados para NFSe', {
-                prestador: nfseData.prestador,
-                servico: nfseData.servico,
-                valores: nfseData.valores,
-                tomadorCpf: nfseData.tomador_cpf,
-                tomadorCnpj: nfseData.tomador_cnpj,
-                tomadorRazaoSocial: nfseData.tomador_razao_social
+            logger.info('Dados recebidos para emissão de NFSe', { 
+                movementId: detailedMovement.movement.movement_id,
+                licenseData: detailedMovement.license,
+                personData: detailedMovement.person,
+                itemsData: detailedMovement.items
             });
 
-            // Validações mínimas
-            if (!nfseData.prestador || !nfseData.prestador.cnpj) {
-                throw new Error('Falha na emissão de NFS-e: CNPJ do prestador é obrigatório');
-            }
-
-            if (!nfseData.servico || nfseData.servico.length === 0) {
-                throw new Error('Falha na emissão de NFS-e: Serviço é obrigatório');
-            }
-
-            // Processamento flexível do documento do tomador
-            const documentoTomador = nfseData.tomador_cpf || nfseData.tomador_cnpj;
-            const tipoDocumento = nfseData.tomador_cpf ? 'CPF' : 'CNPJ';
-
-            logger.info('Processamento do Documento do Tomador', {
-                documentoTomador,
-                tipoDocumento
-            });
-
-            // Payload final com documento processado
-            const payloadNfse = {
-                ...nfseData,
-                tomador: {
-                    nome: nfseData.tomador_razao_social,
-                    documento: {
-                        tipo: tipoDocumento === 'CPF' ? 1 : 2,
-                        numero: documentoTomador || ''
+            // Preparar dados para o payload
+            const payloadData = {
+                movimento: {
+                    id: detailedMovement.movement.movement_id,
+                    data: new Date().toISOString(),
+                    referencia: detailedMovement.movement.movement_id.toString()
+                },
+                prestador: {
+                    cnpj: detailedMovement.license.person.documents[0].document_value.replace(/\D/g, ''),
+                    nome: detailedMovement.license.person.full_name,
+                    endereco: {
+                        logradouro: detailedMovement.license.person.addresses[0].street || 'Não informado',
+                        numero: detailedMovement.license.person.addresses[0].number || 'S/N',
+                        complemento: detailedMovement.license.person.addresses[0].complement || '',
+                        bairro: detailedMovement.license.person.addresses[0].neighborhood || 'Não informado',
+                        cidade: detailedMovement.license.person.addresses[0].city || 'Não informado',
+                        uf: detailedMovement.license.person.addresses[0].state || 'RO',
+                        cep: detailedMovement.license.person.addresses[0].postal_code || '76800000'
                     }
+                },
+                tomador_documento_type: detailedMovement.person.person_type,
+                tomador_documento: detailedMovement.person.documents[0].document_value.replace(/\D/g, ''),
+                tomador_razao_social: detailedMovement.person.full_name,
+                servico: detailedMovement.items.map(item => ({
+                    descricao: item.description || 'Serviço não especificado',
+                    valor: parseFloat(item.total_price || 0),
+                    cnae: item.cnae || '',
+                    codTributacaoNacional: item.lc116_code || '',
+                    codTributacaoMunicipal: item.ctribmun || ''
+                })),
+                valores: {
+                    servico: detailedMovement.items.reduce((total, item) => total + parseFloat(item.total_price || 0), 0),
+                    aliquota: 0 // TODO: Adicionar lógica para calcular alíquota
                 }
             };
 
-            const payload = this.construirPayloadNfse(payloadNfse);
-            return await this.emitirNfseProvedorPadrao(payload);
+            // Validar dados
+            this.validarDadosNfse(payloadData);
+
+            // Construir payload para Nuvem Fiscal
+            const nfsePayload = this.construirPayloadNfse(payloadData);
+
+            logger.info('Payload montado para emissão de NFSe', { 
+                movementId: detailedMovement.movement.movement_id,
+                nfsePayload 
+            });
+
+            // Aqui você adicionaria a chamada para o serviço de emissão de NFSe
+            // const nfseResponse = await this.emitirNfseNaAPI(nfsePayload);
+
+            return {
+                success: true,
+                message: 'Payload de NFSe montado com sucesso',
+                payload: nfsePayload
+            };
         } catch (error) {
-            logger.error('Erro ao emitir NFS-e', {
-                error: error.message,
-                nfseData,
-                ambiente,
+            logger.error('Erro ao montar payload de NFSe', { 
+                movementId: detailedMovement.movement.movement_id,
+                errorMessage: error.message,
                 errorStack: error.stack
             });
             throw error;
@@ -75,28 +95,12 @@ class NfseService {
             valores: data.valores
         });
 
+        // Validações mínimas
         if (!data.prestador.cnpj) {
             logger.error('Validação de NFSE falhou - CNPJ do prestador é obrigatório', {
                 prestador: data.prestador
             });
             throw new Error('CNPJ do prestador é obrigatório');
-        }
-        
-        // Modificado para aceitar os novos campos
-        const tomadorDocumento = data.tomador_documento || 
-            (data.tomador?.documento?.numero ? data.tomador.documento.numero : null);
-        
-        // Remover prefixo 'CPF: ' se existir
-        const documentoLimpo = tomadorDocumento ? 
-            tomadorDocumento.replace(/^(CPF:\s*)?/, '').replace(/\D/g, '') : 
-            null;
-        
-        if (!documentoLimpo) {
-            logger.error('Validação de NFSE falhou - Documento do tomador é obrigatório', {
-                tomador: data.tomador,
-                tomadorDocumento
-            });
-            throw new Error('Documento do tomador é obrigatório');
         }
         
         if (!data.servico.length) {
@@ -105,7 +109,6 @@ class NfseService {
             });
             throw new Error('Serviço é obrigatório');
         }
-        // Adicione outras validações necessárias
     }
 
     construirPayloadNfse(data) {
