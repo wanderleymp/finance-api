@@ -300,9 +300,9 @@ app.use((req, res, next) => {
     next();
 });
 
-// Registra o módulo de parcelas
-const installmentModule = require('./modules/installments/installment.module');
-app.use('/installments', installmentModule(app));
+// Configurar rotas de parcelas - remover duplicação
+// Já registrado anteriormente
+// app.use('/installments', InstallmentModule(app));
 
 // Registra o módulo de NFSes
 app.use('/nfses', nfseRoutes);

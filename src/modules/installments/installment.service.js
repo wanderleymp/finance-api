@@ -16,23 +16,12 @@ class InstallmentService {
         this.boletoService = boletoService;
         this.boletoRepository = boletoRepository;
         this.n8nService = n8nService;
-        this.cachePrefix = 'installments';
-        this.cacheTTL = {
-            list: 300, // 5 minutos
-            detail: 300 // 5 minutos
-        };
     }
 
     async listInstallments(page = 1, limit = 10, filters = {}) {
         try {
             logger.info('Serviço: Listando parcelas', { page, limit, filters });
             
-            
-            if (cached) {
-                logger.info('Cache hit: Retornando parcelas do cache');
-                return cached;
-            }
-
             const result = await this.repository.findAll(page, limit, filters);
             
             // Verifica se há itens antes de mapear
@@ -49,32 +38,27 @@ class InstallmentService {
                 };
             }
 
-            // Transforma os resultados em DTOs
-            const items = result.data.map(item => new InstallmentResponseDTO(item));
-            const totalPages = Math.ceil(result.total / result.limit);
-
-            const formattedResult = {
-                items,
+            // Mapear resultado para DTO
+            const mappedResult = {
+                items: result.data.map(item => new InstallmentResponseDTO(item)),
                 meta: {
                     total: result.total,
-                    page: result.page,
-                    limit: result.limit,
-                    totalPages
+                    page,
+                    limit,
+                    totalPages: Math.ceil(result.total / limit)
                 }
             };
 
-            // Salva no cache
-
-            return formattedResult;
+            return mappedResult;
         } catch (error) {
             logger.error('Erro ao listar parcelas', { 
                 error: error.message, 
-                filters,
-                page,
-                limit,
-                stack: error.stack 
+                stack: error.stack,
+                page, 
+                limit, 
+                filters 
             });
-            throw error;
+            throw new ValidationError('LIST_INSTALLMENTS_ERROR', 'Erro ao listar parcelas');
         }
     }
 
@@ -82,12 +66,6 @@ class InstallmentService {
         try {
             logger.info('Serviço: Buscando parcela por ID', { id });
             
-            
-            if (cached) {
-                logger.info('Cache hit: Retornando parcela do cache');
-                return cached;
-            }
-
             const installment = await this.repository.findInstallmentWithDetails(id);
             
             if (!installment) {
@@ -95,7 +73,6 @@ class InstallmentService {
             }
 
             const installmentResponse = new InstallmentResponseDTO(installment);
-            
             
             return installmentResponse;
         } catch (error) {
@@ -104,19 +81,10 @@ class InstallmentService {
         }
     }
 
-    /**
-     * Busca detalhes de uma parcela específica
-     */
     async getInstallmentDetails(id) {
         try {
             logger.info('Serviço: Buscando detalhes da parcela', { id });
             
-            
-            if (cached) {
-                logger.info('Cache hit: Retornando detalhes da parcela do cache');
-                return cached;
-            }
-
             const installment = await this.repository.findInstallmentWithDetails(id);
             
             if (!installment) {
@@ -124,7 +92,6 @@ class InstallmentService {
             }
 
             const installmentResponse = new InstallmentResponseDTO(installment);
-            
             
             return installmentResponse;
         } catch (error) {
@@ -155,8 +122,6 @@ class InstallmentService {
 
             await client.query('COMMIT');
 
-            // Invalidar cache
-            
             return new InstallmentResponseDTO(installment);
         } catch (error) {
             await client.query('ROLLBACK');
@@ -206,8 +171,6 @@ class InstallmentService {
 
             await client.query('COMMIT');
 
-            // Invalidar cache
-
             return new InstallmentResponseDTO(updatedInstallment);
         } catch (error) {
             await client.query('ROLLBACK');
@@ -218,13 +181,6 @@ class InstallmentService {
         }
     }
 
-    /**
-     * Atualiza a data de vencimento de uma parcela
-     * @param {number} installmentId - ID da parcela
-     * @param {string} newDueDate - Nova data de vencimento (formato ISO)
-     * @param {number} [newAmount] - Novo valor da parcela (opcional)
-     * @returns {Promise<Object>} Parcela atualizada
-     */
     async updateInstallmentDueDate(id, dueDate, amount) {
         const client = await this.repository.pool.connect();
         try {
@@ -259,8 +215,6 @@ class InstallmentService {
 
             await client.query('COMMIT');
 
-            // Invalidar cache
-            
             return new InstallmentResponseDTO(updated);
         } catch (error) {
             await client.query('ROLLBACK');
@@ -277,17 +231,6 @@ class InstallmentService {
         }
     }
 
-    /**
-     * Registra o pagamento de uma parcela
-     * @param {number} id - ID da parcela
-     * @param {Object} paymentData - Dados do pagamento
-     * @param {string} [paymentData.payment_date] - Data do pagamento (opcional, padrão é hoje)
-     * @param {number} paymentData.value - Valor pago
-     * @param {number} [paymentData.bank_id=2] - ID do banco (opcional, padrão 2)
-     * @param {number} [paymentData.juros=0] - Juros (opcional, padrão 0)
-     * @param {number} [paymentData.descontos=0] - Descontos (opcional, padrão 0)
-     * @returns {Promise<Object>} Parcela atualizada após pagamento
-     */
     async registerInstallmentPayment(id, paymentData) {
         const client = await this.repository.pool.connect();
         try {
@@ -322,8 +265,6 @@ class InstallmentService {
 
             await client.query('COMMIT');
 
-            // Invalidar cache
-
             // Busca os detalhes atualizados da parcela
             const updatedInstallment = await this.repository.findInstallmentWithDetails(id);
 
@@ -351,11 +292,6 @@ class InstallmentService {
         }
     }
 
-    /**
-     * Método auxiliar para cancelar boleto de forma assíncrona
-     * @param {number} installmentId - ID da parcela
-     * @returns {Promise<void>}
-     */
     async cancelInstallmentBoletoAsync(installmentId) {
         try {
             logger.info('Iniciando cancelamento de boleto de forma assíncrona', { installmentId });
@@ -419,11 +355,6 @@ class InstallmentService {
         }
     }
 
-    /**
-     * Cancela boletos de uma parcela
-     * @param {number} installmentId - ID da parcela
-     * @returns {Promise<Array>} Boletos cancelados
-     */
     async cancelInstallmentBoletos(installmentId) {
         try {
             logger.info('Serviço: Cancelando boletos da parcela', { installmentId });
