@@ -301,8 +301,7 @@ app.use((req, res, next) => {
 });
 
 // Configurar rotas de parcelas - remover duplicação
-// Já registrado anteriormente
-// app.use('/installments', InstallmentModule(app));
+app.use('/installments', InstallmentModule(app));
 
 // Registra o módulo de NFSes
 app.use('/nfses', nfseRoutes);
