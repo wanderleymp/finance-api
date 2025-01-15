@@ -31,27 +31,17 @@ class NfseService {
                 },
                 prestador: {
                     cnpj: detailedMovement.license.person.documents[0].document_value.replace(/\D/g, ''),
-                    nome: detailedMovement.license.person.full_name,
-                    endereco: {
-                        logradouro: detailedMovement.license.person.addresses[0].street || 'Não informado',
-                        numero: detailedMovement.license.person.addresses[0].number || 'S/N',
-                        complemento: detailedMovement.license.person.addresses[0].complement || '',
-                        bairro: detailedMovement.license.person.addresses[0].neighborhood || 'Não informado',
-                        cidade: detailedMovement.license.person.addresses[0].city || 'Não informado',
-                        uf: detailedMovement.license.person.addresses[0].state || 'RO',
-                        cep: detailedMovement.license.person.addresses[0].postal_code || '76800000'
-                    }
+                    nome: detailedMovement.license.person.full_name
                 },
-                tomador_documento_type: detailedMovement.person.person_type,
                 tomador_documento: detailedMovement.person.documents[0].document_value.replace(/\D/g, ''),
                 tomador_razao_social: detailedMovement.person.full_name,
-                servico: detailedMovement.items.map(item => ({
-                    descricao: item.description || 'Serviço não especificado',
-                    valor: parseFloat(item.total_price || 0),
-                    cnae: item.cnae || '',
-                    codTributacaoNacional: item.lc116_code || '',
-                    codTributacaoMunicipal: item.ctribmun || ''
-                })),
+                servico: [{
+                    cnae: detailedMovement.items[0].cnae,
+                    codTributacaoNacional: detailedMovement.items[0].lc116_code,
+                    codTributacaoMunicipal: detailedMovement.items[0].ctribmun
+                }],
+                itemsData: detailedMovement.items,
+                personData: detailedMovement.person,
                 valores: {
                     servico: detailedMovement.items.reduce((total, item) => total + parseFloat(item.total_price || 0), 0),
                     aliquota: 0 // TODO: Adicionar lógica para calcular alíquota
@@ -112,98 +102,58 @@ class NfseService {
     }
 
     construirPayloadNfse(data) {
-    logger.info('Dados completos recebidos para construção de NFSe', { 
-      movimento: {
-        id: data.movimento.id,
-        data: data.movimento.data,
-        referencia: data.movimento.referencia
-      },
-      prestador: {
-        cnpj: data.prestador.cnpj,
-        nome: data.prestador.nome,
-        endereco: data.prestador.endereco
-      },
-      tomador: data.tomador || {
-        documento: {
-          tipo: data.tomador_documento_type === 'CNPJ' ? 2 : 1,
-          numero: data.tomador_documento
-        },
-        nome: data.tomador_razao_social,
-        endereco: null
-      },
-      servico: data.servico.map(s => ({
-        cnae: s.cnae,
-        codTributacaoNacional: s.codTributacaoNacional,
-        codTributacaoMunicipal: s.codTributacaoMunicipal,
-        descricao: s.descricao,
-        valor: s.valor
-      })),
-      valores: data.valores
-    });
+        logger.info('Construindo payload para NFSe', { 
+            cnae: data.servico[0].cnae,
+            descricao: data.itemsData[0].name,
+            movimento: data.movimento
+        });
 
-    logger.info('Construindo payload para NFSe', { 
-      data,
-      servico: data.servico[0],
-      codTributacaoNacional: data.servico[0].codTributacaoNacional,
-      codTributacaoMunicipal: data.servico[0].codTributacaoMunicipal,
-      cnae: data.servico[0].cnae,
-      descricao: data.servico[0].descricao
-    });
-
-    // Formatar data para o padrão YYYY-MM-DD
-    const dataFormatada = new Date(data.movimento.data).toISOString().split('T')[0];
-
-    // Determinar o tipo de documento (CPF ou CNPJ)
-    const tipoDocumento = data.tomador_documento_type === 'CNPJ' ? 'CNPJ' : 'CPF';
-    const documentoTomador = data.tomador_documento;
-
-    return {
-      provedor: "padrao",
-      ambiente: "producao",
-      referencia: data.movimento.referencia,
-      infDPS: {
-        tpAmb: 1, // Produção
-        dhEmi: data.movimento.data,
-        dCompet: dataFormatada,
-        prest: {
-          CNPJ: data.prestador.cnpj
-        },
-        toma: {
-          [tipoDocumento]: documentoTomador,
-          xNome: data.tomador_razao_social,
-          end: {
-            endNac: {
-              cMun: '',
-              CEP: ''
-            },
-            xLgr: '',
-            nro: '',
-            xBairro: ''
-          },
-          fone: null,
-          email: ''
-        },
-        serv: {
-          xDescServ: data.servico[0].descricao,
-          CNAE: data.servico[0].cnae,
-          cTribNac: data.servico[0].codTributacaoNacional,
-          cTribMun: data.servico[0].codTributacaoMunicipal
-        },
-        valores: { 
-          vServPrest: {
-            vServ: parseFloat(data.valores.servico)
-          },
-          trib: {
-            tribMun: {
-              tribISSQN: 1,
-              cLocIncid: data.prestador.endereco?.ibge,
-              pAliq: data.valores.aliquota * 100
+        return {
+            provedor: "padrao",
+            ambiente: "producao",
+            referencia: data.movimento.referencia,
+            infDPS: {
+                tpAmb: 1,
+                dhEmi: data.movimento.data,
+                dCompet: data.movimento.data.split('T')[0],
+                prest: {
+                    CNPJ: data.prestador.cnpj
+                },
+                toma: {
+                    CPF: data.tomador_documento,
+                    xNome: data.tomador_razao_social,
+                    end: {
+                        endNac: {
+                            cMun: data.personData.addresses[0].ibge,
+                            CEP: data.personData.addresses[0].postal_code
+                        },
+                        xLgr: data.personData.addresses[0].street,
+                        nro: data.personData.addresses[0].number,
+                        xBairro: data.personData.addresses[0].neighborhood
+                    },
+                    fone: null,
+                    email: ""
+                },
+                serv: {
+                    xDescServ: data.itemsData[0].name,
+                    CNAE: data.servico[0].cnae,
+                    cTribNac: data.servico[0].codTributacaoNacional,
+                    cTribMun: data.servico[0].codTributacaoMunicipal
+                },
+                valores: {
+                    vServPrest: {
+                        vServ: data.valores.servico
+                    },
+                    trib: {
+                        tribMun: {
+                            tribISSQN: 1,
+                            pAliq: 2
+                        }
+                    }
+                }
             }
-          }
-        }
-      }
-    };
-  }
+        };
+    }
 
     async emitirNFSeNuvemFiscal(dadosNFSe) {
         try {
