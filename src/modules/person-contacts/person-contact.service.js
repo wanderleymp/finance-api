@@ -14,22 +14,17 @@ class PersonContactService {
      */
     async findAll(page = 1, limit = 10, filters = {}) {
         try {
-            const cacheKey = `person-contacts:list:${JSON.stringify({page, limit, filters})}`;
-            
-            // Tenta buscar do cache
-            if (cachedResult) {
-                return cachedResult;
-            }
-
             const result = await this.personContactRepository.findAll(page, limit, filters);
 
             // Converte para DTO
             const dtoResult = {
                 items: result.items.map(item => PersonContactResponseDTO.fromDatabase(item)),
-                meta: result.meta
+                meta: result.meta || {
+                    page,
+                    limit,
+                    total: result.items.length
+                }
             };
-
-            // Salva no cache por 5 minutos
 
             return dtoResult;
         } catch (error) {
@@ -48,19 +43,10 @@ class PersonContactService {
      */
     async findById(id) {
         try {
-            const cacheKey = `person-contacts:${id}`;
-            
-            // Tenta buscar do cache
-            if (cachedResult) {
-                return cachedResult;
-            }
-
             const result = await this.personContactRepository.findById(id);
 
             // Converte para DTO
             const dto = PersonContactResponseDTO.fromDatabase(result);
-
-            // Salva no cache por 1 hora
 
             return dto;
         } catch (error) {
@@ -73,34 +59,27 @@ class PersonContactService {
     }
 
     /**
-     * Lista contatos de uma pessoa com paginação
+     * Lista contatos de uma pessoa
      */
-    async findByPersonId(personId, page = 1, limit = 10) {
+    async findByPersonId(personId) {
         try {
-            const cacheKey = `person-contacts:person:${personId}:${page}:${limit}`;
-            
-            // Tenta buscar do cache
-            if (cachedResult) {
-                return cachedResult;
-            }
-
-            const result = await this.personContactRepository.findByPersonId(personId, page, limit);
+            const result = await this.personContactRepository.findByPersonId(personId);
 
             // Converte para DTO
-            const dtoResult = {
+            return {
                 items: result.items.map(item => PersonContactResponseDTO.fromDatabase(item)),
-                meta: result.meta
+                meta: {
+                    totalItems: result.total,
+                    itemCount: result.total,
+                    itemsPerPage: result.total,
+                    totalPages: 1,
+                    currentPage: 1
+                }
             };
-
-            // Salva no cache por 1 hora
-
-            return dtoResult;
         } catch (error) {
             logger.error('Erro ao buscar contatos da pessoa', {
                 error: error.message,
-                personId,
-                page,
-                limit
+                personId
             });
             throw error;
         }
@@ -113,20 +92,11 @@ class PersonContactService {
      */
     async findMainContactByPersonId(personId) {
         try {
-            const cacheKey = `person-main-contact:${personId}`;
-            
-            // Tenta buscar do cache
-            if (cachedMainContact) {
-                return cachedMainContact;
-            }
-
             const mainContact = await this.personContactRepository.findMainContactByPersonId(personId);
 
             if (mainContact) {
                 // Converte para DTO
                 const dto = PersonContactResponseDTO.fromDatabase(mainContact);
-
-                // Salva no cache por 1 hora
 
                 return dto;
             }
@@ -146,25 +116,11 @@ class PersonContactService {
      */
     async findByPersonAndContact(personId, contactId, { client } = {}) {
         try {
-            const cacheKey = `person-contacts:person:${personId}:contact:${contactId}`;
-            
-            // Se estamos em uma transação, não usa cache
-            if (client) {
-                return await this.personContactRepository.findByPersonAndContact(personId, contactId, { client });
-            }
-
-            // Tenta buscar do cache
-            if (cachedResult) {
-                return cachedResult;
-            }
-
-            const result = await this.personContactRepository.findByPersonAndContact(personId, contactId);
+            const result = await this.personContactRepository.findByPersonAndContact(personId, contactId, { client });
 
             if (result) {
                 // Converte para DTO
                 const dto = PersonContactResponseDTO.fromDatabase(result);
-
-                // Salva no cache por 1 hora
 
                 return dto;
             }
@@ -189,12 +145,6 @@ class PersonContactService {
 
             // Converte para DTO
             const dto = PersonContactResponseDTO.fromDatabase(result);
-
-            // Se não estamos em uma transação, invalida os caches
-            if (!client) {
-                await Promise.all([
-                ]);
-            }
 
             return dto;
         } catch (error) {
@@ -222,8 +172,6 @@ class PersonContactService {
 
             // Converte para DTO
             const dto = PersonContactResponseDTO.fromDatabase(updatedContact);
-
-            // Limpa cache de contatos da pessoa
 
             logger.info('Contato atualizado', { 
                 contactId, 
@@ -256,10 +204,6 @@ class PersonContactService {
 
             // Converte para DTO
             const dto = PersonContactResponseDTO.fromDatabase(result);
-
-            // Invalida caches
-            await Promise.all([
-            ]);
 
             return dto;
         } catch (error) {

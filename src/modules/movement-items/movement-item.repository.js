@@ -2,7 +2,6 @@ const { systemDatabase } = require('../../config/database');
 const { logger } = require('../../middlewares/logger');
 const BaseRepository = require('../../repositories/base/BaseRepository');
 const MovementItemDTO = require('./dto/movement-item.dto');
-const ServiceRepository = require('../services/service.repository');
 
 class MovementItemRepository extends BaseRepository {
     constructor() {
@@ -206,7 +205,8 @@ class MovementItemRepository extends BaseRepository {
             const query = `
                 SELECT 
                     mi.*,
-                    i.name as item_name
+                    i.name as item_name,
+                    i.description as item_description
                 FROM movement_items mi
                 LEFT JOIN items i ON mi.item_id = i.item_id
                 WHERE mi.movement_id = $1
@@ -214,28 +214,19 @@ class MovementItemRepository extends BaseRepository {
 
             const result = await this.pool.query(query, [movementId]);
 
-            const serviceRepository = new ServiceRepository();
-            const serviceDetailsPromises = result.rows.map(async (row) => {
-                const serviceDetails = await serviceRepository.findServiceDetails(row.item_id);
-                return {
-                    ...row,
-                    total_value: parseFloat(row.quantity) * parseFloat(row.unit_value),
-                    servico: serviceDetails ? {
-                        cnae: serviceDetails.cnae,
-                        cod_tributacao: serviceDetails.lc116_code,
-                        descricao_servico: serviceDetails.item_description,
-                        aliquota_iss: parseFloat(serviceDetails.tax_rate || 0.05),
-                        valor_iss: parseFloat(row.quantity) * parseFloat(row.unit_value) * parseFloat(serviceDetails.tax_rate || 0.05)
-                    } : null
-                };
+            console.error('DEBUG Repositório de Itens', {
+                movementId,
+                query,
+                resultRows: result.rows,
+                rowCount: result.rowCount
             });
 
-            return await Promise.all(serviceDetailsPromises);
+            return result.rows;
         } catch (error) {
-            logger.error('Erro ao buscar itens detalhados do movimento:', {
+            console.error('Erro ao buscar itens do movimento', {
                 movementId,
-                error: error.message,
-                stack: error.stack
+                errorMessage: error.message,
+                errorStack: error.stack
             });
             throw error;
         }

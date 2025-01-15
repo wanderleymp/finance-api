@@ -13,7 +13,7 @@ const MovementPaymentService = require('../movement-payments/movement-payment.se
 const BoletoRepository = require('../boletos/boleto.repository'); 
 const LicenseRepository = require('../../repositories/licenseRepository'); 
 const MovementItemRepository = require('../movement-items/movement-item.repository');
-const ServiceRepository = require('../services/service.repository'); 
+const ServiceRepository = require('../services/service-repository'); 
 const NfseService = require('../nfse/nfse.service');
 const { systemDatabase } = require('../../config/database');
 
@@ -137,67 +137,60 @@ class MovementService extends IMovementService {
                 return null;
             }
 
-            logger.info('Buscando dados do tomador', {
+            logger.info('Buscando detalhes da pessoa', {
                 personId: movement.person_id,
                 repositoryMethod: 'findPersonWithDetails'
             });
 
-            const personDetails = await this.personRepository.findPersonDetailsById(movement.person_id);
-            
-            // Log detalhado para verificar todos os campos recuperados
-            logger.debug('Detalhes completos da pessoa recuperados', {
-              personId: movement.person_id,
-              fullPersonDetails: JSON.stringify(personDetails, null, 2),
-              personDetailsKeys: Object.keys(personDetails[0] || {}),
-              personDetailsType: typeof personDetails,
-              personDetailsLength: personDetails.length
-            });
+            const personRepository = new (require('../persons/person.repository'))();
+            const personDetails = await personRepository.findPersonWithDetails(movement.person_id);
 
-            // Log específico para documentos
-            logger.debug('Documentos da pessoa', {
-              personId: movement.person_id,
-              documentFields: {
-                personType: personDetails[0]?.person_type,
-                documentField: personDetails[0]?.document,
-                cnpj: personDetails[0]?.cnpj,
-                cpf: personDetails[0]?.cpf,
-                rawPersonDetails: JSON.stringify(personDetails[0], null, 2)
-              }
-            });
-
-            logger.info('Retorno completo do repositório de pessoas', {
+            logger.info('Detalhes da Pessoa', {
                 personId: movement.person_id,
-                personData: JSON.stringify(personDetails, null, 2),
-                personKeys: Object.keys(personDetails || {})
+                personDetails: JSON.stringify(personDetails, null, 2)
             });
 
-            logger.info('Dados do Tomador', {
-                tomadorId: movement.person_id,
-                tomadorDetalhes: JSON.stringify(personDetails, null, 2)
+            logger.info('Documentos do Tomador', {
+                documentosEncontrados: personDetails.documents.map(doc => ({
+                    id: doc.id,
+                    type: doc.document_type || doc.type,
+                    value: doc.document_value || doc.value,
+                    rawDocument: JSON.stringify(doc, null, 2)
+                })),
+                personId: movement.person_id
             });
 
-            logger.info('Dados detalhados do Tomador', {
-                tomadorId: movement.person_id,
-                tomadorDetalhes: JSON.stringify(personDetails, null, 2)
+            // Verificar se o tipo da pessoa é PJ ou PF para escolher o documento correto
+            const documentType = personDetails.type === 'PJ' ? 'CNPJ' : 'CPF';
+            const tomadorDocument = personDetails.documents.find(doc => doc.type === documentType);
+
+            logger.info('DEBUG Tomador Documento', {
+                personType: personDetails.type,
+                documentType: documentType,
+                tomadorDocumento: tomadorDocument,
+                todosDocumentos: personDetails.documents
             });
 
-            // Extrair documento e endereço dos detalhes
-            const documentoValido = personDetails[0].documents && personDetails[0].documents.length > 0 
-                ? personDetails[0].documents.find(doc => ['CPF', 'CNPJ'].includes(doc.document_type))
-                : null;
+            if (!tomadorDocument) {
+                logger.error('Nenhum documento encontrado para o tipo esperado', {
+                    personType: personDetails.type,
+                    documentType,
+                    availableDocuments: JSON.stringify(personDetails.documents),
+                    personDetails: JSON.stringify(personDetails)
+                });
+                throw new Error(`Documento do tomador não encontrado para o tipo ${documentType}`);
+            }
 
-            const tomadorDocumento = documentoValido ? documentoValido.document_value : null;
-            const tomadorDocumentoTipo = documentoValido ? documentoValido.document_type : null;
-            
-            const tomadorEndereco = personDetails[0].addresses && personDetails[0].addresses.length > 0 
-                ? personDetails[0].addresses.find(addr => addr.is_main) || personDetails[0].addresses[0]
+            // Extrair endereço dos detalhes
+            const tomadorEndereco = personDetails.addresses && personDetails.addresses.length > 0 
+                ? personDetails.addresses.find(addr => addr.is_main) || personDetails.addresses[0]
                 : null;
 
             // Adiciona pessoa ao movimento
             movement.person = {
                 person_id: movement.person_id,
-                document: tomadorDocumento,
-                document_type: tomadorDocumentoTipo,
+                document: tomadorDocument.value,
+                document_type: tomadorDocument.type,
                 address: tomadorEndereco
             };
 
@@ -597,8 +590,8 @@ class MovementService extends IMovementService {
                 SELECT * FROM installments WHERE movement_id = $1
             `, [movementId]);
             
-            logger.info('Service: Parcelas encontradas', { 
-                movementId, 
+            logger.info('Service: Parcelas encontradas', {
+                movementId,
                 quantidadeParcelas: parcelas.rows.length,
                 parcelas: parcelas.rows.map(p => p.installment_id)
             });
@@ -738,100 +731,109 @@ class MovementService extends IMovementService {
                 poolExists: !!this.pool 
             });
 
-            const movement = await this.findById(movementId, true);
+            const movement = await this.movementRepository.findById(movementId);
             if (!movement) {
                 throw new Error('Movimento não encontrado');
             }
 
-            // Buscar licença para obter CNPJ do prestador
-            const license = await this.licenseRepository.findById(movement.license_id);
-
-            logger.info('Dados da Licença para NFSe', {
-                licenseId: movement.license_id,
-                licenseDocument: license?.person_document,
-                licenseData: JSON.stringify(license, null, 2)
+            // Buscar dados da licença (prestador)
+            const license = await this.licenseRepository.findById(1);
+            if (!license) {
+                throw new Error('Licença não encontrada');
+            }
+            
+            logger.info('Dados da Licença (Prestador)', {
+                cnpj: license.person_document,
+                nome: license.full_name
             });
 
-            // Buscar dados completos do tomador
+            // Buscar pessoa relacionada ao movimento (tomador)
             const person = await this.personRepository.findPersonWithDetails(movement.person_id);
+            if (!person) {
+                throw new Error('Pessoa não encontrada');
+            }
+
+            // Capturar documento do tomador
+            const documentoValido = {
+                type: person.type === 'PJ' ? 'CNPJ' : 'CPF',
+                value: person.document
+            };
             
-            logger.info('Dados do Tomador COMPLETOS', {
-                tomadorId: movement.person_id,
-                tomadorDetalhes: JSON.stringify(person, null, 2),
-                todosDocumentos: person.documents,
-                todosEnderecos: person.addresses
+            logger.info('Documento do Tomador', {
+                tipo: documentoValido.type,
+                valor: documentoValido.value
             });
 
-            logger.info('Dados do Tomador', {
-                tomadorId: movement.person_id,
-                tomadorDetalhes: JSON.stringify(person, null, 2)
-            });
-
-            logger.info('Dados detalhados do Tomador', {
-                tomadorId: movement.person_id,
-                tomadorDetalhes: JSON.stringify(person, null, 2)
-            });
-
-            // Extrair documento e endereço dos detalhes
-            const documentoValido = person.documents && person.documents.length > 0 
-                ? person.documents.find(doc => ['CPF', 'CNPJ'].includes(doc.document_type))
-                : null;
-
-            const tomadorDocumento = documentoValido ? documentoValido.document_value : null;
-            const tomadorDocumentoTipo = documentoValido ? documentoValido.document_type : null;
+            // Capturar endereço principal do tomador
+            const enderecoPrincipal = person.addresses?.find(addr => addr.is_main) || person.addresses?.[0];
             
-            const tomadorEndereco = person.addresses && person.addresses.length > 0 
-                ? person.addresses.find(addr => addr.is_main) || person.addresses[0]
-                : null;
+            logger.info('Endereço do Tomador', {
+                endereco: enderecoPrincipal ? {
+                    logradouro: enderecoPrincipal.street,
+                    numero: enderecoPrincipal.number,
+                    complemento: enderecoPrincipal.complement,
+                    bairro: enderecoPrincipal.neighborhood,
+                    cidade: enderecoPrincipal.city,
+                    uf: enderecoPrincipal.state,
+                    cep: enderecoPrincipal.zipcode
+                } : 'Endereço não encontrado'
+            });
+
+            logger.info('Documento Detalhado', {
+                documentoValido: JSON.stringify(documentoValido, null, 2),
+                documentoType: documentoValido.type,
+                documentoValue: documentoValido.value || documentoValido.document_value,
+                tipoDocumento: typeof documentoValido.type,
+                valorDocumento: documentoValido.value || documentoValido.document_value
+            });
+
+            // Processamento seguro do documento
+            const documentoTomador = documentoValido.value || documentoValido.document_value;
+            const tomadorDocumento = documentoTomador ? documentoTomador.toString().replace(/\D/g, '') : null;
 
             // Buscar itens detalhados do movimento
             const movementItemsRepository = new (require('../movement-items/movement-item.repository'))();
             const items = await movementItemsRepository.findDetailedByMovementId(movementId);
-
-            // Buscar detalhes do serviço
+            
+            // Buscar detalhes do primeiro serviço
             const servicoDetalhado = items.length > 0 
-                ? await this.serviceRepository.findServiceDetails(items[0].servico.item_id) 
+                ? await this.serviceRepository.findServiceDetails(items[0].item_id) 
                 : null;
 
-            logger.info('Detalhes do Serviço', {
-                servicoDetalhado: JSON.stringify(servicoDetalhado, null, 2)
-            });
-
             const nfseData = {
-                movimento: {
-                    id: movement.movement_id,
-                    data: movement.created_at,
-                    referencia: `${new Date().getFullYear()}-${movement.movement_id}-1`
-                },
                 prestador: {
-                    cnpj: license?.person_document ? license.person_document.replace(/\D/g, '') : null,
-                    nome: license?.full_name || 'Nome não disponível',
+                    nome: license.full_name,
+                    documento: {
+                        tipo: 2, // CNPJ
+                        numero: license.person_document.replace(/\D/g, '')
+                    },
                     endereco: {
                         logradouro: 'Não informado',
                         numero: 'S/N',
                         complemento: '',
                         bairro: 'Não informado',
-                        cidade: {
-                            codigo_ibge: '',
-                            nome: 'Não informado'
-                        },
-                        uf: '',
-                        cep: ''
+                        cidade: 'Não informado',
+                        uf: 'RO', // Defina um estado padrão
+                        cep: '76800000' // CEP padrão
                     }
                 },
-                tomador_documento: tomadorDocumento,
-                tomador_documento_type: tomadorDocumentoTipo,
-                tomador_razao_social: person.full_name,
+                tomador: {
+                    nome: person.full_name,
+                    documento: {
+                        tipo: documentoValido.type === 'CPF' ? 1 : 2,
+                        numero: tomadorDocumento ? tomadorDocumento.replace(/\D/g, '') : '00000000000'
+                    }
+                },
                 servico: items.map(item => ({
-                    cnae: servicoDetalhado?.cnae || item.servico.cnae,
-                    codTributacaoNacional: servicoDetalhado?.lc116_code,
-                    codTributacaoMunicipal: servicoDetalhado?.municipality_code,
-                    descricao: item.servico.descricao_servico,
+                    descricao: item.servico?.descricao_servico || item.description || 'Serviço não especificado',
                     valor: item.total_price
                 })),
                 valores: {
                     servico: items.reduce((total, item) => total + parseFloat(item.total_price), 0),
-                    aliquota: servicoDetalhado?.aliquota_iss || items[0]?.servico?.aliquota_iss || 0
+                    aliquota: servicoDetalhado?.aliquota_iss || 
+                              items[0]?.servico?.aliquota_iss || 
+                              items[0]?.aliquota_iss || 
+                              0
                 }
             };
 
@@ -841,18 +843,23 @@ class MovementService extends IMovementService {
                     movementId,
                     personId: movement.person_id,
                     personName: person.full_name,
-                    documentos: person.documents,
-                    prestadorCNPJ: license?.person_document,
-                    itensServico: items
+                    documentoTomador: documentoValido
                 }
             });
 
-            return await this.nfseService.emitirNfse(nfseData);
+            // Emitir NFSe
+            const nfseResponse = await this.nfseService.emitirNfse(nfseData);
+
+            return {
+                success: true,
+                message: 'NFS-e emitida com sucesso',
+                nfse: nfseResponse
+            };
         } catch (error) {
-            logger.error('Erro ao criar NFSE para movimento', {
-                movementId,
+            logger.error('Erro ao criar NFSE para movimento', { 
+                movementId, 
                 errorMessage: error.message,
-                stack: error.stack
+                errorStack: error.stack 
             });
             throw new Error(`Erro ao criar NFSE para movimento: ${error.message}`);
         }

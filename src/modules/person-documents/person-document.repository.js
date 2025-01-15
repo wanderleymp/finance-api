@@ -89,38 +89,47 @@ class PersonDocumentRepository {
         try {
             const offset = (page - 1) * limit;
 
-            // Query para contar o total de registros
-            const countQuery = `
-                SELECT COUNT(*) as total
+            console.error('DEBUG findByPersonId - Parâmetros', {
+                personId,
+                page,
+                limit,
+                offset,
+                table: this.table
+            });
+
+            // Query para buscar documentos
+            const query = `
+                SELECT 
+                    person_document_id,
+                    person_id,
+                    document_type,
+                    document_value
                 FROM ${this.table}
                 WHERE person_id = $1
+                ORDER BY person_document_id DESC
             `;
 
-            // Query principal com paginação
-            const query = `
-                SELECT ${this.table}.*, p.full_name as person_name
-                FROM ${this.table}
-                LEFT JOIN persons p ON p.person_id = ${this.table}.person_id
-                WHERE ${this.table}.person_id = $1
-                ORDER BY ${this.table}.person_document_id DESC
-                LIMIT $2 OFFSET $3
-            `;
+            const result = await this.pool.query(query, [personId]);
 
-            const [countResult, dataResult] = await Promise.all([
-                this.pool.query(countQuery, [personId]),
-                this.pool.query(query, [personId, limit, offset])
-            ]);
+            console.error('DEBUG findByPersonId - Resultados', {
+                resultRows: result.rows,
+                resultRowCount: result.rowCount
+            });
 
-            return {
-                data: dataResult.rows,
-                pagination: {
-                    total: parseInt(countResult.rows[0].total),
-                    page: parseInt(page),
-                    limit: parseInt(limit)
-                }
-            };
+            // Retornar documentos diretamente
+            return result.rows.map(row => ({
+                id: row.person_document_id,
+                type: row.document_type,
+                document_value: row.document_value
+            }));
         } catch (error) {
-            logger.error('Erro ao buscar documentos por pessoa', { error, personId, page, limit });
+            logger.error('Erro ao buscar documentos por pessoa', { 
+                error: error.message, 
+                personId, 
+                page, 
+                limit,
+                errorStack: error.stack 
+            });
             throw error;
         }
     }

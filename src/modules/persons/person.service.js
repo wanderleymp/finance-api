@@ -87,7 +87,7 @@ class PersonService {
                     logger.info('Detalhes encontrados', { 
                         personId: person.person_id,
                         documentsCount: documents.items ? documents.items.length : 'N/A',
-                        contactsCount: contacts.items ? contacts.items.length : 'N/A',
+                        contactsCount: contacts.length,
                         addressesCount: addresses ? addresses.length : 'N/A',
                         addressesRaw: JSON.stringify(addresses)
                     });
@@ -104,7 +104,7 @@ class PersonService {
                     return PersonDetailsResponseDTO.fromDatabase({
                         ...person,
                         documents: documents.items || [],
-                        contacts: contacts.items || [],
+                        contacts: contacts || [],
                         addresses: addresses || []
                     });
                 })
@@ -223,37 +223,35 @@ class PersonService {
 
     async findPersonWithDetails(id) {
         try {
-            const cacheKey = `person:details:${id}`;
-            
-            // Tenta buscar do cache
-            if (cachedPerson) {
-                logger.info('Retornando pessoa com detalhes do cache', { id });
-                return cachedPerson;
-            }
-
             // Busca a pessoa
             const person = await this.findById(id);
             if (!person) {
                 throw new Error('Pessoa não encontrada');
             }
 
-            // Busca relacionamentos em paralelo
-            const [documents, contacts, addresses] = await Promise.all([
+            logger.info('DEBUG findPersonDetails - Pessoa base', { person });
+
+            // Busca relacionamentos em paralelo com tratamento de erros
+            const [documentsResult, contactsResult, addressesResult] = await Promise.allSettled([
                 this.findDocuments(person.person_id),
                 this.findContacts(person.person_id),
-                personAddressRepository.findByPersonId(person.person_id)
+                this.personRepository.findAddressesByPersonId(person.person_id)
             ]);
+
+            logger.info('DEBUG findPersonDetails - Documentos', { documentsResult });
+            logger.info('DEBUG findPersonDetails - Contatos', { contactsResult });
+            logger.info('DEBUG findPersonDetails - Endereços', { addressesResult });
 
             // Usa o DTO de detalhes
             const { PersonDetailsResponseDTO } = require('./dto/person-response.dto');
             const result = PersonDetailsResponseDTO.fromDatabase({
                 ...person,
-                documents: documents.items || [],
-                contacts: contacts.items || [],
-                addresses: addresses || []
+                documents: documentsResult.status === 'fulfilled' ? documentsResult.value.items || [] : [],
+                contacts: contactsResult.status === 'fulfilled' ? contactsResult.value || [] : [],
+                addresses: addressesResult.status === 'fulfilled' ? addressesResult.value || [] : []
             });
 
-            // Salva no cache por 2 minutos
+            logger.info('DEBUG findPersonDetails - Resultado final', { result });
 
             return result;
         } catch (error) {
@@ -267,22 +265,29 @@ class PersonService {
 
     async findDocuments(personId) {
         try {
-            // Verifica se a pessoa existe
-            const person = await this.findById(personId);
-            if (!person) {
-                throw new Error('Pessoa não encontrada');
-            }
-
-            // Usa o serviço de documentos para buscar
-            const PersonDocumentService = require('../person-documents/person-document.service');
-            const documentService = new PersonDocumentService();
+            const documents = await this.personRepository.findDocumentsByPersonId(personId);
             
-            const result = await documentService.findAll(1, 100, { person_id: personId });
-            return result;
+            logger.info('DEBUG findDocuments - Documentos brutos', { 
+                personId, 
+                documentsCount: documents.length,
+                documentsDetails: documents 
+            });
+            
+            logger.info('DEBUG findDocuments - Documentos detalhados', { 
+                personId, 
+                documentsCount: documents.length,
+                documentsDetails: JSON.stringify(documents) 
+            });
+            
+            return {
+                items: documents,
+                total: documents.length
+            };
         } catch (error) {
             logger.error('Erro ao buscar documentos da pessoa', {
                 error: error.message,
-                personId
+                personId,
+                errorStack: error.stack
             });
             throw error;
         }
@@ -290,24 +295,15 @@ class PersonService {
 
     async findContacts(personId) {
         try {
-            // Verifica se a pessoa existe
-            const person = await this.findById(personId);
-            if (!person) {
-                throw new Error('Pessoa não encontrada');
-            }
-
-            // Usa o serviço de contatos para buscar
-            const PersonContactService = require('../person-contacts/person-contact.service');
-            const contactService = new PersonContactService();
-            
-            const result = await contactService.findAll(1, 100, { person_id: personId });
-            return result;
+            const contacts = await this.personContactService.findByPersonId(personId);
+            // Retorna apenas os items sem paginação
+            return contacts.items;
         } catch (error) {
-            logger.error('Erro ao buscar contatos da pessoa', {
+            logger.error('Erro ao buscar contatos da pessoa no serviço de pessoas', {
                 error: error.message,
                 personId
             });
-            throw error;
+            return [];
         }
     }
 

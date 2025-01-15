@@ -188,66 +188,100 @@ class PersonRepository extends IPersonRepository {
         }
     }
 
-    async findPersonWithDetails(id) {
+    async findPersonWithDetails(personId) {
         try {
-            const query = `
+            const personQuery = `
                 SELECT 
-                    p.person_id,
-                    p.full_name,
-                    p.birth_date,
-                    p.person_type,
-                    p.fantasy_name,
+                    p.person_id, 
+                    p.full_name, 
+                    p.fantasy_name, 
+                    p.birth_date, 
+                    p.person_type as type,
                     p.created_at,
-                    p.updated_at,
-                    json_agg(DISTINCT jsonb_build_object(
-                        'address_id', a.address_id,
-                        'person_id', a.person_id,
-                        'street', a.street,
-                        'number', a.number,
-                        'complement', a.complement,
-                        'neighborhood', a.neighborhood,
-                        'city', a.city,
-                        'state', a.state,
-                        'postal_code', a.postal_code,
-                        'country', a.country,
-                        'reference', a.reference,
-                        'ibge', a.ibge
-                    )) as addresses,
-                    json_agg(DISTINCT jsonb_build_object(
-                        'contact_id', c.contact_id,
-                        'contact_value', c.contact_value,
-                        'contact_name', c.contact_name,
-                        'contact_type', c.contact_type
-                    )) as contacts,
-                    json_agg(DISTINCT jsonb_build_object(
-                        'person_document_id', pd.person_document_id,
-                        'document_type', pd.document_type,
-                        'document_value', pd.document_value
-                    )) as documents
-                FROM ${this.tableName} p
-                LEFT JOIN person_addresses a ON a.person_id = p.person_id
-                LEFT JOIN person_contacts pc ON pc.person_id = p.person_id
-                LEFT JOIN contacts c ON c.contact_id = pc.contact_id
-                LEFT JOIN person_documents pd ON pd.person_id = p.person_id
+                    p.updated_at
+                FROM persons p
                 WHERE p.person_id = $1
-                GROUP BY p.person_id
             `;
-            const result = await this.pool.query(query, [id]);
+            const personResult = await this.pool.query(personQuery, [personId]);
             
-            if (!result.rows[0]) return null;
+            if (personResult.rows.length === 0) {
+                logger.warn('Pessoa não encontrada', { personId });
+                return null;
+            }
 
-            logger.debug('Consulta de detalhes da pessoa', { query, id, result: JSON.stringify(result.rows) });
+            const person = personResult.rows[0];
 
-            const personWithDetails = result.rows[0];
-            personWithDetails.addresses = personWithDetails.addresses[0].address_id ? personWithDetails.addresses : [];
-            personWithDetails.contacts = personWithDetails.contacts[0].contact_id ? personWithDetails.contacts : [];
-            personWithDetails.documents = personWithDetails.documents[0].person_document_id ? personWithDetails.documents : [];
+            const documentsQuery = `
+                SELECT 
+                    person_document_id,
+                    person_id,
+                    document_type,
+                    document_value
+                FROM person_documents
+                WHERE person_id = $1
+            `;
+            const documentsResult = await this.pool.query(documentsQuery, [personId]);
 
-            return PersonResponseDTO.fromDatabase(personWithDetails);
+            console.error('DEBUG Documentos da Pessoa', {
+                personId,
+                documentsQuery,
+                documentsResultRows: documentsResult.rows,
+                documentsResultRowCount: documentsResult.rowCount
+            });
+
+            const addressesQuery = `
+                SELECT 
+                    address_id,
+                    person_id,
+                    street,
+                    number,
+                    complement,
+                    neighborhood,
+                    city,
+                    state,
+                    postal_code as zipcode,
+                    country,
+                    reference,
+                    ibge
+                FROM person_addresses
+                WHERE person_id = $1
+            `;
+            const addressesResult = await this.pool.query(addressesQuery, [personId]);
+
+            person.documents = documentsResult.rows.map(doc => ({
+                id: doc.person_document_id,
+                type: doc.document_type,
+                value: doc.document_value
+            }));
+
+            person.addresses = addressesResult.rows.map(addr => ({
+                id: addr.address_id,
+                street: addr.street,
+                number: addr.number,
+                complement: addr.complement,
+                neighborhood: addr.neighborhood,
+                city: addr.city,
+                state: addr.state,
+                zipcode: addr.zipcode,
+                country: addr.country,
+                reference: addr.reference,
+                ibge: addr.ibge
+            }));
+
+            logger.info('Documentos da Pessoa', {
+                personId,
+                documentosEncontrados: person.documents,
+                quantidadeDocumentos: person.documents.length,
+                enderecosEncontrados: person.addresses,
+                quantidadeEnderecos: person.addresses.length
+            });
+
+            return person;
         } catch (error) {
             logger.error('Erro ao buscar detalhes da pessoa', {
+                personId,
                 error: error.message,
-                id
+                errorStack: error.stack
             });
             throw error;
         }
@@ -533,7 +567,7 @@ class PersonRepository extends IPersonRepository {
         try {
             const addressQuery = `
                 SELECT COUNT(*) as address_count 
-                FROM addresses 
+                FROM person_addresses 
                 WHERE person_id = $1
             `;
 
@@ -557,6 +591,129 @@ class PersonRepository extends IPersonRepository {
                 error: error.message,
                 personId
             });
+            throw error;
+        }
+    }
+
+    async findDocumentsByPersonId(personId) {
+        try {
+            const query = `
+                SELECT 
+                    pd.person_document_id,
+                    pd.person_id,
+                    pd.document_type,
+                    pd.document_value
+                FROM person_documents pd
+                WHERE pd.person_id = $1
+            `;
+            const result = await this.pool.query(query, [personId]);
+            
+            console.error('DEBUGGER DOCUMENTOS: Query e resultado', {
+                query,
+                personId,
+                resultRows: result.rows,
+                rowCount: result.rowCount
+            });
+
+            logger.debug('Documentos encontrados para pessoa (REPOSITORY)', {
+                personId,
+                rowCount: result.rowCount,
+                rows: result.rows
+            });
+
+            console.error('DEBUGGER DOCUMENTOS: Conteúdo completo da query', {
+                queryResult: JSON.stringify(result),
+                resultKeys: Object.keys(result),
+                rowsKeys: result.rows.map(row => Object.keys(row))
+            });
+
+            const documents = result.rows.map(row => ({
+                id: row.person_document_id,
+                type: row.document_type,
+                value: row.document_value
+            }));
+
+            logger.info('Debug Documentos Pessoa', {
+                personId,
+                documentsCount: documents.length,
+                documentsDetails: JSON.stringify(documents)
+            });
+
+            return documents || [];
+        } catch (error) {
+            logger.error('Erro ao buscar documentos da pessoa', {
+                error: error.message,
+                personId,
+                errorStack: error.stack
+            });
+            
+            if (error.message.includes('relation') && error.message.includes('does not exist')) {
+                logger.warn('Tabela de documentos não encontrada, retornando lista vazia', { personId });
+                return [];
+            }
+
+            throw error;
+        }
+    }
+
+    async findPersonDocuments(personId) {
+        try {
+            const query = `
+                SELECT 
+                    pd.person_document_id as id,
+                    pd.person_id,
+                    pd.document_type as type,
+                    pd.document_value as value
+                FROM person_documents pd
+                WHERE pd.person_id = $1
+            `;
+            const result = await this.pool.query(query, [personId]);
+            
+            logger.debug('Documentos encontrados para pessoa', {
+                personId,
+                rowCount: result.rowCount
+            });
+
+            return result.rows.map(row => ({
+                id: row.id,
+                type: row.type,
+                value: row.value
+            }));
+        } catch (error) {
+            logger.error('Erro ao buscar documentos da pessoa', {
+                error: error.message,
+                personId,
+                errorStack: error.stack
+            });
+            throw error;
+        }
+    }
+
+    async findAddressesByPersonId(personId) {
+        try {
+            const AddressRepository = require('../addresses/address.repository');
+            const addressRepository = new AddressRepository();
+            
+            const addresses = await addressRepository.findByPersonId(personId);
+            
+            logger.debug('Endereços encontrados para pessoa', {
+                personId,
+                rowCount: addresses.length,
+                addresses
+            });
+
+            return addresses;
+        } catch (error) {
+            logger.error('Erro ao buscar endereços da pessoa', {
+                error: error.message,
+                personId
+            });
+            
+            if (error.message.includes('relation') && error.message.includes('does not exist')) {
+                logger.warn('Tabela de endereços não encontrada, retornando lista vazia', { personId });
+                return [];
+            }
+
             throw error;
         }
     }

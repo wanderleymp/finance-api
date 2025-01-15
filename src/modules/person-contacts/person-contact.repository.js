@@ -126,55 +126,45 @@ class PersonContactRepository extends IPersonContactRepository {
     }
 
     /**
-     * Busca contatos de uma pessoa com paginação
+     * Busca contatos de uma pessoa
      */
-    async findByPersonId(personId, page = 1, limit = 10) {
+    async findByPersonId(personId) {
         try {
-            const offset = (page - 1) * limit;
-            const values = [personId, limit, offset];
-
             const query = `
                 SELECT 
                     pc.person_contact_id,
+                    pc.person_id,
                     pc.contact_id,
-                    pc.created_at,
                     c.contact_value,
                     c.contact_type,
                     c.contact_name
                 FROM ${this.tableName} pc
                 JOIN contacts c ON c.contact_id = pc.contact_id
                 WHERE pc.person_id = $1
-                ORDER BY pc.created_at DESC
-                LIMIT $2 OFFSET $3
+                ORDER BY pc.contact_id
             `;
 
-            const countQuery = `
-                SELECT COUNT(*) as total
-                FROM ${this.tableName}
-                WHERE person_id = $1
-            `;
-
-            const [result, count] = await Promise.all([
-                this.pool.query(query, values),
-                this.pool.query(countQuery, [personId])
-            ]);
+            const result = await this.pool.query(query, [personId]);
 
             return {
-                data: result.rows,
-                pagination: {
-                    total: parseInt(count.rows[0].total),
-                    page: parseInt(page),
-                    limit: parseInt(limit),
-                    pages: Math.ceil(parseInt(count.rows[0].total) / limit)
-                }
+                items: result.rows || [],
+                total: result.rows.length
             };
         } catch (error) {
-            logger.error('Erro ao buscar contatos da pessoa', {
-                error: error.message,
-                personId,
-                page,
-                limit
+            logger.error('Erro ao listar person-contacts', { 
+                error: error.message, 
+                personId 
             });
+
+            // Se for um erro de tabela não existente, retorna estrutura vazia
+            if (error.message.includes('relation') && error.message.includes('does not exist')) {
+                logger.warn('Tabela de contatos não encontrada, retornando estrutura vazia', { personId });
+                return {
+                    items: [],
+                    total: 0
+                };
+            }
+
             throw error;
         }
     }

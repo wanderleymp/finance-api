@@ -19,7 +19,7 @@ const express = require('express');
 const { systemDatabase } = require('../../config/database');
 const NfseService = require('../nfse/nfse.service');
 const NfseRepository = require('../nfse/nfse.repository');
-const ServiceRepository = require('../services/service.repository');
+const ServiceRepository = require('../services/service-repository');
 
 // Instancia os repositórios
 const personRepository = new PersonRepository();

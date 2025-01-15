@@ -64,6 +64,15 @@ class IPersonRepository {
     async delete(id) {
         throw new Error('Método delete deve ser implementado');
     }
+
+    /**
+     * Busca documentos de uma pessoa por ID
+     * @param {number} personId - ID da pessoa
+     * @returns {Promise<Array<{id: number, type: string, value: string}>>}
+     */
+    async findPersonDocuments(personId) {
+        throw new Error('Método findPersonDocuments deve ser implementado');
+    }
 }
 
 module.exports = IPersonRepository;
