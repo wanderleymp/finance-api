@@ -12,6 +12,67 @@ const path = require('path');
 const healthRoutes = require('./modules/health/health.routes');
 const authModule = require('./modules/auth/auth.module');
 const boletoModule = require('./modules/boletos/boleto.module');
+const MovementRepository = require('./modules/movements/movement.repository');
+const PersonRepository = require('./modules/persons/person.repository');
+const MovementTypeRepository = require('./modules/movement-types/movement-type.repository');
+const MovementStatusRepository = require('./modules/movement-statuses/movement-status.repository');
+const PaymentMethodRepository = require('./modules/payment-methods/payment-method.repository');
+const InstallmentRepository = require('./modules/installments/installment.repository');
+const PersonContactRepository = require('./modules/person-contacts/person-contact.repository');
+const BoletoRepository = require('./modules/boletos/boleto.repository');
+const MovementPaymentRepository = require('./modules/movement-payments/movement-payment.repository');
+const MovementItemRepository = require('./modules/movement-items/movement-item.repository');
+const ServiceRepository = require('./modules/services/service.repository');
+const LicenseRepository = require('./repositories/licenseRepository');
+const MovementPaymentService = require('./modules/movement-payments/movement-payment.service');
+const InstallmentService = require('./modules/installments/installment.service');
+const BoletoService = require('./modules/boletos/boleto.service');
+const NfseService = require('./modules/nfse/nfse.service');
+const BillingMessageService = require('./modules/messages/billing/billing-message.service');
+const TaskService = require('./modules/tasks/services/task.service');
+const TaskRepository = require('./modules/tasks/repositories/task.repository');
+const N8nService = require('./services/n8n.service');
+
+const movementDependencies = {
+    movementRepository: new MovementRepository(),
+    personRepository: new PersonRepository(),
+    movementTypeRepository: new MovementTypeRepository(),
+    movementStatusRepository: new MovementStatusRepository(),
+    paymentMethodRepository: new PaymentMethodRepository(),
+    installmentRepository: new InstallmentRepository(),
+    movementPaymentService: new MovementPaymentService({
+        movementPaymentRepository: new MovementPaymentRepository(),
+        installmentRepository: new InstallmentRepository(),
+        boletoService: new BoletoService({
+            boletoRepository: new BoletoRepository(),
+            n8nService: N8nService,
+            taskService: new TaskService({
+                taskRepository: new TaskRepository()
+            })
+        })
+    }),
+    personContactRepository: new PersonContactRepository(),
+    boletoRepository: new BoletoRepository(),
+    boletoService: new BoletoService({
+        boletoRepository: new BoletoRepository(),
+        n8nService: N8nService,
+        taskService: new TaskService({
+            taskRepository: new TaskRepository()
+        })
+    }),
+    movementPaymentRepository: new MovementPaymentRepository(),
+    installmentService: new InstallmentService(),
+    licenseRepository: new LicenseRepository(),
+    movementItemRepository: new MovementItemRepository(),
+    nfseService: new NfseService(),
+    serviceRepository: new ServiceRepository(),
+    billingMessageService: new BillingMessageService()
+};
+
+const MovementService = require('./modules/movements/movement.service');
+const movementService = new MovementService(movementDependencies);
+movementDependencies.movementService = movementService;
+
 const movementRoutes = require('./modules/movements/movement.routes');
 const movementPaymentRoutes = require('./modules/movement-payments/movement-payment.module');
 const paymentMethodModule = require('./modules/payment-methods/payment-method.module');
@@ -210,7 +271,7 @@ userModule.register(app);
 const { PaymentMethodModule } = require('./modules/payment-methods/payment-method.module');
 PaymentMethodModule.register(app);
 
-app.use('/movements', movementRoutes);
+app.use('/movements', movementRoutes(movementDependencies));
 app.use('/movement-payments', movementPaymentRoutes);
 app.use('/addresses', addressRoutes);
 ContactModule.register(app);
