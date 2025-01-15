@@ -1,15 +1,12 @@
 const { logger } = require('../../middlewares/logger');
 const PersonContactRepository = require('./person-contact.repository');
-const CacheService = require('../../services/cacheService');
 const PersonContactResponseDTO = require('./dto/person-contact-response.dto');
 
 class PersonContactService {
     constructor({ 
         personContactRepository = new PersonContactRepository(), 
-        cacheService = CacheService 
     } = {}) {
         this.personContactRepository = personContactRepository;
-        this.cacheService = cacheService;
     }
 
     /**
@@ -20,7 +17,6 @@ class PersonContactService {
             const cacheKey = `person-contacts:list:${JSON.stringify({page, limit, filters})}`;
             
             // Tenta buscar do cache
-            const cachedResult = await this.cacheService.get(cacheKey);
             if (cachedResult) {
                 return cachedResult;
             }
@@ -34,7 +30,6 @@ class PersonContactService {
             };
 
             // Salva no cache por 5 minutos
-            await this.cacheService.set(cacheKey, dtoResult, 300);
 
             return dtoResult;
         } catch (error) {
@@ -56,7 +51,6 @@ class PersonContactService {
             const cacheKey = `person-contacts:${id}`;
             
             // Tenta buscar do cache
-            const cachedResult = await this.cacheService.get(cacheKey);
             if (cachedResult) {
                 return cachedResult;
             }
@@ -67,7 +61,6 @@ class PersonContactService {
             const dto = PersonContactResponseDTO.fromDatabase(result);
 
             // Salva no cache por 1 hora
-            await this.cacheService.set(cacheKey, dto, 3600);
 
             return dto;
         } catch (error) {
@@ -87,7 +80,6 @@ class PersonContactService {
             const cacheKey = `person-contacts:person:${personId}:${page}:${limit}`;
             
             // Tenta buscar do cache
-            const cachedResult = await this.cacheService.get(cacheKey);
             if (cachedResult) {
                 return cachedResult;
             }
@@ -101,7 +93,6 @@ class PersonContactService {
             };
 
             // Salva no cache por 1 hora
-            await this.cacheService.set(cacheKey, dtoResult, 3600);
 
             return dtoResult;
         } catch (error) {
@@ -125,7 +116,6 @@ class PersonContactService {
             const cacheKey = `person-main-contact:${personId}`;
             
             // Tenta buscar do cache
-            const cachedMainContact = await this.cacheService.get(cacheKey);
             if (cachedMainContact) {
                 return cachedMainContact;
             }
@@ -137,7 +127,6 @@ class PersonContactService {
                 const dto = PersonContactResponseDTO.fromDatabase(mainContact);
 
                 // Salva no cache por 1 hora
-                await this.cacheService.set(cacheKey, dto, 3600);
 
                 return dto;
             }
@@ -165,7 +154,6 @@ class PersonContactService {
             }
 
             // Tenta buscar do cache
-            const cachedResult = await this.cacheService.get(cacheKey);
             if (cachedResult) {
                 return cachedResult;
             }
@@ -177,7 +165,6 @@ class PersonContactService {
                 const dto = PersonContactResponseDTO.fromDatabase(result);
 
                 // Salva no cache por 1 hora
-                await this.cacheService.set(cacheKey, dto, 3600);
 
                 return dto;
             }
@@ -206,8 +193,6 @@ class PersonContactService {
             // Se não estamos em uma transação, invalida os caches
             if (!client) {
                 await Promise.all([
-                    this.cacheService.del('person-contacts:list:*'),
-                    this.cacheService.del(`person-contacts:person:${data.person_id}:*`)
                 ]);
             }
 
@@ -239,8 +224,6 @@ class PersonContactService {
             const dto = PersonContactResponseDTO.fromDatabase(updatedContact);
 
             // Limpa cache de contatos da pessoa
-            await this.cacheService.delete(`person-contacts:${updatedContact.person_id}:*`);
-            await this.cacheService.delete(`person-main-contact:${updatedContact.person_id}`);
 
             logger.info('Contato atualizado', { 
                 contactId, 
@@ -276,9 +259,6 @@ class PersonContactService {
 
             // Invalida caches
             await Promise.all([
-                this.cacheService.del('person-contacts:list:*'),
-                this.cacheService.del(`person-contacts:person:${personContact.person_id}:*`),
-                this.cacheService.del(`person-contacts:${id}`)
             ]);
 
             return dto;

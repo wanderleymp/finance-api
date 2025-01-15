@@ -1,10 +1,7 @@
 const axios = require('axios');
 const { logger } = require('../../middlewares/logger');
-const CacheService = require('../../services/cacheService');
 
 class CnpjService {
-    constructor(cacheService = CacheService) {
-        this.cacheService = cacheService;
         this.baseUrl = process.env.CNPJ_API_URL || 'https://brasilapi.com.br/api/cnpj/v1';
     }
 
@@ -19,7 +16,6 @@ class CnpjService {
 
         try {
             // Verifica cache primeiro
-            const cachedData = await this.cacheService.get(`cnpj:${cleanCnpj}`);
             if (cachedData) {
                 return cachedData;
             }
@@ -31,7 +27,6 @@ class CnpjService {
             const formattedData = this.formatCnpjData(response.data);
 
             // Salva no cache por 24 horas
-            await this.cacheService.set(
                 `cnpj:${cleanCnpj}`, 
                 formattedData, 
                 24 * 60 * 60

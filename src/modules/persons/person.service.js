@@ -4,7 +4,6 @@ const AddressRepository = require('../addresses/address.repository');
 const ContactService = require('../contacts/contact.service');
 const PersonContactService = require('../person-contacts/person-contact.service');
 const CnpjService = require('../../services/cnpjService');
-const CacheService = require('../../services/cacheService');
 const PersonValidator = require('./validators/person.validator');
 const CreatePersonDTO = require('./dto/create-person.dto');
 const UpdatePersonDTO = require('./dto/update-person.dto');
@@ -14,12 +13,10 @@ const personAddressRepository = require('../../repositories/personAddressReposit
 class PersonService {
     constructor({ 
         personRepository = new PersonRepository(), 
-        cacheService = CacheService,
         contactService = new ContactService(),
         personContactService = new PersonContactService()
     } = {}) {
         this.personRepository = personRepository;
-        this.cacheService = cacheService;
         this.contactService = contactService;
         this.personContactService = personContactService;
         this.pool = systemDatabase.pool;
@@ -144,7 +141,6 @@ class PersonService {
             const cacheKey = `person:document:${document}`;
             
             // Tenta buscar do cache
-            const cachedPerson = await this.cacheService.get(cacheKey);
             if (cachedPerson) {
                 logger.info('Retornando pessoa por documento do cache', { cacheKey });
                 return cachedPerson;
@@ -161,7 +157,6 @@ class PersonService {
             }
 
             // Salva no cache
-            await this.cacheService.set(cacheKey, person, 3600); // 1 hora
 
             return person;
         } catch (error) {
@@ -187,7 +182,6 @@ class PersonService {
             
             // Tenta buscar do cache
             try {
-                const cachedPerson = await this.cacheService.get(cacheKey);
                 if (cachedPerson) {
                     logger.info('Retornando pessoa do cache', { cacheKey });
                     return cachedPerson;
@@ -205,7 +199,6 @@ class PersonService {
             // Se encontrou, salva no cache
             if (person) {
                 try {
-                    await this.cacheService.set(cacheKey, person, 3600); // 1 hora
                 } catch (cacheError) {
                     logger.warn('Falha ao salvar no cache', { 
                         error: cacheError.message,
@@ -233,7 +226,6 @@ class PersonService {
             const cacheKey = `person:details:${id}`;
             
             // Tenta buscar do cache
-            const cachedPerson = await this.cacheService.get(cacheKey);
             if (cachedPerson) {
                 logger.info('Retornando pessoa com detalhes do cache', { id });
                 return cachedPerson;
@@ -262,7 +254,6 @@ class PersonService {
             });
 
             // Salva no cache por 2 minutos
-            await this.cacheService.set(cacheKey, result, 120);
 
             return result;
         } catch (error) {
@@ -360,7 +351,6 @@ class PersonService {
             const newPerson = await this.personRepository.create(createDTO);
 
             // Limpa cache relacionado
-            await this.cacheService.del('persons:list:*');
             
             logger.info('Pessoa criada com sucesso', { 
                 personId: newPerson.id 
@@ -422,9 +412,6 @@ class PersonService {
 
             // Limpa cache relacionado
             await Promise.all([
-                this.cacheService.del(`person:${id}`),
-                this.cacheService.del(`person:details:${id}`),
-                this.cacheService.del('persons:list:*')
             ]);
 
             logger.info('Pessoa atualizada com sucesso', { 
@@ -448,7 +435,6 @@ class PersonService {
             await this.personRepository.delete(id);
             
             // Limpa cache relacionado
-            await this.cacheService.del(`person:${id}`);
 
             logger.info('Pessoa deletada com sucesso', { id });
         } catch (error) {
@@ -514,7 +500,6 @@ class PersonService {
             const newAddress = await this.personRepository.addAddress(personId, addressData);
 
             // Limpa cache de detalhes da pessoa
-            await this.cacheService.del(`person:details:${personId}`);
 
             logger.info('Endereço adicionado à pessoa', { 
                 personId, 
@@ -596,7 +581,6 @@ class PersonService {
             await client.query('COMMIT');
 
             // Limpa cache
-            await this.cacheService.del(`person:details:${personId}`);
 
             logger.info('Contato vinculado à pessoa com sucesso', {
                 personId,
@@ -631,7 +615,6 @@ class PersonService {
             const newDocument = await this.personRepository.addDocument(personId, documentData);
 
             // Limpa cache de detalhes da pessoa
-            await this.cacheService.del(`person:details:${personId}`);
 
             logger.info('Documento adicionado à pessoa', { 
                 personId, 
@@ -655,7 +638,6 @@ class PersonService {
 
             if (removedAddress) {
                 // Limpa cache de detalhes da pessoa
-                await this.cacheService.del(`person:details:${removedAddress.person_id}`);
 
                 logger.info('Endereço removido', { 
                     addressId, 
@@ -679,7 +661,6 @@ class PersonService {
 
             if (removedContact) {
                 // Limpa cache de detalhes da pessoa
-                await this.cacheService.del(`person:details:${removedContact.person_id}`);
 
                 logger.info('Contato removido', { 
                     contactId, 
@@ -855,7 +836,6 @@ class PersonService {
             }
 
             // Limpa cache
-            await this.cacheService.del(`person:details:${person.person_id}`);
 
             return person;
         } catch (error) {

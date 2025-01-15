@@ -1,6 +1,5 @@
 const { logger } = require('../../middlewares/logger');
 const AddressRepository = require('./address.repository');
-const cacheService = require('../../services/cacheService');
 const AddressValidator = require('./validators/address.validator');
 const CreateAddressDTO = require('./dto/create-address.dto');
 const UpdateAddressDTO = require('./dto/update-address.dto');
@@ -9,10 +8,8 @@ const cepService = require('./cep.service');
 class AddressService {
     constructor({ 
         addressRepository = new AddressRepository(), 
-        cacheService 
     } = {}) {
         this.addressRepository = addressRepository;
-        this.cacheService = cacheService || require('../../services/cacheService');
     }
 
     async findAll(page = 1, limit = 10, filters = {}) {
@@ -36,7 +33,6 @@ class AddressService {
             
             // Tenta buscar do cache
             try {
-                const cachedResult = await this.cacheService.get(cacheKey);
                 if (cachedResult) {
                     logger.info('Retornando endereços do cache', { cacheKey });
                     return cachedResult;
@@ -60,7 +56,6 @@ class AddressService {
 
             // Salva no cache com TTL reduzido
             try {
-                await this.cacheService.set(cacheKey, result, 300); // 5 minutos
             } catch (cacheError) {
                 logger.warn('Falha ao salvar no cache', { 
                     error: cacheError.message,
@@ -90,7 +85,6 @@ class AddressService {
             
             // Tenta buscar do cache
             try {
-                const cachedAddress = await this.cacheService.get(cacheKey);
                 if (cachedAddress) {
                     logger.info('Retornando endereço do cache', { cacheKey });
                     return cachedAddress;
@@ -110,7 +104,6 @@ class AddressService {
 
             // Salva no cache
             try {
-                await this.cacheService.set(cacheKey, address, 3600); // 1 hora
             } catch (cacheError) {
                 logger.warn('Falha ao salvar no cache', { 
                     error: cacheError.message,
@@ -201,7 +194,6 @@ class AddressService {
 
             // Invalida caches relacionados
             try {
-                await this.cacheService.delete(`person:${createDTO.person_id}:addresses`);
             } catch (cacheError) {
                 logger.warn('Falha ao invalidar cache', { 
                     error: cacheError.message,
@@ -255,8 +247,6 @@ class AddressService {
             // Invalida caches relacionados
             try {
                 await Promise.all([
-                    this.cacheService.delete(`address:${id}`),
-                    this.cacheService.delete(`person:${existingAddress.person_id}:addresses`)
                 ]);
             } catch (cacheError) {
                 logger.warn('Falha ao invalidar cache', { 
@@ -310,8 +300,6 @@ class AddressService {
             // Invalida caches relacionados
             try {
                 await Promise.all([
-                    this.cacheService.delete(`address:${id}`),
-                    this.cacheService.delete(`person:${existingAddress.person_id}:addresses`)
                 ]);
             } catch (cacheError) {
                 logger.warn('Falha ao invalidar cache', { 

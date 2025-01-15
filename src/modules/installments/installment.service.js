@@ -8,13 +8,11 @@ const moment = require('moment-timezone');
 class InstallmentService {
     constructor({ 
         installmentRepository, 
-        cacheService,
         boletoService,
         boletoRepository,
         n8nService
     } = {}) {
         this.repository = installmentRepository;
-        this.cacheService = cacheService;
         this.boletoService = boletoService;
         this.boletoRepository = boletoRepository;
         this.n8nService = n8nService;
@@ -29,8 +27,6 @@ class InstallmentService {
         try {
             logger.info('Serviço: Listando parcelas', { page, limit, filters });
             
-            const cacheKey = this.cacheService.generateKey(`${this.cachePrefix}:list`, { page, limit, ...filters });
-            const cached = await this.cacheService.get(cacheKey);
             
             if (cached) {
                 logger.info('Cache hit: Retornando parcelas do cache');
@@ -68,7 +64,6 @@ class InstallmentService {
             };
 
             // Salva no cache
-            await this.cacheService.set(cacheKey, formattedResult, this.cacheTTL.list);
 
             return formattedResult;
         } catch (error) {
@@ -87,8 +82,6 @@ class InstallmentService {
         try {
             logger.info('Serviço: Buscando parcela por ID', { id });
             
-            const cacheKey = this.cacheService.generateKey(`${this.cachePrefix}:detail`, { id });
-            const cached = await this.cacheService.get(cacheKey);
             
             if (cached) {
                 logger.info('Cache hit: Retornando parcela do cache');
@@ -103,7 +96,6 @@ class InstallmentService {
 
             const installmentResponse = new InstallmentResponseDTO(installment);
             
-            await this.cacheService.set(cacheKey, installmentResponse, this.cacheTTL.detail);
             
             return installmentResponse;
         } catch (error) {
@@ -119,8 +111,6 @@ class InstallmentService {
         try {
             logger.info('Serviço: Buscando detalhes da parcela', { id });
             
-            const cacheKey = this.cacheService.generateKey(`${this.cachePrefix}:details`, { id });
-            const cached = await this.cacheService.get(cacheKey);
             
             if (cached) {
                 logger.info('Cache hit: Retornando detalhes da parcela do cache');
@@ -135,7 +125,6 @@ class InstallmentService {
 
             const installmentResponse = new InstallmentResponseDTO(installment);
             
-            await this.cacheService.set(cacheKey, installmentResponse, this.cacheTTL.detail);
             
             return installmentResponse;
         } catch (error) {
@@ -167,7 +156,6 @@ class InstallmentService {
             await client.query('COMMIT');
 
             // Invalidar cache
-            await this.cacheService.del(`${this.cachePrefix}:list:*`);
             
             return new InstallmentResponseDTO(installment);
         } catch (error) {
@@ -219,8 +207,6 @@ class InstallmentService {
             await client.query('COMMIT');
 
             // Invalidar cache
-            await this.cacheService.del(`${this.cachePrefix}:detail:${id}`);
-            await this.cacheService.del(`${this.cachePrefix}:list:*`);
 
             return new InstallmentResponseDTO(updatedInstallment);
         } catch (error) {
@@ -274,8 +260,6 @@ class InstallmentService {
             await client.query('COMMIT');
 
             // Invalidar cache
-            await this.cacheService.del(`${this.cachePrefix}:list:*`);
-            await this.cacheService.del(`${this.cachePrefix}:detail:${id}`);
             
             return new InstallmentResponseDTO(updated);
         } catch (error) {
@@ -339,8 +323,6 @@ class InstallmentService {
             await client.query('COMMIT');
 
             // Invalidar cache
-            await this.cacheService.del(`${this.cachePrefix}:detail:${id}`);
-            await this.cacheService.del(`${this.cachePrefix}:list:*`);
 
             // Busca os detalhes atualizados da parcela
             const updatedInstallment = await this.repository.findInstallmentWithDetails(id);

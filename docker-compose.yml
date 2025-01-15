@@ -25,8 +25,14 @@ services:
     image: redis:7.2
     container_name: finance-redis
     restart: unless-stopped
+    volumes:
+      - ./redis-secure-config.conf:/usr/local/etc/redis/redis.conf
+      - ./redis-logs:/var/log/redis
+    command: redis-server /usr/local/etc/redis/redis.conf
     networks:
       - AgileNet
+    ports:
+      - "6379:6379"
 
   api:
     image: node:18
@@ -37,8 +43,10 @@ services:
       - .:/app
     command: npm run dev
     environment:
-      - REDIS_HOST=finance-redis
+      - REDIS_HOST=redis
       - REDIS_PORT=6379
+      - REDIS_PASSWORD=${REDIS_PASSWORD}
+      - REDIS_DB=0
     networks:
       - AgileNet
     depends_on:

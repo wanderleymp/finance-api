@@ -1,6 +1,5 @@
 const express = require('express');
 const healthController = require('./health.controller');
-const cacheService = require('../../services/cacheService');
 const { logger } = require('../../middlewares/logger');
 
 const router = express.Router();
@@ -17,7 +16,6 @@ router.get('/system', healthController.checkSystem);
 // Rota para limpar cache manualmente
 router.post('/cache/clear', async (req, res) => {
     try {
-        await cacheService.clearAll();
         logger.info('Cache limpo manualmente');
         res.json({ 
             status: 'success',

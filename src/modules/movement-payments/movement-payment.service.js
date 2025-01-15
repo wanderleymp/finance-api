@@ -11,19 +11,16 @@ class MovementPaymentService extends IMovementPaymentService {
     /**
      * @param {Object} params
      * @param {import('./movement-payment.repository')} params.movementPaymentRepository
-     * @param {import('../../services/cache.service')} params.cacheService
      * @param {import('../installments/installment.repository')} params.installmentRepository
      * @param {import('../boletos/boleto.service')} params.boletoService
      */
     constructor({ 
         movementPaymentRepository,
-        cacheService,
         installmentRepository,
         boletoService
     }) {
         super();
         this.repository = movementPaymentRepository;
-        this.cacheService = cacheService;
         this.installmentRepository = installmentRepository;
         this.boletoService = boletoService;
         
@@ -33,13 +30,11 @@ class MovementPaymentService extends IMovementPaymentService {
 
         this.paymentMethodsService = new PaymentMethodService({
             paymentMethodRepository,
-            cacheService: this.cacheService
         });
         
         // Instanciar o InstallmentService
         this.installmentService = new InstallmentService({ 
             installmentRepository,
-            cacheService
         });
         
         // Inicializa o gerador de parcelas com o serviço de boleto
@@ -72,12 +67,6 @@ class MovementPaymentService extends IMovementPaymentService {
             installmentRepository,
             boletoService
         );
-        
-        this.cachePrefix = 'movement-payments';
-        this.cacheTTL = {
-            list: 300, // 5 minutos
-            detail: 600 // 10 minutos
-        };
     }
 
     /**
@@ -87,26 +76,16 @@ class MovementPaymentService extends IMovementPaymentService {
         try {
             logger.info('Serviço: Listando pagamentos', { page, limit, filters });
 
-            const cacheKey = this.cacheService.generateKey(`${this.cachePrefix}:list`, { page, limit, filters });
-
-            const result = await this.cacheService.getOrSet(
-                cacheKey,
-                async () => {
-                    const data = await this.repository.findAll(page, limit, filters);
-                    return {
-                        data: data.rows.map(row => new MovementPaymentResponseDTO(row)),
-                        pagination: {
-                            page: parseInt(page),
-                            limit: parseInt(limit),
-                            total: parseInt(data.count),
-                            total_pages: Math.ceil(data.count / limit)
-                        }
-                    };
-                },
-                this.cacheTTL.list
-            );
-
-            return result;
+            const data = await this.repository.findAll(page, limit, filters);
+            return {
+                data: data.rows.map(row => new MovementPaymentResponseDTO(row)),
+                pagination: {
+                    page: parseInt(page),
+                    limit: parseInt(limit),
+                    total: parseInt(data.count),
+                    total_pages: Math.ceil(data.count / limit)
+                }
+            };
         } catch (error) {
             logger.error('Erro ao listar pagamentos no serviço', {
                 error: error.message,
@@ -124,22 +103,12 @@ class MovementPaymentService extends IMovementPaymentService {
     async findById(id) {
         try {
             logger.info('Serviço: Buscando pagamento por ID', { id });
-            
-            const cacheKey = this.cacheService.generateKey(`${this.cachePrefix}:detail`, { id });
 
-            const payment = await this.cacheService.getOrSet(
-                cacheKey,
-                async () => {
-                    const data = await this.repository.findById(id);
-                    if (!data) {
-                        return null;
-                    }
-                    return new MovementPaymentResponseDTO(data);
-                },
-                this.cacheTTL.detail
-            );
-            
-            return payment;
+            const data = await this.repository.findById(id);
+            if (!data) {
+                return null;
+            }
+            return new MovementPaymentResponseDTO(data);
         } catch (error) {
             logger.error('Erro ao buscar pagamento por ID no serviço', {
                 error: error.message,
@@ -159,58 +128,47 @@ class MovementPaymentService extends IMovementPaymentService {
         try {
             logger.info('Serviço: Buscando pagamentos por movimento ID', { movementId, detailed });
 
-            const cacheKey = this.cacheService.generateKey(`${this.cachePrefix}:movement`, { movementId, detailed });
+            const data = await this.repository.findByMovementId(movementId);
+            
+            logger.info('Serviço: Pagamentos encontrados', { 
+                count: data.length, 
+                paymentIds: data.map(p => p.payment_id) 
+            });
 
-            const payments = await this.cacheService.getOrSet(
-                cacheKey,
-                async () => {
-                    logger.info('Serviço: Buscando dados de pagamentos', { movementId });
-                    const data = await this.repository.findByMovementId(movementId);
-                    
-                    logger.info('Serviço: Pagamentos encontrados', { 
-                        count: data.length, 
-                        paymentIds: data.map(p => p.payment_id) 
+            if (!detailed) {
+                return data.map(payment => new MovementPaymentResponseDTO(payment));
+            }
+
+            // Se detailed, carrega installments
+            const paymentsWithDetails = await Promise.all(
+                data.map(async (payment) => {
+                    logger.info('Serviço: Carregando detalhes para pagamento', { 
+                        payment_id: payment.payment_id 
                     });
 
-                    if (!detailed) {
-                        return data.map(payment => new MovementPaymentResponseDTO(payment));
+                    try {
+                        const installments = await this.installmentRepository.findByPaymentId(payment.payment_id);
+
+                        logger.info('Serviço: Detalhes carregados', { 
+                            payment_id: payment.payment_id,
+                            installments_count: installments.length
+                        });
+
+                        return new MovementPaymentResponseDTO({
+                            ...payment,
+                            installments
+                        });
+                    } catch (error) {
+                        logger.error('Erro ao carregar detalhes do pagamento', {
+                            error: error.message,
+                            payment_id: payment.payment_id
+                        });
+                        return new MovementPaymentResponseDTO(payment);
                     }
-
-                    // Se detailed, carrega installments
-                    const paymentsWithDetails = await Promise.all(
-                        data.map(async (payment) => {
-                            logger.info('Serviço: Carregando detalhes para pagamento', { 
-                                payment_id: payment.payment_id 
-                            });
-
-                            try {
-                                const installments = await this.installmentRepository.findByPaymentId(payment.payment_id);
-
-                                logger.info('Serviço: Detalhes carregados', { 
-                                    payment_id: payment.payment_id,
-                                    installments_count: installments.length
-                                });
-
-                                return new MovementPaymentResponseDTO({
-                                    ...payment,
-                                    installments
-                                });
-                            } catch (error) {
-                                logger.error('Erro ao carregar detalhes do pagamento', {
-                                    error: error.message,
-                                    payment_id: payment.payment_id
-                                });
-                                return new MovementPaymentResponseDTO(payment);
-                            }
-                        })
-                    );
-
-                    return paymentsWithDetails;
-                },
-                this.cacheTTL.detail
+                })
             );
 
-            return payments;
+            return paymentsWithDetails;
         } catch (error) {
             logger.error('Erro ao buscar pagamentos por movimento ID', {
                 error: error.message,
@@ -397,7 +355,6 @@ class MovementPaymentService extends IMovementPaymentService {
                 return null;
             }
 
-            await this.cacheService.invalidatePrefix(this.cachePrefix);
             return new MovementPaymentResponseDTO(result);
         } catch (error) {
             logger.error('Erro ao atualizar pagamento no serviço', {
@@ -421,7 +378,6 @@ class MovementPaymentService extends IMovementPaymentService {
                 return null;
             }
 
-            await this.cacheService.invalidatePrefix(this.cachePrefix);
             return result;
         } catch (error) {
             logger.error('Erro ao remover pagamento no serviço', {

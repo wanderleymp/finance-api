@@ -23,7 +23,6 @@ class MovementService extends IMovementService {
         personRepository,
         movementTypeRepository,
         movementStatusRepository,
-        cacheService,
         paymentMethodRepository,
         installmentRepository,
         movementPaymentService,
@@ -44,7 +43,6 @@ class MovementService extends IMovementService {
         this.personRepository = personRepository;
         this.movementTypeRepository = movementTypeRepository;
         this.movementStatusRepository = movementStatusRepository;
-        this.cacheService = cacheService;
         this.paymentMethodRepository = paymentMethodRepository;
         this.installmentRepository = installmentRepository;
         this.movementPaymentService = movementPaymentService;
@@ -60,12 +58,6 @@ class MovementService extends IMovementService {
         this.serviceRepository = serviceRepository;
         this.billingMessageService = billingMessageService;
         this.pool = systemDatabase.pool;
-        
-        this.cachePrefix = 'movements';
-        this.cacheTTL = {
-            list: 5 * 60, // 5 minutos
-            detail: 15 * 60 // 15 minutos
-        };
     }
 
     /**
@@ -75,38 +67,13 @@ class MovementService extends IMovementService {
         try {
             logger.info('Serviço: Buscando movimento por ID', { id, detailed, include });
             
-            let movement;
-            const cacheKey = this.cacheService?.generateKey(
-                `${this.cachePrefix}:${detailed ? 'detail' : 'basic'}`, 
-                { id }
-            );
-            
-            if (this.cacheService) {
-                movement = await this.cacheService.get(cacheKey);
-                
-                if (movement) {
-                    logger.info('Service: Retornando movimento do cache', { id });
-                    return movement;
-                }
-            }
-
             const data = await this.findById(id, true);
 
             if (!data) {
                 throw new ValidationError('Movimento não encontrado');
             }
 
-            movement = new MovementResponseDTO(data);
-
-            if (this.cacheService) {
-                await this.cacheService.set(
-                    cacheKey, 
-                    movement, 
-                    true ? this.cacheTTL.detail : this.cacheTTL.list
-                );
-            }
-            
-            return movement;
+            return new MovementResponseDTO(data);
         } catch (error) {
             logger.error('Erro ao buscar movimento por ID no serviço', {
                 error: error.message,
@@ -215,18 +182,22 @@ class MovementService extends IMovementService {
             });
 
             // Extrair documento e endereço dos detalhes
-            const tomadorDocumento = person.documents && person.documents.length > 0 
-                ? `CPF: ${person.documents.find(doc => doc.document_type === 'CPF')?.document_value}`
+            const documentoValido = personDetails[0].documents && personDetails[0].documents.length > 0 
+                ? personDetails[0].documents.find(doc => ['CPF', 'CNPJ'].includes(doc.document_type))
                 : null;
+
+            const tomadorDocumento = documentoValido ? documentoValido.document_value : null;
+            const tomadorDocumentoTipo = documentoValido ? documentoValido.document_type : null;
             
-            const tomadorEndereco = person.addresses && person.addresses.length > 0 
-                ? person.addresses.find(addr => addr.is_main) || person.addresses[0]
+            const tomadorEndereco = personDetails[0].addresses && personDetails[0].addresses.length > 0 
+                ? personDetails[0].addresses.find(addr => addr.is_main) || personDetails[0].addresses[0]
                 : null;
 
             // Adiciona pessoa ao movimento
             movement.person = {
                 person_id: movement.person_id,
                 document: tomadorDocumento,
+                document_type: tomadorDocumentoTipo,
                 address: tomadorEndereco
             };
 
@@ -402,9 +373,6 @@ class MovementService extends IMovementService {
             const person = await this.personRepository.findPersonById(data.person_id);
             await this._processBillingMessage(movement, person);
 
-            // Invalidar cache
-            await this.invalidateCache();
-
             return new MovementResponseDTO(movement);
         });
     }
@@ -482,9 +450,6 @@ class MovementService extends IMovementService {
             // Atualizar movimento
             const updated = await this.movementRepository.update(id, data);
 
-            // Invalidar cache
-            await this.invalidateCache();
-
             return new MovementResponseDTO(updated);
         } catch (error) {
             logger.error('Service: Erro ao atualizar movimento', {
@@ -511,9 +476,6 @@ class MovementService extends IMovementService {
 
             // Remover movimento
             await this.movementRepository.delete(id);
-
-            // Invalidar cache
-            await this.invalidateCache();
         } catch (error) {
             logger.error('Service: Erro ao remover movimento', {
                 error: error.message,
@@ -541,9 +503,6 @@ class MovementService extends IMovementService {
 
             // Atualizar status
             const updated = await this.movementRepository.updateStatus(id, status);
-
-            // Invalidar cache
-            await this.invalidateCache();
 
             return new MovementResponseDTO(updated);
         } catch (error) {
@@ -573,7 +532,6 @@ class MovementService extends IMovementService {
             const PaymentMethodService = require('../payment-methods/payment-method.service');
             const paymentMethodService = new PaymentMethodService({
                 paymentMethodRepository: this.paymentMethodRepository,
-                cacheService: this.cacheService
             });
 
             // Criar pagamento
@@ -623,171 +581,6 @@ class MovementService extends IMovementService {
             });
             throw error;
         }
-    }
-
-    /**
-     * Invalida o cache de movimentos
-     */
-    async invalidateCache() {
-        if (!this.cacheService) return;
-
-        try {
-            const pattern = `${this.cachePrefix}:*`;
-            await this.cacheService.deletePattern(pattern);
-        } catch (error) {
-            logger.error('Service: Erro ao invalidar cache', {
-                error: error.message
-            });
-        }
-    }
-
-    /**
-     * Valida os dados do movimento
-     */
-    validateMovementData(data, isUpdate = false) {
-        // Validações básicas se não for update
-        if (!isUpdate) {
-            if (!data.description) {
-                throw new ValidationError('Descrição é obrigatória');
-            }
-            if (!data.total_amount || data.total_amount <= 0) {
-                throw new ValidationError('Valor deve ser maior que zero');
-            }
-            if (!data.person_id) {
-                throw new ValidationError('Pessoa é obrigatória');
-            }
-            if (!data.movement_type_id) {
-                throw new ValidationError('Tipo de movimento é obrigatório');
-            }
-            if (!data.movement_status_id) {
-                throw new ValidationError('Status do movimento é obrigatório');
-            }
-            if (!data.license_id) {
-                throw new ValidationError('Licença é obrigatória');
-            }
-        }
-
-        // Validações para campos específicos em update
-        if (data.total_amount !== undefined && data.total_amount <= 0) {
-            throw new ValidationError('Valor deve ser maior que zero');
-        }
-        if (data.description !== undefined && data.description.length < 3) {
-            throw new ValidationError('Descrição deve ter no mínimo 3 caracteres');
-        }
-    }
-
-    /**
-     * Valida a transição de status
-     */
-    validateStatusTransition(currentStatus, newStatus) {
-        const validStatus = ['PENDING', 'PAID', 'CANCELED'];
-        if (!validStatus.includes(newStatus)) {
-            throw new ValidationError('Status inválido');
-        }
-
-        // Regras de transição de status
-        if (currentStatus === 'CANCELED') {
-            throw new ValidationError('Não é possível alterar um movimento cancelado');
-        }
-        if (currentStatus === 'PAID' && newStatus !== 'CANCELED') {
-            throw new ValidationError('Um movimento pago só pode ser cancelado');
-        }
-    }
-
-    /**
-     * Valida os filtros
-     */
-    validateFilters(filters) {
-        const { 
-            value_min,
-            value_max,
-            movement_date_start,
-            movement_date_end
-        } = filters;
-
-        // Valida range de valores
-        if (value_min && value_max && parseFloat(value_min) > parseFloat(value_max)) {
-            throw new ValidationError('O valor mínimo não pode ser maior que o valor máximo');
-        }
-
-        // Valida range de datas
-        if (movement_date_start && movement_date_end) {
-            const start = new Date(movement_date_start);
-            const end = new Date(movement_date_end);
-            if (start > end) {
-                throw new ValidationError('A data inicial não pode ser maior que a data final');
-            }
-        }
-    }
-
-    /**
-     * Prepara os filtros para a query
-     */
-    prepareFilters(filters) {
-        const preparedFilters = { ...filters };
-        delete preparedFilters.detailed; // Remove o detailed dos filtros pois não é usado na query
-
-        // Converte strings para números
-        if (preparedFilters.person_id) {
-            preparedFilters.person_id = parseInt(preparedFilters.person_id);
-        }
-        if (preparedFilters.movement_type_id) {
-            preparedFilters.movement_type_id = parseInt(preparedFilters.movement_type_id);
-        }
-        if (preparedFilters.movement_status_id) {
-            preparedFilters.movement_status_id = parseInt(preparedFilters.movement_status_id);
-        }
-        if (preparedFilters.value_min) {
-            preparedFilters.value_min = parseFloat(preparedFilters.value_min);
-        }
-        if (preparedFilters.value_max) {
-            preparedFilters.value_max = parseFloat(preparedFilters.value_max);
-        }
-
-        return preparedFilters;
-    }
-
-    /**
-     * Valida os dados de pagamento
-     */
-    async validatePaymentData(paymentData) {
-        logger.info('Service: Validando dados de pagamento', { paymentData });
-
-        // Validar payment_method_id
-        if (!paymentData.payment_method_id) {
-            throw new ValidationError('ID do método de pagamento é obrigatório');
-        }
-
-        // Verificar se o método de pagamento existe
-        const paymentMethodExists = await this.pool.query(`
-            SELECT * FROM payment_methods WHERE payment_method_id = $1
-        `, [paymentData.payment_method_id]);
-
-        if (paymentMethodExists.rows.length === 0) {
-            throw new ValidationError('Método de pagamento não encontrado');
-        }
-
-        // Validar total_amount
-        if (!paymentData.total_amount || paymentData.total_amount <= 0) {
-            throw new ValidationError('Valor total do pagamento deve ser maior que zero');
-        }
-
-        // Preparar dados validados
-        const validatedData = {
-            payment_method_id: paymentData.payment_method_id,
-            total_amount: paymentData.total_amount
-        };
-
-        // Adicionar campos opcionais se existirem
-        if (paymentData.payment_date) {
-            validatedData.payment_date = paymentData.payment_date;
-        }
-
-        if (paymentData.observation) {
-            validatedData.observation = paymentData.observation;
-        }
-
-        return validatedData;
     }
 
     /**
@@ -962,6 +755,13 @@ class MovementService extends IMovementService {
             // Buscar dados completos do tomador
             const person = await this.personRepository.findPersonWithDetails(movement.person_id);
             
+            logger.info('Dados do Tomador COMPLETOS', {
+                tomadorId: movement.person_id,
+                tomadorDetalhes: JSON.stringify(person, null, 2),
+                todosDocumentos: person.documents,
+                todosEnderecos: person.addresses
+            });
+
             logger.info('Dados do Tomador', {
                 tomadorId: movement.person_id,
                 tomadorDetalhes: JSON.stringify(person, null, 2)
@@ -973,9 +773,12 @@ class MovementService extends IMovementService {
             });
 
             // Extrair documento e endereço dos detalhes
-            const tomadorDocumento = person.documents && person.documents.length > 0 
-                ? `CPF: ${person.documents.find(doc => doc.document_type === 'CPF')?.document_value}`
+            const documentoValido = person.documents && person.documents.length > 0 
+                ? person.documents.find(doc => ['CPF', 'CNPJ'].includes(doc.document_type))
                 : null;
+
+            const tomadorDocumento = documentoValido ? documentoValido.document_value : null;
+            const tomadorDocumentoTipo = documentoValido ? documentoValido.document_type : null;
             
             const tomadorEndereco = person.addresses && person.addresses.length > 0 
                 ? person.addresses.find(addr => addr.is_main) || person.addresses[0]
@@ -1017,9 +820,7 @@ class MovementService extends IMovementService {
                     }
                 },
                 tomador_documento: tomadorDocumento,
-                tomador_documento_type: person.documents && person.documents.length > 0 
-                    ? person.documents[0].document_type
-                    : null,
+                tomador_documento_type: tomadorDocumentoTipo,
                 tomador_razao_social: person.full_name,
                 servico: items.map(item => ({
                     cnae: servicoDetalhado?.cnae || item.servico.cnae,
@@ -1035,7 +836,15 @@ class MovementService extends IMovementService {
             };
 
             logger.info('Payload completo para NFSe', {
-                payloadCompleto: JSON.stringify(nfseData, null, 2)
+                payloadCompleto: JSON.stringify(nfseData, null, 2),
+                dadosOriginais: {
+                    movementId,
+                    personId: movement.person_id,
+                    personName: person.full_name,
+                    documentos: person.documents,
+                    prestadorCNPJ: license?.person_document,
+                    itensServico: items
+                }
             });
 
             return await this.nfseService.emitirNfse(nfseData);
@@ -1052,6 +861,155 @@ class MovementService extends IMovementService {
     async getMovementItems(movementId) {
         const movementItemsRepository = new (require('../movement-items/movement-item.repository'))();
         return await movementItemsRepository.findDetailedByMovementId(movementId);
+    }
+
+    /**
+     * Valida os dados do movimento
+     */
+    validateMovementData(data, isUpdate = false) {
+        // Validações básicas se não for update
+        if (!isUpdate) {
+            if (!data.description) {
+                throw new ValidationError('Descrição é obrigatória');
+            }
+            if (!data.total_amount || data.total_amount <= 0) {
+                throw new ValidationError('Valor deve ser maior que zero');
+            }
+            if (!data.person_id) {
+                throw new ValidationError('Pessoa é obrigatória');
+            }
+            if (!data.movement_type_id) {
+                throw new ValidationError('Tipo de movimento é obrigatório');
+            }
+            if (!data.movement_status_id) {
+                throw new ValidationError('Status do movimento é obrigatório');
+            }
+            if (!data.license_id) {
+                throw new ValidationError('Licença é obrigatória');
+            }
+        }
+
+        // Validações para campos específicos em update
+        if (data.total_amount !== undefined && data.total_amount <= 0) {
+            throw new ValidationError('Valor deve ser maior que zero');
+        }
+        if (data.description !== undefined && data.description.length < 3) {
+            throw new ValidationError('Descrição deve ter no mínimo 3 caracteres');
+        }
+    }
+
+    /**
+     * Valida a transição de status
+     */
+    validateStatusTransition(currentStatus, newStatus) {
+        const validStatus = ['PENDING', 'PAID', 'CANCELED'];
+        if (!validStatus.includes(newStatus)) {
+            throw new ValidationError('Status inválido');
+        }
+
+        // Regras de transição de status
+        if (currentStatus === 'CANCELED') {
+            throw new ValidationError('Não é possível alterar um movimento cancelado');
+        }
+        if (currentStatus === 'PAID' && newStatus !== 'CANCELED') {
+            throw new ValidationError('Um movimento pago só pode ser cancelado');
+        }
+    }
+
+    /**
+     * Valida os filtros
+     */
+    validateFilters(filters) {
+        const { 
+            value_min,
+            value_max,
+            movement_date_start,
+            movement_date_end
+        } = filters;
+
+        // Valida range de valores
+        if (value_min && value_max && parseFloat(value_min) > parseFloat(value_max)) {
+            throw new ValidationError('O valor mínimo não pode ser maior que o valor máximo');
+        }
+
+        // Valida range de datas
+        if (movement_date_start && movement_date_end) {
+            const start = new Date(movement_date_start);
+            const end = new Date(movement_date_end);
+            if (start > end) {
+                throw new ValidationError('A data inicial não pode ser maior que a data final');
+            }
+        }
+    }
+
+    /**
+     * Prepara os filtros para a query
+     */
+    prepareFilters(filters) {
+        const preparedFilters = { ...filters };
+        delete preparedFilters.detailed; // Remove o detailed dos filtros pois não é usado na query
+
+        // Converte strings para números
+        if (preparedFilters.person_id) {
+            preparedFilters.person_id = parseInt(preparedFilters.person_id);
+        }
+        if (preparedFilters.movement_type_id) {
+            preparedFilters.movement_type_id = parseInt(preparedFilters.movement_type_id);
+        }
+        if (preparedFilters.movement_status_id) {
+            preparedFilters.movement_status_id = parseInt(preparedFilters.movement_status_id);
+        }
+        if (preparedFilters.value_min) {
+            preparedFilters.value_min = parseFloat(preparedFilters.value_min);
+        }
+        if (preparedFilters.value_max) {
+            preparedFilters.value_max = parseFloat(preparedFilters.value_max);
+        }
+
+        return preparedFilters;
+    }
+
+    /**
+     * Valida os dados de pagamento
+     */
+    async validatePaymentData(paymentData) {
+        logger.info('Service: Validando dados de pagamento', { paymentData });
+
+        // Validar payment_method_id
+        if (!paymentData.payment_method_id) {
+            throw new ValidationError('ID do método de pagamento é obrigatório');
+        }
+
+        // Verificar se o método de pagamento existe
+        const paymentMethodExists = await this.pool.query(`
+            SELECT * FROM payment_methods WHERE payment_method_id = $1
+        `, [paymentData.payment_method_id]);
+
+        if (paymentMethodExists.rows.length === 0) {
+            throw new ValidationError('Método de pagamento não encontrado');
+        }
+
+        // Validar total_amount
+        if (!paymentData.total_amount || paymentData.total_amount <= 0) {
+            throw new ValidationError('Valor total do pagamento deve ser maior que zero');
+        }
+
+        // Preparar dados validados
+        const validatedData = {
+            payment_method_id: paymentData.payment_method_id,
+            total_amount: paymentData.total_amount
+        };
+
+        // Adicionar campos opcionais se existirem
+        if (paymentData.payment_date) {
+            validatedData.payment_date = paymentData.payment_date;
+        }
+
+        if (paymentData.observation) {
+            validatedData.observation = paymentData.observation;
+        }
+
+        return validatedData;
     }
 }
 

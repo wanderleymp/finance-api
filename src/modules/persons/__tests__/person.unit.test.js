@@ -17,7 +17,6 @@ describe('Person Unit Tests', () => {
 
         personService = new PersonService({
             personRepository,
-            cacheService: {
                 get: jest.fn(),
                 set: jest.fn(),
                 delete: jest.fn()

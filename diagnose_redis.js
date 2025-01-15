@@ -8,7 +8,7 @@ console.log('Iniciando diagnóstico de conexão Redis...');
 
 // Configurações de conexão
 const redisConfig = {
-    host: process.env.REDIS_HOST || 'localhost',
+    host: 'localhost',
     port: parseInt(process.env.REDIS_PORT || '6379'),
     password: process.env.REDIS_PASSWORD,
     db: parseInt(process.env.REDIS_DB || '0')

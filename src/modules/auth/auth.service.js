@@ -2,7 +2,6 @@ const bcrypt = require('bcrypt');
 const IAuthService = require('./interfaces/IAuthService');
 const { AuthResponseDTO } = require('./dto/login.dto');
 const { logger } = require('../../middlewares/logger');
-const redis = require('../../config/redis');
 const JwtService = require('../../config/jwt');
 
 class AuthService extends IAuthService {
@@ -131,12 +130,6 @@ class AuthService extends IAuthService {
         try {
             // Remover refresh token do usuário
             await this.userService.updateRefreshToken(userId, null);
-
-            // Se redis estiver habilitado, adicionar token à blacklist
-            if (redis.isEnabled()) {
-                const key = `blacklist:${userId}`;
-                await redis.set(key, 'true', 'EX', process.env.JWT_EXPIRATION);
-            }
 
             return true;
         } catch (error) {

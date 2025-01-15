@@ -1,10 +1,8 @@
 const ContactService = require('../contact.service');
 const ContactRepository = require('../contact.repository');
-const CacheService = require('../../../services/cacheService');
 
 // Mocks
 jest.mock('../contact.repository');
-jest.mock('../../../services/cacheService');
 
 describe('ContactService', () => {
     let contactService;
@@ -21,7 +19,6 @@ describe('ContactService', () => {
 
         contactService = new ContactService({
             contactRepository: mockContactRepository,
-            cacheService: mockCacheService
         });
     });
 

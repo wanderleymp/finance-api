@@ -2,9 +2,8 @@ const { logger } = require('../../middlewares/logger');
 const { PaymentMethodResponseDTO } = require('./dto/payment-method.dto');
 
 class PaymentMethodService {
-    constructor({ paymentMethodRepository, cacheService }) {
+    constructor({ paymentMethodRepository }) {
         this.paymentMethodRepository = paymentMethodRepository;
-        this.cacheService = cacheService;
     }
 
     /**
@@ -14,12 +13,7 @@ class PaymentMethodService {
         try {
             logger.info('Serviço: Listando formas de pagamento', { page, limit, filters });
 
-            const cacheKey = `payment-methods:list:${page}:${limit}:${JSON.stringify(filters)}`;
-            const result = await this.cacheService.getOrSet(
-                cacheKey,
-                async () => this.paymentMethodRepository.findAll(page, limit, filters),
-                300 // 5 minutos
-            );
+            const result = await this.paymentMethodRepository.findAll(page, limit, filters);
 
             return {
                 data: result.data.map(row => new PaymentMethodResponseDTO(row)),
@@ -48,13 +42,7 @@ class PaymentMethodService {
         try {
             logger.info('Serviço: Buscando forma de pagamento', { id });
 
-            const cacheKey = `payment-methods:${id}`;
-            const result = await this.cacheService.getOrSet(
-                cacheKey,
-                async () => this.paymentMethodRepository.findById(id),
-                300 // 5 minutos
-            );
-
+            const result = await this.paymentMethodRepository.findById(id);
             if (!result) {
                 return null;
             }
@@ -77,7 +65,6 @@ class PaymentMethodService {
             logger.info('Serviço: Criando forma de pagamento', { data });
 
             const result = await this.paymentMethodRepository.create(data);
-            await this.cacheService.invalidatePattern('payment-methods:*');
 
             return new PaymentMethodResponseDTO(result);
         } catch (error) {
@@ -101,7 +88,6 @@ class PaymentMethodService {
                 return null;
             }
 
-            await this.cacheService.invalidatePattern('payment-methods:*');
             return new PaymentMethodResponseDTO(result);
         } catch (error) {
             logger.error('Erro ao atualizar forma de pagamento no serviço', {
@@ -125,7 +111,6 @@ class PaymentMethodService {
                 return null;
             }
 
-            await this.cacheService.invalidatePattern('payment-methods:*');
             return new PaymentMethodResponseDTO(result);
         } catch (error) {
             logger.error('Erro ao remover forma de pagamento no serviço', {

@@ -1,16 +1,19 @@
 const { logger } = require('../../../middlewares/logger');
 
 class TaskWorker {
-    constructor({ taskService, interval = 5000, batchSize = 10 }) {
+    constructor({ taskService, interval = 30000, batchSize = 5, maxRetries = 3 }) {
         this.taskService = taskService;
         this.interval = interval;
         this.batchSize = batchSize;
+        this.maxRetries = maxRetries;
         this.isRunning = false;
         this.processors = new Map();
-        logger.info('TaskWorker construído', {
+        this.retryCount = 0;
+        logger.info('TaskWorker construído com configurações otimizadas', {
             hasTaskService: !!taskService,
             interval,
-            batchSize
+            batchSize,
+            maxRetries
         });
     }
 
@@ -44,55 +47,84 @@ class TaskWorker {
     }
 
     async processTasks() {
-        logger.info('Iniciando worker de processamento de tasks');
+        logger.info('Iniciando worker de processamento de tasks com estratégia de backoff', {
+            interval: this.interval,
+            batchSize: this.batchSize,
+            processors: Array.from(this.processors.keys())
+        });
 
         while (this.isRunning) {
             try {
+                logger.debug('Buscando tasks pendentes', {
+                    batchSize: this.batchSize,
+                    timestamp: new Date().toISOString()
+                });
+
                 const tasks = await this.taskService.findPendingTasks(this.batchSize);
                 
+                logger.debug('Resultado da busca de tasks', {
+                    tasksCount: tasks.length,
+                    timestamp: new Date().toISOString()
+                });
+
                 if (tasks.length > 0) {
-                    logger.info('Processando lote de tasks', { count: tasks.length });
+                    logger.info(`Processando lote de ${tasks.length} tasks`);
                     
                     for (const task of tasks) {
                         try {
-                            const processor = this.getProcessor(1); // Sempre usa tipo 1
+                            const processor = this.getProcessor(task.type_id);
                             
                             if (!processor) {
-                                logger.error('Processador não encontrado', {
-                                    taskId: task.id
+                                logger.error('Processador não encontrado para task', {
+                                    taskId: task.task_id,
+                                    taskTypeId: task.type_id,
+                                    details: task
                                 });
                                 
-                                await this.taskService.update(task.id, {
+                                await this.taskService.update(task.task_id, {
                                     status: 'failed',
-                                    error_message: 'Processador de boleto não encontrado'
+                                    error_message: 'Processador não configurado'
                                 });
                                 
                                 continue;
                             }
 
                             await processor.process(task);
+                            this.retryCount = 0; // Reset retry count on success
                         } catch (error) {
-                            logger.error('Erro ao processar task', {
-                                taskId: task.id,
+                            this.retryCount++;
+                            
+                            logger.error(`Erro ao processar task (Tentativa ${this.retryCount})`, {
+                                taskId: task.task_id,
                                 error: error.message,
                                 stack: error.stack
                             });
 
-                            await this.taskService.update(task.id, {
-                                status: 'failed',
-                                error_message: error.message
+                            await this.taskService.update(task.task_id, {
+                                status: this.retryCount >= this.maxRetries ? 'failed' : 'retrying',
+                                error_message: error.message,
+                                retry_count: this.retryCount
                             });
+
+                            if (this.retryCount >= this.maxRetries) {
+                                logger.warn(`Task ${task.task_id} excedeu máximo de tentativas`);
+                            }
                         }
                     }
                 }
 
-                await new Promise(resolve => setTimeout(resolve, this.interval));
+                // Backoff exponencial
+                const backoffTime = this.interval * (1 + Math.random());
+                await new Promise(resolve => setTimeout(resolve, backoffTime));
             } catch (error) {
-                logger.error('Erro no loop de processamento', {
+                logger.error('Erro crítico no loop de processamento', {
                     error: error.message,
                     stack: error.stack
                 });
-                await new Promise(resolve => setTimeout(resolve, this.interval));
+                
+                // Aumenta intervalo em caso de erro persistente
+                const errorBackoff = this.interval * 2;
+                await new Promise(resolve => setTimeout(resolve, errorBackoff));
             }
         }
     }

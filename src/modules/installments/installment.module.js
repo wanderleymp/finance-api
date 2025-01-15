@@ -4,7 +4,6 @@ const InstallmentRepository = require('./installment.repository');
 const BoletoRepository = require('../boletos/boleto.repository');
 const BoletoService = require('../boletos/boleto.service');
 const installmentRoutes = require('./installment.routes');
-const MockCacheService = require('../../services/mockCacheService');
 const N8nService = require('../../services/n8n.service');
 
 module.exports = (app) => {
@@ -16,7 +15,6 @@ module.exports = (app) => {
     });
     const service = new InstallmentService({ 
         installmentRepository: repository,
-        cacheService: MockCacheService,
         boletoRepository: boletoRepository,
         boletoService: boletoService,
         n8nService: N8nService

@@ -413,34 +413,6 @@ const options = {
                     }
                 }
             },
-            '/health/cache/clear': {
-                post: {
-                    tags: ['Health'],
-                    summary: 'Limpa todo o cache',
-                    security: [{ bearerAuth: [] }],
-                    responses: {
-                        200: {
-                            description: 'Cache limpo com sucesso',
-                            content: {
-                                'application/json': {
-                                    schema: {
-                                        type: 'object',
-                                        properties: {
-                                            status: {
-                                                type: 'string',
-                                                enum: ['success']
-                                            },
-                                            message: {
-                                                type: 'string'
-                                            }
-                                        }
-                                    }
-                                }
-                            }
-                        }
-                    }
-                }
-            },
             '/persons': {
                 get: {
                     tags: ['Persons'],

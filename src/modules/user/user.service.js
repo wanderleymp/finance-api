@@ -6,15 +6,12 @@ const UserRepository = require('./user.repository');
 const CreateUserDTO = require('./dto/create-user.dto');
 const UpdateUserDTO = require('./dto/update-user.dto');
 const UserResponseDTO = require('./dto/user-response.dto');
-const CacheService = require('../../services/cacheService');
 
 class UserService {
     constructor({ 
         userRepository = new UserRepository(),
-        cacheService = CacheService 
     } = {}) {
         this.repository = userRepository;
-        this.cacheService = cacheService;
         this.cachePrefix = 'user:';
         this.cacheTTL = 3600; // 1 hora
     }
@@ -24,7 +21,6 @@ class UserService {
             const cacheKey = `${this.cachePrefix}list:${JSON.stringify({ filters, page, limit })}`;
             
             // Tenta buscar do cache
-            const cachedResult = await this.cacheService.get(cacheKey);
             if (cachedResult) {
                 logger.info('Cache hit para listagem de usuários');
                 return cachedResult;
@@ -36,7 +32,6 @@ class UserService {
             result.rows = result.rows.map(user => new UserResponseDTO(user));
 
             // Salvar no cache
-            await this.cacheService.set(cacheKey, result, this.cacheTTL);
 
             return result;
         } catch (error) {
@@ -50,7 +45,6 @@ class UserService {
             const cacheKey = `${this.cachePrefix}${id}`;
             
             // Tenta buscar do cache
-            const cachedUser = await this.cacheService.get(cacheKey);
             if (cachedUser) {
                 logger.info('Cache hit para usuário por ID');
                 return cachedUser;
@@ -64,7 +58,6 @@ class UserService {
             const userResponse = new UserResponseDTO(user);
 
             // Salvar no cache
-            await this.cacheService.set(cacheKey, userResponse, this.cacheTTL);
 
             return userResponse;
         } catch (error) {
@@ -111,8 +104,6 @@ class UserService {
 
             // Invalidar cache
             const cacheKey = `${this.cachePrefix}${id}`;
-            await this.cacheService.del(cacheKey);
-            await this.cacheService.delByPattern(`${this.cachePrefix}list:*`);
 
             return userResponse;
         } catch (error) {
@@ -132,8 +123,6 @@ class UserService {
 
             // Invalidar cache
             const cacheKey = `${this.cachePrefix}${id}`;
-            await this.cacheService.del(cacheKey);
-            await this.cacheService.delByPattern(`${this.cachePrefix}list:*`);
         } catch (error) {
             logger.error('Erro ao deletar usuário', { error: error.message });
             throw error;
@@ -158,7 +147,6 @@ class UserService {
 
             // Invalidar cache
             const cacheKey = `${this.cachePrefix}${userId}`;
-            await this.cacheService.del(cacheKey);
 
             return user;
         } catch (error) {

@@ -15,7 +15,6 @@ const TaskService = require('../tasks/services/task.service');
 const TaskRepository = require('../tasks/repositories/task.repository');
 const PersonContactRepository = require('../person-contacts/person-contact.repository');
 const n8nService = require('../../services/n8n.service');
-const CacheService = require('../../services/cache.service');
 const express = require('express');
 const { systemDatabase } = require('../../config/database');
 const NfseService = require('../nfse/nfse.service');
@@ -33,7 +32,6 @@ const repository = new MovementRepository(personRepository, movementTypeReposito
 const boletoRepository = new BoletoRepository(systemDatabase.pool);
 const taskRepository = new TaskRepository();
 const personContactRepository = new PersonContactRepository();
-const cacheService = new CacheService('movements');
 const nfseRepository = new NfseRepository();
 const serviceRepository = new ServiceRepository();
 
@@ -43,13 +41,11 @@ const boletoService = new BoletoService({
     boletoRepository,
     n8nService,
     taskService,
-    cacheService
 });
 
 // Instancia o InstallmentService
 const installmentService = new InstallmentService({ 
     installmentRepository,
-    cacheService,
     boletoRepository,
     boletoService,
     n8nService
@@ -58,7 +54,6 @@ const installmentService = new InstallmentService({
 // Instancia o MovementPaymentService
 const movementPaymentService = new MovementPaymentService({ 
     movementPaymentRepository,
-    cacheService,
     installmentRepository,
     boletoService
 });
@@ -69,7 +64,6 @@ const nfseService = new NfseService(nfseRepository);
 // Instancia o serviço principal
 const service = new MovementService({ 
     movementRepository: repository,
-    cacheService,
     movementPaymentService,
     personRepository,
     movementTypeRepository,

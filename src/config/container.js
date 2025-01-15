@@ -1,6 +1,5 @@
 const { createContainer, asClass, asValue, InjectionMode } = require('awilix');
 const { logger } = require('../middlewares/logger');
-const cacheService = require('../services/cache.service');
 
 // Importações de repositórios e serviços necessários
 const TaskService = require('../modules/tasks/task.service');
@@ -23,7 +22,6 @@ const container = createContainer({
 container.register({
     // Infraestrutura
     logger: asValue(logger),
-    cacheService: asValue(cacheService),
     systemDatabase: asValue(systemDatabase),
 
     // Repositórios

@@ -1,10 +1,8 @@
 const AddressService = require('../address.service');
 const AddressRepository = require('../address.repository');
-const CacheService = require('../../../services/cacheService');
 
 // Mocks
 jest.mock('../address.repository');
-jest.mock('../../../services/cacheService');
 
 describe('AddressService', () => {
     let addressService;
@@ -21,7 +19,6 @@ describe('AddressService', () => {
 
         addressService = new AddressService({
             addressRepository: mockAddressRepository,
-            cacheService: mockCacheService
         });
     });
 

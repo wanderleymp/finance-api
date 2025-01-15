@@ -17,7 +17,6 @@ describe.skip('Address Unit Tests', () => {
 
         addressService = new AddressService({
             addressRepository,
-            cacheService: {
                 get: jest.fn(),
                 set: jest.fn(),
                 delete: jest.fn()

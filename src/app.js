@@ -71,6 +71,26 @@ app.use((req, res, next) => {
     next();
 });
 
+// Debug de rotas
+app.use((req, res, next) => {
+    console.log('DEBUG: Nova requisição recebida', {
+        method: req.method,
+        url: req.url,
+        path: req.path,
+        originalUrl: req.originalUrl,
+        ip: req.ip,
+        headers: req.headers
+    });
+    next();
+});
+
+// Adicionar log de todas as rotas registradas
+const _use = app.use;
+app.use = function(route, handler) {
+    console.log(`DEBUG: Registrando rota: ${route}`);
+    return _use.apply(this, arguments);
+};
+
 // Configurações básicas
 app.use(cors({
     origin: function(origin, callback){
@@ -193,9 +213,11 @@ messagesModuleInstance.initialize().catch(error => {
 const userModule = require('./modules/user/user.module');
 userModule.register(app);
 
+const { PaymentMethodModule } = require('./modules/payment-methods/payment-method.module');
+PaymentMethodModule.register(app);
+
 app.use('/movements', movementRoutes);
 app.use('/movement-payments', movementPaymentRoutes);
-app.use('/payment-method', paymentMethodModule.getRouter());
 app.use('/addresses', addressRoutes);
 ContactModule.register(app);
 PersonContactModule.registerRoutes(app);

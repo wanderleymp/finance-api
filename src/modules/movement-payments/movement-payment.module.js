@@ -9,7 +9,6 @@ const BoletoRepository = require('../boletos/boleto.repository');
 const TaskService = require('../tasks/services/task.service');
 const TaskRepository = require('../tasks/repositories/task.repository');
 const n8nService = require('../../services/n8n.service');
-const cacheService = require('../../services/cache.service');
 const { systemDatabase } = require('../../config/database');
 
 // Instancia os repositórios
@@ -24,13 +23,11 @@ const boletoService = new BoletoService({
     boletoRepository,
     n8nService,
     taskService,
-    cacheService
 });
 
 // Instancia o serviço principal
 const service = new MovementPaymentService({ 
     movementPaymentRepository: repository,
-    cacheService,
     installmentRepository,
     boletoService
 });

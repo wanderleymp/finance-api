@@ -17,7 +17,6 @@ describe('Contact Unit Tests', () => {
 
         contactService = new ContactService({
             contactRepository,
-            cacheService: {
                 get: jest.fn(),
                 set: jest.fn(),
                 delete: jest.fn()
