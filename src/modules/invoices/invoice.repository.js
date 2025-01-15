@@ -61,7 +61,7 @@ class InvoiceRepository extends BaseRepository {
     }
 
     /**
-     * Busca faturas por referência
+     * Busca faturas por reference_id
      * @param {string} referenceId - ID de referência da fatura
      * @returns {Promise<Array>} Lista de faturas
      */
@@ -75,8 +75,8 @@ class InvoiceRepository extends BaseRepository {
             const result = await this.pool.query(query, [referenceId]);
             return result.rows;
         } catch (error) {
-            logger.error('Erro ao buscar faturas por referência', { error, referenceId });
-            throw new DatabaseError('Erro ao buscar faturas por referência', error);
+            logger.error('Erro ao buscar fatura por reference_id', { error, referenceId });
+            throw new DatabaseError('Erro ao buscar fatura por reference_id', error);
         }
     }
 

@@ -216,10 +216,23 @@ class BaseRepository {
                 tableName: this.tableName
             });
 
-            // Remover campos undefined ou null
+            // Primeiro, buscar os nomes das colunas da tabela
+            const columnsQuery = `
+                SELECT column_name 
+                FROM information_schema.columns 
+                WHERE table_name = $1
+            `;
+            const columnsResult = await this.pool.query(columnsQuery, [this.tableName]);
+            const tableColumns = columnsResult.rows.map(row => row.column_name);
+
+            // Filtrar apenas os dados que existem na tabela
             const cleanData = Object.fromEntries(
                 Object.entries(data)
-                    .filter(([_, value]) => value !== undefined && value !== null)
+                    .filter(([key, value]) => 
+                        tableColumns.includes(key) && 
+                        value !== undefined && 
+                        value !== null
+                    )
             );
 
             // Construir a query dinamicamente

@@ -211,6 +211,28 @@ class NfseController {
             return errorResponse(res, 500, 'Erro ao criar NFSe', error);
         }
     }
+
+    /**
+     * Criar NFSe
+     */
+    async criarNfse(req, res) {
+        try {
+            const dadosNfse = req.body;
+            
+            logger.info('Recebendo solicitação para criar NFSe', { dadosNfse });
+
+            const resultado = await this.nfseService.criarNfse(dadosNfse);
+            
+            return successResponse(res, 201, resultado);
+        } catch (error) {
+            logger.error('Erro no controller ao criar NFSe', { 
+                error: error.message, 
+                stack: error.stack,
+                body: req.body 
+            });
+            return errorResponse(res, 500, 'Erro ao criar NFSe', error);
+        }
+    }
 }
 
 module.exports = NfseController;

@@ -31,7 +31,9 @@ const MessagesModule = require('./modules/messages/messages.module');
 const servicesRoutes = require('./modules/services/service.routes');
 const invoicesModule = require('./modules/invoices/invoice.module');
 const invoiceEventModule = require('./modules/invoice-events/invoice-event.module');
-const nfseRoutes = require('./modules/nfse/nfse.routes');
+const NfseController = require('./modules/nfse/nfse.controller');
+const nfseController = new NfseController(new (require('./modules/nfse/nfse.service'))());
+const nfseRoutes = require('./modules/nfse/nfse.routes')(nfseController);
 
 const app = express();
 
