@@ -1,6 +1,7 @@
 const { logger } = require('../../middlewares/logger');
 const { createMovementSchema } = require('./validators/movement.validator');
 const { ValidationError } = require('../../utils/errors');
+const MovementService = require('./movement.service');
 
 class MovementController {
     constructor({ movementService }) {
@@ -459,6 +460,28 @@ class MovementController {
             return res.status(400).json({
                 success: false,
                 message: error.message
+            });
+        }
+    }
+
+    async getDetailedMovement(req, res) {
+        try {
+            console.log('Controlador getDetailedMovement chamado:', {
+                movementId: req.params.movementId,
+                headers: req.headers,
+                body: req.body,
+                query: req.query
+            });
+            
+            const { movementId } = req.params;
+            const detailedMovement = await this.service.getDetailedMovement(movementId);
+            
+            return res.status(200).json(detailedMovement);
+        } catch (error) {
+            logger.error('Erro no controlador ao buscar movimento detalhado:', error);
+            return res.status(error.status || 500).json({
+                success: false,
+                message: error.message || 'Erro interno do servidor'
             });
         }
     }

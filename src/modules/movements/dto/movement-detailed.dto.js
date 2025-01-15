@@ -1,5 +1,12 @@
 class MovementDetailedDTO {
     static fromDatabase(data) {
+        console.log('MovementDetailedDTO.fromDatabase - Dados recebidos:', {
+            dataKeys: Object.keys(data),
+            licenseType: typeof data.license,
+            personType: typeof data.person,
+            itemsType: typeof data.items
+        });
+
         return {
             movement: {
                 movement_id: data.movement_id,
@@ -10,9 +17,9 @@ class MovementDetailedDTO {
                         .map(key => [key, data[key]])
                 )
             },
-            license: data.license ? JSON.parse(data.license) : null,
-            person: data.person ? JSON.parse(data.person) : null,
-            items: data.items ? JSON.parse(data.items) : []
+            license: data.license || null,
+            person: data.person || null,
+            items: data.items || []
         };
     }
 }

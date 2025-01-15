@@ -871,6 +871,32 @@ class MovementService extends IMovementService {
     }
 
     /**
+     * Busca movimento detalhado
+     * @param {number} movementId - ID do movimento
+     * @returns {Promise<Object>} Movimento detalhado
+     */
+    async getDetailedMovement(movementId) {
+        try {
+            console.log('Serviço getDetailedMovement chamado:', { movementId });
+            
+            const detailedMovement = await this.movementRepository.findDetailedMovement(movementId);
+
+            if (!detailedMovement) {
+                throw new ValidationError('Movimento não encontrado');
+            }
+
+            return detailedMovement;
+        } catch (error) {
+            logger.error('Erro detalhado ao buscar movimento detalhado:', {
+                movementId,
+                errorMessage: error.message,
+                errorStack: error.stack
+            });
+            throw error;
+        }
+    }
+
+    /**
      * Valida os dados do movimento
      */
     validateMovementData(data, isUpdate = false) {

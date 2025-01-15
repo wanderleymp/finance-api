@@ -1,6 +1,7 @@
 const BaseRepository = require('../../repositories/base/BaseRepository');
 const { logger } = require('../../middlewares/logger');
 const { DatabaseError } = require('../../utils/errors');
+const MovementDetailedDTO = require('./dto/movement-detailed.dto');
 
 class MovementRepository extends BaseRepository {
     constructor() {
@@ -482,6 +483,154 @@ class MovementRepository extends BaseRepository {
                 logger.warn('Repository: Tabela movement_items não existe', { movementId });
                 return [];
             }
+            throw error;
+        }
+    }
+
+    async findDetailedMovement(movementId) {
+        try {
+            console.log('Repositório findDetailedMovement chamado:', { movementId });
+            
+            const query = `
+                SELECT 
+                    m.*, 
+                    jsonb_build_object(
+                        'license_id', l.license_id,
+                        'license_name', l.license_name,
+                        'person', jsonb_build_object(
+                            'person_id', lp.person_id,
+                            'full_name', lp.full_name,
+                            'fantasy_name', lp.fantasy_name,
+                            'birth_date', lp.birth_date,
+                            'active', lp.active,
+                            'person_type', lp.person_type,
+                            'documents', jsonb_agg(
+                                DISTINCT jsonb_build_object(
+                                    'person_document_id', pd.person_document_id,
+                                    'document_value', pd.document_value,
+                                    'document_type', pd.document_type
+                                )
+                            ),
+                            'addresses', jsonb_agg(
+                                DISTINCT jsonb_build_object(
+                                    'address_id', pa.address_id,
+                                    'street', pa.street,
+                                    'number', pa.number,
+                                    'complement', pa.complement,
+                                    'neighborhood', pa.neighborhood,
+                                    'city', pa.city,
+                                    'state', pa.state,
+                                    'postal_code', pa.postal_code,
+                                    'country', pa.country,
+                                    'reference', pa.reference,
+                                    'ibge', pa.ibge
+                                )
+                            ),
+                            'contacts', jsonb_agg(
+                                DISTINCT jsonb_build_object(
+                                    'contact_id', c.contact_id,
+                                    'contact_name', c.contact_name,
+                                    'contact_value', c.contact_value,
+                                    'contact_type', c.contact_type
+                                )
+                            )
+                        )
+                    ) AS license,
+                    jsonb_build_object(
+                        'person_id', mp.person_id,
+                        'full_name', mp.full_name,
+                        'fantasy_name', mp.fantasy_name,
+                        'birth_date', mp.birth_date,
+                        'active', mp.active,
+                        'person_type', mp.person_type,
+                        'documents', jsonb_agg(
+                            DISTINCT jsonb_build_object(
+                                'person_document_id', pd2.person_document_id,
+                                'document_value', pd2.document_value,
+                                'document_type', pd2.document_type
+                            )
+                        ),
+                        'addresses', jsonb_agg(
+                            DISTINCT jsonb_build_object(
+                                'address_id', pa2.address_id,
+                                'street', pa2.street,
+                                'number', pa2.number,
+                                'complement', pa2.complement,
+                                'neighborhood', pa2.neighborhood,
+                                'city', pa2.city,
+                                'state', pa2.state,
+                                'postal_code', pa2.postal_code,
+                                'country', pa2.country,
+                                'reference', pa2.reference,
+                                'ibge', pa2.ibge
+                            )
+                        ),
+                        'contacts', jsonb_agg(
+                            DISTINCT jsonb_build_object(
+                                'contact_id', c2.contact_id,
+                                'contact_name', c2.contact_name,
+                                'contact_value', c2.contact_value,
+                                'contact_type', c2.contact_type
+                            )
+                        )
+                    ) AS person,
+                    jsonb_agg(
+                        DISTINCT jsonb_build_object(
+                            'movement_item_id', mi.movement_item_id,
+                            'quantity', mi.quantity,
+                            'unit_price', mi.unit_price,
+                            'total_price', mi.total_price,
+                            'description', mi.description,
+                            'item_id', i.item_id,
+                            'code', i.code,
+                            'name', i.name,
+                            'item_description', i.description,
+                            'price', i.price,
+                            'active', i.active,
+                            'service_id', srv.service_id,
+                            'service_group_id', srv.service_group_id,
+                            'lc116_code', lc116.code,
+                            'lc116_description', lc116.description,
+                            'cnae', lc116.cnae,
+                            'municipality_name', mun.municipality_name,
+                            'ibge_code', mun.ibge_code,
+                            'ctribmun', mun.ctribmun
+                        )
+                    ) AS items
+                FROM movements m
+                JOIN licenses l ON m.license_id = l.license_id
+                JOIN persons lp ON l.person_id = lp.person_id
+                LEFT JOIN person_documents pd ON lp.person_id = pd.person_id
+                LEFT JOIN person_addresses pa ON lp.person_id = pa.person_id
+                LEFT JOIN person_contacts pc ON lp.person_id = pc.person_id
+                LEFT JOIN contacts c ON pc.contact_id = c.contact_id
+                JOIN persons mp ON m.person_id = mp.person_id
+                LEFT JOIN person_documents pd2 ON mp.person_id = pd2.person_id
+                LEFT JOIN person_addresses pa2 ON mp.person_id = pa2.person_id
+                LEFT JOIN person_contacts pc2 ON mp.person_id = pc2.person_id
+                LEFT JOIN contacts c2 ON pc2.contact_id = c2.contact_id
+                LEFT JOIN movement_items mi ON m.movement_id = mi.movement_id
+                LEFT JOIN items i ON mi.item_id = i.item_id
+                LEFT JOIN services srv ON i.item_id = srv.item_id
+                LEFT JOIN service_groups sg ON srv.service_group_id = sg.service_group_id
+                LEFT JOIN service_municipality mun ON sg.service_municipality_id = mun.service_municipality_id
+                LEFT JOIN service_lc116 lc116 ON mun.service_lc116_id = lc116.service_lc116_id
+                WHERE m.movement_id = $1
+                GROUP BY m.movement_id, l.license_id, lp.person_id, mp.person_id
+            `;
+
+            const result = await this.pool.query(query, [movementId]);
+            console.log('Resultado findDetailedMovement:', { 
+                rowsLength: result.rows.length,
+                firstRow: result.rows[0] ? Object.keys(result.rows[0]) : null,
+                firstRowData: result.rows[0] ? JSON.stringify(result.rows[0]) : null
+            });
+
+            return result.rows.length > 0 
+                ? MovementDetailedDTO.fromDatabase(result.rows[0]) 
+                : null;
+        } catch (error) {
+            logger.error('Erro ao buscar movimento detalhado:', error);
             throw error;
         }
     }

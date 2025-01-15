@@ -1,6 +1,7 @@
 const { Router } = require('express');
 const { validateRequest } = require('../../middlewares/requestValidator');
 const { logger } = require('../../middlewares/logger');
+const { authMiddleware } = require('../../middlewares/auth');
 const { 
     listMovementsSchema,
     createMovementSchema,
@@ -133,6 +134,17 @@ module.exports = (controller) => {
     router.post('/:id/nfse', 
         controller.createMovementNFSe.bind(controller)
     );
+
+    // Nova rota para busca detalhada de movimento
+    router.get('/:movementId/detailed', authMiddleware, (req, res, next) => {
+        console.log('Rota detailed acessada:', {
+            movementId: req.params.movementId,
+            headers: req.headers,
+            body: req.body,
+            query: req.query
+        });
+        next();
+    }, controller.getDetailedMovement.bind(controller));
 
     // Adiciona rotas de items
     router.use('/:id/items', movementItemRoutes(controller));
