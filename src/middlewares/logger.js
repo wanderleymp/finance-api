@@ -35,7 +35,14 @@ const logger = winston.createLogger({
     new winston.transports.Console({
       format: winston.format.combine(
         winston.format.colorize(),
-        winston.format.simple()
+        winston.format.simple(),
+        winston.format.printf(({ level, message, timestamp, ...metadata }) => {
+          let msg = `${timestamp} [${level}]: ${message} `;
+          const metaStr = JSON.stringify(metadata);
+          if (metaStr !== '{}') msg += metaStr;
+          console.log(msg);  // Força log no console
+          return msg;
+        })
       )
     })
   ],
@@ -69,5 +76,5 @@ const httpLogger = morgan('combined', {
 
 module.exports = { 
   logger: customLogger,
-  httpLogger
+  httpLogger 
 };

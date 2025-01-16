@@ -144,7 +144,6 @@ const { logger } = require('../../middlewares/logger');
 const ${moduleName}Repository = require('./${moduleName.toLowerCase()}.repository');
 const I${moduleName}Service = require('./interfaces/I${moduleName}Service');
 const jwt = require('jsonwebtoken');
-const redis = require('../../config/redis');
 
 class ${moduleName}Service extends I${moduleName}Service {
     constructor(repository = new ${moduleName}Repository()) {
@@ -202,12 +201,6 @@ class ${moduleName}Service extends I${moduleName}Service {
             // Verificar refresh token
             const decoded = jwt.verify(refreshToken, process.env.JWT_REFRESH_SECRET);
             
-            // Verificar se o refresh token está na blacklist
-            const isBlacklisted = await redis.client.get(\`refresh_token:\${decoded.userId}\`);
-            if (isBlacklisted) {
-                throw new Error('Refresh token revogado');
-            }
-
             // Gerar novos tokens
             const accessToken = jwt.sign(
                 { userId: decoded.userId },
@@ -219,13 +212,6 @@ class ${moduleName}Service extends I${moduleName}Service {
                 { userId: decoded.userId },
                 process.env.JWT_REFRESH_SECRET,
                 { expiresIn: process.env.REFRESH_TOKEN_EXPIRATION }
-            );
-
-            // Atualizar refresh token no Redis
-            await redis.client.setex(
-                \`refresh_token:\${decoded.userId}\`,
-                parseInt(process.env.REFRESH_TOKEN_EXPIRATION) * 24 * 60 * 60,
-                newRefreshToken
             );
 
             return {

@@ -162,4 +162,8 @@ app.use((req, res, next) => {
 // Middleware de tratamento de erros
 app.use(errorHandler);
 
+// Log de finalização da configuração do app
+console.log('DEBUG: Configuração do aplicativo Express concluída');
+logger.info('Configuração do aplicativo Express concluída');
+
 module.exports = app;
