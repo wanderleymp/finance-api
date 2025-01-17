@@ -49,7 +49,77 @@ const options = {
                         },
                         limit: {
                             type: 'integer',
-                            description: 'Limite de registros por página'
+                            description: 'Número de registros por página'
+                        }
+                    }
+                },
+                ContractGroup: {
+                    type: 'object',
+                    properties: {
+                        id: {
+                            type: 'integer',
+                            description: 'ID único do grupo de contrato'
+                        },
+                        group_name: {
+                            type: 'string',
+                            description: 'Nome do grupo de contrato'
+                        },
+                        group_description: {
+                            type: 'string',
+                            description: 'Descrição do grupo de contrato',
+                            nullable: true
+                        },
+                        has_decimo_terceiro: {
+                            type: 'boolean',
+                            description: 'Indica se o grupo possui décimo terceiro'
+                        },
+                        vencimento1_dia: {
+                            type: 'integer',
+                            description: 'Dia do primeiro vencimento',
+                            minimum: 1,
+                            maximum: 31,
+                            nullable: true
+                        },
+                        vencimento1_mes: {
+                            type: 'integer',
+                            description: 'Mês do primeiro vencimento',
+                            minimum: 1,
+                            maximum: 12,
+                            nullable: true
+                        },
+                        vencimento2_dia: {
+                            type: 'integer',
+                            description: 'Dia do segundo vencimento',
+                            minimum: 1,
+                            maximum: 31,
+                            nullable: true
+                        },
+                        vencimento2_mes: {
+                            type: 'integer',
+                            description: 'Mês do segundo vencimento',
+                            minimum: 1,
+                            maximum: 12,
+                            nullable: true
+                        },
+                        decimo_payment_method_id: {
+                            type: 'integer',
+                            description: 'ID do método de pagamento para décimo terceiro',
+                            default: 4
+                        },
+                        active: {
+                            type: 'boolean',
+                            description: 'Status de ativação do grupo',
+                            default: true
+                        },
+                        created_at: {
+                            type: 'string',
+                            format: 'date-time',
+                            description: 'Data de criação do registro'
+                        },
+                        updated_at: {
+                            type: 'string',
+                            format: 'date-time',
+                            description: 'Data da última atualização do registro'
                         }
                     }
                 },
@@ -1484,6 +1554,189 @@ const options = {
                         },
                         '404': { description: 'Fatura não encontrada' },
                         '500': { description: 'Erro interno do servidor' }
+                    }
+                }
+            },
+            '/contract-groups': {
+                get: {
+                    tags: ['Contract Groups'],
+                    summary: 'Listar grupos de contrato',
+                    description: 'Recupera uma lista de grupos de contrato com suporte a filtros e paginação',
+                    security: [{ bearerAuth: [] }],
+                    parameters: [
+                        {
+                            name: 'page',
+                            in: 'query',
+                            schema: { type: 'integer', default: 1 },
+                            description: 'Número da página'
+                        },
+                        {
+                            name: 'limit',
+                            in: 'query',
+                            schema: { type: 'integer', default: 10 },
+                            description: 'Número de registros por página'
+                        },
+                        {
+                            name: 'name',
+                            in: 'query',
+                            schema: { type: 'string' },
+                            description: 'Filtrar por nome do grupo'
+                        },
+                        {
+                            name: 'active',
+                            in: 'query',
+                            schema: { type: 'boolean' },
+                            description: 'Filtrar por status de ativação'
+                        }
+                    ],
+                    responses: {
+                        '200': {
+                            description: 'Lista de grupos de contrato recuperada com sucesso',
+                            content: {
+                                'application/json': {
+                                    schema: {
+                                        type: 'object',
+                                        properties: {
+                                            data: {
+                                                type: 'array',
+                                                items: { $ref: '#/components/schemas/ContractGroup' }
+                                            },
+                                            pagination: { $ref: '#/components/schemas/Pagination' }
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                },
+                post: {
+                    tags: ['Contract Groups'],
+                    summary: 'Criar grupo de contrato',
+                    description: 'Cria um novo grupo de contrato com os detalhes fornecidos',
+                    security: [{ bearerAuth: [] }],
+                    requestBody: {
+                        required: true,
+                        content: {
+                            'application/json': {
+                                schema: {
+                                    type: 'object',
+                                    required: ['group_name', 'has_decimo_terceiro'],
+                                    properties: {
+                                        group_name: { type: 'string', description: 'Nome do grupo' },
+                                        group_description: { type: 'string', description: 'Descrição do grupo', nullable: true },
+                                        has_decimo_terceiro: { type: 'boolean', description: 'Indica se possui décimo terceiro' },
+                                        vencimento1_dia: { type: 'integer', description: 'Dia do primeiro vencimento', minimum: 1, maximum: 31, nullable: true },
+                                        vencimento1_mes: { type: 'integer', description: 'Mês do primeiro vencimento', minimum: 1, maximum: 12, nullable: true },
+                                        vencimento2_dia: { type: 'integer', description: 'Dia do segundo vencimento', minimum: 1, maximum: 31, nullable: true },
+                                        vencimento2_mes: { type: 'integer', description: 'Mês do segundo vencimento', minimum: 1, maximum: 12, nullable: true },
+                                        decimo_payment_method_id: { type: 'integer', description: 'ID do método de pagamento', default: 4 }
+                                    }
+                                }
+                            }
+                        }
+                    },
+                    responses: {
+                        '201': {
+                            description: 'Grupo de contrato criado com sucesso',
+                            content: {
+                                'application/json': {
+                                    schema: { $ref: '#/components/schemas/ContractGroup' }
+                                }
+                            }
+                        }
+                    }
+                }
+            },
+            '/contract-groups/{id}': {
+                get: {
+                    tags: ['Contract Groups'],
+                    summary: 'Buscar grupo de contrato por ID',
+                    description: 'Recupera os detalhes de um grupo de contrato específico',
+                    security: [{ bearerAuth: [] }],
+                    parameters: [
+                        {
+                            name: 'id',
+                            in: 'path',
+                            required: true,
+                            schema: { type: 'integer' },
+                            description: 'ID do grupo de contrato'
+                        }
+                    ],
+                    responses: {
+                        '200': {
+                            description: 'Detalhes do grupo de contrato recuperados com sucesso',
+                            content: {
+                                'application/json': {
+                                    schema: { $ref: '#/components/schemas/ContractGroup' }
+                                }
+                            }
+                        }
+                    }
+                },
+                put: {
+                    tags: ['Contract Groups'],
+                    summary: 'Atualizar grupo de contrato',
+                    description: 'Atualiza os detalhes de um grupo de contrato existente',
+                    security: [{ bearerAuth: [] }],
+                    parameters: [
+                        {
+                            name: 'id',
+                            in: 'path',
+                            required: true,
+                            schema: { type: 'integer' },
+                            description: 'ID do grupo de contrato'
+                        }
+                    ],
+                    requestBody: {
+                        required: true,
+                        content: {
+                            'application/json': {
+                                schema: {
+                                    type: 'object',
+                                    properties: {
+                                        group_name: { type: 'string', description: 'Nome do grupo' },
+                                        group_description: { type: 'string', description: 'Descrição do grupo', nullable: true },
+                                        has_decimo_terceiro: { type: 'boolean', description: 'Indica se possui décimo terceiro' },
+                                        vencimento1_dia: { type: 'integer', description: 'Dia do primeiro vencimento', minimum: 1, maximum: 31, nullable: true },
+                                        vencimento1_mes: { type: 'integer', description: 'Mês do primeiro vencimento', minimum: 1, maximum: 12, nullable: true },
+                                        vencimento2_dia: { type: 'integer', description: 'Dia do segundo vencimento', minimum: 1, maximum: 31, nullable: true },
+                                        vencimento2_mes: { type: 'integer', description: 'Mês do segundo vencimento', minimum: 1, maximum: 12, nullable: true },
+                                        decimo_payment_method_id: { type: 'integer', description: 'ID do método de pagamento', default: 4 },
+                                        active: { type: 'boolean', description: 'Status de ativação do grupo' }
+                                    }
+                                }
+                            }
+                        }
+                    },
+                    responses: {
+                        '200': {
+                            description: 'Grupo de contrato atualizado com sucesso',
+                            content: {
+                                'application/json': {
+                                    schema: { $ref: '#/components/schemas/ContractGroup' }
+                                }
+                            }
+                        }
+                    }
+                },
+                delete: {
+                    tags: ['Contract Groups'],
+                    summary: 'Remover grupo de contrato',
+                    description: 'Remove um grupo de contrato específico',
+                    security: [{ bearerAuth: [] }],
+                    parameters: [
+                        {
+                            name: 'id',
+                            in: 'path',
+                            required: true,
+                            schema: { type: 'integer' },
+                            description: 'ID do grupo de contrato'
+                        }
+                    ],
+                    responses: {
+                        '204': {
+                            description: 'Grupo de contrato removido com sucesso'
+                        }
                     }
                 }
             },

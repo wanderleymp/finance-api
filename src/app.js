@@ -313,6 +313,10 @@ app.use('/services', servicesRoutes);
 invoiceEventModule.register(app);
 invoicesModule.register(app);
 
+// Adicionar importação de rotas de contract-groups
+const contractGroupRoutes = require('./modules/contract-groups/contract-group.routes');
+contractGroupRoutes(app);
+
 // Rota 404 para capturar requisições não encontradas
 app.use((req, res, next) => {
     const error = new Error('Not Found');
