@@ -363,8 +363,15 @@ class MovementService extends IMovementService {
             }
 
             // Após criar o movimento, envia mensagem de faturamento
-            const person = await this.personRepository.findPersonById(data.person_id);
-            await this._processBillingMessage(movement, person);
+            try {
+                const person = await this.personRepository.findById(data.person_id);
+                await this._processBillingMessage(movement, person);
+            } catch (error) {
+                logger.error('Erro ao buscar pessoa para envio de mensagem de faturamento', {
+                    error: error.message,
+                    personId: data.person_id
+                });
+            }
 
             return new MovementResponseDTO(movement);
         });
@@ -586,24 +593,22 @@ class MovementService extends IMovementService {
             logger.info('Service: Criando boletos para movimento', { movementId });
 
             // Buscar parcelas do movimento
-            const parcelas = await this.pool.query(`
-                SELECT * FROM installments WHERE movement_id = $1
-            `, [movementId]);
+            const installments = await this.installmentRepository.findByMovementId(movementId);
             
             logger.info('Service: Parcelas encontradas', {
                 movementId,
-                quantidadeParcelas: parcelas.rows.length,
-                parcelas: parcelas.rows.map(p => p.installment_id)
+                quantidadeParcelas: installments.length,
+                parcelas: installments.map(p => p.installment_id)
             });
 
-            if (parcelas.rows.length === 0) {
+            if (installments.length === 0) {
                 logger.warn('Service: Nenhuma parcela encontrada para o movimento', { movementId });
                 return [];
             }
 
             // Filtrar parcelas sem boleto
             const parcelasSemBoleto = [];
-            for (const parcela of parcelas.rows) {
+            for (const parcela of installments) {
                 const query = 'SELECT COUNT(*) as count FROM boletos WHERE installment_id = $1';
                 const result = await this.pool.query(query, [parcela.installment_id]);
                 
@@ -659,7 +664,7 @@ class MovementService extends IMovementService {
 
         // Valida se o movimento já não está cancelado
         if (movement.movement_status_id === 99) {
-            throw new ValidationError('Movimento já está cancelado');
+            throw new ValidationError(`Movimento ${movementId} já está cancelado. Não é possível cancelar novamente.`);
         }
 
         // Atualiza status do movimento para 99 (cancelado)
@@ -668,18 +673,16 @@ class MovementService extends IMovementService {
         });
 
         // Busca installments do movimento
-        const installments = await this.pool.query(`
-            SELECT * FROM installments WHERE movement_id = $1
-        `, [movementId]);
+        const installments = await this.installmentRepository.findByMovementId(movementId);
         
         logger.info('Parcelas encontradas para cancelamento', {
             movementId,
-            installmentsCount: installments.rows.length,
-            installmentIds: installments.rows.map(i => i.installment_id)
+            installmentsCount: installments.length,
+            installmentIds: installments.map(i => i.installment_id)
         });
 
         // Processamento assíncrono para cancelar boletos
-        const cancelResults = await Promise.all(installments.rows.map(async (installment) => {
+        const cancelResults = await Promise.all(installments.map(async (installment) => {
             try {
                 // Cancela boletos da parcela
                 const canceledBoletos = await this.installmentService.cancelInstallmentBoletos(installment.installment_id);
@@ -709,7 +712,7 @@ class MovementService extends IMovementService {
 
         return { 
             message: 'Movimento cancelado com sucesso', 
-            movement_id: movementId,
+            movementId: movementId,
             cancelResults 
         };
     }

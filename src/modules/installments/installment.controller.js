@@ -19,8 +19,26 @@ class InstallmentController {
      */
     async index(req, res, next) {
         try {
-            const { page = 1, limit = 10, ...filters } = req.query;
-            
+            const { 
+                page = 1, 
+                limit = 10, 
+                start_date, 
+                end_date, 
+                startDate, 
+                endDate, 
+                ...otherFilters 
+            } = req.query;
+
+            // Prioriza os parâmetros ISO (startDate/endDate)
+            const consolidatedStartDate = startDate || start_date;
+            const consolidatedEndDate = endDate || end_date;
+
+            const filters = {
+                ...otherFilters,
+                start_date: consolidatedStartDate,
+                end_date: consolidatedEndDate
+            };
+
             logger.info('Controller: Listando parcelas', { 
                 filters 
             });

@@ -20,15 +20,23 @@ class InstallmentRepository {
         // Normaliza o filtro de nome para full_name
         const fullName = filters.full_name || filters.fullName;
         
-        // Normaliza filtros de data
+        // Normaliza filtros de data com suporte a múltiplos formatos
         const startDate = filters.start_date || filters.startDate;
         const endDate = filters.end_date || filters.endDate;
 
         if (startDate && endDate) {
+            // Converte para ISO com início do dia e fim do dia
             const formattedStartDate = moment(startDate).startOf('day').toISOString();
             const formattedEndDate = moment(endDate).endOf('day').toISOString();
+            
             conditions.push(`i.due_date BETWEEN $${++paramCount} AND $${++paramCount}`);
             params.push(formattedStartDate, formattedEndDate);
+        }
+
+        // Restante do método original
+        if (fullName) {
+            conditions.push(`p.full_name ILIKE $${++paramCount}`);
+            params.push(`%${fullName}%`);
         }
 
         if (filters.status) {
@@ -51,14 +59,7 @@ class InstallmentRepository {
             params.push(filters.amount);
         }
 
-        if (fullName) {
-            conditions.push(`p.full_name ILIKE $${++paramCount}`);
-            params.push(`%${fullName}%`);
-        }
-
-        const whereClause = conditions.length > 0 
-            ? `WHERE ${conditions.join(' AND ')}`
-            : '';
+        const whereClause = conditions.length > 0 ? `WHERE ${conditions.join(' AND ')}` : '';
 
         return { whereClause, queryParams: params, paramCount };
     }

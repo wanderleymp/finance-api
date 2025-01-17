@@ -416,7 +416,11 @@ class MovementController {
             // Tratamento de erro
             logger.error('Erro ao cancelar movimento', { 
                 movementId: req.params.id, 
-                error: error.message 
+                error: error.message,
+                errorStack: error.stack,
+                requestBody: req.body,
+                requestParams: req.params,
+                requestQuery: req.query
             });
             
             // Verifica se é um erro de validação
