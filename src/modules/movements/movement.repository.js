@@ -21,6 +21,15 @@ class MovementRepository extends BaseRepository {
                 ...otherFilters 
             } = filters;
 
+            // Converter movement_status_id para números se forem strings
+            if (filters.movement_status_id) {
+                if (Array.isArray(filters.movement_status_id)) {
+                    filters.movement_status_id = filters.movement_status_id.map(Number);
+                } else {
+                    filters.movement_status_id = Number(filters.movement_status_id);
+                }
+            }
+
             // Mapeamento de campos de ordenação
             const orderByMapping = {
                 'date': 'movement_date',
@@ -32,9 +41,27 @@ class MovementRepository extends BaseRepository {
             // Mapear o campo de ordenação
             const mappedOrderBy = orderByMapping[orderBy] || orderBy;
 
+            // Remover declaração duplicada e usar diretamente dos filtros
+            const orderBySecondary = filters.orderBySecondary || 'movement_id';
+            const orderDirectionSecondary = filters.orderDirectionSecondary || 'DESC';
+
+            // Mapear o campo de ordenação secundária
+            const mappedOrderBySecondary = orderByMapping[orderBySecondary] || orderBySecondary;
+
             // Construir cláusula WHERE para filtros de data
             const whereConditions = [];
             const queryParams = [];
+
+            // Filtro de status
+            if (filters.movement_status_id) {
+                if (Array.isArray(filters.movement_status_id)) {
+                    whereConditions.push(`m.movement_status_id IN (${filters.movement_status_id.map((_, index) => `$${queryParams.length + index + 1}`).join(', ')})`);
+                    queryParams.push(...filters.movement_status_id);
+                } else {
+                    whereConditions.push(`m.movement_status_id = $${queryParams.length + 1}`);
+                    queryParams.push(filters.movement_status_id);
+                }
+            }
 
             // Filtro de data
             if (startDate && endDate) {
@@ -92,7 +119,7 @@ class MovementRepository extends BaseRepository {
                     ms.status_name, 
                     mt.type_name, 
                     p.full_name
-                ORDER BY m.${mappedOrderBy} ${orderDirection}
+                ${`ORDER BY m.${mappedOrderBy} ${orderDirection}, m.${mappedOrderBySecondary} ${orderDirectionSecondary}`}
             `;
 
             // Usa o método findAll do BaseRepository com query personalizada
@@ -355,12 +382,48 @@ class MovementRepository extends BaseRepository {
         }
     }
 
-    getWhereClause(filters) {
+    getWhereClause(filters = {}) {
+        const whereClauses = [];
+        const values = [];
+        let paramCount = 1;
+
+        // Converter movement_status_id para números se forem strings
+        if (filters.movement_status_id) {
+            if (Array.isArray(filters.movement_status_id)) {
+                filters.movement_status_id = filters.movement_status_id.map(Number);
+            } else {
+                filters.movement_status_id = Number(filters.movement_status_id);
+            }
+        }
+
+        // Filtro de status com suporte a múltiplos valores
+        if (filters.movement_status_id) {
+            if (Array.isArray(filters.movement_status_id)) {
+                // Se for um array, usa IN
+                whereClauses.push(`movement_status_id IN (${filters.movement_status_id.map(id => `$${paramCount++}`).join(', ')})`);
+                values.push(...filters.movement_status_id);
+            } else {
+                // Se for um número único, mantém a lógica atual
+                whereClauses.push(`movement_status_id = $${paramCount++}`);
+                values.push(filters.movement_status_id);
+            }
+        }
+
         const conditions = Object.keys(filters)
-            .map((key, index) => `${key} = $${index + 1}`)
+            .filter(key => key !== 'movement_status_id')
+            .map((key, index) => `${key} = $${paramCount + index}`)
             .join(' AND ');
 
-        return conditions ? `WHERE ${conditions}` : '';
+        if (conditions) {
+            whereClauses.push(conditions);
+            values.push(...Object.values(filters).filter(value => value !== filters.movement_status_id));
+        }
+
+        const whereClause = whereClauses.length > 0 
+            ? `WHERE ${whereClauses.join(' AND ')}` 
+            : '';
+
+        return { whereClause, values };
     }
 
     // Métodos auxiliares para busca de dados relacionados

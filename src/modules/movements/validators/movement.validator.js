@@ -6,7 +6,10 @@ const listMovementsSchema = Joi.object({
     detailed: Joi.boolean().default(true),
     movement_date_start: Joi.string().pattern(/^\d{4}-\d{2}-\d{2}$/),
     movement_date_end: Joi.string().pattern(/^\d{4}-\d{2}-\d{2}$/),
-    movement_status_id: Joi.number().integer(),
+    movement_status_id: Joi.alternatives().try(
+        Joi.number().integer(), 
+        Joi.array().items(Joi.number().integer())
+    ),
     movement_type_id: Joi.number().integer(),
     person_id: Joi.number().integer()
 }).custom((value, helpers) => {
@@ -42,7 +45,10 @@ const createMovementSchema = Joi.object({
         'any.required': 'O tipo de movimentação (movement_type_id) é obrigatório. Selecione um tipo de movimento.',
         'number.base': 'O tipo de movimentação (movement_type_id) deve ser um número inteiro válido.'
     }),
-    movement_status_id: Joi.number().integer().default(2).messages({
+    movement_status_id: Joi.alternatives().try(
+        Joi.number().integer(), 
+        Joi.array().items(Joi.number().integer())
+    ).default(2).messages({
         'number.base': 'O status da movimentação (movement_status_id) deve ser um número inteiro válido.'
     }),
     license_id: Joi.number().integer().default(1).messages({
@@ -102,7 +108,10 @@ const updateMovementSchema = Joi.object({
     description: Joi.string(),
     total_amount: Joi.number(),
     movement_type_id: Joi.number().integer(),
-    movement_status_id: Joi.number().integer(),
+    movement_status_id: Joi.alternatives().try(
+        Joi.number().integer(), 
+        Joi.array().items(Joi.number().integer())
+    ),
     person_id: Joi.number().integer(),
     license_id: Joi.number().integer(),
     observation: Joi.string().allow('', null)
