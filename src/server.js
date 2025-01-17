@@ -35,7 +35,9 @@ async function startServer() {
 
             const httpsServer = https.createServer(httpsOptions, app);
             httpsServer.listen(httpsPort, () => {
-                logger.info(`Servidor HTTPS rodando na porta ${httpsPort} (${process.env.NODE_ENV})`);
+                logger.info(`Servidor HTTPS rodando na porta ${httpsPort} (${process.env.NODE_ENV})`, {
+                    version: process.env.npm_package_version || 'unknown'
+                });
             });
         }
 

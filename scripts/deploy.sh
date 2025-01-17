@@ -56,16 +56,33 @@ merge_main() {
     git push origin main
 }
 
+# Fazer merge para develop
+merge_develop() {
+    log "Fazendo merge da branch main para develop..."
+    
+    # Trocar para develop
+    git checkout develop
+    
+    # Atualizar develop
+    git pull origin develop
+    
+    # Fazer merge da main para develop
+    git merge main
+    
+    # Enviar merge para remoto
+    git push origin develop
+}
+
 # Construir imagem Docker
 construir_docker() {
     log "Construindo imagem Docker..."
-    npm run docker:build
+    npm run docker:build:latest
 }
 
 # Fazer push da imagem Docker
 push_docker() {
     log "Fazendo push da imagem Docker..."
-    docker push wanderleymp/finance-api:1.0.3
+    docker push wanderleymp/finance-api:latest
 }
 
 # Atualizar versão após deploy bem-sucedido
@@ -80,6 +97,7 @@ main() {
     atualizar_repositorio
     enviar_branch
     merge_main
+    merge_develop
     construir_docker
     push_docker
     atualizar_versao

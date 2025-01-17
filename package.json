@@ -18,6 +18,8 @@
     "roadmap:populate": "node scripts/populate_roadmap_full.js",
     "migrate": "node src/scripts/migrate.js",
     "docker:build": "docker build --platform linux/amd64 -t wanderleymp/finance-api:1.0.3 .",
+    "docker:build:latest": "docker build --platform linux/amd64 -t wanderleymp/finance-api:latest .",
+    "docker:build:main": "docker build --platform linux/amd64 -t wanderleymp/finance-api:main .",
     "release": "node scripts/release.js",
     "deploy": "bash scripts/deploy.sh"
   },
