@@ -7,7 +7,7 @@ class ContractGroupRepository extends BaseRepository {
         super('contract_groups', 'contract_group_id');
     }
 
-    async findAll(page = 1, limit = 10, filters = {}) {
+    async findAll(filters = {}, page = 1, limit = 10) {
         try {
             const { 
                 orderBy = 'group_name', 
@@ -67,10 +67,8 @@ class ContractGroupRepository extends BaseRepository {
                 queryParams
             });
 
-            const processedItems = result.items.map(item => new ContractGroupDetailedDTO(item));
-
             return {
-                items: processedItems,
+                data: result.items.map(item => new ContractGroupDetailedDTO(item)),
                 meta: result.meta,
                 links: result.links
             };

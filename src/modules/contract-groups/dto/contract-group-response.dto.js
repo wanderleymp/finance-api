@@ -1,9 +1,9 @@
 const Joi = require('joi');
 const contractGroupValidator = require('../validators/contract-group.validator');
 
-class ContractGroupCreateDTO {
+class ContractGroupResponseDTO {
     static validate(data) {
-        const { error, value } = contractGroupValidator.create.validate(data, { 
+        const { error, value } = contractGroupValidator.findById.validate(data, { 
             abortEarly: false,
             stripUnknown: true 
         });
@@ -18,6 +18,7 @@ class ContractGroupCreateDTO {
 
     static fromEntity(entity) {
         return {
+            contract_group_id: entity.contract_group_id,
             group_name: entity.group_name,
             group_description: entity.group_description,
             has_decimo_terceiro: entity.has_decimo_terceiro,
@@ -25,9 +26,10 @@ class ContractGroupCreateDTO {
             vencimento1_mes: entity.vencimento1_mes,
             vencimento2_dia: entity.vencimento2_dia,
             vencimento2_mes: entity.vencimento2_mes,
-            decimo_payment_method_id: entity.decimo_payment_method_id
+            decimo_payment_method_id: entity.decimo_payment_method_id,
+            decimo_payment_method: entity.decimoPaymentMethod || null
         };
     }
 }
 
-module.exports = ContractGroupCreateDTO;
+module.exports = ContractGroupResponseDTO;

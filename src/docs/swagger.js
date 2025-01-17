@@ -56,72 +56,73 @@ const options = {
                 ContractGroup: {
                     type: 'object',
                     properties: {
-                        id: {
-                            type: 'integer',
-                            description: 'ID único do grupo de contrato'
+                        contract_group_id: { 
+                            type: 'integer', 
+                            description: 'ID único do grupo de contrato' 
                         },
-                        group_name: {
-                            type: 'string',
-                            description: 'Nome do grupo de contrato'
+                        group_name: { 
+                            type: 'string', 
+                            description: 'Nome do grupo de contrato' 
                         },
-                        group_description: {
-                            type: 'string',
+                        group_description: { 
+                            type: 'string', 
                             description: 'Descrição do grupo de contrato',
-                            nullable: true
+                            nullable: true 
                         },
-                        has_decimo_terceiro: {
-                            type: 'boolean',
-                            description: 'Indica se o grupo possui décimo terceiro'
+                        has_decimo_terceiro: { 
+                            type: 'boolean', 
+                            description: 'Indica se o grupo possui décimo terceiro' 
                         },
-                        vencimento1_dia: {
-                            type: 'integer',
+                        vencimento1_dia: { 
+                            type: 'integer', 
                             description: 'Dia do primeiro vencimento',
-                            minimum: 1,
+                            minimum: 1, 
                             maximum: 31,
-                            nullable: true
+                            nullable: true 
                         },
-                        vencimento1_mes: {
-                            type: 'integer',
+                        vencimento1_mes: { 
+                            type: 'integer', 
                             description: 'Mês do primeiro vencimento',
-                            minimum: 1,
+                            minimum: 1, 
                             maximum: 12,
-                            nullable: true
+                            nullable: true 
                         },
-                        vencimento2_dia: {
-                            type: 'integer',
+                        vencimento2_dia: { 
+                            type: 'integer', 
                             description: 'Dia do segundo vencimento',
-                            minimum: 1,
+                            minimum: 1, 
                             maximum: 31,
-                            nullable: true
+                            nullable: true 
                         },
-                        vencimento2_mes: {
-                            type: 'integer',
+                        vencimento2_mes: { 
+                            type: 'integer', 
                             description: 'Mês do segundo vencimento',
-                            minimum: 1,
+                            minimum: 1, 
                             maximum: 12,
-                            nullable: true
+                            nullable: true 
                         },
-                        decimo_payment_method_id: {
-                            type: 'integer',
+                        decimo_payment_method_id: { 
+                            type: 'integer', 
                             description: 'ID do método de pagamento para décimo terceiro',
-                            default: 4
+                            default: 4 
                         },
-                        active: {
-                            type: 'boolean',
+                        active: { 
+                            type: 'boolean', 
                             description: 'Status de ativação do grupo',
-                            default: true
+                            default: true 
                         },
-                        created_at: {
-                            type: 'string',
-                            format: 'date-time',
-                            description: 'Data de criação do registro'
+                        created_at: { 
+                            type: 'string', 
+                            format: 'date-time', 
+                            description: 'Data de criação do grupo' 
                         },
-                        updated_at: {
-                            type: 'string',
-                            format: 'date-time',
-                            description: 'Data da última atualização do registro'
+                        updated_at: { 
+                            type: 'string', 
+                            format: 'date-time', 
+                            description: 'Data da última atualização do grupo' 
                         }
-                    }
+                    },
+                    required: ['contract_group_id', 'group_name', 'has_decimo_terceiro']
                 },
                 Item: {
                     type: 'object',
@@ -442,6 +443,99 @@ const options = {
                             type: 'number',
                             description: 'Descontos aplicados',
                             default: 0
+                        }
+                    }
+                },
+                ContractRecurring: {
+                    type: 'object',
+                    properties: {
+                        contract_id: { 
+                            type: 'integer', 
+                            description: 'ID único do contrato recorrente' 
+                        },
+                        contract_name: { 
+                            type: 'string', 
+                            description: 'Nome do contrato' 
+                        },
+                        contract_value: { 
+                            type: 'number', 
+                            description: 'Valor do contrato' 
+                        },
+                        start_date: { 
+                            type: 'string', 
+                            format: 'date', 
+                            description: 'Data de início do contrato' 
+                        },
+                        end_date: { 
+                            type: 'string', 
+                            format: 'date', 
+                            description: 'Data de término do contrato', 
+                            nullable: true 
+                        },
+                        recurrence_period: { 
+                            type: 'string', 
+                            enum: ['daily', 'weekly', 'monthly', 'yearly'], 
+                            description: 'Período de recorrência do contrato' 
+                        },
+                        due_day: { 
+                            type: 'integer', 
+                            description: 'Dia de vencimento do contrato' 
+                        },
+                        days_before_due: { 
+                            type: 'integer', 
+                            description: 'Dias antes do vencimento' 
+                        },
+                        status: { 
+                            type: 'string', 
+                            enum: ['active', 'inactive', 'paused'], 
+                            description: 'Status do contrato' 
+                        },
+                        model_movement_id: { 
+                            type: 'integer', 
+                            description: 'ID do modelo de movimento', 
+                            nullable: true 
+                        },
+                        last_billing_date: { 
+                            type: 'string', 
+                            format: 'date', 
+                            description: 'Data da última cobrança', 
+                            nullable: true 
+                        },
+                        next_billing_date: { 
+                            type: 'string', 
+                            format: 'date', 
+                            description: 'Data da próxima cobrança', 
+                            nullable: true 
+                        },
+                        contract_group_id: { 
+                            type: 'integer', 
+                            description: 'ID do grupo de contrato', 
+                            nullable: true 
+                        },
+                        billing_reference: { 
+                            type: 'string', 
+                            enum: ['current', 'previous'], 
+                            description: 'Referência de faturamento' 
+                        },
+                        representative_person_id: { 
+                            type: 'integer', 
+                            description: 'ID da pessoa representante', 
+                            nullable: true 
+                        },
+                        commissioned_value: { 
+                            type: 'number', 
+                            description: 'Valor comissionado', 
+                            nullable: true 
+                        },
+                        account_entry_id: { 
+                            type: 'integer', 
+                            description: 'ID da entrada contábil', 
+                            nullable: true 
+                        },
+                        last_decimo_billing_year: { 
+                            type: 'integer', 
+                            description: 'Ano da última cobrança de décimo', 
+                            nullable: true 
                         }
                     }
                 }
@@ -2140,10 +2234,10 @@ const options = {
                             name: 'limit',
                             in: 'query',
                             schema: { type: 'integer', default: 10 },
-                            description: 'Número de registros por página'
+                            description: 'Número de itens por página'
                         },
                         {
-                            name: 'name',
+                            name: 'group_name',
                             in: 'query',
                             schema: { type: 'string' },
                             description: 'Filtrar por nome do grupo'
@@ -2151,8 +2245,10 @@ const options = {
                         {
                             name: 'active',
                             in: 'query',
-                            schema: { type: 'boolean' },
-                            description: 'Filtrar por status de ativação'
+                            schema: { 
+                                type: 'boolean', 
+                                description: 'Filtrar por status de ativação' 
+                            }
                         }
                     ],
                     responses: {
@@ -2167,46 +2263,40 @@ const options = {
                                                 type: 'array',
                                                 items: { $ref: '#/components/schemas/ContractGroup' }
                                             },
-                                            pagination: { $ref: '#/components/schemas/Pagination' }
+                                            meta: {
+                                                type: 'object',
+                                                properties: {
+                                                    currentPage: { type: 'integer' },
+                                                    itemCount: { type: 'integer' },
+                                                    itemsPerPage: { type: 'integer' },
+                                                    totalItems: { type: 'integer' },
+                                                    totalPages: { type: 'integer' }
+                                                }
+                                            },
+                                            links: {
+                                                type: 'object',
+                                                properties: {
+                                                    first: { type: 'string', nullable: true },
+                                                    previous: { type: 'string', nullable: true },
+                                                    next: { type: 'string', nullable: true },
+                                                    last: { type: 'string', nullable: true }
+                                                }
+                                            }
                                         }
                                     }
                                 }
                             }
-                        }
-                    }
-                },
-                post: {
-                    tags: ['Contract Groups'],
-                    summary: 'Criar grupo de contrato',
-                    description: 'Cria um novo grupo de contrato com os detalhes fornecidos',
-                    security: [{ bearerAuth: [] }],
-                    requestBody: {
-                        required: true,
-                        content: {
-                            'application/json': {
-                                schema: {
-                                    type: 'object',
-                                    required: ['group_name', 'has_decimo_terceiro'],
-                                    properties: {
-                                        group_name: { type: 'string', description: 'Nome do grupo' },
-                                        group_description: { type: 'string', description: 'Descrição do grupo', nullable: true },
-                                        has_decimo_terceiro: { type: 'boolean', description: 'Indica se possui décimo terceiro' },
-                                        vencimento1_dia: { type: 'integer', description: 'Dia do primeiro vencimento', minimum: 1, maximum: 31, nullable: true },
-                                        vencimento1_mes: { type: 'integer', description: 'Mês do primeiro vencimento', minimum: 1, maximum: 12, nullable: true },
-                                        vencimento2_dia: { type: 'integer', description: 'Dia do segundo vencimento', minimum: 1, maximum: 31, nullable: true },
-                                        vencimento2_mes: { type: 'integer', description: 'Mês do segundo vencimento', minimum: 1, maximum: 12, nullable: true },
-                                        decimo_payment_method_id: { type: 'integer', description: 'ID do método de pagamento', default: 4 }
-                                    }
-                                }
-                            }
-                        }
-                    },
-                    responses: {
-                        '201': {
-                            description: 'Grupo de contrato criado com sucesso',
+                        },
+                        '400': {
+                            description: 'Parâmetros de consulta inválidos',
                             content: {
                                 'application/json': {
-                                    schema: { $ref: '#/components/schemas/ContractGroup' }
+                                    schema: {
+                                        type: 'object',
+                                        properties: {
+                                            error: { type: 'string' }
+                                        }
+                                    }
                                 }
                             }
                         }
@@ -2306,6 +2396,289 @@ const options = {
                     }
                 }
             },
+            '/contracts-recurring': {
+                get: {
+                    tags: ['Contratos Recorrentes'],
+                    summary: 'Listar contratos recorrentes',
+                    description: 'Recupera uma lista de contratos recorrentes com suporte a filtros e paginação',
+                    security: [{ bearerAuth: [] }],
+                    parameters: [
+                        {
+                            name: 'page',
+                            in: 'query',
+                            schema: { type: 'integer', default: 1 },
+                            description: 'Número da página'
+                        },
+                        {
+                            name: 'limit',
+                            in: 'query',
+                            schema: { type: 'integer', default: 10 },
+                            description: 'Número de itens por página'
+                        },
+                        {
+                            name: 'contract_name',
+                            in: 'query',
+                            schema: { type: 'string' },
+                            description: 'Filtrar por nome do contrato'
+                        },
+                        {
+                            name: 'status',
+                            in: 'query',
+                            schema: { 
+                                type: 'string', 
+                                enum: ['active', 'inactive', 'paused'] 
+                            },
+                            description: 'Filtrar por status do contrato'
+                        }
+                    ],
+                    responses: {
+                        '200': {
+                            description: 'Lista de contratos recorrentes recuperada com sucesso',
+                            content: {
+                                'application/json': {
+                                    schema: {
+                                        type: 'object',
+                                        properties: {
+                                            data: {
+                                                type: 'array',
+                                                items: { $ref: '#/components/schemas/ContractRecurring' }
+                                            },
+                                            meta: {
+                                                type: 'object',
+                                                properties: {
+                                                    currentPage: { type: 'integer' },
+                                                    itemCount: { type: 'integer' },
+                                                    itemsPerPage: { type: 'integer' },
+                                                    totalItems: { type: 'integer' },
+                                                    totalPages: { type: 'integer' }
+                                                }
+                                            },
+                                            links: {
+                                                type: 'object',
+                                                properties: {
+                                                    first: { type: 'string', nullable: true },
+                                                    previous: { type: 'string', nullable: true },
+                                                    next: { type: 'string', nullable: true },
+                                                    last: { type: 'string', nullable: true }
+                                                }
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                },
+                post: {
+                    tags: ['Contratos Recorrentes'],
+                    summary: 'Criar contrato recorrente',
+                    description: 'Cria um novo contrato recorrente',
+                    security: [{ bearerAuth: [] }],
+                    requestBody: {
+                        required: true,
+                        content: {
+                            'application/json': {
+                                schema: {
+                                    type: 'object',
+                                    required: [
+                                        'contract_value', 
+                                        'start_date', 
+                                        'recurrence_period', 
+                                        'due_day',
+                                        'billing_reference'
+                                    ],
+                                    properties: {
+                                        contract_name: { 
+                                            type: 'string', 
+                                            description: 'Nome do contrato' 
+                                        },
+                                        contract_value: { 
+                                            type: 'number', 
+                                            description: 'Valor do contrato' 
+                                        },
+                                        start_date: { 
+                                            type: 'string', 
+                                            format: 'date', 
+                                            description: 'Data de início do contrato' 
+                                        },
+                                        end_date: { 
+                                            type: 'string', 
+                                            format: 'date', 
+                                            description: 'Data de término do contrato' 
+                                        },
+                                        recurrence_period: { 
+                                            type: 'string', 
+                                            enum: ['daily', 'weekly', 'monthly', 'yearly'], 
+                                            description: 'Período de recorrência do contrato' 
+                                        },
+                                        due_day: { 
+                                            type: 'integer', 
+                                            description: 'Dia de vencimento do contrato' 
+                                        },
+                                        days_before_due: { 
+                                            type: 'integer', 
+                                            description: 'Dias antes do vencimento' 
+                                        },
+                                        status: { 
+                                            type: 'string', 
+                                            enum: ['active', 'inactive', 'paused'], 
+                                            default: 'active' 
+                                        },
+                                        contract_group_id: { 
+                                            type: 'integer', 
+                                            description: 'ID do grupo de contrato' 
+                                        },
+                                        billing_reference: { 
+                                            type: 'string', 
+                                            enum: ['current', 'previous'], 
+                                            default: 'current' 
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    },
+                    responses: {
+                        '201': {
+                            description: 'Contrato recorrente criado com sucesso',
+                            content: {
+                                'application/json': {
+                                    schema: { $ref: '#/components/schemas/ContractRecurring' }
+                                }
+                            }
+                        }
+                    }
+                }
+            },
+            '/contracts-recurring/{id}': {
+                get: {
+                    tags: ['Contratos Recorrentes'],
+                    summary: 'Buscar contrato recorrente por ID',
+                    description: 'Recupera os detalhes de um contrato recorrente específico',
+                    security: [{ bearerAuth: [] }],
+                    parameters: [
+                        {
+                            name: 'id',
+                            in: 'path',
+                            required: true,
+                            schema: { type: 'integer' },
+                            description: 'ID do contrato recorrente'
+                        }
+                    ],
+                    responses: {
+                        '200': {
+                            description: 'Detalhes do contrato recorrente recuperados com sucesso',
+                            content: {
+                                'application/json': {
+                                    schema: { $ref: '#/components/schemas/ContractRecurring' }
+                                }
+                            }
+                        }
+                    }
+                },
+                put: {
+                    tags: ['Contratos Recorrentes'],
+                    summary: 'Atualizar contrato recorrente',
+                    description: 'Atualiza os detalhes de um contrato recorrente existente',
+                    security: [{ bearerAuth: [] }],
+                    parameters: [
+                        {
+                            name: 'id',
+                            in: 'path',
+                            required: true,
+                            schema: { type: 'integer' },
+                            description: 'ID do contrato recorrente'
+                        }
+                    ],
+                    requestBody: {
+                        required: true,
+                        content: {
+                            'application/json': {
+                                schema: {
+                                    type: 'object',
+                                    properties: {
+                                        contract_name: { 
+                                            type: 'string', 
+                                            description: 'Nome do contrato' 
+                                        },
+                                        contract_value: { 
+                                            type: 'number', 
+                                            description: 'Valor do contrato' 
+                                        },
+                                        start_date: { 
+                                            type: 'string', 
+                                            format: 'date', 
+                                            description: 'Data de início do contrato' 
+                                        },
+                                        end_date: { 
+                                            type: 'string', 
+                                            format: 'date', 
+                                            description: 'Data de término do contrato' 
+                                        },
+                                        recurrence_period: { 
+                                            type: 'string', 
+                                            enum: ['daily', 'weekly', 'monthly', 'yearly'], 
+                                            description: 'Período de recorrência do contrato' 
+                                        },
+                                        due_day: { 
+                                            type: 'integer', 
+                                            description: 'Dia de vencimento do contrato' 
+                                        },
+                                        days_before_due: { 
+                                            type: 'integer', 
+                                            description: 'Dias antes do vencimento' 
+                                        },
+                                        status: { 
+                                            type: 'string', 
+                                            enum: ['active', 'inactive', 'paused'], 
+                                            description: 'Status do contrato' 
+                                        },
+                                        contract_group_id: { 
+                                            type: 'integer', 
+                                            description: 'ID do grupo de contrato' 
+                                        },
+                                        billing_reference: { 
+                                            type: 'string', 
+                                            enum: ['current', 'previous'], 
+                                            description: 'Referência de faturamento' 
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    },
+                    responses: {
+                        '200': {
+                            description: 'Contrato recorrente atualizado com sucesso',
+                            content: {
+                                'application/json': {
+                                    schema: { $ref: '#/components/schemas/ContractRecurring' }
+                                }
+                            }
+                        }
+                    }
+                },
+                delete: {
+                    tags: ['Contratos Recorrentes'],
+                    summary: 'Remover contrato recorrente',
+                    description: 'Remove um contrato recorrente específico',
+                    security: [{ bearerAuth: [] }],
+                    parameters: [
+                        {
+                            name: 'id',
+                            in: 'path',
+                            required: true,
+                            schema: { type: 'integer' },
+                            description: 'ID do contrato recorrente'
+                        }
+                    ],
+                    responses: {
+                        '204': {
+                            description: 'Contrato recorrente removido com sucesso'
+                        }
+                    }
+                }
+            }
         }
     },
     apis: ['./src/routes/*.js', './src/modules/*/*.routes.js']

@@ -12,12 +12,9 @@ class ContractGroupService {
 
     async findAll(filters = {}, page = 1, limit = 10) {
         try {
-            ContractGroupValidator.validateFindAll({ ...filters, page, limit });
+            const validatedFilters = ContractGroupValidator.findAll({ ...filters, page, limit });
 
-            const result = await this.repository.findAll(filters, page, limit);
-            
-            // Transforma em DTOs
-            result.data = result.data.map(entity => ContractGroupDetailedDTO.fromEntity(entity));
+            const result = await this.repository.findAll(validatedFilters, page, limit);
 
             return result;
         } catch (error) {
@@ -28,9 +25,9 @@ class ContractGroupService {
 
     async findById(id) {
         try {
-            ContractGroupValidator.validateFindById({ id });
+            const validatedId = ContractGroupValidator.findById({ id });
 
-            const contractGroup = await this.repository.findById(id);
+            const contractGroup = await this.repository.findById(validatedId.id);
             if (!contractGroup) {
                 throw new NotFoundError('Grupo de contrato não encontrado');
             }
@@ -47,8 +44,10 @@ class ContractGroupService {
 
     async create(data) {
         try {
-            ContractGroupValidator.validateCreate(data);
-            const contractGroup = await this.repository.create(data);
+            const validatedData = ContractGroupValidator.create(data);
+            const contractGroup = await this.repository.create(validatedData);
+
+            // Transforma em DTO
             const contractGroupDTO = ContractGroupDetailedDTO.fromEntity(contractGroup);
 
             return contractGroupDTO;
@@ -60,15 +59,15 @@ class ContractGroupService {
 
     async update(id, data) {
         try {
-            // Verifica se existe
-            const existingGroup = await this.repository.findById(id);
-            if (!existingGroup) {
+            const validatedData = ContractGroupValidator.update({ ...data, id });
+            const contractGroup = await this.repository.update(id, validatedData);
+
+            if (!contractGroup) {
                 throw new NotFoundError('Grupo de contrato não encontrado');
             }
 
-            ContractGroupValidator.validateUpdate(data);
-            const updatedContractGroup = await this.repository.update(id, data);
-            const contractGroupDTO = ContractGroupDetailedDTO.fromEntity(updatedContractGroup);
+            // Transforma em DTO
+            const contractGroupDTO = ContractGroupDetailedDTO.fromEntity(contractGroup);
 
             return contractGroupDTO;
         } catch (error) {

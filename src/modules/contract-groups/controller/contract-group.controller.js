@@ -9,7 +9,7 @@ class ContractGroupController {
     async findAll(req, res, next) {
         try {
             const { page = 1, limit = 10, ...filters } = req.query;
-            const result = await this.service.findAll(Number(page), Number(limit), filters);
+            const result = await this.service.findAll(filters, Number(page), Number(limit));
             
             logger.info('Grupos de contrato listados', { 
                 page, 
