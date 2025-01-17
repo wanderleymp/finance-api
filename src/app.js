@@ -317,6 +317,10 @@ invoicesModule.register(app);
 const contractGroupRoutes = require('./modules/contract-groups/contract-group.routes');
 contractGroupRoutes(app);
 
+// Adicionar rotas de contratos recorrentes
+const contractRecurringRoutes = require('./modules/contracts-recurring/contract-recurring.module');
+contractRecurringRoutes(app);
+
 // Rota 404 para capturar requisições não encontradas
 app.use((req, res, next) => {
     const error = new Error('Not Found');
