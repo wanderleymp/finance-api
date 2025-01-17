@@ -7,14 +7,30 @@ const installmentSchema = {
         limit: Joi.number().integer().min(1).max(100).optional(),
         status: Joi.string().optional(),
         payment_id: Joi.number().integer().positive().optional(),
-        start_date: Joi.date().iso().optional(),
-        startDate: Joi.date().iso().optional(),
-        end_date: Joi.date().iso().optional(),
-        endDate: Joi.date().iso().optional(),
+        start_date: Joi.alternatives().try(
+            Joi.date().iso(), 
+            Joi.string().isoDate()
+        ).optional(),
+        startDate: Joi.alternatives().try(
+            Joi.date().iso(), 
+            Joi.string().isoDate()
+        ).optional(),
+        end_date: Joi.alternatives().try(
+            Joi.date().iso(), 
+            Joi.string().isoDate()
+        ).optional(),
+        endDate: Joi.alternatives().try(
+            Joi.date().iso(), 
+            Joi.string().isoDate()
+        ).optional(),
         include: Joi.string().valid('boletos').optional(),
         full_name: Joi.string().optional(),
-        fullName: Joi.string().optional()
-    }).unknown(false),
+        fullName: Joi.string().optional(),
+        
+        // Novos parâmetros de ordenação
+        sort: Joi.string().valid('due_date', 'amount', 'status', 'payment_id').optional(),
+        order: Joi.string().valid('asc', 'desc').optional()
+    }).unknown(true),
 
     // Schema para busca por ID
     getInstallmentById: Joi.object({

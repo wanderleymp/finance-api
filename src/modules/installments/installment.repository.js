@@ -63,6 +63,114 @@ class InstallmentRepository {
         return { whereClause, queryParams: params, paramCount };
     }
 
+    async listInstallments(filters = {}, page = 1, limit = 10) {
+        const offset = (page - 1) * limit;
+        
+        // Mapeamento de campos de ordenação
+        const sortMapping = {
+            'due_date': 'i.due_date',
+            'amount': 'i.amount',
+            'status': 'i.status',
+            'payment_id': 'i.payment_id'
+        };
+
+        // Definir campo de ordenação padrão
+        const sortField = filters.sort ? sortMapping[filters.sort] || 'i.due_date' : 'i.due_date';
+        const sortOrder = filters.order || 'desc';
+
+        let query = `
+            SELECT 
+                i.installment_id,
+                i.payment_id,
+                i.installment_number,
+                i.due_date,
+                i.amount,
+                i.balance,
+                i.status,
+                i.account_entry_id,
+                i.expected_date,
+                COUNT(*) OVER() as total_count
+            FROM public.installments i
+            JOIN payments p ON i.payment_id = p.payment_id
+            WHERE 1=1
+        `;
+
+        const queryParams = [];
+        let paramIndex = 1;
+
+        // Adicionar filtros
+        if (filters.status) {
+            query += ` AND i.status = $${paramIndex}`;
+            queryParams.push(filters.status);
+            paramIndex++;
+        }
+
+        if (filters.payment_id) {
+            query += ` AND i.payment_id = $${paramIndex}`;
+            queryParams.push(filters.payment_id);
+            paramIndex++;
+        }
+
+        // Filtros de data
+        const startDate = filters.start_date || filters.startDate;
+        const endDate = filters.end_date || filters.endDate;
+
+        if (startDate) {
+            query += ` AND i.due_date >= $${paramIndex}`;
+            queryParams.push(startDate);
+            paramIndex++;
+        }
+
+        if (endDate) {
+            query += ` AND i.due_date <= $${paramIndex}`;
+            queryParams.push(endDate);
+            paramIndex++;
+        }
+
+        // Adicionar ordenação
+        query += ` ORDER BY ${sortField} ${sortOrder}`;
+
+        // Adicionar paginação
+        query += ` LIMIT $${paramIndex} OFFSET $${paramIndex + 1}`;
+        queryParams.push(limit, offset);
+
+        try {
+            const result = await this.pool.query(query, queryParams);
+
+            const totalCount = result.rows.length > 0 ? parseInt(result.rows[0].total_count) : 0;
+            const totalPages = Math.ceil(totalCount / limit);
+
+            return {
+                items: result.rows.map(row => {
+                    delete row.total_count;
+                    return row;
+                }),
+                meta: {
+                    totalItems: totalCount,
+                    itemCount: result.rows.length,
+                    itemsPerPage: limit,
+                    totalPages: totalPages,
+                    currentPage: page
+                },
+                links: {
+                    first: `?page=1&limit=${limit}`,
+                    previous: page > 1 ? `?page=${page - 1}&limit=${limit}` : null,
+                    next: page < totalPages ? `?page=${page + 1}&limit=${limit}` : null,
+                    last: `?page=${totalPages}&limit=${limit}`
+                }
+            };
+        } catch (error) {
+            this.logger.error('Erro ao listar installments', { 
+                error: error.message, 
+                stack: error.stack,
+                filters,
+                page,
+                limit 
+            });
+            throw error;
+        }
+    }
+
     async findAll(page = 1, limit = 10, filters = {}) {
         try {
             const includeBoletos = filters.include === 'boletos';
