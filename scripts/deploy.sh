@@ -87,8 +87,19 @@ push_docker() {
 
 # Atualizar versão após deploy bem-sucedido
 atualizar_versao() {
-    log "Atualizando versão no package.json..."
-    npm run release
+    log "Atualizando versão..."
+    
+    # Incrementar versão patch
+    npm version patch
+
+    # Capturar a nova versão
+    NOVA_VERSAO=$(node -p "require('./package.json').version")
+    
+    # Criar nova branch com o nome da versão
+    git checkout -b "release/v${NOVA_VERSAO}"
+
+    # Fazer push da nova branch
+    git push -u origin "release/v${NOVA_VERSAO}"
 }
 
 # Função principal de deploy
