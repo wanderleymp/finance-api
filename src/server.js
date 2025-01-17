@@ -62,4 +62,5 @@ app.use((req, res, next) => {
     next();
 });
 
+// Teste de deploy simples - sem impacto no sistema
 startServer();
