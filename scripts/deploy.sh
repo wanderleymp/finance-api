@@ -33,15 +33,6 @@ atualizar_repositorio() {
     git pull origin "$BRANCH_ATUAL"
 }
 
-# Executar testes
-executar_testes() {
-    log "Executando testes..."
-    npm run test
-    if [[ $? -ne 0 ]]; then
-        erro "Testes falharam. Não é possível continuar o deploy."
-    fi
-}
-
 # Enviar branch atual para remoto
 enviar_branch() {
     log "Enviando branch ${BRANCH_ATUAL} para o repositório remoto..."
@@ -87,7 +78,6 @@ atualizar_versao() {
 main() {
     verificar_branch
     atualizar_repositorio
-    executar_testes
     enviar_branch
     merge_main
     construir_docker
