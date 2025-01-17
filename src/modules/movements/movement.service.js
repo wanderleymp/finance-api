@@ -365,9 +365,20 @@ class MovementService extends IMovementService {
             // Após criar o movimento, envia mensagem de faturamento
             try {
                 const person = await this.personRepository.findById(data.person_id);
-                await this._processBillingMessage(movement, person);
+                // Comentado temporariamente
+                // await this._processBillingMessage(movement, person);
+
+                // Cria pagamento se método de pagamento estiver presente
+                if (data.payment_method_id) {
+                    await this.createPayment(movement.movement_id, {
+                        payment_method_id: data.payment_method_id,
+                        total_amount: movement.total_amount,
+                        movement_id: movement.movement_id,
+                        person_id: data.person_id
+                    });
+                }
             } catch (error) {
-                logger.error('Erro ao buscar pessoa para envio de mensagem de faturamento', {
+                logger.error('Erro ao processar pagamento ou mensagem de faturamento', {
                     error: error.message,
                     personId: data.person_id
                 });

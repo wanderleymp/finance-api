@@ -152,8 +152,7 @@ class BoletoService {
                 installment_id: data.installment_id,
                 generated_at: new Date(),
                 last_status_update: new Date(),
-                status: boletoData.status || 'A_EMITIR',
-                external_data: boletoData
+                status: boletoData.status || 'A_EMITIR'
             });
 
             return newBoleto;
