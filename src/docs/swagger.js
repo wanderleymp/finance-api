@@ -350,6 +350,100 @@ const options = {
                             }
                         }
                     }
+                },
+                Installment: {
+                    type: 'object',
+                    properties: {
+                        id: {
+                            type: 'integer',
+                            description: 'ID único da parcela'
+                        },
+                        payment_id: {
+                            type: 'integer',
+                            description: 'ID do pagamento associado'
+                        },
+                        due_date: {
+                            type: 'string',
+                            format: 'date',
+                            description: 'Data de vencimento da parcela'
+                        },
+                        amount: {
+                            type: 'number',
+                            format: 'float',
+                            description: 'Valor da parcela'
+                        },
+                        status: {
+                            type: 'string',
+                            enum: ['PENDENTE', 'PAGO', 'ATRASADO', 'CANCELADO'],
+                            description: 'Status atual da parcela'
+                        },
+                        boletos: {
+                            type: 'array',
+                            description: 'Lista de boletos associados à parcela',
+                            items: {
+                                type: 'object',
+                                properties: {
+                                    id: { type: 'integer', description: 'ID do boleto' },
+                                    status: { type: 'string', description: 'Status do boleto' }
+                                }
+                            }
+                        },
+                        payment_date: {
+                            type: 'string',
+                            format: 'date-time',
+                            description: 'Data do pagamento',
+                            nullable: true
+                        },
+                        payment_value: {
+                            type: 'number',
+                            format: 'float',
+                            description: 'Valor pago',
+                            nullable: true
+                        },
+                        juros: {
+                            type: 'number',
+                            format: 'float',
+                            description: 'Juros aplicados',
+                            default: 0
+                        },
+                        descontos: {
+                            type: 'number',
+                            format: 'float',
+                            description: 'Descontos aplicados',
+                            default: 0
+                        }
+                    }
+                },
+                InstallmentPayment: {
+                    type: 'object',
+                    required: ['valor'],
+                    properties: {
+                        valor: {
+                            type: 'number',
+                            description: 'Valor do pagamento'
+                        },
+                        date: {
+                            type: 'string',
+                            format: 'date',
+                            description: 'Data do pagamento',
+                            default: 'Data atual'
+                        },
+                        bank_id: {
+                            type: 'integer',
+                            description: 'ID do banco',
+                            default: 2
+                        },
+                        juros: {
+                            type: 'number',
+                            description: 'Juros aplicados',
+                            default: 0
+                        },
+                        descontos: {
+                            type: 'number',
+                            description: 'Descontos aplicados',
+                            default: 0
+                        }
+                    }
                 }
             }
         },
@@ -950,22 +1044,266 @@ const options = {
                     }
                 }
             },
-            '/installments/{id}/due-date': {
-                patch: {
-                    summary: 'Atualizar data de vencimento de uma parcela',
-                    description: 'Atualiza a data de vencimento de uma parcela específica',
+            '/installments': {
+                get: {
                     tags: ['Installments'],
+                    summary: 'Listar parcelas',
+                    description: 'Recupera uma lista de parcelas com suporte a filtros avançados e paginação',
+                    security: [{ bearerAuth: [] }],
+                    parameters: [
+                        {
+                            name: 'page',
+                            in: 'query',
+                            schema: { type: 'integer', default: 1 },
+                            description: 'Número da página'
+                        },
+                        {
+                            name: 'limit',
+                            in: 'query',
+                            schema: { type: 'integer', default: 10 },
+                            description: 'Número de registros por página'
+                        },
+                        {
+                            name: 'status',
+                            in: 'query',
+                            schema: { 
+                                type: 'string', 
+                                enum: ['PENDENTE', 'PAGO', 'ATRASADO', 'CANCELADO'] 
+                            },
+                            description: 'Filtrar por status da parcela'
+                        },
+                        {
+                            name: 'start_date',
+                            in: 'query',
+                            schema: { type: 'string', format: 'date' },
+                            description: 'Data inicial para filtro'
+                        },
+                        {
+                            name: 'end_date',
+                            in: 'query',
+                            schema: { type: 'string', format: 'date' },
+                            description: 'Data final para filtro'
+                        },
+                        {
+                            name: 'full_name',
+                            in: 'query',
+                            schema: { type: 'string' },
+                            description: 'Filtrar por nome completo'
+                        },
+                        {
+                            name: 'sort',
+                            in: 'query',
+                            schema: { 
+                                type: 'string', 
+                                enum: ['due_date', 'amount', 'status', 'payment_id'] 
+                            },
+                            description: 'Campo para ordenação'
+                        },
+                        {
+                            name: 'order',
+                            in: 'query',
+                            schema: { 
+                                type: 'string', 
+                                enum: ['asc', 'desc'] 
+                            },
+                            description: 'Direção da ordenação'
+                        }
+                    ],
+                    responses: {
+                        '200': {
+                            description: 'Lista de parcelas recuperada com sucesso',
+                            content: {
+                                'application/json': {
+                                    schema: {
+                                        type: 'object',
+                                        properties: {
+                                            data: {
+                                                type: 'array',
+                                                items: { $ref: '#/components/schemas/Installment' }
+                                            },
+                                            pagination: { $ref: '#/components/schemas/Pagination' }
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            },
+            '/installments/details': {
+                get: {
+                    tags: ['Installments'],
+                    summary: 'Listar parcelas com detalhes de boletos',
+                    description: 'Recupera uma lista de parcelas incluindo informações de boletos',
+                    security: [{ bearerAuth: [] }],
+                    parameters: [
+                        {
+                            name: 'page',
+                            in: 'query',
+                            schema: { type: 'integer', default: 1 },
+                            description: 'Número da página'
+                        },
+                        {
+                            name: 'limit',
+                            in: 'query',
+                            schema: { type: 'integer', default: 10 },
+                            description: 'Número de registros por página'
+                        }
+                    ],
+                    responses: {
+                        '200': {
+                            description: 'Lista de parcelas com detalhes de boletos recuperada com sucesso',
+                            content: {
+                                'application/json': {
+                                    schema: {
+                                        type: 'object',
+                                        properties: {
+                                            data: {
+                                                type: 'array',
+                                                items: { 
+                                                    allOf: [
+                                                        { $ref: '#/components/schemas/Installment' },
+                                                        { 
+                                                            type: 'object',
+                                                            properties: {
+                                                                boletos: {
+                                                                    type: 'array',
+                                                                    items: {
+                                                                        type: 'object',
+                                                                        properties: {
+                                                                            id: { type: 'integer' },
+                                                                            status: { type: 'string' },
+                                                                            details: { type: 'object' }
+                                                                        }
+                                                                    }
+                                                                }
+                                                            }
+                                                        }
+                                                    ]
+                                                }
+                                            },
+                                            pagination: { $ref: '#/components/schemas/Pagination' }
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            },
+            '/installments/{id}': {
+                get: {
+                    tags: ['Installments'],
+                    summary: 'Buscar parcela por ID',
+                    description: 'Recupera os detalhes de uma parcela específica',
                     security: [{ bearerAuth: [] }],
                     parameters: [
                         {
                             name: 'id',
                             in: 'path',
                             required: true,
-                            description: 'ID da parcela',
-                            schema: {
-                                type: 'integer',
-                                minimum: 1
+                            schema: { type: 'integer' },
+                            description: 'ID da parcela'
+                        }
+                    ],
+                    responses: {
+                        '200': {
+                            description: 'Detalhes da parcela recuperados com sucesso',
+                            content: {
+                                'application/json': {
+                                    schema: { $ref: '#/components/schemas/Installment' }
+                                }
                             }
+                        }
+                    }
+                }
+            },
+            '/installments/{id}/details': {
+                get: {
+                    tags: ['Installments'],
+                    summary: 'Buscar detalhes da parcela',
+                    description: 'Recupera detalhes completos de uma parcela, incluindo informações adicionais',
+                    security: [{ bearerAuth: [] }],
+                    parameters: [
+                        {
+                            name: 'id',
+                            in: 'path',
+                            required: true,
+                            schema: { type: 'integer' },
+                            description: 'ID da parcela'
+                        }
+                    ],
+                    responses: {
+                        '200': {
+                            description: 'Detalhes completos da parcela recuperados com sucesso',
+                            content: {
+                                'application/json': {
+                                    schema: { 
+                                        allOf: [
+                                            { $ref: '#/components/schemas/Installment' },
+                                            { 
+                                                type: 'object',
+                                                properties: {
+                                                    additional_info: {
+                                                        type: 'object',
+                                                        description: 'Informações adicionais da parcela'
+                                                    }
+                                                }
+                                            }
+                                        ]
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            },
+            '/installments/{id}/boletos': {
+                post: {
+                    tags: ['Installments', 'Boletos'],
+                    summary: 'Gerar boleto para parcela',
+                    description: 'Gera um novo boleto para uma parcela específica',
+                    security: [{ bearerAuth: [] }],
+                    parameters: [
+                        {
+                            name: 'id',
+                            in: 'path',
+                            required: true,
+                            schema: { type: 'integer' },
+                            description: 'ID da parcela'
+                        }
+                    ],
+                    responses: {
+                        '201': {
+                            description: 'Boleto gerado com sucesso',
+                            content: {
+                                'application/json': {
+                                    schema: {
+                                        type: 'object',
+                                        properties: {
+                                            boleto_id: { type: 'integer' },
+                                            status: { type: 'string' }
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            },
+            '/installments/{id}/due-date': {
+                patch: {
+                    tags: ['Installments'],
+                    summary: 'Atualizar data de vencimento',
+                    description: 'Atualiza a data de vencimento de uma parcela',
+                    security: [{ bearerAuth: [] }],
+                    parameters: [
+                        {
+                            name: 'id',
+                            in: 'path',
+                            required: true,
+                            schema: { type: 'integer' },
+                            description: 'ID da parcela'
                         }
                     ],
                     requestBody: {
@@ -977,14 +1315,246 @@ const options = {
                                     properties: {
                                         due_date: {
                                             type: 'string',
-                                            format: 'date-time',
-                                            description: 'Nova data de vencimento no formato ISO'
+                                            format: 'date',
+                                            description: 'Nova data de vencimento'
+                                        },
+                                        amount: {
+                                            type: 'number',
+                                            description: 'Novo valor da parcela (opcional)'
                                         }
-                                    },
-                                    required: ['due_date']
-                                },
-                                example: {
-                                    due_date: '2025-02-15T00:00:00Z'
+                                    }
+                                }
+                            }
+                        }
+                    },
+                    responses: {
+                        '200': {
+                            description: 'Data de vencimento atualizada com sucesso',
+                            content: {
+                                'application/json': {
+                                    schema: { $ref: '#/components/schemas/Installment' }
+                                }
+                            }
+                        }
+                    }
+                }
+            },
+            '/installments/{id}': {
+                patch: {
+                    tags: ['Installments'],
+                    summary: 'Atualizar parcela',
+                    description: 'Atualiza informações de uma parcela',
+                    security: [{ bearerAuth: [] }],
+                    parameters: [
+                        {
+                            name: 'id',
+                            in: 'path',
+                            required: true,
+                            schema: { type: 'integer' },
+                            description: 'ID da parcela'
+                        }
+                    ],
+                    requestBody: {
+                        required: true,
+                        content: {
+                            'application/json': {
+                                schema: {
+                                    type: 'object',
+                                    properties: {
+                                        due_date: {
+                                            type: 'string',
+                                            format: 'date',
+                                            description: 'Nova data de vencimento'
+                                        },
+                                        amount: {
+                                            type: 'number',
+                                            description: 'Novo valor da parcela'
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    },
+                    responses: {
+                        '200': {
+                            description: 'Parcela atualizada com sucesso',
+                            content: {
+                                'application/json': {
+                                    schema: { $ref: '#/components/schemas/Installment' }
+                                }
+                            }
+                        }
+                    }
+                }
+            },
+            '/installments/{id}/payment': {
+                put: {
+                    tags: ['Installments', 'Payments'],
+                    summary: 'Registrar pagamento de parcela',
+                    description: 'Registra o pagamento de uma parcela específica',
+                    security: [{ bearerAuth: [] }],
+                    parameters: [
+                        {
+                            name: 'id',
+                            in: 'path',
+                            required: true,
+                            schema: { type: 'integer' },
+                            description: 'ID da parcela'
+                        }
+                    ],
+                    requestBody: {
+                        required: true,
+                        content: {
+                            'application/json': {
+                                schema: { $ref: '#/components/schemas/InstallmentPayment' }
+                            }
+                        }
+                    },
+                    responses: {
+                        '200': {
+                            description: 'Pagamento registrado com sucesso',
+                            content: {
+                                'application/json': {
+                                    schema: { $ref: '#/components/schemas/Installment' }
+                                }
+                            }
+                        }
+                    }
+                }
+            },
+            '/installments/{id}/boleto/cancelar': {
+                put: {
+                    tags: ['Installments', 'Boletos'],
+                    summary: 'Cancelar boletos de parcela',
+                    description: 'Cancela todos os boletos associados a uma parcela específica',
+                    security: [{ bearerAuth: [] }],
+                    parameters: [
+                        {
+                            name: 'id',
+                            in: 'path',
+                            required: true,
+                            schema: { type: 'integer' },
+                            description: 'ID da parcela'
+                        }
+                    ],
+                    responses: {
+                        '200': {
+                            description: 'Boletos cancelados com sucesso',
+                            content: {
+                                'application/json': {
+                                    schema: {
+                                        type: 'object',
+                                        properties: {
+                                            message: { type: 'string' },
+                                            canceledBoletosCount: { type: 'integer' }
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            },
+            '/installments/{id}/payment': {
+                put: {
+                    tags: ['Installments', 'Payments'],
+                    summary: 'Registrar pagamento de parcela',
+                    description: 'Registra o pagamento de uma parcela específica',
+                    security: [{ bearerAuth: [] }],
+                    parameters: [
+                        {
+                            name: 'id',
+                            in: 'path',
+                            required: true,
+                            schema: { type: 'integer' },
+                            description: 'ID da parcela'
+                        }
+                    ],
+                    requestBody: {
+                        required: true,
+                        content: {
+                            'application/json': {
+                                schema: { $ref: '#/components/schemas/InstallmentPayment' }
+                            }
+                        }
+                    },
+                    responses: {
+                        '200': {
+                            description: 'Pagamento registrado com sucesso',
+                            content: {
+                                'application/json': {
+                                    schema: { $ref: '#/components/schemas/Installment' }
+                                }
+                            }
+                        }
+                    }
+                }
+            },
+            '/installments/{id}/boletos': {
+                post: {
+                    tags: ['Installments', 'Boletos'],
+                    summary: 'Gerar boleto para parcela',
+                    description: 'Gera um novo boleto para uma parcela específica',
+                    security: [{ bearerAuth: [] }],
+                    parameters: [
+                        {
+                            name: 'id',
+                            in: 'path',
+                            required: true,
+                            schema: { type: 'integer' },
+                            description: 'ID da parcela'
+                        }
+                    ],
+                    responses: {
+                        '200': {
+                            description: 'Boleto gerado com sucesso',
+                            content: {
+                                'application/json': {
+                                    schema: {
+                                        type: 'object',
+                                        properties: {
+                                            boleto: {
+                                                $ref: '#/components/schemas/Boleto'
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            },
+            '/installments/{id}': {
+                patch: {
+                    tags: ['Installments'],
+                    summary: 'Atualizar parcela',
+                    description: 'Atualiza informações de uma parcela específica',
+                    security: [{ bearerAuth: [] }],
+                    parameters: [
+                        {
+                            name: 'id',
+                            in: 'path',
+                            required: true,
+                            schema: { type: 'integer' },
+                            description: 'ID da parcela'
+                        }
+                    ],
+                    requestBody: {
+                        required: true,
+                        content: {
+                            'application/json': {
+                                schema: {
+                                    type: 'object',
+                                    properties: {
+                                        amount: {
+                                            type: 'number',
+                                            description: 'Novo valor da parcela'
+                                        },
+                                        status: {
+                                            type: 'string',
+                                            description: 'Novo status da parcela'
+                                        }
+                                    }
                                 }
                             }
                         }
@@ -995,46 +1565,42 @@ const options = {
                             content: {
                                 'application/json': {
                                     schema: {
+                                        $ref: '#/components/schemas/Installment'
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            },
+            '/installments/{id}/boleto/cancelar': {
+                put: {
+                    tags: ['Installments', 'Boletos'],
+                    summary: 'Cancelar boletos de parcela',
+                    description: 'Cancela todos os boletos associados a uma parcela específica',
+                    security: [{ bearerAuth: [] }],
+                    parameters: [
+                        {
+                            name: 'id',
+                            in: 'path',
+                            required: true,
+                            schema: { type: 'integer' },
+                            description: 'ID da parcela'
+                        }
+                    ],
+                    responses: {
+                        '200': {
+                            description: 'Boletos cancelados com sucesso',
+                            content: {
+                                'application/json': {
+                                    schema: {
                                         type: 'object',
                                         properties: {
-                                            success: {
-                                                type: 'boolean',
-                                                example: true
-                                            },
-                                            data: {
-                                                $ref: '#/components/schemas/Installment'
+                                            message: {
+                                                type: 'string',
+                                                description: 'Confirmação de cancelamento'
                                             }
                                         }
-                                    }
-                                }
-                            }
-                        },
-                        '400': {
-                            description: 'Erro de validação',
-                            content: {
-                                'application/json': {
-                                    schema: {
-                                        $ref: '#/components/schemas/ValidationError'
-                                    }
-                                }
-                            }
-                        },
-                        '401': {
-                            description: 'Não autorizado',
-                            content: {
-                                'application/json': {
-                                    schema: {
-                                        $ref: '#/components/schemas/UnauthorizedError'
-                                    }
-                                }
-                            }
-                        },
-                        '404': {
-                            description: 'Parcela não encontrada',
-                            content: {
-                                'application/json': {
-                                    schema: {
-                                        $ref: '#/components/schemas/NotFoundError'
                                     }
                                 }
                             }
