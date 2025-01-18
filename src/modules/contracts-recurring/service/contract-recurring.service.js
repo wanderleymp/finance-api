@@ -3,10 +3,14 @@ const ContractRecurringCreateDTO = require('../dto/contract-recurring-create.dto
 const ContractRecurringDetailedDTO = require('../dto/contract-recurring-detailed.dto');
 const { DatabaseError } = require('../../../utils/errors');
 const { logger } = require('../../../middlewares/logger');
+const MovementService = require('../../movements/movement.service');
+const MovementItemService = require('../../movement-items/movement-item.service');
 
 class ContractRecurringService {
     constructor() {
         this.repository = new ContractRecurringRepository();
+        this.movementService = new MovementService();
+        this.movementItemService = new MovementItemService();
         this.logger = logger;
     }
 
@@ -107,32 +111,86 @@ class ContractRecurringService {
         };
     }
 
-    async billing(contractIds = []) {
-        this.logger.info('Iniciando processo de faturamento', { contractIds });
-
-        // Constante para armazenar IDs de contratos
-        const processContractIds = contractIds.length > 0 
-            ? contractIds 
-            : (await this.findPendingBillings()).data.map(contract => contract.contract_id);
-
-        // Se não houver contratos para processar, retorna vazio
-        if (processContractIds.length === 0) {
-            this.logger.info('Nenhum contrato encontrado para faturamento');
-            return [];
+    async billingPrepareData(contractId) {
+        this.logger.info('Preparando dados para faturamento', { contractId });
+        
+        // 1. Recuperar contrato completo
+        const contract = await this.repository.findById(contractId);
+        
+        if (!contract) {
+            throw new Error(`Contrato com ID ${contractId} não encontrado`);
         }
 
-        // Loop para processar faturament
-        const results = [];
-        for (const contractId of processContractIds) {
-            this.logger.info('Processando faturamento para contrato', { contractId });
-            // TODO: Implementar método de faturamento individual
-            results.push({ 
-                contractId, 
-                message: 'contrato pendente de implementação' 
-            });
+        // 2. Recuperar movimento modelo
+        const modelMovementId = contract.model_movement_id;
+        if (!modelMovementId) {
+            throw new Error(`Nenhum movimento modelo encontrado para o contrato ${contractId}`);
         }
 
-        return results;
+        // 3. Buscar movimento modelo para recuperar detalhes
+        const modelMovement = await this.movementService.findById(modelMovementId);
+        
+        // Log completo do movimento modelo
+        this.logger.info('Movimento modelo recuperado', { modelMovement });
+        
+        // 4. Recuperar itens do movimento modelo
+        const movementItems = await this.movementItemService.findByMovementId(modelMovementId);
+        
+        // 5. Definir referência de faturamento
+        const billingReference = this.generateBillingReference(contract.next_billing_date);
+
+        // 6. Calcular data de vencimento
+        const dueDate = this.calculateDueDate(contract.next_billing_date, contract.due_day);
+
+        // 7. Preparar payload para criação de movimento
+        return {
+            contractId: contract.contract_id,
+            personId: contract.person_id,
+            licenseId: modelMovement.license_id,
+            paymentMethodId: contract.payment_method_id,
+            movementTypeId: 3, // Definido como 'venda'
+            items: movementItems,
+            billingReference: billingReference,
+            dueDate: dueDate,
+            description: `Faturamento Contrato Ref. ${billingReference}`,
+            modelMovementId: modelMovementId
+        };
+    }
+
+    generateBillingReference(nextBillingDate) {
+        return nextBillingDate 
+            ? this.formatDate(nextBillingDate, 'MM/YYYY') 
+            : this.formatDate(new Date(), 'MM/YYYY');
+    }
+
+    calculateDueDate(nextBillingDate, dueDay) {
+        const baseDate = nextBillingDate || new Date();
+        const firstDayOfMonth = new Date(baseDate.getFullYear(), baseDate.getMonth(), 1);
+        return new Date(firstDayOfMonth.setDate(dueDay));
+    }
+
+    formatDate(date, format) {
+        const formattedDate = new Date(date);
+        const month = String(formattedDate.getMonth() + 1).padStart(2, '0');
+        const year = formattedDate.getFullYear();
+        return format.replace('MM', month).replace('YYYY', year);
+    }
+
+    async billingCreateMovement(billingData) {
+        this.logger.info('Criando movimento de faturamento', { billingData });
+        
+        // TODO: Implementar criação de movimento
+        // Usar serviço de movimentos
+        // Registrar movimento
+        return {
+            movementId: null,
+            message: 'movimento pendente de implementação'
+        };
+    }
+
+    async billing(contractId) {
+        // Método deixado em branco para testes de montagem
+        return null;
     }
 }
 
