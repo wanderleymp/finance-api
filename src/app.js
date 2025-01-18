@@ -32,6 +32,8 @@ const BillingMessageService = require('./modules/messages/billing/billing-messag
 const TaskService = require('./modules/tasks/services/task.service');
 const TaskRepository = require('./modules/tasks/repositories/task.repository');
 const N8nService = require('./services/n8n.service');
+const ContractGroupModule = require('./modules/contract-groups/contract-group.module');
+const ContractMovementModule = require('./modules/contract-movements/contract-movement.module');
 
 const movementDependencies = {
     movementRepository: new MovementRepository(),
@@ -314,12 +316,16 @@ invoiceEventModule.register(app);
 invoicesModule.register(app);
 
 // Adicionar importação de rotas de contract-groups
-const contractGroupRoutes = require('./modules/contract-groups/contract-group.routes');
-contractGroupRoutes(app);
+const ContractGroupRoutes = require('./modules/contract-groups/contract-group.routes');
+const ContractMovementRoutes = require('./modules/contract-movements/contract-movement.routes');
 
 // Adicionar rotas de contratos recorrentes
 const contractRecurringRoutes = require('./modules/contracts-recurring/contract-recurring.module');
 contractRecurringRoutes(app);
+
+// Adicionar rotas de contract-groups e contract-movements
+ContractGroupRoutes(app);
+ContractMovementRoutes(app);
 
 // Rota 404 para capturar requisições não encontradas
 app.use((req, res, next) => {
