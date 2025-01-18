@@ -150,6 +150,12 @@ class ContractRecurringService {
         try {
             const contract = await this.repository.findById(contractId);
             
+            this.logger.info('Dados do Contrato', { 
+                contract,
+                modelMovementId: contract.model_movement_id,
+                timestamp: new Date().toISOString()
+            });
+
             this.logger.info('Contrato recuperado', { 
                 contract,
                 timestamp: new Date().toISOString()
@@ -168,8 +174,14 @@ class ContractRecurringService {
 
             this.logger.info('Itens do movimento recuperados', { 
                 movementItems,
+                movementItemsCount: movementItems.length,
                 timestamp: new Date().toISOString()
             });
+
+            // Log completo dos itens
+            console.log('DEBUG Itens do Movimento COMPLETO:', JSON.stringify(movementItems, null, 2));
+
+            console.log('DEBUG Itens do Movimento:', JSON.stringify(movementItems, null, 2));
 
             // Definir referência de faturamento
             const nextBillingDate = new Date(contract.next_billing_date);
@@ -206,12 +218,12 @@ class ContractRecurringService {
                 items: movementItems.map(item => ({
                     itemId: item.item_id,
                     serviceId: item.service_id,
-                    description: item.item_name || 'Item sem nome',
                     quantity: item.quantity,
                     unitValue: item.unit_price,
                     totalValue: item.total_price,
                     valor: item.total_price,
-                    licenseId: item.license_id
+                    licenseId: contract.license_id,
+                    personId: contract.person_id
                 }))
             };
 
