@@ -6,6 +6,7 @@ const contractRecurringValidator = require('./validators/contract-recurring.vali
 const router = express.Router();
 const controller = new ContractRecurringController();
 
+router.get('/pending-billings', controller.findPendingBillings.bind(controller));
 router.get('/', controller.findAll.bind(controller));
 router.get('/:id', controller.findById.bind(controller));
 

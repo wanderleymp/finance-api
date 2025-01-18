@@ -84,6 +84,28 @@ class ContractRecurringService {
         await this.repository.delete(id);
         this.logger.info('Contrato recorrente removido com sucesso', { id });
     }
+
+    async findPendingBillings(page = 1, limit = 10, currentDate = new Date()) {
+        this.logger.info('Buscando contratos pendentes de faturamento', { page, limit, currentDate });
+        
+        const result = await this.repository.findPendingBillings(page, limit, currentDate);
+        
+        this.logger.info('Contratos pendentes encontrados', { 
+            total: result.meta.totalItems, 
+            page, 
+            limit 
+        });
+        
+        const mappedRows = result.items.map(row => 
+            ContractRecurringDetailedDTO.fromEntity(row)
+        );
+
+        return {
+            data: mappedRows,
+            meta: result.meta,
+            links: result.links
+        };
+    }
 }
 
 module.exports = ContractRecurringService;

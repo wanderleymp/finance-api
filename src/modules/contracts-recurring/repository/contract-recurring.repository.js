@@ -6,67 +6,7 @@ class ContractRecurringRepository extends BaseRepository {
         super('contracts_recurring', 'contract_id');
     }
 
-    async findAll(page = 1, limit = 10, filters = {}) {
-        try {
-            const whereConditions = [`cr.status = 'active'`];
-            const queryParams = [];
-            let paramCount = 1;
 
-            // Filtros adicionais
-            if (filters.contract_name) {
-                whereConditions.push(`cr.contract_name ILIKE $${paramCount}`);
-                queryParams.push(`%${filters.contract_name}%`);
-                paramCount++;
-            }
-
-            // Construir cláusula WHERE
-            const whereClause = whereConditions.length > 0 
-                ? `WHERE ${whereConditions.join(' AND ')}` 
-                : '';
-
-            // Query customizada com joins
-            const customQuery = `
-                SELECT 
-                    p.full_name, 
-                    cg.group_name, 
-                    cr.*
-                FROM public.contracts_recurring cr
-                JOIN movements m ON cr.model_movement_id = m.movement_id
-                JOIN persons p ON m.person_id = p.person_id
-                JOIN contract_groups cg ON cr.contract_group_id = cg.contract_group_id
-                ${whereClause}
-                ORDER BY cr.next_billing_date ASC
-            `;
-
-            // Query de contagem
-            const countQuery = `
-                SELECT COUNT(*) as total 
-                FROM public.contracts_recurring cr
-                JOIN movements m ON cr.model_movement_id = m.movement_id
-                JOIN persons p ON m.person_id = p.person_id
-                JOIN contract_groups cg ON cr.contract_group_id = cg.contract_group_id
-                ${whereClause}
-            `;
-
-            logger.info('Detalhes da query customizada', {
-                customQuery,
-                whereClause,
-                queryParams
-            });
-
-            return super.findAll(page, limit, filters, {
-                customQuery,
-                countQuery,
-                queryParams,
-                whereClause
-            });
-        } catch (error) {
-            logger.error('Erro ao buscar contratos recorrentes', { 
-                error: error.message 
-            });
-            throw error;
-        }
-    }
 
     async findById(id) {
         try {
@@ -208,6 +148,124 @@ class ContractRecurringRepository extends BaseRepository {
         } catch (error) {
             logger.error('Erro ao remover contrato recorrente', { 
                 id, 
+                error: error.message 
+            });
+            throw error;
+        }
+    }
+
+    async findAll(page = 1, limit = 10, filters = {}) {
+        try {
+            const whereConditions = [`cr.status = 'active'`];
+            const queryParams = [];
+            let paramCount = 1;
+
+            // Filtros adicionais
+            if (filters.contract_name) {
+                whereConditions.push(`cr.contract_name ILIKE $${paramCount}`);
+                queryParams.push(`%${filters.contract_name}%`);
+                paramCount++;
+            }
+
+            // Construir cláusula WHERE
+            const whereClause = whereConditions.length > 0 
+                ? `WHERE ${whereConditions.join(' AND ')}` 
+                : '';
+
+            // Query customizada com joins
+            const customQuery = `
+                SELECT 
+                    p.full_name, 
+                    cg.group_name, 
+                    cr.*
+                FROM public.contracts_recurring cr
+                JOIN movements m ON cr.model_movement_id = m.movement_id
+                JOIN persons p ON m.person_id = p.person_id
+                JOIN contract_groups cg ON cr.contract_group_id = cg.contract_group_id
+                ${whereClause}
+                ORDER BY cr.next_billing_date ASC
+            `;
+
+            // Query de contagem
+            const countQuery = `
+                SELECT COUNT(*) as total 
+                FROM public.contracts_recurring cr
+                JOIN movements m ON cr.model_movement_id = m.movement_id
+                JOIN persons p ON m.person_id = p.person_id
+                JOIN contract_groups cg ON cr.contract_group_id = cg.contract_group_id
+                ${whereClause}
+            `;
+
+            logger.info('Detalhes da query customizada', {
+                customQuery,
+                whereClause,
+                queryParams
+            });
+
+            return super.findAll(page, limit, filters, {
+                customQuery,
+                countQuery,
+                queryParams,
+                whereClause
+            });
+        } catch (error) {
+            logger.error('Erro ao buscar contratos recorrentes', { 
+                error: error.message 
+            });
+            throw error;
+        }
+    }
+
+    async findPendingBillings(page = 1, limit = 10, currentDate = new Date()) {
+        try {
+            const whereConditions = [
+                `cr.status = 'active'`,
+                `(cr.next_billing_date IS NULL OR cr.next_billing_date <= $1)`
+            ];
+            const queryParams = [currentDate];
+            let paramCount = 2;
+
+            // Construir cláusula WHERE
+            const whereClause = `WHERE ${whereConditions.join(' AND ')}`;
+
+            // Query customizada com joins
+            const customQuery = `
+                SELECT 
+                    p.full_name, 
+                    cg.group_name, 
+                    cr.*
+                FROM public.contracts_recurring cr
+                JOIN movements m ON cr.model_movement_id = m.movement_id
+                JOIN persons p ON m.person_id = p.person_id
+                JOIN contract_groups cg ON cr.contract_group_id = cg.contract_group_id
+                ${whereClause}
+                ORDER BY cr.next_billing_date ASC
+            `;
+
+            // Query de contagem
+            const countQuery = `
+                SELECT COUNT(*) as total 
+                FROM public.contracts_recurring cr
+                JOIN movements m ON cr.model_movement_id = m.movement_id
+                JOIN persons p ON m.person_id = p.person_id
+                JOIN contract_groups cg ON cr.contract_group_id = cg.contract_group_id
+                ${whereClause}
+            `;
+
+            logger.info('Detalhes da query de contratos pendentes', {
+                customQuery,
+                whereClause,
+                queryParams
+            });
+
+            return super.findAll(page, limit, {}, {
+                customQuery,
+                countQuery,
+                queryParams,
+                whereClause
+            });
+        } catch (error) {
+            logger.error('Erro ao buscar contratos pendentes de faturamento', { 
                 error: error.message 
             });
             throw error;

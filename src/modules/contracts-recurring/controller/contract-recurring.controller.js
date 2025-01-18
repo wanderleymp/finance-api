@@ -79,6 +79,29 @@ class ContractRecurringController {
             next(error);
         }
     }
+
+    async findPendingBillings(req, res, next) {
+        try {
+            const { page = 1, limit = 10 } = req.query;
+            const currentDate = new Date();
+            
+            const result = await this.service.findPendingBillings(
+                Number(page), 
+                Number(limit), 
+                currentDate
+            );
+            
+            logger.info('Contratos pendentes listados', { 
+                page, 
+                limit, 
+                totalItems: result.meta.totalItems 
+            });
+
+            res.json(result);
+        } catch (error) {
+            next(error);
+        }
+    }
 }
 
 module.exports = ContractRecurringController;
