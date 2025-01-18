@@ -18,7 +18,9 @@ class ContractRecurringDetailedDTO {
             representative_person_id: entity.representative_person_id,
             commissioned_value: entity.commissioned_value,
             account_entry_id: entity.account_entry_id,
-            last_decimo_billing_year: entity.last_decimo_billing_year
+            last_decimo_billing_year: entity.last_decimo_billing_year,
+            group_name: entity.group_name,
+            full_name: entity.full_name
         };
     }
 }
