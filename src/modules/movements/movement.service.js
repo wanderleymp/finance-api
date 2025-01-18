@@ -40,6 +40,12 @@ class MovementService extends IMovementService {
     }) {
         super();
         
+        // Fallback para movementRepository
+        if (!movementRepository) {
+            const MovementRepository = require('./movement.repository');
+            movementRepository = new MovementRepository();
+        }
+        
         this.movementRepository = movementRepository;
         this.personRepository = personRepository;
         this.movementTypeRepository = movementTypeRepository;
@@ -60,13 +66,26 @@ class MovementService extends IMovementService {
         this.movementPaymentService = movementPaymentService;
         this.movementPaymentRepository = movementPaymentRepository;
         
+        // Fallback para movementPaymentRepository
+        if (!this.movementPaymentRepository) {
+            const MovementPaymentRepository = require('../movement-payments/movement-payment.repository');
+            this.movementPaymentRepository = new MovementPaymentRepository();
+        }
+        
         this.personContactRepository = personContactRepository;
         this.boletoRepository = boletoRepository;
         this.boletoService = boletoService;
         this.installmentService = installmentService;
         // Manter a lógica de fallback para criação do licenseRepository
         this.licenseRepository = licenseRepository || new LicenseRepository();
+        
+        // Fallback para movementItemRepository
+        if (!movementItemRepository) {
+            const MovementItemRepository = require('../movement-items/movement-item.repository');
+            movementItemRepository = new MovementItemRepository();
+        }
         this.movementItemRepository = movementItemRepository;
+        
         this.nfseService = nfseService;
         this.serviceRepository = serviceRepository;
         this.billingMessageService = billingMessageService;
@@ -161,68 +180,34 @@ class MovementService extends IMovementService {
             const personRepository = new (require('../persons/person.repository'))();
             const personDetails = await personRepository.findPersonWithDetails(movement.person_id);
 
-            logger.info('Detalhes da Pessoa', {
+            logger.info('Detalhes encontrados', {
+                movementId: movement.movement_id,
                 personId: movement.person_id,
-                personDetails: JSON.stringify(personDetails, null, 2)
             });
 
-            logger.info('Documentos do Tomador', {
-                documentosEncontrados: personDetails.documents.map(doc => ({
-                    id: doc.id,
-                    type: doc.document_type || doc.type,
-                    value: doc.document_value || doc.value,
-                    rawDocument: JSON.stringify(doc, null, 2)
-                })),
-                personId: movement.person_id
+            // Verifica se contacts existe e é um array antes de processar
+            const contacts = personDetails.contacts || [];
+            
+            // Log adicional para detalhes de contatos
+            logger.info('Detalhes de contatos', {
+                totalContacts: contacts.length,
+                contactTypes: contacts.map(c => c.type)
             });
 
-            // Verificar se o tipo da pessoa é PJ ou PF para escolher o documento correto
-            const documentType = personDetails.type === 'PJ' ? 'CNPJ' : 'CPF';
-            const tomadorDocument = personDetails.documents.find(doc => doc.type === documentType);
-
-            logger.info('DEBUG Tomador Documento', {
-                personType: personDetails.type,
-                documentType: documentType,
-                tomadorDocumento: tomadorDocument,
-                todosDocumentos: personDetails.documents
+            // Processa mensagem
+            await this.billingMessageService.processBillingMessage(movement, personDetails, contacts);
+            
+            logger.info('Mensagem de faturamento enviada com sucesso', {
+                movementId: movement.movement_id,
+                personId: personDetails.person_id
             });
-
-            if (!tomadorDocument) {
-                logger.error('Nenhum documento encontrado para o tipo esperado', {
-                    personType: personDetails.type,
-                    documentType,
-                    availableDocuments: JSON.stringify(personDetails.documents),
-                    personDetails: JSON.stringify(personDetails)
-                });
-                throw new Error(`Documento do tomador não encontrado para o tipo ${documentType}`);
-            }
-
-            // Extrair endereço dos detalhes
-            const tomadorEndereco = personDetails.addresses && personDetails.addresses.length > 0 
-                ? personDetails.addresses.find(addr => addr.is_main) || personDetails.addresses[0]
-                : null;
-
-            // Adiciona pessoa ao movimento
-            movement.person = {
-                person_id: movement.person_id,
-                document: tomadorDocument.value,
-                document_type: tomadorDocument.type,
-                address: tomadorEndereco
-            };
-
-            // Busca outros detalhes se necessário
-            // Por exemplo, installments, payments, etc.
-
-            logger.info('Movimento encontrado', { 
-                movementId: id,
-                personId: movement.person_id 
-            });
-
-            return movement;
         } catch (error) {
-            logger.error('Erro ao buscar movimento', {
-                error: error.message,
-                movementId: id
+            logger.error('Erro ao processar mensagem de faturamento', {
+                error: error,
+                errorMessage: error.message,
+                errorStack: error.stack,
+                movementId: movement.movement_id,
+                personId: personDetails.person_id
             });
             throw error;
         }
@@ -336,110 +321,110 @@ class MovementService extends IMovementService {
         }
     }
 
-    /**
-     * Cria um novo movimento
-     */
-    async createMovement(data, generateBoleto = false, generateNotify = false) {
-        // Fallback seguro para logging
-        const log = (message, meta) => {
-            if (this.logger && typeof this.logger.info === 'function') {
-                this.logger.info(message, meta);
-            } else {
-                console.log(message, meta);
-            }
-        };
-
-        log('Estado inicial do movimento', { 
-            data: JSON.stringify(data),
-            generateBoleto, 
-            generateNotify,
-            movementRepositoryExists: !!this.movementRepository,
-            poolExists: !!this.pool,
-            timestamp: new Date().toISOString()
-        });
+    async createMovement(movementData, { client = null } = {}) {
+        const shouldReleaseClient = !client;
+        let transaction;
 
         try {
-            log('Iniciando criação de movimento', { 
-                data, 
-                generateBoleto, 
-                generateNotify,
-                timestamp: new Date().toISOString()
+            // Log adicional de debug
+            console.log('DEBUG: Iniciando createMovement', { 
+                movementData, 
+                hasClient: !!client,
+                movementRepositoryExists: !!this.movementRepository,
+                movementRepositoryType: typeof this.movementRepository
             });
 
-            // Validar dados do movimento
-            const validatedData = await this.validateMovementData(data);
+            // Iniciar transação
+            client = client || await systemDatabase.pool.connect();
+            transaction = await client.query('BEGIN');
 
-            log('Dados do movimento validados', { 
-                validatedData,
-                timestamp: new Date().toISOString()
-            });
-
-            // Criar movimento
-            const movement = await this.movementRepository.createWithClient(
-                this.pool, 
-                validatedData
-            );
-
-            log('Movimento criado no repositório', { 
-                movement,
-                timestamp: new Date().toISOString()
-            });
-
-            // Criar itens do movimento
-            await this.movementItemRepository.createWithClient(
-                this.pool, 
-                movement.movement_id, 
-                validatedData.items
-            );
-
-            log('Itens do movimento criados', { 
-                movementId: movement.movement_id,
-                itemsCount: validatedData.items.length,
-                timestamp: new Date().toISOString()
-            });
-
-            // Buscar movimento detalhado
-            const detailedMovement = await this.getDetailedMovement(movement.movement_id);
-
-            log('Movimento detalhado recuperado', { 
-                detailedMovement,
-                timestamp: new Date().toISOString()
-            });
-
-            // Criar pagamentos do movimento
-            await this.createMovementPayments(
-                movement.movement_id, 
-                validatedData.payment_method_id, 
-                generateBoleto,
-                validatedData.due_date
-            );
-
-            log('Pagamentos do movimento criados', { 
-                movementId: movement.movement_id,
-                timestamp: new Date().toISOString()
-            });
-
-            // Enviar notificação, se necessário e movimento criado com sucesso
-            if (generateNotify) {
-                await this.sendBillingMessage(detailedMovement);
+            // Remover due_date dos dados do movimento de forma segura
+            if (movementData && 'due_date' in movementData) {
+                delete movementData.due_date;
             }
 
-            log('Movimento criado com sucesso', { 
-                movementId: movement.movement_id,
-                timestamp: new Date().toISOString()
+            // Log de debug para validação de dados
+            console.log('DEBUG: Validando dados do movimento', {
+                personId: movementData.person_id,
+                movementTypeId: movementData.movement_type_id
             });
 
-            return detailedMovement;
+            // Validar dados obrigatórios
+            if (!movementData.person_id || !movementData.movement_type_id) {
+                throw new Error('Dados obrigatórios não preenchidos');
+            }
+
+            // Definir valores padrão
+            movementData.movement_date = movementData.movement_date || new Date();
+            movementData.total_amount = movementData.total_amount || 
+                (movementData.items 
+                    ? movementData.items.reduce((total, item) => 
+                        total + (item.quantity * item.unit_price), 0) 
+                    : 0);
+
+            // Log de debug antes da criação
+            console.log('DEBUG: Antes de criar movimento', {
+                movementRepositoryMethod: typeof this.movementRepository.createWithClient,
+                movementData
+            });
+
+            // Criar movimento com cliente de transação
+            const movementRepository = this.movementRepository;
+            const movement = await movementRepository.createWithClient(movementData, client);
+
+            // Log de debug após criação
+            console.log('DEBUG: Movimento criado', { movement });
+
+            // Criar itens do movimento
+            if (movementData.items && movementData.items.length > 0) {
+                const movementItemsData = movementData.items.map(item => ({
+                    ...item,
+                    movement_id: movement.movement_id
+                }));
+                await this.movementItemRepository.createManyWithClient(movementItemsData, client);
+            }
+
+            // Criar pagamentos se existirem
+            if (movementData.payments && movementData.payments.length > 0) {
+                const movementPaymentsData = movementData.payments.map(payment => ({
+                    ...payment,
+                    movement_id: movement.movement_id
+                }));
+                await this.movementPaymentRepository.createManyWithClient(movementPaymentsData, client);
+            }
+
+            // Commit da transação
+            await client.query('COMMIT');
+
+            return movement;
         } catch (error) {
-            log('Erro ao criar movimento', {
-                data,
+            // Log de erro detalhado
+            console.error('ERRO CRÍTICO em createMovement', {
                 errorMessage: error.message,
                 errorStack: error.stack,
-                errorName: error.name,
-                errorObject: JSON.stringify(error, Object.getOwnPropertyNames(error)),
-                timestamp: new Date().toISOString()
+                movementData,
+                movementRepositoryExists: !!this.movementRepository,
+                movementRepositoryType: typeof this.movementRepository
             });
+
+            // Rollback em caso de erro
+            if (transaction) {
+                await client.query('ROLLBACK');
+            }
+
+            // Log detalhado do erro
+            this.logger.error('Erro na criação do movimento:', {
+                errorMessage: error.message,
+                movementData,
+                stack: error.stack
+            });
+
             throw error;
+        } finally {
+            // Liberar cliente se foi criado neste método
+            if (shouldReleaseClient && client) {
+                client.release();
+            }
         }
     }
 
@@ -620,18 +605,43 @@ class MovementService extends IMovementService {
                 paymentData 
             });
 
-            // Validar dados do pagamento
-            const validatedPaymentData = await this.validatePaymentData(paymentData);
+            // Validar payment_method_id
+            if (!paymentData.payment_method_id) {
+                throw new ValidationError('ID do método de pagamento é obrigatório');
+            }
 
-            // Usar o serviço de métodos de pagamento
-            const PaymentMethodService = require('../payment-methods/payment-method.service');
-            const paymentMethodService = new PaymentMethodService({
-                paymentMethodRepository: this.paymentMethodRepository,
-            });
+            // Verificar se o método de pagamento existe
+            const paymentMethodExists = await this.pool.query(`
+                SELECT * FROM payment_methods WHERE payment_method_id = $1
+            `, [paymentData.payment_method_id]);
+
+            if (paymentMethodExists.rows.length === 0) {
+                throw new ValidationError('Método de pagamento não encontrado');
+            }
+
+            // Validar total_amount
+            if (!paymentData.total_amount || paymentData.total_amount <= 0) {
+                throw new ValidationError('Valor total do pagamento deve ser maior que zero');
+            }
+
+            // Preparar dados validados
+            const validatedData = {
+                payment_method_id: paymentData.payment_method_id,
+                total_amount: paymentData.total_amount
+            };
+
+            // Adicionar campos opcionais se existirem
+            if (paymentData.payment_date) {
+                validatedData.payment_date = paymentData.payment_date;
+            }
+
+            if (paymentData.observation) {
+                validatedData.observation = paymentData.observation;
+            }
 
             // Criar pagamento
             const payment = await this.movementPaymentService.create({
-                ...validatedPaymentData, 
+                ...validatedData, 
                 movement_id: movementId 
             });
 
@@ -878,18 +888,35 @@ class MovementService extends IMovementService {
         }
     }
 
-    /**
-     * Valida os dados do movimento
-     */
     validateMovementData(data, isUpdate = false) {
         // Validações básicas se não for update
         if (!isUpdate) {
             if (!data.description) {
                 throw new ValidationError('Descrição é obrigatória');
             }
-            if (!data.total_amount || data.total_amount <= 0) {
-                throw new ValidationError('Valor deve ser maior que zero');
+            
+            // Nova lógica de validação de valor
+            const hasItems = data.items && data.items.length > 0;
+            const hasTotalAmount = data.total_amount && data.total_amount > 0;
+            
+            if (!hasItems && !hasTotalAmount) {
+                throw new ValidationError('Movimento deve ter itens ou valor total');
             }
+            
+            // Se tiver items, calcular valor total (opcional)
+            if (hasItems) {
+                const calculatedTotal = data.items.reduce((total, item) => 
+                    total + (parseFloat(item.quantity) * parseFloat(item.unit_price)), 0);
+                
+                // Se total_amount existir, pode ser diferente do calculado
+                if (hasTotalAmount && Math.abs(calculatedTotal - data.total_amount) > 0.01) {
+                    this.logger.warn('Valor total diverge do valor calculado dos itens', {
+                        calculatedTotal,
+                        providedTotal: data.total_amount
+                    });
+                }
+            }
+            
             if (!data.person_id) {
                 throw new ValidationError('Pessoa é obrigatória');
             }
@@ -905,12 +932,16 @@ class MovementService extends IMovementService {
         }
 
         // Validações para campos específicos em update
-        if (data.total_amount !== undefined && data.total_amount <= 0) {
-            throw new ValidationError('Valor deve ser maior que zero');
+        if (data.total_amount !== undefined) {
+            if (data.total_amount <= 0) {
+                throw new ValidationError('Valor deve ser maior que zero');
+            }
         }
         if (data.description !== undefined && data.description.length < 3) {
             throw new ValidationError('Descrição deve ter no mínimo 3 caracteres');
         }
+
+        return data;
     }
 
     /**

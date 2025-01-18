@@ -165,6 +165,12 @@ class ContractRecurringService {
             // Recuperar dados do movimento modelo
             const movement = await this.movementService.getDetailedMovement(contract.model_movement_id);
 
+            this.logger.warn('Detalhes do Movimento Modelo', {
+                movementId: contract.model_movement_id,
+                movementDetails: JSON.stringify(movement),
+                timestamp: new Date().toISOString()
+            });
+
             // Buscar movement_payments diretamente
             const movementPayments = await this.movementService.movementPaymentRepository.findByMovementId(contract.model_movement_id);
 
@@ -179,8 +185,8 @@ class ContractRecurringService {
                 movement_type_id: 3,
                 movement_status_id: 2,
                 payment_method_id: movementPayments[0]?.payment_method_id,
-                reference: reference,
                 due_date: new Date(), // Data de vencimento padrão
+                license_id: movement.movement.license_id, // Corrigir acesso ao license_id
                 items: movementItems.map(item => ({
                     item_id: item.item_id,
                     quantity: item.quantity,
@@ -213,7 +219,7 @@ class ContractRecurringService {
             });
 
             // Adicionar descrição com referência
-            const description = `Faturamento de contrato referente competencia ${billingData.reference}`;
+            const description = `Faturamento de contrato referente competencia ${this.formatBillingReference(new Date())}`;
 
             // Criar movimento usando o serviço de movimento
             const movement = await this.movementService.createMovement(
@@ -222,7 +228,8 @@ class ContractRecurringService {
                     description
                 }, 
                 false,  // generateBoleto 
-                false   // generateNotify
+                false,  // generateNotify
+                billingData.due_date  // Passar due_date como parâmetro extra
             );
 
             this.logger.info('Movimento de faturamento criado com sucesso', { 

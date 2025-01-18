@@ -278,12 +278,22 @@ class MovementRepository extends BaseRepository {
         }
     }
 
-    async createWithClient(client, data) {
+    async createWithClient(data, client) {
         try {
-            logger.info('Repository: Criando movimento com cliente de transação', { data });
+            // Log detalhado de diagnóstico
+            logger.info('Repositório: Dados para Criação de Movimento', {
+                fullData: JSON.stringify(data),
+                dataKeys: Object.keys(data),
+                timestamp: new Date().toISOString()
+            });
 
-            const columns = Object.keys(data);
-            const values = Object.values(data);
+            // Remover campos que não devem ser inseridos
+            const movementData = { ...data };
+            delete movementData.payment_method_id;
+            delete movementData.items;
+
+            const columns = Object.keys(movementData);
+            const values = Object.values(movementData);
             const placeholders = values.map((_, index) => `$${index + 1}`).join(', ');
 
             const query = `
