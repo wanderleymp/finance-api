@@ -68,6 +68,36 @@ class ContractRecurringRepository extends BaseRepository {
         }
     }
 
+    async findById(id) {
+        try {
+            const query = `
+                SELECT 
+                    p.full_name, 
+                    cg.group_name, 
+                    cr.* 
+                FROM public.contracts_recurring cr
+                JOIN movements m ON cr.model_movement_id = m.movement_id
+                JOIN persons p ON m.person_id = p.person_id
+                JOIN contract_groups cg ON cr.contract_group_id = cg.contract_group_id
+                WHERE cr.contract_id = $1
+            `;
+
+            const result = await this.pool.query(query, [id]);
+
+            if (result.rows.length === 0) {
+                return null;
+            }
+
+            return result.rows[0];
+        } catch (error) {
+            logger.error('Erro ao buscar contrato recorrente por ID', { 
+                id, 
+                error: error.message 
+            });
+            throw error;
+        }
+    }
+
     async create(data) {
         try {
             const result = await this.pool.query(
