@@ -344,6 +344,76 @@ class MovementPaymentService extends IMovementPaymentService {
     }
 
     /**
+     * Cria um novo pagamento
+     */
+    async createPayment(data) {
+        try {
+            this.logger.info('Criando pagamento de movimento', { 
+                data,
+                timestamp: new Date().toISOString()
+            });
+
+            // Validar dados do pagamento
+            const validatedData = MovementPaymentCreateDTO.validate(data);
+
+            // Criar pagamento no repositório
+            const payment = await this.repository.create(validatedData);
+
+            // Criar parcelas do pagamento
+            const installments = await this.createInstallments(
+                payment.movement_payment_id, 
+                validatedData.generateBoleto,
+                validatedData.due_date  // Passar due_date para createInstallments
+            );
+
+            // Adicionar parcelas ao pagamento
+            payment.installments = installments;
+
+            this.logger.info('Pagamento de movimento criado com sucesso', { 
+                movementPaymentId: payment.movement_payment_id,
+                timestamp: new Date().toISOString()
+            });
+
+            return payment;
+        } catch (error) {
+            this.logger.error('Erro ao criar pagamento de movimento', {
+                data,
+                errorMessage: error.message,
+                errorStack: error.stack,
+                timestamp: new Date().toISOString()
+            });
+            throw error;
+        }
+    }
+
+    async createInstallments(movementPaymentId, generateBoleto = false, due_date = null) {
+        try {
+            this.logger.info('Criando parcelas do pagamento', { 
+                movementPaymentId, 
+                generateBoleto,
+                due_date,
+                timestamp: new Date().toISOString()
+            });
+
+            const installments = await this.installmentService.createInstallments({
+                movement_payment_id: movementPaymentId,
+                generateBoleto,
+                due_date  // Passar due_date para createInstallments
+            });
+
+            return installments;
+        } catch (error) {
+            this.logger.error('Erro ao criar parcelas do pagamento', {
+                movementPaymentId,
+                errorMessage: error.message,
+                errorStack: error.stack,
+                timestamp: new Date().toISOString()
+            });
+            throw error;
+        }
+    }
+
+    /**
      * Atualiza um pagamento
      */
     async update(id, data) {
