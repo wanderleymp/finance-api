@@ -16,6 +16,8 @@ const { DatabaseError } = require('../../../utils/errors');
 class ContractRecurringService {
     constructor() {
         this.repository = new ContractRecurringRepository();
+        const movementPaymentRepository = new MovementPaymentRepository();
+
         this.movementService = new MovementService({
             movementRepository: new MovementRepository(),
             personRepository: new PersonRepository(),
@@ -27,7 +29,7 @@ class ContractRecurringService {
             personContactRepository: null,
             boletoRepository: null,
             boletoService: null,
-            movementPaymentRepository: new MovementPaymentRepository(),
+            movementPaymentRepository: movementPaymentRepository,
             installmentService: null,
             licenseRepository: null,
             movementItemRepository: null,

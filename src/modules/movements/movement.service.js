@@ -29,7 +29,7 @@ class MovementService extends IMovementService {
         personContactRepository,
         boletoRepository,
         boletoService,
-        movementPaymentRepository,
+        movementPaymentRepository = null,
         installmentService,
         licenseRepository,
         movementItemRepository,
@@ -46,11 +46,23 @@ class MovementService extends IMovementService {
         this.movementStatusRepository = movementStatusRepository;
         this.paymentMethodRepository = paymentMethodRepository;
         this.installmentRepository = installmentRepository;
-        this.movementPaymentService = movementPaymentService || new MovementPaymentService();
+        
+        // Fallback para movementPaymentService
+        if (!movementPaymentService && movementPaymentRepository) {
+            const MovementPaymentService = require('../movement-payments/movement-payment.service');
+            movementPaymentService = new MovementPaymentService({
+                movementPaymentRepository,
+                installmentRepository,
+                boletoService
+            });
+        }
+        
+        this.movementPaymentService = movementPaymentService;
+        this.movementPaymentRepository = movementPaymentRepository;
+        
         this.personContactRepository = personContactRepository;
         this.boletoRepository = boletoRepository;
         this.boletoService = boletoService;
-        this.movementPaymentRepository = movementPaymentRepository;
         this.installmentService = installmentService;
         // Manter a lógica de fallback para criação do licenseRepository
         this.licenseRepository = licenseRepository || new LicenseRepository();
