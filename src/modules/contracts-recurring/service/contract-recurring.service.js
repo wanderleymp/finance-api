@@ -163,6 +163,14 @@ class ContractRecurringService {
                 throw new Error(`Contrato com ID ${contractId} não encontrado`);
             }
 
+            // Recuperar itens do movimento modelo
+            const movementItems = await this.movementItemService.findByMovementId(contract.model_movement_id);
+
+            this.logger.info('Itens do movimento recuperados', { 
+                movementItems,
+                timestamp: new Date().toISOString()
+            });
+
             // Definir referência de faturamento
             const nextBillingDate = new Date(contract.next_billing_date);
 
@@ -195,7 +203,16 @@ class ContractRecurringService {
                 paymentMethodId: contract.payment_method_id,
                 billingReference: this.formatBillingReference(v_billing_reference),
                 dueDate: dueDate,
-                items: []
+                items: movementItems.map(item => ({
+                    itemId: item.item_id,
+                    serviceId: item.service_id,
+                    description: item.item_name || 'Item sem nome',
+                    quantity: item.quantity,
+                    unitValue: item.unit_price,
+                    totalValue: item.total_price,
+                    valor: item.total_price,
+                    licenseId: item.license_id
+                }))
             };
 
             this.logger.info('Dados de faturamento preparados', { 
