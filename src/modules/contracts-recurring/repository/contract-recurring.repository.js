@@ -10,6 +10,7 @@ class ContractRecurringRepository extends BaseRepository {
 
     async findById(id) {
         try {
+            logger.info('Buscando contrato recorrente', { id });
             const query = `
                 SELECT 
                     p.full_name, 
@@ -22,9 +23,17 @@ class ContractRecurringRepository extends BaseRepository {
                 WHERE cr.contract_id = $1
             `;
 
+            logger.info('Query de busca de contrato', { query, id });
+
             const result = await this.pool.query(query, [id]);
 
+            logger.info('Resultado da busca', { 
+                rowCount: result.rows.length,
+                rows: result.rows
+            });
+
             if (result.rows.length === 0) {
+                logger.warn('Nenhum contrato encontrado', { id });
                 return null;
             }
 
@@ -32,7 +41,8 @@ class ContractRecurringRepository extends BaseRepository {
         } catch (error) {
             logger.error('Erro ao buscar contrato recorrente por ID', { 
                 id, 
-                error: error.message 
+                errorMessage: error.message,
+                errorStack: error.stack 
             });
             throw error;
         }

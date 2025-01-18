@@ -1,15 +1,39 @@
+const { logger } = require('../../../middlewares/logger');
 const ContractRecurringRepository = require('../repository/contract-recurring.repository');
 const ContractRecurringCreateDTO = require('../dto/contract-recurring-create.dto');
 const ContractRecurringDetailedDTO = require('../dto/contract-recurring-detailed.dto');
-const { DatabaseError } = require('../../../utils/errors');
-const { logger } = require('../../../middlewares/logger');
 const MovementService = require('../../movements/movement.service');
 const MovementItemService = require('../../movement-items/movement-item.service');
+const MovementRepository = require('../../movements/movement.repository');
+const PersonRepository = require('../../persons/person.repository');
+const MovementTypeRepository = require('../../movement-types/movement-type.repository');
+const MovementStatusRepository = require('../../movement-statuses/movement-status.repository');
+const PaymentMethodRepository = require('../../payment-methods/payment-method.repository');
+const InstallmentRepository = require('../../installments/installment.repository');
+const { DatabaseError } = require('../../../utils/errors');
 
 class ContractRecurringService {
     constructor() {
         this.repository = new ContractRecurringRepository();
-        this.movementService = new MovementService();
+        this.movementService = new MovementService({
+            movementRepository: new MovementRepository(),
+            personRepository: new PersonRepository(),
+            movementTypeRepository: new MovementTypeRepository(),
+            movementStatusRepository: new MovementStatusRepository(),
+            paymentMethodRepository: new PaymentMethodRepository(),
+            installmentRepository: new InstallmentRepository(),
+            movementPaymentService: null,
+            personContactRepository: null,
+            boletoRepository: null,
+            boletoService: null,
+            movementPaymentRepository: null,
+            installmentService: null,
+            licenseRepository: null,
+            movementItemRepository: null,
+            nfseService: null,
+            serviceRepository: null,
+            billingMessageService: null
+        });
         this.movementItemService = new MovementItemService();
         this.logger = logger;
     }
@@ -111,69 +135,84 @@ class ContractRecurringService {
         };
     }
 
+    formatBillingReference(date) {
+        const month = String(date.getMonth() + 1).padStart(2, '0');
+        const year = date.getFullYear();
+        return `${month}/${year}`;
+    }
+
     async billingPrepareData(contractId) {
-        this.logger.info('Preparando dados para faturamento', { contractId });
+        this.logger.info('Iniciando preparação de dados para faturamento', { 
+            contractId,
+            timestamp: new Date().toISOString()
+        });
         
-        // 1. Recuperar contrato completo
-        const contract = await this.repository.findById(contractId);
-        
-        if (!contract) {
-            throw new Error(`Contrato com ID ${contractId} não encontrado`);
+        try {
+            const contract = await this.repository.findById(contractId);
+            
+            this.logger.info('Contrato recuperado', { 
+                contract,
+                timestamp: new Date().toISOString()
+            });
+            
+            if (!contract) {
+                this.logger.warn('Contrato não encontrado', { 
+                    contractId,
+                    timestamp: new Date().toISOString()
+                });
+                throw new Error(`Contrato com ID ${contractId} não encontrado`);
+            }
+
+            // Definir referência de faturamento
+            const nextBillingDate = new Date(contract.next_billing_date);
+
+            // Calcular mês e ano de referência
+            let v_billing_reference;
+            let dueDate;
+
+            if (contract.billing_reference === 'current') {
+                // Referência 1 mês antes da próxima data de faturamento
+                const referenceDate = new Date(nextBillingDate);
+                referenceDate.setMonth(referenceDate.getMonth() - 1);
+                v_billing_reference = new Date(referenceDate.getFullYear(), referenceDate.getMonth(), 1);
+                
+                // Vencimento no mesmo mês da próxima data de faturamento
+                dueDate = new Date(nextBillingDate.getFullYear(), nextBillingDate.getMonth(), contract.due_day);
+            } else {
+                // Se não for 'current', usa o mês da próxima data de faturamento
+                v_billing_reference = new Date(nextBillingDate.getFullYear(), nextBillingDate.getMonth(), 1);
+                
+                // Vencimento no próximo mês
+                const nextMonth = new Date(nextBillingDate);
+                nextMonth.setMonth(nextMonth.getMonth() + 1);
+                dueDate = new Date(nextMonth.getFullYear(), nextMonth.getMonth(), contract.due_day);
+            }
+
+            const billingData = {
+                contractId: contract.contract_id,
+                personId: contract.person_id,
+                licenseId: contract.license_id,
+                paymentMethodId: contract.payment_method_id,
+                billingReference: this.formatBillingReference(v_billing_reference),
+                dueDate: dueDate,
+                items: []
+            };
+
+            this.logger.info('Dados de faturamento preparados', { 
+                billingData,
+                timestamp: new Date().toISOString()
+            });
+
+            return billingData;
+        } catch (error) {
+            this.logger.error('Erro na preparação de dados de faturamento', {
+                contractId,
+                errorMessage: error.message,
+                errorStack: error.stack,
+                timestamp: new Date().toISOString()
+            });
+            throw error;
         }
-
-        // 2. Recuperar movimento modelo
-        const modelMovementId = contract.model_movement_id;
-        if (!modelMovementId) {
-            throw new Error(`Nenhum movimento modelo encontrado para o contrato ${contractId}`);
-        }
-
-        // 3. Buscar movimento modelo para recuperar detalhes
-        const modelMovement = await this.movementService.findById(modelMovementId);
-        
-        // Log completo do movimento modelo
-        this.logger.info('Movimento modelo recuperado', { modelMovement });
-        
-        // 4. Recuperar itens do movimento modelo
-        const movementItems = await this.movementItemService.findByMovementId(modelMovementId);
-        
-        // 5. Definir referência de faturamento
-        const billingReference = this.generateBillingReference(contract.next_billing_date);
-
-        // 6. Calcular data de vencimento
-        const dueDate = this.calculateDueDate(contract.next_billing_date, contract.due_day);
-
-        // 7. Preparar payload para criação de movimento
-        return {
-            contractId: contract.contract_id,
-            personId: contract.person_id,
-            licenseId: modelMovement.license_id,
-            paymentMethodId: contract.payment_method_id,
-            movementTypeId: 3, // Definido como 'venda'
-            items: movementItems,
-            billingReference: billingReference,
-            dueDate: dueDate,
-            description: `Faturamento Contrato Ref. ${billingReference}`,
-            modelMovementId: modelMovementId
-        };
-    }
-
-    generateBillingReference(nextBillingDate) {
-        return nextBillingDate 
-            ? this.formatDate(nextBillingDate, 'MM/YYYY') 
-            : this.formatDate(new Date(), 'MM/YYYY');
-    }
-
-    calculateDueDate(nextBillingDate, dueDay) {
-        const baseDate = nextBillingDate || new Date();
-        const firstDayOfMonth = new Date(baseDate.getFullYear(), baseDate.getMonth(), 1);
-        return new Date(firstDayOfMonth.setDate(dueDay));
-    }
-
-    formatDate(date, format) {
-        const formattedDate = new Date(date);
-        const month = String(formattedDate.getMonth() + 1).padStart(2, '0');
-        const year = formattedDate.getFullYear();
-        return format.replace('MM', month).replace('YYYY', year);
     }
 
     async billingCreateMovement(billingData) {
@@ -188,9 +227,50 @@ class ContractRecurringService {
         };
     }
 
-    async billing(contractId) {
-        // Método deixado em branco para testes de montagem
-        return null;
+    async billing(contractIds) {
+        this.logger.info('Iniciando processamento de faturamento', { 
+            contractIds,
+            timestamp: new Date().toISOString()
+        });
+
+        const billingResults = [];
+
+        try {
+            for (const contractId of contractIds) {
+                this.logger.info(`Processando faturamento para contrato ${contractId}`, {
+                    contractId,
+                    timestamp: new Date().toISOString()
+                });
+
+                // Preparar dados de faturamento
+                const billingData = await this.billingPrepareData(contractId);
+
+                // Criar movimento de faturamento
+                const movementResult = await this.billingCreateMovement(billingData);
+
+                billingResults.push({
+                    contractId,
+                    billingData,
+                    movementResult
+                });
+            }
+
+            this.logger.info('Processamento de faturamento concluído', { 
+                totalContracts: contractIds.length,
+                billingResults,
+                timestamp: new Date().toISOString()
+            });
+
+            return billingResults;
+        } catch (error) {
+            this.logger.error('Erro no processamento de faturamento', {
+                contractIds,
+                errorMessage: error.message,
+                errorStack: error.stack,
+                timestamp: new Date().toISOString()
+            });
+            throw error;
+        }
     }
 }
 
