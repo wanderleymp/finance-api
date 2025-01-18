@@ -105,17 +105,15 @@ class ContractRecurringController {
 
     async processBilling(req, res, next) {
         try {
-            const { body } = req;
+            const { body = [] } = req;
 
-            if (body && body.length > 0) {
-                // Faturamento de contratos específicos
-                logger.info('Processando faturamento para contratos específicos', { contracts: body });
-                return res.status(200).json({ message: 'implementando...' });
-            } else {
-                // Faturamento de todos os contratos pendentes
-                logger.info('Processando faturamento de todos os contratos pendentes');
-                return res.status(200).json({ message: 'implementando...' });
-            }
+            const result = await this.service.billing(body);
+            
+            logger.info('Processamento de faturamento concluído', { 
+                totalContracts: body.length 
+            });
+
+            return res.status(200).json(result);
         } catch (error) {
             next(error);
         }
@@ -125,8 +123,13 @@ class ContractRecurringController {
         try {
             const { id } = req.params;
             
-            logger.info('Processando faturamento para contrato específico', { contractId: id });
-            return res.status(200).json({ message: 'implementando...' });
+            const result = await this.service.billing([Number(id)]);
+            
+            logger.info('Processamento de faturamento para contrato específico', { 
+                contractId: id 
+            });
+
+            return res.status(200).json(result);
         } catch (error) {
             next(error);
         }

@@ -106,6 +106,34 @@ class ContractRecurringService {
             links: result.links
         };
     }
+
+    async billing(contractIds = []) {
+        this.logger.info('Iniciando processo de faturamento', { contractIds });
+
+        // Constante para armazenar IDs de contratos
+        const processContractIds = contractIds.length > 0 
+            ? contractIds 
+            : (await this.findPendingBillings()).data.map(contract => contract.contract_id);
+
+        // Se não houver contratos para processar, retorna vazio
+        if (processContractIds.length === 0) {
+            this.logger.info('Nenhum contrato encontrado para faturamento');
+            return [];
+        }
+
+        // Loop para processar faturament
+        const results = [];
+        for (const contractId of processContractIds) {
+            this.logger.info('Processando faturamento para contrato', { contractId });
+            // TODO: Implementar método de faturamento individual
+            results.push({ 
+                contractId, 
+                message: 'contrato pendente de implementação' 
+            });
+        }
+
+        return results;
+    }
 }
 
 module.exports = ContractRecurringService;
