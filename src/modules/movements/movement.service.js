@@ -335,20 +335,23 @@ class MovementService extends IMovementService {
                 ...movementData 
             } = data;
 
+            // Validar dados do movimento
+            const validatedData = this.validateMovementData(movementData);
+
             // Definir data do movimento se não fornecida
-            movementData.movement_date = movementData.movement_date || new Date().toISOString().split('T')[0];
+            validatedData.movement_date = validatedData.movement_date || new Date().toISOString().split('T')[0];
             
             // Definir status padrão se não fornecido
-            movementData.movement_status_id = movementData.movement_status_id || 2; // Assumindo que 2 é o status padrão
+            validatedData.movement_status_id = validatedData.movement_status_id || 2; // Assumindo que 2 é o status padrão
 
             // Adicionar informações de boleto, notificação e data de vencimento
-            movementData.boleto = boleto;
-            movementData.nfse = nfse;
-            movementData.notificar = notificar;
-            movementData.due_date = due_date || new Date(new Date().setDate(new Date().getDate() + 30)).toISOString().split('T')[0];
+            validatedData.boleto = boleto;
+            validatedData.nfse = nfse;
+            validatedData.notificar = notificar;
+            validatedData.due_date = due_date || new Date(new Date().setDate(new Date().getDate() + 30)).toISOString().split('T')[0];
 
             // Criar movimento usando o cliente de transação
-            const movement = await this.movementRepository.create(movementData);
+            const movement = await this.movementRepository.create(validatedData);
             logger.info('Service: Movimento criado', { movement });
 
             // Criar itens do movimento
@@ -375,17 +378,22 @@ class MovementService extends IMovementService {
 
             // Após criar o movimento, envia mensagem de faturamento
             try {
-                const person = await this.personRepository.findById(data.person_id);
-                // Comentado temporariamente
-                // await this._processBillingMessage(movement, person);
+                const person = await this.personRepository.findById(validatedData.person_id);
 
                 // Cria pagamento se método de pagamento estiver presente
-                if (data.payment_method_id) {
-                    await this.createPayment(movement.movement_id, {
-                        payment_method_id: data.payment_method_id,
+                if (validatedData.payment_method_id) {
+                    const paymentData = {
+                        payment_method_id: validatedData.payment_method_id,
                         total_amount: movement.total_amount,
                         movement_id: movement.movement_id,
-                        person_id: data.person_id
+                        person_id: validatedData.person_id
+                    };
+
+                    const payment = await this.createPayment(movement.movement_id, paymentData);
+                    
+                    logger.info('Service: Pagamento criado com sucesso', {
+                        movementId: movement.movement_id,
+                        paymentId: payment?.movement_payment_id
                     });
                 }
 
@@ -396,263 +404,21 @@ class MovementService extends IMovementService {
 
                 // Notificar se notificar for true
                 if (notificar) {
-                    // Implementar lógica de notificação
                     logger.info('Notificação solicitada para o movimento', { movementId: movement.movement_id });
+                    // Implementar lógica de notificação
                 }
             } catch (error) {
                 logger.error('Erro ao processar pagamento ou mensagem de faturamento', {
                     error: error.message,
-                    personId: data.person_id
+                    personId: validatedData.person_id
                 });
+                throw error;
             }
 
             return new MovementResponseDTO(movement);
         });
     }
 
-    async createMovement(movementData, { client = null } = {}) {
-        try {
-            // Log detalhado de entrada
-            this.logger.info('Service: Iniciando criação de movimento', {
-                movementData: JSON.stringify(movementData),
-                hasClient: !!client
-            });
-
-            // Definir movement_date se não existir
-            if (!movementData.movement_date) {
-                movementData.movement_date = new Date().toISOString().split('T')[0];
-                this.logger.info('Service: movement_date definido automaticamente', {
-                    autoDefinedDate: movementData.movement_date
-                });
-            }
-
-            // Validar dados do movimento
-            const validatedData = this.validateMovementData(movementData);
-
-            // Criar movimento
-            const movement = await this.movementRepository.create(validatedData, client);
-            
-            this.logger.info('Service: Movimento criado com sucesso', { 
-                movementId: movement.movement_id,
-                movementData: JSON.stringify(movement)
-            });
-
-            // Verificar se deve criar pagamentos
-            if (validatedData.payment_method_id) {
-                this.logger.info('Service: Preparando criação de pagamentos de movimento', {
-                    movementId: movement.movement_id,
-                    paymentMethodId: validatedData.payment_method_id,
-                    totalAmount: validatedData.total_amount
-                });
-
-                try {
-                    const payments = await this.createMovementPayments(
-                        movement.movement_id, 
-                        validatedData.payment_method_id, 
-                        false, 
-                        validatedData.due_date || new Date()
-                    );
-
-                    this.logger.info('Service: Pagamentos de movimento criados', {
-                        movementId: movement.movement_id,
-                        paymentCount: payments ? payments.length : 0,
-                        paymentDetails: JSON.stringify(payments)
-                    });
-                } catch (paymentError) {
-                    this.logger.error('Service: Erro na criação de pagamentos de movimento', {
-                        movementId: movement.movement_id,
-                        paymentMethodId: validatedData.payment_method_id,
-                        errorMessage: paymentError.message,
-                        errorName: paymentError.constructor.name,
-                        errorStack: paymentError.stack
-                    });
-                    // Não lança o erro para não interromper o fluxo de criação do movimento
-                }
-            }
-
-            return movement;
-        } catch (error) {
-            // Log detalhado de erro
-            this.logger.error('Service: Erro na criação do movimento', {
-                errorMessage: error.message,
-                movementData,
-                stack: error.stack
-            });
-
-            throw error;
-        }
-    }
-
-    async createMovementPayments(movementId, paymentMethodId, generateBoleto = false, due_date = null) {
-        try {
-            this.logger.info('Criando pagamentos do movimento', { 
-                movementId, 
-                paymentMethodId, 
-                generateBoleto,
-                due_date,
-                timestamp: new Date().toISOString()
-            });
-
-            const payments = await this.movementPaymentService.createPayment({
-                movement_id: movementId,
-                payment_method_id: paymentMethodId,
-                generateBoleto,
-                due_date  // Passar due_date para createPayment
-            });
-
-            return payments;
-        } catch (error) {
-            this.logger.error('Erro ao criar pagamentos do movimento', {
-                movementId,
-                errorMessage: error.message,
-                errorStack: error.stack,
-                timestamp: new Date().toISOString()
-            });
-            throw error;
-        }
-    }
-
-    /**
-     * Processa mensagem de faturamento
-     * @private
-     */
-    async _processBillingMessage(movement, person) {
-        try {
-            logger.info('Iniciando processamento de mensagem de faturamento', {
-                movementId: movement.movement_id,
-                personId: person.person_id
-            });
-
-            // Usa o serviço de pessoa para buscar contatos
-            const PersonService = require('../persons/person.service');
-            const personService = new PersonService();
-            
-            logger.info('Buscando detalhes da pessoa', {
-                personId: person.person_id
-            });
-
-            const personDetails = await personService.findById(person.person_id, true);
-            
-            logger.info('Detalhes encontrados', {
-                movementId: movement.movement_id,
-                personId: person.person_id,
-            });
-
-            // Verifica se contacts existe e é um array antes de processar
-            const contacts = personDetails.contacts || [];
-            
-            // Log adicional para detalhes de contatos
-            logger.info('Detalhes de contatos', {
-                totalContacts: contacts.length,
-                contactTypes: contacts.map(c => c.type)
-            });
-
-            // Processa mensagem
-            await this.billingMessageService.processBillingMessage(movement, person, contacts);
-            
-            logger.info('Mensagem de faturamento enviada com sucesso', {
-                movementId: movement.movement_id,
-                personId: person.person_id
-            });
-        } catch (error) {
-            logger.error('Erro ao processar mensagem de faturamento', {
-                error: error,
-                errorMessage: error.message,
-                errorStack: error.stack,
-                movementId: movement.movement_id,
-                personId: person.person_id
-            });
-            throw error;
-        }
-    }
-
-    /**
-     * Atualiza um movimento
-     */
-    async update(id, data) {
-        try {
-            logger.info('Service: Atualizando movimento', { id, data });
-
-            // Validar se movimento existe
-            const movement = await this.movementRepository.findById(id);
-            if (!movement) {
-                throw new ValidationError('Movimento não encontrado');
-            }
-
-            // Validações específicas
-            this.validateMovementData(data, true);
-
-            // Atualizar movimento
-            const updated = await this.movementRepository.update(id, data);
-
-            return new MovementResponseDTO(updated);
-        } catch (error) {
-            logger.error('Service: Erro ao atualizar movimento', {
-                error: error.message,
-                id,
-                data
-            });
-            throw error;
-        }
-    }
-
-    /**
-     * Remove um movimento
-     */
-    async delete(id) {
-        try {
-            logger.info('Service: Removendo movimento', { id });
-
-            // Validar se movimento existe
-            const movement = await this.movementRepository.findById(id);
-            if (!movement) {
-                throw new ValidationError('Movimento não encontrado');
-            }
-
-            // Remover movimento
-            await this.movementRepository.delete(id);
-        } catch (error) {
-            logger.error('Service: Erro ao remover movimento', {
-                error: error.message,
-                id
-            });
-            throw error;
-        }
-    }
-
-    /**
-     * Atualiza o status de um movimento
-     */
-    async updateStatus(id, status) {
-        try {
-            logger.info('Service: Atualizando status do movimento', { id, status });
-
-            // Validar se movimento existe
-            const movement = await this.movementRepository.findById(id);
-            if (!movement) {
-                throw new ValidationError('Movimento não encontrado');
-            }
-
-            // Validar transição de status
-            this.validateStatusTransition(movement.status, status);
-
-            // Atualizar status
-            const updated = await this.movementRepository.updateStatus(id, status);
-
-            return new MovementResponseDTO(updated);
-        } catch (error) {
-            logger.error('Service: Erro ao atualizar status do movimento', {
-                error: error.message,
-                id,
-                status
-            });
-            throw error;
-        }
-    }
-
-    /**
-     * Cria um novo pagamento para o movimento
-     */
     async createPayment(movementId, paymentData) {
         return this.movementPaymentRepository.transaction(async (client) => {
             logger.info('Service: Criando pagamento para movimento', { 
@@ -730,45 +496,6 @@ class MovementService extends IMovementService {
         });
     }
 
-    /**
-     * Atualiza o status do movimento
-     */
-    async updateMovementStatus(client, movementId, payment) {
-        try {
-            logger.info('Service: Atualizando status do movimento', { 
-                movementId, 
-                paymentStatus: payment?.status 
-            });
-
-            // Lógica para atualizar o status do movimento baseado no pagamento
-            // Por exemplo, se o pagamento for concluído, atualizar o status do movimento
-            const newStatus = payment?.status === 'Concluído' ? 3 : 2; // Assumindo que 2 é pendente e 3 é concluído
-
-            const updatedMovement = await this.movementRepository.update(movementId, {
-                movement_status_id: newStatus
-            });
-
-            logger.info('Service: Status do movimento atualizado', { 
-                movementId, 
-                newStatus 
-            });
-
-            return updatedMovement;
-        } catch (error) {
-            logger.error('Service: Erro ao atualizar status do movimento', {
-                error: error.message,
-                movementId,
-                errorStack: error.stack
-            });
-            throw error;
-        }
-    }
-
-    /**
-     * Cria boletos para um movimento
-     * @param {number} movementId - ID do movimento
-     * @returns {Promise<Array>} Boletos criados
-     */
     async createBoletosMovimento(movementId) {
         try {
             logger.info('Service: Criando boletos para movimento', { movementId });
@@ -831,11 +558,6 @@ class MovementService extends IMovementService {
         }
     }
 
-    /**
-     * Cancela um movimento
-     * @param {number} movementId - ID do movimento a ser cancelado
-     * @returns {Promise<Object>} Resultado do cancelamento
-     */
     async cancelMovement(movementId) {
         // Verifica se o movimento existe
         const movement = await this.findById(movementId);
@@ -898,13 +620,6 @@ class MovementService extends IMovementService {
         };
     }
 
-    /**
-     * Cria uma NFSE para um movimento específico
-     * @param {number} movementId - ID do movimento
-     * @param {object} [options] - Opções adicionais
-     * @param {string} [options.ambiente='homologacao'] - Ambiente de emissão da NFSE
-     * @returns {Promise<Object>} NFSE criada
-     */
     async createMovementNFSe(movementId) {
         try {
             logger.info('Iniciando criação de NFSE para movimento', { movementId });
@@ -959,6 +674,101 @@ class MovementService extends IMovementService {
                 movementId,
                 errorMessage: error.message,
                 errorStack: error.stack
+            });
+            throw error;
+        }
+    }
+
+    async sendBillingMessage(detailedMovement) {
+        try {
+            // Busca a pessoa associada ao movimento
+            const person = await this.personRepository.findById(detailedMovement.person_id);
+
+            // Busca os contatos da pessoa
+            const contacts = await this.personContactRepository.findByPersonId(person.person_id);
+
+            // Processa a mensagem de faturamento
+            await this.billingMessageService.processBillingMessage(detailedMovement, person, contacts);
+        } catch (error) {
+            this.logger.error('Erro ao enviar mensagem de faturamento', {
+                movementId: detailedMovement.movement_id,
+                errorMessage: error.message,
+                errorStack: error.stack
+            });
+            throw error;
+        }
+    }
+
+    async update(id, data) {
+        try {
+            logger.info('Service: Atualizando movimento', { id, data });
+
+            // Validar se movimento existe
+            const movement = await this.movementRepository.findById(id);
+            if (!movement) {
+                throw new ValidationError('Movimento não encontrado');
+            }
+
+            // Validações específicas
+            this.validateMovementData(data, true);
+
+            // Atualizar movimento
+            const updated = await this.movementRepository.update(id, data);
+
+            return new MovementResponseDTO(updated);
+        } catch (error) {
+            logger.error('Service: Erro ao atualizar movimento', {
+                error: error.message,
+                id,
+                data
+            });
+            throw error;
+        }
+    }
+
+    async delete(id) {
+        try {
+            logger.info('Service: Removendo movimento', { id });
+
+            // Validar se movimento existe
+            const movement = await this.movementRepository.findById(id);
+            if (!movement) {
+                throw new ValidationError('Movimento não encontrado');
+            }
+
+            // Remover movimento
+            await this.movementRepository.delete(id);
+        } catch (error) {
+            logger.error('Service: Erro ao remover movimento', {
+                error: error.message,
+                id
+            });
+            throw error;
+        }
+    }
+
+    async updateStatus(id, status) {
+        try {
+            logger.info('Service: Atualizando status do movimento', { id, status });
+
+            // Validar se movimento existe
+            const movement = await this.movementRepository.findById(id);
+            if (!movement) {
+                throw new ValidationError('Movimento não encontrado');
+            }
+
+            // Validar transição de status
+            this.validateStatusTransition(movement.status, status);
+
+            // Atualizar status
+            const updated = await this.movementRepository.updateStatus(id, status);
+
+            return new MovementResponseDTO(updated);
+        } catch (error) {
+            logger.error('Service: Erro ao atualizar status do movimento', {
+                error: error.message,
+                id,
+                status
             });
             throw error;
         }
@@ -1020,9 +830,6 @@ class MovementService extends IMovementService {
         return data;
     }
 
-    /**
-     * Valida a transição de status
-     */
     validateStatusTransition(currentStatus, newStatus) {
         const validStatus = ['PENDING', 'PAID', 'CANCELED'];
         if (!validStatus.includes(newStatus)) {
@@ -1038,9 +845,6 @@ class MovementService extends IMovementService {
         }
     }
 
-    /**
-     * Valida os filtros
-     */
     validateFilters(filters) {
         const { 
             value_min,
@@ -1064,9 +868,6 @@ class MovementService extends IMovementService {
         }
     }
 
-    /**
-     * Prepara os filtros para a query
-     */
     prepareFilters(filters) {
         const preparedFilters = { ...filters };
         delete preparedFilters.detailed; // Remove o detailed dos filtros pois não é usado na query
@@ -1147,26 +948,6 @@ class MovementService extends IMovementService {
                 paymentData: JSON.stringify(paymentData),
                 errorMessage: error.message,
                 errorName: error.constructor.name,
-                errorStack: error.stack
-            });
-            throw error;
-        }
-    }
-
-    async sendBillingMessage(detailedMovement) {
-        try {
-            // Busca a pessoa associada ao movimento
-            const person = await this.personRepository.findById(detailedMovement.person_id);
-
-            // Busca os contatos da pessoa
-            const contacts = await this.personContactRepository.findByPersonId(person.person_id);
-
-            // Processa a mensagem de faturamento
-            await this.billingMessageService.processBillingMessage(detailedMovement, person, contacts);
-        } catch (error) {
-            this.logger.error('Erro ao enviar mensagem de faturamento', {
-                movementId: detailedMovement.movement_id,
-                errorMessage: error.message,
                 errorStack: error.stack
             });
             throw error;
