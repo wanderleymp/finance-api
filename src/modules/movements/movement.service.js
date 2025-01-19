@@ -321,110 +321,165 @@ class MovementService extends IMovementService {
         }
     }
 
-    async createMovement(movementData, { client = null } = {}) {
-        const shouldReleaseClient = !client;
-        let transaction;
+    async create(data) {
+        return this.movementPaymentRepository.transaction(async (client) => {
+            logger.info('Service: Criando novo movimento', { data });
 
-        try {
-            // Log adicional de debug
-            console.log('DEBUG: Iniciando createMovement', { 
-                movementData, 
-                hasClient: !!client,
-                movementRepositoryExists: !!this.movementRepository,
-                movementRepositoryType: typeof this.movementRepository
-            });
+            // Separar dados do movimento e do pagamento
+            const { 
+                items, 
+                boleto = false, 
+                nfse = false, 
+                notificar = false, 
+                due_date,
+                ...movementData 
+            } = data;
 
-            // Iniciar transação
-            client = client || await systemDatabase.pool.connect();
-            transaction = await client.query('BEGIN');
+            // Definir data do movimento se não fornecida
+            movementData.movement_date = movementData.movement_date || new Date().toISOString().split('T')[0];
+            
+            // Definir status padrão se não fornecido
+            movementData.movement_status_id = movementData.movement_status_id || 2; // Assumindo que 2 é o status padrão
 
-            // Remover due_date dos dados do movimento de forma segura
-            if (movementData && 'due_date' in movementData) {
-                delete movementData.due_date;
-            }
+            // Adicionar informações de boleto, notificação e data de vencimento
+            movementData.boleto = boleto;
+            movementData.nfse = nfse;
+            movementData.notificar = notificar;
+            movementData.due_date = due_date || new Date(new Date().setDate(new Date().getDate() + 30)).toISOString().split('T')[0];
 
-            // Log de debug para validação de dados
-            console.log('DEBUG: Validando dados do movimento', {
-                personId: movementData.person_id,
-                movementTypeId: movementData.movement_type_id
-            });
-
-            // Validar dados obrigatórios
-            if (!movementData.person_id || !movementData.movement_type_id) {
-                throw new Error('Dados obrigatórios não preenchidos');
-            }
-
-            // Definir valores padrão
-            movementData.movement_date = movementData.movement_date || new Date();
-            movementData.total_amount = movementData.total_amount || 
-                (movementData.items 
-                    ? movementData.items.reduce((total, item) => 
-                        total + (item.quantity * item.unit_price), 0) 
-                    : 0);
-
-            // Log de debug antes da criação
-            console.log('DEBUG: Antes de criar movimento', {
-                movementRepositoryMethod: typeof this.movementRepository.createWithClient,
-                movementData
-            });
-
-            // Criar movimento com cliente de transação
-            const movementRepository = this.movementRepository;
-            const movement = await movementRepository.createWithClient(movementData, client);
-
-            // Log de debug após criação
-            console.log('DEBUG: Movimento criado', { movement });
+            // Criar movimento usando o cliente de transação
+            const movement = await this.movementRepository.create(movementData);
+            logger.info('Service: Movimento criado', { movement });
 
             // Criar itens do movimento
-            if (movementData.items && movementData.items.length > 0) {
-                const movementItemsData = movementData.items.map(item => ({
-                    ...item,
-                    movement_id: movement.movement_id
-                }));
-                await this.movementItemRepository.createManyWithClient(movementItemsData, client);
+            if (items && items.length > 0) {
+                const MovementItemService = require('../movement-items/movement-item.service');
+                const movementItemService = new MovementItemService();
+
+                for (const item of items) {
+                    try {
+                        await movementItemService.create({
+                            ...item,
+                            movement_id: movement.movement_id
+                        });
+                    } catch (error) {
+                        logger.error('Service: Erro ao criar item de movimento', {
+                            error: error.message,
+                            item,
+                            movementId: movement.movement_id
+                        });
+                        throw error;
+                    }
+                }
             }
 
-            // Criar pagamentos se existirem
-            if (movementData.payments && movementData.payments.length > 0) {
-                const movementPaymentsData = movementData.payments.map(payment => ({
-                    ...payment,
-                    movement_id: movement.movement_id
-                }));
-                await this.movementPaymentRepository.createManyWithClient(movementPaymentsData, client);
+            // Após criar o movimento, envia mensagem de faturamento
+            try {
+                const person = await this.personRepository.findById(data.person_id);
+                // Comentado temporariamente
+                // await this._processBillingMessage(movement, person);
+
+                // Cria pagamento se método de pagamento estiver presente
+                if (data.payment_method_id) {
+                    await this.createPayment(movement.movement_id, {
+                        payment_method_id: data.payment_method_id,
+                        total_amount: movement.total_amount,
+                        movement_id: movement.movement_id,
+                        person_id: data.person_id
+                    });
+                }
+
+                // Criar boleto se boleto for true
+                if (boleto) {
+                    await this.createBoletosMovimento(movement.movement_id);
+                }
+
+                // Notificar se notificar for true
+                if (notificar) {
+                    // Implementar lógica de notificação
+                    logger.info('Notificação solicitada para o movimento', { movementId: movement.movement_id });
+                }
+            } catch (error) {
+                logger.error('Erro ao processar pagamento ou mensagem de faturamento', {
+                    error: error.message,
+                    personId: data.person_id
+                });
             }
 
-            // Commit da transação
-            await client.query('COMMIT');
+            return new MovementResponseDTO(movement);
+        });
+    }
+
+    async createMovement(movementData, { client = null } = {}) {
+        try {
+            // Log detalhado de entrada
+            this.logger.info('Service: Iniciando criação de movimento', {
+                movementData: JSON.stringify(movementData),
+                hasClient: !!client
+            });
+
+            // Definir movement_date se não existir
+            if (!movementData.movement_date) {
+                movementData.movement_date = new Date().toISOString().split('T')[0];
+                this.logger.info('Service: movement_date definido automaticamente', {
+                    autoDefinedDate: movementData.movement_date
+                });
+            }
+
+            // Validar dados do movimento
+            const validatedData = this.validateMovementData(movementData);
+
+            // Criar movimento
+            const movement = await this.movementRepository.create(validatedData, client);
+            
+            this.logger.info('Service: Movimento criado com sucesso', { 
+                movementId: movement.movement_id,
+                movementData: JSON.stringify(movement)
+            });
+
+            // Verificar se deve criar pagamentos
+            if (validatedData.payment_method_id) {
+                this.logger.info('Service: Preparando criação de pagamentos de movimento', {
+                    movementId: movement.movement_id,
+                    paymentMethodId: validatedData.payment_method_id,
+                    totalAmount: validatedData.total_amount
+                });
+
+                try {
+                    const payments = await this.createMovementPayments(
+                        movement.movement_id, 
+                        validatedData.payment_method_id, 
+                        false, 
+                        validatedData.due_date || new Date()
+                    );
+
+                    this.logger.info('Service: Pagamentos de movimento criados', {
+                        movementId: movement.movement_id,
+                        paymentCount: payments ? payments.length : 0,
+                        paymentDetails: JSON.stringify(payments)
+                    });
+                } catch (paymentError) {
+                    this.logger.error('Service: Erro na criação de pagamentos de movimento', {
+                        movementId: movement.movement_id,
+                        paymentMethodId: validatedData.payment_method_id,
+                        errorMessage: paymentError.message,
+                        errorName: paymentError.constructor.name,
+                        errorStack: paymentError.stack
+                    });
+                    // Não lança o erro para não interromper o fluxo de criação do movimento
+                }
+            }
 
             return movement;
         } catch (error) {
-            // Log de erro detalhado
-            console.error('ERRO CRÍTICO em createMovement', {
-                errorMessage: error.message,
-                errorStack: error.stack,
-                movementData,
-                movementRepositoryExists: !!this.movementRepository,
-                movementRepositoryType: typeof this.movementRepository
-            });
-
-            // Rollback em caso de erro
-            if (transaction) {
-                await client.query('ROLLBACK');
-            }
-
-            // Log detalhado do erro
-            this.logger.error('Erro na criação do movimento:', {
+            // Log detalhado de erro
+            this.logger.error('Service: Erro na criação do movimento', {
                 errorMessage: error.message,
                 movementData,
                 stack: error.stack
             });
 
             throw error;
-        } finally {
-            // Liberar cliente se foi criado neste método
-            if (shouldReleaseClient && client) {
-                client.release();
-            }
         }
     }
 
@@ -605,32 +660,38 @@ class MovementService extends IMovementService {
                 paymentData 
             });
 
-            // Validar payment_method_id
+            // Validações existentes
             if (!paymentData.payment_method_id) {
-                throw new ValidationError('ID do método de pagamento é obrigatório');
-            }
-
-            // Verificar se o método de pagamento existe
-            const paymentMethodExists = await this.pool.query(`
-                SELECT * FROM payment_methods WHERE payment_method_id = $1
-            `, [paymentData.payment_method_id]);
-
-            if (paymentMethodExists.rows.length === 0) {
-                throw new ValidationError('Método de pagamento não encontrado');
+                logger.warn('Service: Método de pagamento não informado', {
+                    paymentData: JSON.stringify(paymentData)
+                });
+                throw new ValidationError('Método de pagamento é obrigatório');
             }
 
             // Validar total_amount
             if (!paymentData.total_amount || paymentData.total_amount <= 0) {
+                logger.warn('Service: Total de pagamento inválido', {
+                    totalAmount: paymentData.total_amount,
+                    paymentData: JSON.stringify(paymentData)
+                });
                 throw new ValidationError('Valor total do pagamento deve ser maior que zero');
             }
 
-            // Preparar dados validados
+            // Validar movimento_id
+            if (!paymentData.movement_id) {
+                logger.warn('Service: Movimento não informado', {
+                    paymentData: JSON.stringify(paymentData)
+                });
+                throw new ValidationError('Movimento é obrigatório');
+            }
+
             const validatedData = {
                 payment_method_id: paymentData.payment_method_id,
-                total_amount: paymentData.total_amount
+                total_amount: paymentData.total_amount,
+                movement_id: paymentData.movement_id
             };
 
-            // Adicionar campos opcionais se existirem
+            // Adicionar campos opcionais
             if (paymentData.payment_date) {
                 validatedData.payment_date = paymentData.payment_date;
             }
@@ -639,18 +700,33 @@ class MovementService extends IMovementService {
                 validatedData.observation = paymentData.observation;
             }
 
-            // Criar pagamento
-            const payment = await this.movementPaymentService.create({
-                ...validatedData, 
-                movement_id: movementId 
+            logger.info('Service: Dados de pagamento validados com sucesso', {
+                validatedData: JSON.stringify(validatedData)
             });
 
-            logger.info('Service: Pagamento criado com sucesso', { 
-                movementId, 
-                paymentId: payment.movement_payment_id 
-            });
+            try {
+                const payment = await this.movementPaymentService.create({
+                    ...validatedData, 
+                    movement_id: movementId 
+                });
 
-            return payment;
+                logger.info('Service: Pagamento criado com sucesso', { 
+                    movementId, 
+                    paymentId: payment.movement_payment_id,
+                    paymentDetails: JSON.stringify(payment)
+                });
+
+                return payment;
+            } catch (error) {
+                logger.error('Service: Erro COMPLETO na criação de pagamento', {
+                    movementId,
+                    paymentData: JSON.stringify(validatedData),
+                    errorMessage: error.message,
+                    errorName: error.constructor.name,
+                    errorStack: error.stack
+                });
+                throw error;
+            }
         });
     }
 
@@ -1015,47 +1091,66 @@ class MovementService extends IMovementService {
         return preparedFilters;
     }
 
-    /**
-     * Valida os dados de pagamento
-     */
     async validatePaymentData(paymentData) {
-        logger.info('Service: Validando dados de pagamento', { paymentData });
+        try {
+            logger.info('Service: Iniciando validação de dados de pagamento', {
+                paymentData: JSON.stringify(paymentData)
+            });
 
-        // Validar payment_method_id
-        if (!paymentData.payment_method_id) {
-            throw new ValidationError('ID do método de pagamento é obrigatório');
+            // Validações existentes
+            if (!paymentData.payment_method_id) {
+                logger.warn('Service: Método de pagamento não informado', {
+                    paymentData: JSON.stringify(paymentData)
+                });
+                throw new ValidationError('Método de pagamento é obrigatório');
+            }
+
+            // Validar total_amount
+            if (!paymentData.total_amount || paymentData.total_amount <= 0) {
+                logger.warn('Service: Total de pagamento inválido', {
+                    totalAmount: paymentData.total_amount,
+                    paymentData: JSON.stringify(paymentData)
+                });
+                throw new ValidationError('Valor total do pagamento deve ser maior que zero');
+            }
+
+            // Validar movimento_id
+            if (!paymentData.movement_id) {
+                logger.warn('Service: Movimento não informado', {
+                    paymentData: JSON.stringify(paymentData)
+                });
+                throw new ValidationError('Movimento é obrigatório');
+            }
+
+            const validatedData = {
+                payment_method_id: paymentData.payment_method_id,
+                total_amount: paymentData.total_amount,
+                movement_id: paymentData.movement_id
+            };
+
+            // Adicionar campos opcionais
+            if (paymentData.payment_date) {
+                validatedData.payment_date = paymentData.payment_date;
+            }
+
+            if (paymentData.observation) {
+                validatedData.observation = paymentData.observation;
+            }
+
+            logger.info('Service: Dados de pagamento validados com sucesso', {
+                validatedData: JSON.stringify(validatedData)
+            });
+
+            return validatedData;
+        } catch (error) {
+            logger.error('Service: Erro na validação de dados de pagamento', {
+                paymentData: JSON.stringify(paymentData),
+                errorMessage: error.message,
+                errorName: error.constructor.name,
+                errorStack: error.stack
+            });
+            throw error;
         }
-
-        // Verificar se o método de pagamento existe
-        const paymentMethodExists = await this.pool.query(`
-            SELECT * FROM payment_methods WHERE payment_method_id = $1
-        `, [paymentData.payment_method_id]);
-
-        if (paymentMethodExists.rows.length === 0) {
-            throw new ValidationError('Método de pagamento não encontrado');
-        }
-
-        // Validar total_amount
-        if (!paymentData.total_amount || paymentData.total_amount <= 0) {
-            throw new ValidationError('Valor total do pagamento deve ser maior que zero');
-        }
-
-        // Preparar dados validados
-        const validatedData = {
-            payment_method_id: paymentData.payment_method_id,
-            total_amount: paymentData.total_amount
-        };
-
-        // Adicionar campos opcionais se existirem
-        if (paymentData.payment_date) {
-            validatedData.payment_date = paymentData.payment_date;
-        }
-
-        if (paymentData.observation) {
-            validatedData.observation = paymentData.observation;
-        }
-
-        return validatedData;
     }
 
     async sendBillingMessage(detailedMovement) {

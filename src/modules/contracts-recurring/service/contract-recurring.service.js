@@ -187,6 +187,9 @@ class ContractRecurringService {
                 payment_method_id: movementPayments[0]?.payment_method_id,
                 due_date: new Date(), // Data de vencimento padrão
                 license_id: movement.movement.license_id, // Corrigir acesso ao license_id
+                // NOVO: Calcular total_amount
+                total_amount: movementItems.reduce((total, item) => 
+                    total + (item.quantity * item.unit_price), 0),
                 items: movementItems.map(item => ({
                     item_id: item.item_id,
                     quantity: item.quantity,
@@ -221,11 +224,15 @@ class ContractRecurringService {
             // Adicionar descrição com referência
             const description = `Faturamento de contrato referente competencia ${this.formatBillingReference(new Date())}`;
 
+            // Definir movement_date como a data atual
+            const movement_date = new Date().toISOString().split('T')[0];
+
             // Criar movimento usando o serviço de movimento
             const movement = await this.movementService.createMovement(
                 {
                     ...billingData,
-                    description
+                    description,
+                    movement_date  // Adicionar movement_date explicitamente
                 }, 
                 false,  // generateBoleto 
                 false,  // generateNotify
@@ -234,6 +241,7 @@ class ContractRecurringService {
 
             this.logger.info('Movimento de faturamento criado com sucesso', { 
                 movementId: movement.movement_id,
+                movementDate: movement_date,
                 timestamp: new Date().toISOString()
             });
 

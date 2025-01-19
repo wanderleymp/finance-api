@@ -185,19 +185,34 @@ class MovementPaymentService extends IMovementPaymentService {
      */
     async create(data) {
         try {
-            logger.info('Service: Criando movimento_payment', { data });
+            // Log inicial detalhado
+            this.logger.info('MovementPaymentService: Iniciando criação de pagamento', { 
+                inputData: JSON.stringify(data),
+                paymentMethodId: data.payment_method_id,
+                movementId: data.movement_id,
+                totalAmount: data.total_amount
+            });
 
             // Criar payment
             const payment = await this.repository.create(data);
-            logger.info('Service: Movimento_payment criado', { payment });
+            
+            this.logger.info('MovementPaymentService: Movimento_payment criado', { 
+                payment: JSON.stringify(payment),
+                paymentId: payment.payment_id
+            });
 
             // Buscar o payment method para ver o número de parcelas
             const paymentMethod = await this.paymentMethodsService.findById(data.payment_method_id);
             
-            // Log detalhado do método de pagamento encontrado
-            logger.info('Service: Payment method encontrado', { 
-                paymentMethod,
+            this.logger.info('MovementPaymentService: Payment method encontrado', { 
+                paymentMethod: JSON.stringify(paymentMethod),
                 paymentMethodId: data.payment_method_id 
+            });
+
+            // Log antes da geração de parcelas
+            this.logger.info('MovementPaymentService: Preparando geração de parcelas', {
+                paymentMethodInstallments: paymentMethod.installment_count,
+                totalAmount: data.total_amount
             });
 
             // Gerar parcelas
@@ -250,29 +265,16 @@ class MovementPaymentService extends IMovementPaymentService {
                 installments
             };
         } catch (error) {
-            // Log detalhado do erro
-            logger.error('Service: Erro ao criar movimento_payment', {
-                error: error.message,
+            this.logger.error('MovementPaymentService: Erro COMPLETO na criação de pagamento', {
+                inputData: JSON.stringify(data),
+                errorMessage: error.message,
                 errorName: error.constructor.name,
-                error_stack: error.stack,
-                inputData: data,
-                paymentMethodId: data?.payment_method_id
+                errorStack: error.stack,
+                paymentMethodId: data.payment_method_id,
+                movementId: data.movement_id,
+                totalAmount: data.total_amount
             });
-
-            // Tratamento de erro para frontend
-            if (error instanceof ValidationError) {
-                throw error; // Já é um erro tratado
-            }
-
-            // Erros genéricos
-            if (error.message.includes('payment_method_id')) {
-                throw new ValidationError('Método de pagamento inválido', {
-                    paymentMethodId: data?.payment_method_id
-                });
-            }
-
-            // Erro genérico para o frontend
-            throw new Error('Erro ao processar pagamento. Por favor, tente novamente.');
+            throw error;
         }
     }
 
@@ -281,19 +283,40 @@ class MovementPaymentService extends IMovementPaymentService {
      */
     async createWithTransaction(client, data) {
         try {
-            logger.info('Service: Criando movimento_payment', { data });
+            logger.info('Service: Criando movimento_payment', { 
+                data,
+                timestamp: new Date().toISOString()
+            });
+
+            // Validar dados de entrada
+            if (!data.movement_id || !data.payment_method_id || !data.total_amount) {
+                throw new ValidationError('Dados de pagamento incompletos', {
+                    movement_id: data.movement_id,
+                    payment_method_id: data.payment_method_id,
+                    total_amount: data.total_amount
+                });
+            }
 
             // Criar payment
             const payment = await this.repository.createWithClient(client, data);
-            logger.info('Service: Movimento_payment criado', { payment });
+            logger.info('Service: Movimento_payment criado', { 
+                payment,
+                timestamp: new Date().toISOString()
+            });
 
             // Buscar o payment method para ver o número de parcelas
             const paymentMethod = await this.paymentMethodsService.findById(data.payment_method_id);
-            logger.info('Service: Payment method encontrado', { paymentMethod });
+            logger.info('Service: Payment method encontrado', { 
+                paymentMethod,
+                timestamp: new Date().toISOString()
+            });
 
             // Buscar o movimento para pegar o person_id
             const movement = await this.repository.findMovementById(data.movement_id);
-            logger.info('Service: Movimento encontrado', { movement });
+            logger.info('Service: Movimento encontrado', { 
+                movement,
+                timestamp: new Date().toISOString()
+            });
 
             // Gerar parcelas
             let installments = [];
@@ -306,7 +329,7 @@ class MovementPaymentService extends IMovementPaymentService {
                 }, paymentMethod);
             } else {
                 // Para outros métodos de pagamento, usa o InstallmentService
-                const installmentAmount = data.total_amount / (paymentMethod.data.installment_count || 1);
+                const installmentAmount = Number(data.total_amount) / (paymentMethod.data.installment_count || 1);
                 
                 for (let i = 1; i <= (paymentMethod.data.installment_count || 1); i++) {
                     const dueDate = new Date();
@@ -327,17 +350,26 @@ class MovementPaymentService extends IMovementPaymentService {
                 }
             }
 
-            logger.info('Service: Parcelas geradas', { installments });
+            logger.info('Service: Parcelas geradas', { 
+                installmentsCount: installments.length,
+                paymentId: payment.payment_id,
+                timestamp: new Date().toISOString()
+            });
 
             return {
                 ...payment,
                 installments
             };
         } catch (error) {
-            logger.error('Service: Erro ao criar movimento_payment', {
-                error: error.message,
-                error_stack: error.stack,
-                data
+            logger.error('Service: Erro COMPLETO na criação de movimento_payment', {
+                inputData: JSON.stringify(data),
+                errorMessage: error.message,
+                errorName: error.constructor.name,
+                errorStack: error.stack,
+                paymentMethodId: data.payment_method_id,
+                movementId: data.movement_id,
+                totalAmount: data.total_amount,
+                timestamp: new Date().toISOString()
             });
             throw error;
         }
@@ -353,8 +385,15 @@ class MovementPaymentService extends IMovementPaymentService {
                 timestamp: new Date().toISOString()
             });
 
+            // Remover parâmetros extras antes da validação
+            const { generateBoleto, due_date, ...validationData } = data;
+
             // Validar dados do pagamento
-            const validatedData = MovementPaymentCreateDTO.validate(data);
+            const validatedData = {
+                ...MovementPaymentCreateDTO.validate(validationData),
+                generateBoleto: generateBoleto || false,
+                due_date: due_date || new Date().toISOString().split('T')[0]
+            };
 
             // Criar pagamento no repositório
             const payment = await this.repository.create(validatedData);
@@ -363,7 +402,7 @@ class MovementPaymentService extends IMovementPaymentService {
             const installments = await this.createInstallments(
                 payment.movement_payment_id, 
                 validatedData.generateBoleto,
-                validatedData.due_date  // Passar due_date para createInstallments
+                validatedData.due_date
             );
 
             // Adicionar parcelas ao pagamento
@@ -371,6 +410,8 @@ class MovementPaymentService extends IMovementPaymentService {
 
             this.logger.info('Pagamento de movimento criado com sucesso', { 
                 movementPaymentId: payment.movement_payment_id,
+                generateBoleto: validatedData.generateBoleto,
+                dueDate: validatedData.due_date,
                 timestamp: new Date().toISOString()
             });
 
@@ -379,6 +420,7 @@ class MovementPaymentService extends IMovementPaymentService {
             this.logger.error('Erro ao criar pagamento de movimento', {
                 data,
                 errorMessage: error.message,
+                errorName: error.constructor.name,
                 errorStack: error.stack,
                 timestamp: new Date().toISOString()
             });
