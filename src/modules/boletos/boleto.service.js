@@ -110,49 +110,20 @@ class BoletoService {
     async createBoleto(data) {
         try {
             logger.info('Serviço: Criando boleto', { data });
-            
-            // Validação básica
+
             if (!data.installment_id) {
                 throw new Error('installment_id é obrigatório');
             }
 
-            // Chama função do postgres para gerar payload do boleto
-            const boletoPayload = await this.repository.generateBoletoJson(data.installment_id);
-
-            if (!boletoPayload) {
-                throw new Error('Falha ao gerar payload do boleto');
-            }
-
-            // Chama serviço do N8N para emissão de boleto
-            const n8nResponse = await this.n8nService.createBoleto({
-                dados: boletoPayload,
-                installment_id: data.installment_id
-            });
-
-            logger.info('Resposta do N8N para criação de boleto', { 
-                fullResponse: n8nResponse
-            });
-
-            // Verifica se a resposta contém dados válidos
-            if (!n8nResponse || !Array.isArray(n8nResponse) || n8nResponse.length === 0 || !n8nResponse[0].boleto_id) {
-                const errorMessage = "Não foi possível criar o boleto. Resposta do N8N inválida.";
-                
-                logger.error(errorMessage, { 
-                    fullResponse: n8nResponse 
-                });
-
-                throw new Error(errorMessage);
-            }
-
-            // Usa o primeiro item do array
-            const boletoData = n8nResponse[0];
-
-            // Cria registro do boleto no banco
             const newBoleto = await this.repository.create({
                 installment_id: data.installment_id,
                 generated_at: new Date(),
                 last_status_update: new Date(),
-                status: boletoData.status || 'A_EMITIR'
+                status: data.status || 'A_EMITIR',
+                amount: data.amount,
+                due_date: data.due_date,
+                payer_id: data.payer_id,
+                description: data.description
             });
 
             return newBoleto;
@@ -214,9 +185,7 @@ class BoletoService {
             
             logger.debug('Resultado da busca de boleto por ID', { 
                 boletoId, 
-                boleto,
-                hasExternalData: !!boleto?.external_data,
-                externalDataKeys: boleto ? Object.keys(boleto.external_data || {}) : null
+                boleto
             });
             
             if (!boleto) {

@@ -145,8 +145,9 @@ class BoletoRepository extends BaseRepository {
                     status,
                     generated_at,
                     last_status_update,
-                    external_data
-                ) VALUES ($1, $2, $3, $4, $5)
+                    amount,
+                    due_date
+                ) VALUES ($1, $2, $3, $4, $5, $6)
                 RETURNING *
             `;
             const result = await this.pool.query(query, [
@@ -154,11 +155,12 @@ class BoletoRepository extends BaseRepository {
                 data.status || 'A_EMITIR',
                 data.generated_at || new Date(),
                 data.last_status_update || new Date(),
-                JSON.stringify(data.external_data || {})
+                data.amount,
+                data.due_date
             ]);
             return result.rows[0];
         } catch (error) {
-            logger.error('Erro ao criar boleto com dados externos', { error: error.message, data });
+            logger.error('Erro ao criar boleto', { error: error.message, data });
             throw error;
         }
     }
