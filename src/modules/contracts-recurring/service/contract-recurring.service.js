@@ -58,27 +58,26 @@ class ContractRecurringService {
                     // Preparar dados de faturamento
                     const billingData = await this.billingPrepareData(contractId);
 
-                    // Criar movimento de faturamento
-                    const movement = await this.billingCreateMovement(billingData);
+                    // COMENTADO: Criação de movimento temporariamente desativada
+                    // const movement = await this.billingCreateMovement(billingData);
 
-                    // Adicionar movimento ao contrato usando ContractMovementService
-                    await this.contractMovementService.create({
-                        contract_id: contractId,
-                        movement_id: movement.movement_id
-                    });
+                    // COMENTADO: Adicionar movimento ao contrato
+                    // await this.contractMovementService.create({
+                    //     contract_id: contractId,
+                    //     movement_id: movement.movement_id
+                    // });
 
-                    // Atualizar datas de faturamento do contrato
-                    await this.updateBillingDates(contractId);
+                    // COMENTADO: Atualização de datas de faturamento
+                    // await this.updateBillingDates(contractId);
 
                     results.push({
                         contractId,
-                        movementId: movement.movement_id,
-                        status: 'success'
+                        billingData,
+                        status: 'prepared'
                     });
 
-                    this.logger.info('Faturamento processado com sucesso', { 
+                    this.logger.info('Dados de faturamento preparados com sucesso', { 
                         contractId,
-                        movementId: movement.movement_id,
                         timestamp: new Date().toISOString()
                     });
                 } catch (contractError) {
@@ -99,7 +98,7 @@ class ContractRecurringService {
 
             this.logger.info('Processamento de faturamento concluído', { 
                 totalContracts: contractIds.length,
-                successCount: results.filter(r => r.status === 'success').length,
+                preparedCount: results.filter(r => r.status === 'prepared').length,
                 errorCount: results.filter(r => r.status === 'error').length,
                 timestamp: new Date().toISOString()
             });
@@ -148,24 +147,24 @@ class ContractRecurringService {
             // Recuperar itens do movimento modelo
             const movementItems = await this.movementItemService.findByMovementId(contract.model_movement_id);
 
-            // Gerar referência de competência
-            const reference = this.formatBillingReference(new Date());
+            // Calcular data de vencimento e referência
+            const { dueDate, reference } = this.calculateBillingDueDate(contract);
 
             const billingData = {
                 person_id: movement.person?.person_id,
                 movement_type_id: 3,
                 movement_status_id: 2,
                 payment_method_id: movementPayments[0]?.payment_method_id,
-                due_date: new Date(), // Data de vencimento padrão
-                license_id: movement.movement.license_id, // Corrigir acesso ao license_id
-                // NOVO: Calcular total_amount
+                due_date: dueDate, // Nova data de vencimento
+                license_id: movement.movement.license_id,
                 total_amount: movementItems.reduce((total, item) => 
                     total + (item.quantity * item.unit_price), 0),
                 items: movementItems.map(item => ({
                     item_id: item.item_id,
                     quantity: item.quantity,
                     unit_price: item.unit_price
-                }))
+                })),
+                reference: reference // Adicionar referência
             };
 
             this.logger.info('Dados de faturamento preparados', { 
@@ -199,29 +198,48 @@ class ContractRecurringService {
             const description = `Faturamento de contrato referente competencia ${this.formatBillingReference(new Date(), billingReference)}`;
 
             // Definir movement_date como a data atual
-            const movement_date = new Date().toISOString().split('T')[0];
+            const movementDate = new Date();
 
-            // Criar movimento usando o serviço de movimento
+            // Comentário: Criar movimento usando o serviço de movimento
+            // Isso irá gerar um novo movimento no banco de dados
             const movement = await this.movementService.create({
-                ...billingData,
-                description,
-                movement_date,
-                boleto: false,
-                nfse: false,
-                notificar: false,
-                due_date: billingData.due_date
+                person_id: billingData.person_id,
+                movement_type_id: billingData.movement_type_id,
+                movement_status_id: billingData.movement_status_id,
+                payment_method_id: billingData.payment_method_id,
+                description: description,
+                movement_date: movementDate,
+                due_date: billingData.due_date,
+                license_id: billingData.license_id,
+                total_amount: billingData.total_amount
             });
 
-            this.logger.info('Movimento de faturamento criado com sucesso', { 
+            // Comentário: Criar itens do movimento para cada item no billingData
+            for (const item of billingData.items) {
+                await this.movementItemService.create({
+                    movement_id: movement.movement_id,
+                    item_id: item.item_id,
+                    quantity: item.quantity,
+                    unit_price: item.unit_price
+                });
+            }
+
+            this.logger.info('Movimento de faturamento criado com sucesso', {
                 movementId: movement.movement_id,
-                movementDate: movement_date,
-                billingReference,
                 timestamp: new Date().toISOString()
             });
 
-            return movement;
+            // Retornar dados completos de faturamento
+            return {
+                movement: movement,
+                billingData: {
+                    ...billingData,
+                    description: description,
+                    movementDate: movementDate
+                }
+            };
         } catch (error) {
-            this.logger.error('Erro ao criar movimento de faturamento', {
+            this.logger.error('Erro na criação de movimento de faturamento', {
                 billingData,
                 errorMessage: error.message,
                 errorStack: error.stack,
@@ -376,17 +394,60 @@ class ContractRecurringService {
         }
     }
 
+    calculateBillingDueDate(contract, currentDate = new Date()) {
+        // Validar entrada
+        if (!contract) {
+            throw new Error('Contrato inválido');
+        }
+
+        // Determinar a data de próximo faturamento
+        const nextBillingDate = contract.next_billing_date;
+
+        if (!nextBillingDate) {
+            throw new Error('Data de próximo faturamento não encontrada');
+        }
+
+        // Converter para objeto Date se for string
+        const billingDate = typeof nextBillingDate === 'string' 
+            ? new Date(nextBillingDate) 
+            : nextBillingDate;
+
+        // Clonar a data para não modificar o original
+        const dueDate = new Date(billingDate);
+
+        // Determinar o dia de vencimento
+        const dueDayOfMonth = contract.due_day || billingDate.getDate();
+
+        // Definir o dia de vencimento no próximo mês
+        dueDate.setMonth(dueDate.getMonth() + 1);
+        dueDate.setDate(dueDayOfMonth);
+
+        // Gerar referência no formato MM/YYYY
+        const reference = this.formatBillingReference(dueDate);
+
+        this.logger.info('Cálculo de data de vencimento', {
+            contractId: contract.contract_id,
+            nextBillingDate: billingDate,
+            dueDate,
+            reference,
+            timestamp: new Date().toISOString()
+        });
+
+        return {
+            dueDate,
+            reference
+        };
+    }
+
     formatBillingReference(date, reference = 'current') {
         const targetDate = new Date(date);
         
-        if (reference === 'current') {
-            // Referência do mês anterior
-            targetDate.setMonth(targetDate.getMonth() - 1);
-        } else if (reference === 'next') {
-            // Referência do mesmo mês
-            // Nenhuma alteração necessária
+        // Ajustar data para mês corrente ou próximo
+        if (reference === 'next') {
+            targetDate.setMonth(targetDate.getMonth() + 1);
         }
-
+        
+        // Formatar como MM/YYYY
         const month = String(targetDate.getMonth() + 1).padStart(2, '0');
         const year = targetDate.getFullYear();
         return `${month}/${year}`;
