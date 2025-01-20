@@ -9,13 +9,12 @@ class InstallmentGenerator {
     /**
      * Gera parcelas para um pagamento baseado no método de pagamento
      */
-    async generateInstallments(payment, paymentMethod, baseDate = null) {
+    async generateInstallments(payment, paymentMethod) {
         try {
             logger.info('Generator: Iniciando geração de parcelas', {
                 payment_id: payment.payment_id,
                 payment_method_id: paymentMethod.payment_method_id,
-                payment_method: paymentMethod,
-                baseDate: baseDate ? baseDate.toISOString() : 'Data atual'
+                payment_method: paymentMethod
             });
 
             // Número de parcelas vem do método de pagamento
@@ -37,14 +36,12 @@ class InstallmentGenerator {
                 last_installment_adjustment: lastInstallmentAdjustment
             });
 
-            // Usa a data base fornecida ou a data atual
-            const effectiveBaseDate = baseDate || new Date();
-
             // Gera as datas de vencimento baseado na configuração do método de pagamento
             const installments = [];
+            const baseDate = new Date();
 
             for (let i = 0; i < numberOfInstallments; i++) {
-                const dueDate = new Date(effectiveBaseDate);
+                const dueDate = new Date(baseDate);
                 // Primeira parcela vence em first_due_date_days, as próximas a cada days_between_installments
                 const daysToAdd = i === 0 
                     ? paymentMethod.first_due_date_days 
@@ -66,11 +63,7 @@ class InstallmentGenerator {
                     account_entry_id: paymentMethod.account_entry_id
                 };
 
-                logger.info('Generator: Criando parcela', { 
-                    installment,
-                    baseDate: effectiveBaseDate.toISOString(),
-                    daysToAdd
-                });
+                logger.info('Generator: Criando parcela', { installment });
                 
                 try {
                     const createdInstallment = await this.installmentRepository.create(installment);

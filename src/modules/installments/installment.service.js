@@ -10,14 +10,12 @@ class InstallmentService {
         installmentRepository, 
         boletoService,
         boletoRepository,
-        n8nService,
-        paymentMethodsService
+        n8nService
     } = {}) {
         this.repository = installmentRepository;
         this.boletoService = boletoService;
         this.boletoRepository = boletoRepository;
         this.n8nService = n8nService;
-        this.paymentMethodsService = paymentMethodsService;
     }
 
     async listInstallments(page = 1, limit = 10, filters = {}) {
@@ -154,140 +152,6 @@ class InstallmentService {
             logger.error('Erro ao criar parcela', { error });
             throw error;
         }
-    }
-
-    async createInstallments(data) {
-        const transaction = await this.repository.pool.connect();
-        try {
-            logger.info('Iniciando criação de parcelas', { 
-                data,
-                timestamp: new Date().toISOString()
-            });
-
-            // Validação inicial dos dados
-            if (!data || !data.payment_method_id || !data.total_value) {
-                throw new ValidationError('Dados inválidos para criação de parcelas', {
-                    data,
-                    missingFields: {
-                        payment_method_id: !data.payment_method_id,
-                        total_value: !data.total_value
-                    }
-                });
-            }
-
-            // Iniciar transação
-            await transaction.query('BEGIN');
-
-            // Buscar o payment method para ver o número de parcelas
-            const paymentMethod = await this.paymentMethodsService.findById(data.payment_method_id);
-            
-            logger.info('Método de pagamento encontrado', { 
-                installments_number: paymentMethod.installments_number,
-                payment_method_id: data.payment_method_id 
-            });
-
-            if (!paymentMethod || paymentMethod.installments_number <= 0) {
-                throw new ValidationError('Método de pagamento inválido ou sem parcelas', {
-                    paymentMethod,
-                    installments_number: paymentMethod?.installments_number
-                });
-            }
-
-            const installmentsData = [];
-            const today = new Date();
-            const { movement_payment_id, generateBoleto, due_date } = data;
-
-            // Gerar parcelas baseado no número de parcelas do método de pagamento
-            for (let i = 1; i <= paymentMethod.installments_number; i++) {
-                try {
-                    // Calcular data de vencimento
-                    const installmentDueDate = this.calculateInstallmentDueDate(today, i, paymentMethod);
-
-                    // Se due_date for fornecido e diferente do vencimento calculado, usar o due_date
-                    const finalDueDate = due_date && 
-                        this.isDifferentDate(due_date, installmentDueDate) ? due_date : installmentDueDate;
-
-                    const installmentValue = Number((data.total_value / paymentMethod.installments_number).toFixed(2));
-
-                    const installmentData = {
-                        movement_payment_id,
-                        number: i,
-                        total_installments: paymentMethod.installments_number,
-                        due_date: finalDueDate,
-                        value: installmentValue
-                    };
-
-                    logger.info('Criando parcela', { 
-                        installmentNumber: i, 
-                        installmentData 
-                    });
-
-                    const createdInstallment = await this.repository.createWithClient(transaction, installmentData);
-
-                    // Gerar boleto se necessário
-                    if (generateBoleto) {
-                        try {
-                            const boleto = await this.boletoService.createBoleto({
-                                installment_id: createdInstallment.installment_id,
-                                due_date: finalDueDate
-                            });
-                            logger.info('Boleto gerado para parcela', { 
-                                installmentId: createdInstallment.installment_id,
-                                boletoId: boleto.id 
-                            });
-                        } catch (boletoError) {
-                            logger.warn('Falha ao gerar boleto para parcela', { 
-                                installmentId: createdInstallment.installment_id,
-                                error: boletoError.message 
-                            });
-                            // Não interrompe o processo, apenas registra o erro
-                        }
-                    }
-
-                    installmentsData.push(createdInstallment);
-                } catch (installmentError) {
-                    logger.error('Erro ao criar parcela individual', { 
-                        installmentNumber: i,
-                        error: installmentError.message,
-                        stack: installmentError.stack
-                    });
-                    throw installmentError; // Interrompe toda a criação de parcelas
-                }
-            }
-
-            // Confirmar transação
-            await transaction.query('COMMIT');
-
-            logger.info('Parcelas criadas com sucesso', { 
-                totalInstallments: installmentsData.length 
-            });
-
-            return installmentsData;
-        } catch (error) {
-            // Reverter transação em caso de erro
-            await transaction.query('ROLLBACK');
-
-            logger.error('Erro no processo de criação de parcelas', { 
-                error: error.message, 
-                stack: error.stack,
-                data 
-            });
-
-            throw new ValidationError('INSTALLMENTS_CREATION_ERROR', error.message);
-        } finally {
-            // Sempre liberar a conexão
-            transaction.release();
-        }
-    }
-
-    calculateInstallmentDueDate(baseDate, installmentNumber, paymentMethod) {
-        const dueDate = new Date(baseDate);
-        dueDate.setMonth(dueDate.getMonth() + (installmentNumber - 1));
-        return dueDate;
-    }
-
-    isDifferentDate(date1, date2) {
-        return date1.getTime() !== date2.getTime();
     }
 
     async updateInstallment(id, data) {
