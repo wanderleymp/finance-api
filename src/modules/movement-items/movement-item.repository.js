@@ -231,30 +231,6 @@ class MovementItemRepository extends BaseRepository {
             throw error;
         }
     }
-
-    async createManyWithClient(movementItemsData, client) {
-        try {
-            const queries = movementItemsData.map((item, index) => {
-                const columns = Object.keys(item);
-                const values = columns.map((_, i) => `$${i + 1}`);
-                const query = `
-                    INSERT INTO ${this.tableName} (${columns.join(', ')})
-                    VALUES (${values.join(', ')})
-                    RETURNING *
-                `;
-                return { query, params: Object.values(item) };
-            });
-
-            const results = await Promise.all(
-                queries.map(({ query, params }) => client.query(query, params))
-            );
-
-            return results.map(result => result.rows[0]);
-        } catch (error) {
-            logger.error('Erro ao criar itens de movimento:', error);
-            throw error;
-        }
-    }
 }
 
 module.exports = MovementItemRepository;
