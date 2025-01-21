@@ -397,83 +397,24 @@ class ContractRecurringService {
 
     async findAll(page = 1, limit = 10, filters = {}) {
         try {
-            // Validar e preparar parâmetros
-            const offset = (page - 1) * limit;
+            // Preparar filtros
+            const queryFilters = {
+                status: filters.status,
+                contract_group_id: filters.contract_group_id
+            };
 
-            // Construir query base
-            let query = `
-                SELECT 
-                    cr.*,
-                    p.full_name AS person_name,
-                    cg.group_name,
-                    m.total_amount,
-                    m.movement_date
-                FROM 
-                    contracts_recurring cr
-                LEFT JOIN persons p ON cr.person_id = p.person_id
-                LEFT JOIN contract_groups cg ON cr.contract_group_id = cg.contract_group_id
-                LEFT JOIN movements m ON cr.model_movement_id = m.movement_id
-                WHERE 1=1
-            `;
-
-            // Adicionar filtros dinâmicos
-            const queryParams = [];
-            let paramCount = 1;
-
-            if (filters.status) {
-                query += ` AND cr.status = $${paramCount}`;
-                queryParams.push(filters.status);
-                paramCount++;
-            }
-
-            if (filters.contract_group_id) {
-                query += ` AND cr.contract_group_id = $${paramCount}`;
-                queryParams.push(filters.contract_group_id);
-                paramCount++;
-            }
-
-            // Adicionar ordenação e paginação
-            query += ` 
-                ORDER BY cr.created_at DESC
-                LIMIT $${paramCount} OFFSET $${paramCount + 1}
-            `;
-            queryParams.push(limit, offset);
-
-            // Executar consulta
-            const result = await this.repository.query(query, queryParams);
-
-            // Contar total de registros
-            const countQuery = `
-                SELECT COUNT(*) as total 
-                FROM contracts_recurring cr
-                WHERE 1=1
-                ${filters.status ? `AND cr.status = $1` : ''}
-                ${filters.contract_group_id ? `AND cr.contract_group_id = $${filters.status ? 2 : 1}` : ''}
-            `;
-            const countParams = filters.status || filters.contract_group_id 
-                ? [filters.status, filters.contract_group_id].filter(Boolean) 
-                : [];
-            
-            const totalResult = await this.repository.query(countQuery, countParams);
-            const total = parseInt(totalResult[0]?.total || 0);
+            // Usar findAll do repositório base
+            const result = await this.repository.findAll(page, limit, queryFilters);
 
             // Registrar log
             this.logger.info('Contratos recorrentes listados', {
                 page,
                 limit,
-                totalItems: total,
+                totalItems: result.meta.totalItems,
                 filters
             });
 
-            return {
-                data: result,
-                meta: {
-                    page,
-                    limit,
-                    totalItems: total,
-                    totalPages: Math.ceil(total / limit)
-                }
-            };
+            return result;
         } catch (error) {
             // Log de erro detalhado
             this.logger.error('Erro ao listar contratos recorrentes', {
