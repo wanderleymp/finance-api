@@ -246,39 +246,40 @@ class ContractRecurringService {
                 timestamp: new Date().toISOString()
             });
 
+            // Calcular movement_date
+            const now = new Date();
+            const nextBillingDate = new Date(billingData.next_billing_date);
+
+            const movementDate = nextBillingDate < now 
+                ? now 
+                : nextBillingDate;
+
             // Gerar descrição do movimento
             const description = `Faturamento Contrato - Ref. ${billingData.reference}`;
             
-            // Definir data do movimento baseado em next_billing_date
-            const today = new Date().toISOString().split('T')[0];
-            const movementDate = new Date(billingData.next_billing_date) < new Date(today) 
-                ? today 
-                : billingData.next_billing_date;
-
-            // Criar movimento
-            const movement = await this.movementService.create({
-                person_id: billingData.person_id,
-                movement_type_id: billingData.movement_type_id,
-                movement_status_id: billingData.movement_status_id,
+            const movementData = {
                 description: description,
                 movement_date: movementDate,
                 license_id: billingData.license_id,
+                movement_status_id: billingData.movement_status_id,
+                movement_type_id: billingData.movement_type_id,
+                person_id: billingData.person_id,
                 total_amount: billingData.total_amount
-            }, client);
+            };
 
-            this.logger.info('Movimento de faturamento criado com sucesso', { 
-                movementId: movement.movement_id,
-                timestamp: new Date().toISOString()
+            // Log detalhado do movimento
+            this.logger.info('Dados do movimento de faturamento', {
+                movementData: JSON.stringify(movementData)
             });
 
-            // Retornar movimento completo
-            return movement;
+            // Criar movimento
+            const movement = await this.movementService.create(movementData, client);
 
+            return movement;
         } catch (error) {
-            this.logger.error('Erro ao criar movimento de faturamento', {
+            this.logger.error('Erro na criação do movimento de faturamento', {
                 errorMessage: error.message,
-                errorStack: error.stack,
-                timestamp: new Date().toISOString()
+                errorStack: error.stack
             });
             throw error;
         }
