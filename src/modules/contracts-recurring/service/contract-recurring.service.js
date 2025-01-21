@@ -116,13 +116,31 @@ class ContractRecurringService {
                         });
                     }
                     
+                    // Criar movimento de contrato
+                    const contractMovement = await this.createContractMovement(contractDetails, {
+                        movement_id: movement.movement_id,
+                        value: movement.total_amount,
+                        type: 'RECURRING',
+                        status: 'ACTIVE',
+                        description: `Faturamento Contrato ${contractId}`,
+                        due_date: billingData.due_date,
+                        reference_date: billingData.reference
+                    });
+
+                    // Atualizar datas de faturamento do contrato
+                    const updatedContract = await this.updateBillingDates(contractDetails, {
+                        movement_date: movement.movement_date
+                    });
+
                     results.push({
                         contractId,
                         movement,
                         movementItems,
                         payment,
                         billingData,
-                        status: payment ? 'success' : 'partial_error'
+                        status: payment ? 'success' : 'partial_error',
+                        contractMovement,
+                        updatedContract
                     });
 
                 } catch (error) {
@@ -293,39 +311,40 @@ class ContractRecurringService {
         }
     }
 
-    async updateBillingDates(contractId, client) {
-        const contract = await this.repository.findById(contractId);
-        
-        // Calcular próxima data de faturamento
-        const { dueDate, reference } = this.calculateBillingDueDate(contract);
+    async updateBillingDates(contract, movementData) {
+        try {
+            // Calcular nova data de próximo faturamento (1 mês após o atual)
+            const currentNextBillingDate = new Date(contract.next_billing_date);
+            const newNextBillingDate = new Date(currentNextBillingDate);
+            newNextBillingDate.setMonth(newNextBillingDate.getMonth() + 1);
 
-        // Preparar dados para atualização
-        const updateData = {
-            next_billing_date: dueDate,
-            billing_reference: reference
-        };
+            // Preparar payload para atualização
+            const updatePayload = {
+                next_billing_date: newNextBillingDate,
+                last_billing_date: movementData.movement_date || new Date()
+            };
 
-        // Usar o cliente de transação para atualizar
-        const query = `
-            UPDATE contracts_recurring 
-            SET next_billing_date = $1, billing_reference = $2 
-            WHERE contract_id = $3
-            RETURNING *
-        `;
+            // Atualizar contrato no repositório
+            const updatedContract = await this.repository.update(
+                contract.contract_id, 
+                updatePayload
+            );
 
-        const result = await client.query(query, [
-            updateData.next_billing_date, 
-            updateData.billing_reference, 
-            contractId
-        ]);
+            this.logger.info('Datas de faturamento do contrato atualizadas', {
+                contractId: contract.contract_id,
+                oldNextBillingDate: currentNextBillingDate,
+                newNextBillingDate,
+                lastBillingDate: updatePayload.last_billing_date
+            });
 
-        this.logger.info('Datas de faturamento atualizadas', { 
-            contractId, 
-            nextBillingDate: updateData.next_billing_date,
-            billingReference: updateData.billing_reference
-        });
-
-        return result.rows[0];
+            return updatedContract;
+        } catch (error) {
+            this.logger.error('Erro ao atualizar datas de faturamento do contrato', {
+                error: error.message,
+                contractId: contract.contract_id
+            });
+            throw error;
+        }
     }
 
     async findAll(page = 1, limit = 10, filters = {}) {
@@ -455,7 +474,33 @@ class ContractRecurringService {
         return createdItems;
     }
 
-    calculateBillingDueDate(contract, currentDate = new Date()) {
+    async createContractMovement(contract, movementData) {
+        try {
+            const movementPayload = {
+                contract_id: contract.contract_id,
+                movement_id: movementData.movement_id,
+            };
+
+            const contractMovement = await this.contractMovementService.create(movementPayload);
+
+            this.logger.info('Movimento de contrato criado com sucesso', {
+                contractId: contract.contract_id,
+                movementId: movementData.movement_id,
+                contractMovementId: contractMovement.id
+            });
+
+            return contractMovement;
+        } catch (error) {
+            this.logger.error('Erro ao criar movimento de contrato', {
+                error: error.message,
+                contract: contract.contract_id,
+                movementData
+            });
+            throw error;
+        }
+    }
+
+    calculateBillingDueDate(contract, currentDate = new Date(), reference = 'current') {
         // Validar entrada
         if (!contract) {
             throw new Error('Contrato inválido');
@@ -471,41 +516,57 @@ class ContractRecurringService {
         // Converter para objeto Date se for string
         const billingDate = typeof nextBillingDate === 'string' 
             ? new Date(nextBillingDate) 
-            : nextBillingDate;
-
-        // Clonar a data para não modificar o original
-        const dueDate = new Date(billingDate);
+            : new Date(nextBillingDate);
 
         // Determinar o dia de vencimento
         const dueDayOfMonth = contract.due_day || billingDate.getDate();
 
-        // Definir o dia de vencimento no próximo mês
-        dueDate.setMonth(dueDate.getMonth() + 1);
-        dueDate.setDate(dueDayOfMonth);
+        // Clonar a data para não modificar o original
+        const dueDate = new Date(billingDate);
+
+        // Lógica para calcular dueDate baseado no tipo de referência
+        if (reference === 'next') {
+            // Para 'next', adiciona 1 mês e ajusta para o dia de vencimento
+            dueDate.setMonth(dueDate.getMonth() + 1);
+            dueDate.setDate(dueDayOfMonth);
+        } else if (reference === 'current') {
+            // Para 'current', ajusta para o dia de vencimento
+            dueDate.setDate(dueDayOfMonth);
+
+            // Se a data de vencimento for menor que hoje, adiciona 1 dia
+            if (dueDate < currentDate) {
+                dueDate.setDate(currentDate.getDate() + 1);
+            }
+        }
 
         // Gerar referência no formato MM/YYYY
-        const reference = this.formatBillingReference(dueDate);
+        const billingReference = this.formatBillingReference(dueDate, reference);
 
         this.logger.info('Cálculo de data de vencimento', {
             contractId: contract.contract_id,
             nextBillingDate: billingDate,
             dueDate,
-            reference,
+            reference: billingReference,
+            referenceType: reference,
             timestamp: new Date().toISOString()
         });
 
         return {
             dueDate,
-            reference
+            reference: billingReference
         };
     }
 
     formatBillingReference(date, reference = 'current') {
         const targetDate = new Date(date);
         
-        // Ajustar data para mês corrente ou próximo
-        if (reference === 'next') {
-            targetDate.setMonth(targetDate.getMonth() + 1);
+        // Ajustar data baseado no tipo de referência
+        if (reference === 'current') {
+            // Reference será o mês anterior
+            targetDate.setMonth(targetDate.getMonth() - 1);
+        } else if (reference === 'next') {
+            // Reference será o mês do next_billing_date
+            targetDate.setMonth(targetDate.getMonth());
         }
         
         // Formatar como MM/YYYY

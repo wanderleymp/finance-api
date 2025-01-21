@@ -147,15 +147,8 @@ class BoletoService {
             // Usa o primeiro item do array
             const boletoData = n8nResponse[0];
 
-            // Cria registro do boleto no banco
-            const newBoleto = await this.repository.create({
-                installment_id: data.installment_id,
-                generated_at: new Date(),
-                last_status_update: new Date(),
-                status: boletoData.status || 'A_EMITIR'
-            });
-
-            return newBoleto;
+            // Retorna a resposta do N8N sem criar boleto localmente
+            return n8nResponse;
         } catch (error) {
             const n8nErrorMessage = error.response?.data?.message || error.message;
             
