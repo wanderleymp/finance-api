@@ -169,6 +169,53 @@ class ContractRecurringService {
                 resultCount: results.length 
             });
 
+            // Notificação de faturamento assíncrona com delay
+            const delayNotification = async (movementId) => {
+                try {
+                    this.logger.info('Preparando notificação de faturamento assíncrona', {
+                        movementId,
+                        timestamp: new Date().toISOString()
+                    });
+
+                    // Delay de 8 segundos
+                    await new Promise(resolve => setTimeout(resolve, 8000));
+                    
+                    this.logger.info('Iniciando envio de notificação após delay', {
+                        movementId,
+                        delayDuration: 8000,
+                        timestamp: new Date().toISOString()
+                    });
+
+                    // Verificar se o boleto foi gerado antes de notificar
+                    const n8nService = require('../../../services/n8n.service');
+                    await n8nService.notifyBillingMovement(movementId);
+
+                    this.logger.info('Notificação de faturamento concluída com sucesso', {
+                        movementId,
+                        timestamp: new Date().toISOString()
+                    });
+                } catch (error) {
+                    this.logger.error('Erro na notificação de faturamento', {
+                        movementId,
+                        errorName: error.name,
+                        errorMessage: error.message,
+                        errorStack: error.stack,
+                        timestamp: new Date().toISOString()
+                    });
+                }
+            };
+
+            // Iniciar notificação em background sem aguardar
+            for (const result of results) {
+                if (result.movement) {
+                    this.logger.info('Agendando notificação de faturamento', {
+                        movementId: result.movement.movement_id,
+                        timestamp: new Date().toISOString()
+                    });
+                    delayNotification(result.movement.movement_id);
+                }
+            }
+
             return results;
         } catch (error) {
             // Rollback em caso de erro geral
@@ -259,7 +306,7 @@ class ContractRecurringService {
             
             const movementData = {
                 description: description,
-                movement_date: movementDate,
+                movement_date: new Date(), // Usando data atual do dia
                 license_id: billingData.license_id,
                 movement_status_id: billingData.movement_status_id,
                 movement_type_id: billingData.movement_type_id,

@@ -216,6 +216,87 @@ class N8NService {
 
         return this._sendRequest('send-message', messageData);
     }
+
+    /**
+     * Notifica um movimento de faturamento via N8N
+     */
+    async notifyBillingMovement(movementId) {
+        try {
+            // Log detalhado de entrada
+            logger.info('Iniciando notificação de faturamento N8N', {
+                movementId,
+                timestamp: new Date().toISOString(),
+                baseURL: this.baseURL,
+                apiKeyPresent: !!process.env.N8N_API_KEY,
+                apiSecretPresent: !!process.env.N8N_API_SECRET
+            });
+
+            if (!this.baseURL || !process.env.N8N_API_KEY || !process.env.N8N_API_SECRET) {
+                const errorMsg = 'Configurações do N8N incompletas para notificação de faturamento';
+                logger.error(errorMsg, {
+                    baseURL: !!this.baseURL,
+                    apiKey: !!process.env.N8N_API_KEY,
+                    apiSecret: !!process.env.N8N_API_SECRET
+                });
+                throw new Error(errorMsg);
+            }
+
+            // Preparação de headers idêntica à criação de boleto
+            const authString = `${process.env.N8N_API_KEY}:${process.env.N8N_API_SECRET}`;
+            const encodedAuth = Buffer.from(authString).toString('base64');
+
+            const payload = { movement_id: movementId };
+
+            const headers = {
+                'Content-Type': 'application/json',
+                'Authorization': `Basic ${encodedAuth}`,
+                'X-API-KEY': process.env.N8N_API_KEY,
+                'X-API-SECRET': process.env.N8N_API_SECRET,
+                // Headers adicionais para rastreabilidade
+                'X-Request-Source': 'finance-api',
+                'X-Request-Type': 'billing-notification'
+            };
+
+            // Log detalhado dos headers
+            logger.info('Headers para notificação de faturamento', {
+                headersKeys: Object.keys(headers),
+                payloadKeys: Object.keys(payload)
+            });
+
+            const response = await axios.post(
+                'https://n8n.webhook.agilefinance.com.br/webhook/mensagem/faturamento', 
+                payload, 
+                { 
+                    headers,
+                    timeout: 10000 // Timeout de 10 segundos
+                }
+            );
+
+            // Log de sucesso com detalhes da resposta
+            logger.info('Notificação de faturamento enviada com sucesso no N8N', {
+                movementId,
+                responseStatus: response.status,
+                responseData: response.data,
+                timestamp: new Date().toISOString()
+            });
+
+            return response.data;
+        } catch (error) {
+            // Log de erro detalhado
+            logger.error('Erro ao enviar notificação de faturamento para N8N', {
+                movementId,
+                errorName: error.name,
+                errorMessage: error.message,
+                errorStack: error.stack,
+                errorResponse: error.response ? {
+                    status: error.response.status,
+                    data: error.response.data
+                } : null,
+                timestamp: new Date().toISOString()
+            });
+            throw new Error(`Falha na requisição N8N de notificação: ${error.message}`);
+        }
+    }
 }
 
 // Singleton para reutilizar a mesma instância
