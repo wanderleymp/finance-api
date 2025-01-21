@@ -548,6 +548,31 @@ class ContractRecurringService {
         }
     }
 
+    async findPendingBillings(page = 1, limit = 10, currentDate = new Date()) {
+        try {
+            this.logger.info('Buscando contratos pendentes de faturamento', {
+                page,
+                limit,
+                currentDate
+            });
+
+            const result = await this.repository.findPendingBillings(page, limit, currentDate);
+
+            this.logger.info('Contratos pendentes encontrados', {
+                totalItems: result.meta.totalItems,
+                totalPages: result.meta.totalPages
+            });
+
+            return result;
+        } catch (error) {
+            this.logger.error('Erro ao buscar contratos pendentes', {
+                errorMessage: error.message,
+                errorStack: error.stack
+            });
+            throw error;
+        }
+    }
+
     calculateBillingDueDate(contract, currentDate = new Date(), reference = 'current') {
         // Validar entrada
         if (!contract) {
