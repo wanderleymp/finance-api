@@ -180,9 +180,11 @@ class MovementPaymentService extends IMovementPaymentService {
         }
     }
 
-    async create(data) {
+    async create(data, options = {}) {
         try {
-            logger.info('Service: Criando movimento_payment', { data });
+            const { transaction = null, generateBoleto = true } = options;
+
+            logger.info('Service: Criando movimento_payment', { data, generateBoleto });
 
             // Criar payment
             const payment = await this.repository.create(data);
@@ -214,7 +216,7 @@ class MovementPaymentService extends IMovementPaymentService {
             // Usar due_date personalizado ou calcular automaticamente
             const baseDueDate = data.due_date ? new Date(data.due_date) : new Date();
 
-            if (isBoletoPagamento) {
+            if (isBoletoPagamento && generateBoleto) {
                 // Se for boleto, usa o InstallmentGenerator que já cuida da criação do boleto
                 installments = await this.installmentGenerator.generateInstallments(payment, paymentMethod, baseDueDate);
             } else {
@@ -440,8 +442,10 @@ class MovementPaymentService extends IMovementPaymentService {
     /**
      * Cria um novo pagamento
      */
-    async createPayment(data) {
+    async createPayment(data, options = {}) {
         try {
+            const { generateBoleto = true } = options;
+
             // Log de início do método
             logger.info('MovementPaymentService: INÍCIO da criação de pagamento', { 
                 inputData: JSON.stringify(data),
@@ -496,7 +500,7 @@ class MovementPaymentService extends IMovementPaymentService {
 
             // Gerar parcelas
             let installments = [];
-            if (isBoletoPagamento) {
+            if (isBoletoPagamento && generateBoleto) {
                 // Se for boleto, usa o InstallmentGenerator que já cuida da criação do boleto
                 installments = await this.installmentGenerator.generateInstallments(payment, paymentMethod);
             } else {

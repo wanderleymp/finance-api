@@ -4,23 +4,26 @@ class InstallmentGenerator {
     constructor(installmentRepository, boletoService) {
         this.installmentRepository = installmentRepository;
         this.boletoService = boletoService;
+        this.logger = logger;
     }
 
     /**
      * Gera parcelas para um pagamento baseado no método de pagamento
      */
-    async generateInstallments(payment, paymentMethod) {
+    async generateInstallments(payment, paymentMethod, baseDueDate = null, generateBoleto = true) {
         try {
-            logger.info('Generator: Iniciando geração de parcelas', {
+            this.logger.info('Generator: Iniciando geração de parcelas', {
                 payment_id: payment.payment_id,
                 payment_method_id: paymentMethod.payment_method_id,
-                payment_method: paymentMethod
+                payment_method: paymentMethod,
+                baseDueDate: baseDueDate,
+                generateBoleto
             });
 
             // Número de parcelas vem do método de pagamento
             const numberOfInstallments = paymentMethod.installment_count;
             
-            logger.info('Generator: Calculando valores das parcelas', {
+            this.logger.info('Generator: Calculando valores das parcelas', {
                 total_amount: payment.total_amount,
                 number_of_installments: numberOfInstallments
             });
@@ -31,46 +34,62 @@ class InstallmentGenerator {
             // Ajusta o valor da última parcela para compensar possíveis diferenças de arredondamento
             const lastInstallmentAdjustment = Number((payment.total_amount - (installmentAmount * numberOfInstallments)).toFixed(2));
 
-            logger.info('Generator: Valores calculados', {
+            this.logger.info('Generator: Valores calculados', {
                 installment_amount: installmentAmount,
                 last_installment_adjustment: lastInstallmentAdjustment
             });
 
-            // Gera as datas de vencimento baseado na configuração do método de pagamento
+            // Gera as datas de vencimento
             const installments = [];
-            const baseDate = new Date();
+            
+            // Usar baseDueDate se fornecido, senão usar data atual
+            const baseDate = baseDueDate ? new Date(baseDueDate) : new Date();
 
             for (let i = 0; i < numberOfInstallments; i++) {
                 const dueDate = new Date(baseDate);
-                // Primeira parcela vence em first_due_date_days, as próximas a cada days_between_installments
-                const daysToAdd = i === 0 
-                    ? paymentMethod.first_due_date_days 
-                    : paymentMethod.first_due_date_days + (paymentMethod.days_between_installments * i);
-                dueDate.setDate(dueDate.getDate() + daysToAdd);
+                
+                // Se baseDueDate foi fornecido, usar intervalos mensais
+                if (baseDueDate) {
+                    dueDate.setMonth(dueDate.getMonth() + i);
+                } else {
+                    // Senão, usar lógica original de dias
+                    const daysToAdd = i === 0 
+                        ? paymentMethod.first_due_date_days 
+                        : paymentMethod.first_due_date_days + (paymentMethod.days_between_installments * i);
+                    dueDate.setDate(dueDate.getDate() + daysToAdd);
+                }
+
+                this.logger.info('Generator: Criando parcela', {
+                    installmentNumber: i + 1,
+                    dueDate: dueDate.toISOString(),
+                    amount: i === numberOfInstallments - 1 
+                        ? installmentAmount + lastInstallmentAdjustment 
+                        : installmentAmount
+                });
 
                 // Se for a última parcela, ajusta o valor
-                const amount = i === numberOfInstallments - 1 
-                    ? installmentAmount + lastInstallmentAdjustment 
-                    : installmentAmount;
-
                 const installment = {
-                    payment_id: payment.payment_id,
+                    account_entry_id: paymentMethod.account_entry_id,
+                    amount: i === numberOfInstallments - 1 
+                        ? installmentAmount + lastInstallmentAdjustment 
+                        : installmentAmount,
+                    balance: i === numberOfInstallments - 1 
+                        ? installmentAmount + lastInstallmentAdjustment 
+                        : installmentAmount,
+                    due_date: dueDate.toISOString().split('T')[0],
                     installment_number: String(i + 1).padStart(2, '0'),
-                    amount: amount,
-                    balance: amount,
-                    due_date: dueDate,
-                    status: 'PENDING',
-                    account_entry_id: paymentMethod.account_entry_id
+                    payment_id: payment.payment_id,
+                    status: 'PENDING'
                 };
 
-                logger.info('Generator: Criando parcela', { installment });
+                this.logger.info('Generator: Criando parcela', { installment });
                 
                 try {
                     const createdInstallment = await this.installmentRepository.create(installment);
-                    logger.info('Generator: Parcela criada com sucesso', { createdInstallment });
+                    this.logger.info('Generator: Parcela criada com sucesso', { createdInstallment });
 
-                    // Se for pagamento via boleto, gera o boleto
-                    if (paymentMethod.payment_document_type_id === 1) {
+                    // Se for pagamento via boleto e generateBoleto for true, gera o boleto
+                    if (paymentMethod.payment_document_type_id === 1 && generateBoleto) {
                         try {
                             const boletoData = {
                                 installment_id: createdInstallment.installment_id,
@@ -81,15 +100,15 @@ class InstallmentGenerator {
                                 status: 'A_EMITIR'
                             };
                             
-                            logger.info('Generator: Gerando boleto', { boletoData });
+                            this.logger.info('Generator: Gerando boleto', { boletoData });
                             
                             await this.boletoService.createBoleto(boletoData);
                             
-                            logger.info('Generator: Boleto gerado com sucesso', { 
+                            this.logger.info('Generator: Boleto gerado com sucesso', { 
                                 installment_id: createdInstallment.installment_id 
                             });
                         } catch (error) {
-                            logger.error('Generator: Erro ao gerar boleto', {
+                            this.logger.error('Generator: Erro ao gerar boleto', {
                                 error: error.message,
                                 error_stack: error.stack,
                                 installment_id: createdInstallment.installment_id
@@ -101,7 +120,7 @@ class InstallmentGenerator {
 
                     installments.push(createdInstallment);
                 } catch (error) {
-                    logger.error('Generator: Erro ao criar parcela individual', {
+                    this.logger.error('Generator: Erro ao criar parcela individual', {
                         error: error.message,
                         error_stack: error.stack,
                         installment
@@ -110,7 +129,7 @@ class InstallmentGenerator {
                 }
             }
 
-            logger.info('Generator: Parcelas geradas com sucesso', {
+            this.logger.info('Generator: Parcelas geradas com sucesso', {
                 payment_id: payment.payment_id,
                 installments_count: installments.length,
                 installments: installments
@@ -118,7 +137,7 @@ class InstallmentGenerator {
 
             return installments;
         } catch (error) {
-            logger.error('Generator: Erro ao gerar parcelas', {
+            this.logger.error('Generator: Erro ao gerar parcelas', {
                 error: error.message,
                 error_stack: error.stack,
                 payment_id: payment.payment_id,
@@ -130,7 +149,7 @@ class InstallmentGenerator {
 
     async generateInstallmentsWithTransaction(client, payment, paymentMethod) {
         try {
-            logger.info('Generator: Iniciando geração de parcelas com transação', {
+            this.logger.info('Generator: Iniciando geração de parcelas com transação', {
                 payment_id: payment.payment_id,
                 payment_method_id: paymentMethod.data.payment_method_id,
                 payment_method: paymentMethod.data
@@ -139,7 +158,7 @@ class InstallmentGenerator {
             // Número de parcelas vem do método de pagamento
             const numberOfInstallments = paymentMethod.data.installment_count;
             
-            logger.info('Generator: Calculando valores das parcelas', {
+            this.logger.info('Generator: Calculando valores das parcelas', {
                 total_amount: payment.total_amount,
                 number_of_installments: numberOfInstallments
             });
@@ -150,7 +169,7 @@ class InstallmentGenerator {
             // Ajusta o valor da última parcela para compensar possíveis diferenças de arredondamento
             const lastInstallmentAdjustment = Number((payment.total_amount - (installmentAmount * numberOfInstallments)).toFixed(2));
 
-            logger.info('Generator: Valores calculados', {
+            this.logger.info('Generator: Valores calculados', {
                 installment_amount: installmentAmount,
                 last_installment_adjustment: lastInstallmentAdjustment
             });
@@ -182,11 +201,11 @@ class InstallmentGenerator {
                     account_entry_id: paymentMethod.data.account_entry_id
                 };
 
-                logger.info('Generator: Criando parcela', { installment });
+                this.logger.info('Generator: Criando parcela', { installment });
                 
                 try {
                     const createdInstallment = await this.installmentRepository.createWithClient(client, installment);
-                    logger.info('Generator: Parcela criada com sucesso', { createdInstallment });
+                    this.logger.info('Generator: Parcela criada com sucesso', { createdInstallment });
 
                     // Se for pagamento via boleto, gera o boleto
                     if (paymentMethod.data.payment_document_type_id === 1) {
@@ -200,15 +219,15 @@ class InstallmentGenerator {
                                 status: 'A_EMITIR'
                             };
                             
-                            logger.info('Generator: Gerando boleto', { boletoData });
+                            this.logger.info('Generator: Gerando boleto', { boletoData });
                             
                             await this.boletoService.createBoleto(boletoData);
                             
-                            logger.info('Generator: Boleto gerado com sucesso', { 
+                            this.logger.info('Generator: Boleto gerado com sucesso', { 
                                 installment_id: createdInstallment.installment_id 
                             });
                         } catch (error) {
-                            logger.error('Generator: Erro ao gerar boleto', {
+                            this.logger.error('Generator: Erro ao gerar boleto', {
                                 error: error.message,
                                 error_stack: error.stack,
                                 installment_id: createdInstallment.installment_id
@@ -220,7 +239,7 @@ class InstallmentGenerator {
 
                     installments.push(createdInstallment);
                 } catch (error) {
-                    logger.error('Generator: Erro ao criar parcela individual', {
+                    this.logger.error('Generator: Erro ao criar parcela individual', {
                         error: error.message,
                         error_stack: error.stack,
                         installment
@@ -231,7 +250,7 @@ class InstallmentGenerator {
 
             return installments;
         } catch (error) {
-            logger.error('Generator: Erro ao gerar parcelas', {
+            this.logger.error('Generator: Erro ao gerar parcelas', {
                 error: error.message,
                 error_stack: error.stack,
                 payment_id: payment.payment_id

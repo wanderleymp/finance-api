@@ -129,23 +129,46 @@ class MovementItemRepository extends BaseRepository {
         }
     }
 
-    async updateMovementTotal(movementId) {
+    async updateMovementTotal(movementId, client = null) {
         try {
+            // Se nenhum cliente for fornecido, usar pool padrão
+            const queryClient = client || this.pool;
+
+            // Query para calcular o total dos itens do movimento
             const query = `
                 UPDATE movements m
-                SET total_amount = (
+                SET total_items = (
                     SELECT COALESCE(SUM(total_price), 0)
-                    FROM ${this.tableName} mi
+                    FROM movement_items mi
                     WHERE mi.movement_id = $1
                 )
                 WHERE m.movement_id = $1
-                RETURNING total_amount
+                RETURNING total_items
             `;
             
-            const result = await this.pool.query(query, [movementId]);
-            return result.rows[0]?.total_amount || 0;
+            // Definir timeout para evitar bloqueios longos
+            const queryConfig = {
+                text: query,
+                values: [movementId],
+                timeout: 5000 // 5 segundos
+            };
+
+            const result = await queryClient.query(queryConfig);
+            
+            return result.rows[0]?.total_items || 0;
         } catch (error) {
-            logger.error('Erro ao atualizar total do movimento:', error);
+            // Log detalhado do erro
+            logger.error('Erro ao atualizar total do movimento:', {
+                movementId,
+                errorMessage: error.message,
+                errorStack: error.stack
+            });
+
+            // Se for um erro de timeout, lançar um erro específico
+            if (error.code === '57014') {
+                throw new Error(`Timeout ao atualizar total do movimento ${movementId}`);
+            }
+
             throw error;
         }
     }

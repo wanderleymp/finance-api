@@ -321,8 +321,8 @@ class MovementService extends IMovementService {
         }
     }
 
-    async create(data) {
-        return this.movementPaymentRepository.transaction(async (client) => {
+    async create(data, client = null) {
+        const executeTransaction = async (transactionClient) => {
             logger.info('Service: Criando novo movimento', { data });
 
             // Separar dados do movimento e do pagamento
@@ -416,7 +416,14 @@ class MovementService extends IMovementService {
             }
 
             return new MovementResponseDTO(movement);
-        });
+        };
+
+        // Se cliente for fornecido, usar o cliente, senão iniciar nova transação
+        if (client) {
+            return executeTransaction(client);
+        } else {
+            return this.movementPaymentRepository.transaction(executeTransaction);
+        }
     }
 
     async createPayment(movementId, paymentData) {

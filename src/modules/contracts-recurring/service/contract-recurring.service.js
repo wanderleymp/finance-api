@@ -18,6 +18,12 @@ class ContractRecurringService {
     constructor() {
         this.repository = new ContractRecurringRepository();
         const movementPaymentRepository = new MovementPaymentRepository();
+        const installmentRepository = new InstallmentRepository();
+        const MovementPaymentService = require('../../movement-payments/movement-payment.service');
+        this.movementPaymentService = new MovementPaymentService({
+            movementPaymentRepository: movementPaymentRepository,
+            installmentRepository: installmentRepository
+        });
         this.contractMovementService = new ContractMovementService();
 
         this.movementService = new MovementService({
@@ -45,131 +51,164 @@ class ContractRecurringService {
     }
 
     async billing(contractIds) {
-        try {
-            this.logger.info('Iniciando processamento de faturamento', { 
-                contractIds,
-                timestamp: new Date().toISOString()
-            });
+        const results = [];
+        const client = await this.repository.pool.connect();
 
-            const results = [];
+        try {
+            // Inicia a transação
+            await client.query('BEGIN');
+            this.logger.info('Iniciando processamento de faturamento', { contractIds });
 
             for (const contractId of contractIds) {
                 try {
+                    // Buscar dados do contrato
+                    const contractDetails = await this.repository.findById(contractId);
+                    this.logger.info('Detalhes do contrato encontrados', { 
+                        contractId, 
+                        contractName: contractDetails.contract_name 
+                    });
+                    
                     // Preparar dados de faturamento
                     const billingData = await this.billingPrepareData(contractId);
-
-                    // COMENTADO: Criação de movimento temporariamente desativada
-                    // const movement = await this.billingCreateMovement(billingData);
-
-                    // COMENTADO: Adicionar movimento ao contrato
-                    // await this.contractMovementService.create({
-                    //     contract_id: contractId,
-                    //     movement_id: movement.movement_id
-                    // });
-
-                    // COMENTADO: Atualização de datas de faturamento
-                    // await this.updateBillingDates(contractId);
-
+                    this.logger.info('Dados de faturamento preparados', { 
+                        contractId, 
+                        billingData 
+                    });
+                    
+                    // Criar movimento de faturamento
+                    const movement = await this.billingCreateMovement(billingData, client);
+                    this.logger.info('Movimento de faturamento criado', { 
+                        contractId, 
+                        movementId: movement.movement_id,
+                        movementDetails: movement 
+                    });
+                    
+                    // Adicionar itens ao movimento
+                    let movementItems = [];
+                    if (billingData.items && billingData.items.length > 0) {
+                        movementItems = await this.createMovementItems(movement, billingData.items, client);
+                        this.logger.info('Itens de movimento criados', { 
+                            contractId, 
+                            movementId: movement.movement_id,
+                            movementItemsCount: movementItems.length 
+                        });
+                    }
+                    
+                    // Criar pagamento do movimento
+                    let payment = null;
+                    try {
+                        payment = await this.billingCreatePayment(contractId, {
+                            billingData: {
+                                ...billingData,
+                                movement_id: movement.movement_id
+                            },
+                            transaction: client
+                        });
+                        this.logger.info('Pagamento criado com sucesso', { 
+                            contractId, 
+                            paymentDetails: payment 
+                        });
+                    } catch (paymentError) {
+                        this.logger.error('Erro ao criar pagamento', {
+                            contractId,
+                            errorMessage: paymentError.message,
+                            errorStack: paymentError.stack
+                        });
+                    }
+                    
                     results.push({
                         contractId,
+                        movement,
+                        movementItems,
+                        payment,
                         billingData,
-                        status: 'prepared'
+                        status: payment ? 'success' : 'partial_error'
                     });
 
-                    this.logger.info('Dados de faturamento preparados com sucesso', { 
-                        contractId,
-                        timestamp: new Date().toISOString()
-                    });
-                } catch (contractError) {
+                } catch (error) {
                     this.logger.error('Erro no processamento de faturamento para contrato', {
                         contractId,
-                        errorMessage: contractError.message,
-                        errorStack: contractError.stack,
-                        timestamp: new Date().toISOString()
+                        errorMessage: error.message,
+                        errorStack: error.stack
                     });
 
                     results.push({
                         contractId,
+                        movement: null,
+                        movementItems: [],
+                        payment: null,
+                        billingData: null,
                         status: 'error',
-                        errorMessage: contractError.message
+                        errorMessage: error.message
                     });
                 }
             }
 
+            // Commit da transação
+            await client.query('COMMIT');
             this.logger.info('Processamento de faturamento concluído', { 
                 totalContracts: contractIds.length,
-                preparedCount: results.filter(r => r.status === 'prepared').length,
-                errorCount: results.filter(r => r.status === 'error').length,
-                timestamp: new Date().toISOString()
+                resultCount: results.length 
             });
 
             return results;
         } catch (error) {
-            this.logger.error('Erro no processamento de faturamento', {
-                contractIds,
+            // Rollback em caso de erro geral
+            await client.query('ROLLBACK');
+            this.logger.error('Erro geral no processamento de faturamento', {
                 errorMessage: error.message,
-                errorStack: error.stack,
-                timestamp: new Date().toISOString()
+                errorStack: error.stack
             });
             throw error;
+        } finally {
+            // Sempre liberar o cliente
+            client.release();
         }
     }
 
     async billingPrepareData(contractId) {
-        this.logger.info('Iniciando preparação de dados para faturamento', { 
-            contractId,
-            timestamp: new Date().toISOString()
-        });
-        
         try {
+            // Buscar contrato
             const contract = await this.repository.findById(contractId);
-            
-            if (!contract) {
-                this.logger.warn('Contrato não encontrado', { 
-                    contractId,
-                    timestamp: new Date().toISOString()
-                });
-                throw new Error(`Contrato com ID ${contractId} não encontrado`);
-            }
 
-            // Recuperar dados do movimento modelo
-            const movement = await this.movementService.getDetailedMovement(contract.model_movement_id);
-
-            this.logger.warn('Detalhes do Movimento Modelo', {
-                movementId: contract.model_movement_id,
-                movementDetails: JSON.stringify(movement),
-                timestamp: new Date().toISOString()
+            // Log detalhado de dados do contrato
+            this.logger.info('Preparação de Faturamento - Dados do Contrato', {
+                contractId,
+                contractDetails: JSON.stringify(contract),
+                lastBillingDate: contract.last_billing_date,
+                nextBillingDate: contract.next_billing_date
             });
 
-            // Buscar movement_payments diretamente
-            const movementPayments = await this.movementService.movementPaymentRepository.findByMovementId(contract.model_movement_id);
-
-            // Recuperar itens do movimento modelo
-            const movementItems = await this.movementItemService.findByMovementId(contract.model_movement_id);
-
-            // Calcular data de vencimento e referência
+            // Calcular próxima data de faturamento
             const { dueDate, reference } = this.calculateBillingDueDate(contract);
 
+            // Log de datas calculadas
+            this.logger.info('Preparação de Faturamento - Datas Calculadas', {
+                calculatedDueDate: dueDate,
+                calculatedReference: reference,
+                originalNextBillingDate: contract.next_billing_date
+            });
+
+            // Buscar movimento modelo
+            const modelMovement = await this.movementService.findById(contract.model_movement_id);
+
+            // Preparar dados de faturamento
             const billingData = {
-                person_id: movement.person?.person_id,
-                movement_type_id: 3,
-                movement_status_id: 2,
-                payment_method_id: movementPayments[0]?.payment_method_id,
-                due_date: dueDate, // Nova data de vencimento
-                license_id: movement.movement.license_id,
-                total_amount: movementItems.reduce((total, item) => 
-                    total + (item.quantity * item.unit_price), 0),
-                items: movementItems.map(item => ({
-                    item_id: item.item_id,
-                    quantity: item.quantity,
-                    unit_price: item.unit_price
-                })),
-                reference: reference // Adicionar referência
+                due_date: dueDate, // ATENÇÃO: Usar dueDate calculado
+                next_billing_date: dueDate, // Atualizar next_billing_date
+                items: await this.movementItemService.findByMovementId(contract.model_movement_id),
+                license_id: modelMovement.license_id,
+                movement_status_id: modelMovement.movement_status_id,
+                movement_type_id: modelMovement.movement_type_id,
+                payment_method_id: modelMovement.payment_method_id,
+                person_id: modelMovement.person_id,
+                reference: reference,
+                total_amount: modelMovement.total_amount
             };
 
-            this.logger.info('Dados de faturamento preparados', { 
-                billingData,
-                timestamp: new Date().toISOString()
+            // Log final dos dados de billing
+            this.logger.info('Preparação de Faturamento - Dados Finais', {
+                billingData: JSON.stringify(billingData)
             });
 
             return billingData;
@@ -177,70 +216,48 @@ class ContractRecurringService {
             this.logger.error('Erro na preparação de dados de faturamento', {
                 contractId,
                 errorMessage: error.message,
-                errorStack: error.stack,
-                timestamp: new Date().toISOString()
+                errorStack: error.stack
             });
             throw error;
         }
     }
 
-    async billingCreateMovement(billingData) {
+    async billingCreateMovement(billingData, client = null) {
         try {
-            this.logger.info('Iniciando criação de movimento de faturamento', {
-                billingData,
+            this.logger.info('Criando movimento de faturamento', { 
                 timestamp: new Date().toISOString()
             });
 
-            // Determinar referência de billing baseado no contrato
-            const billingReference = billingData.billing_reference || 'current';
+            // Gerar descrição do movimento
+            const description = `Faturamento Contrato - Ref. ${billingData.reference}`;
+            
+            // Definir data do movimento baseado em next_billing_date
+            const today = new Date().toISOString().split('T')[0];
+            const movementDate = new Date(billingData.next_billing_date) < new Date(today) 
+                ? today 
+                : billingData.next_billing_date;
 
-            // Adicionar descrição com referência
-            const description = `Faturamento de contrato referente competencia ${this.formatBillingReference(new Date(), billingReference)}`;
-
-            // Definir movement_date como a data atual
-            const movementDate = new Date();
-
-            // Comentário: Criar movimento usando o serviço de movimento
-            // Isso irá gerar um novo movimento no banco de dados
+            // Criar movimento
             const movement = await this.movementService.create({
                 person_id: billingData.person_id,
                 movement_type_id: billingData.movement_type_id,
                 movement_status_id: billingData.movement_status_id,
-                payment_method_id: billingData.payment_method_id,
                 description: description,
                 movement_date: movementDate,
-                due_date: billingData.due_date,
                 license_id: billingData.license_id,
                 total_amount: billingData.total_amount
-            });
+            }, client);
 
-            // Comentário: Criar itens do movimento para cada item no billingData
-            for (const item of billingData.items) {
-                await this.movementItemService.create({
-                    movement_id: movement.movement_id,
-                    item_id: item.item_id,
-                    quantity: item.quantity,
-                    unit_price: item.unit_price
-                });
-            }
-
-            this.logger.info('Movimento de faturamento criado com sucesso', {
+            this.logger.info('Movimento de faturamento criado com sucesso', { 
                 movementId: movement.movement_id,
                 timestamp: new Date().toISOString()
             });
 
-            // Retornar dados completos de faturamento
-            return {
-                movement: movement,
-                billingData: {
-                    ...billingData,
-                    description: description,
-                    movementDate: movementDate
-                }
-            };
+            // Retornar movimento completo
+            return movement;
+
         } catch (error) {
-            this.logger.error('Erro na criação de movimento de faturamento', {
-                billingData,
+            this.logger.error('Erro ao criar movimento de faturamento', {
                 errorMessage: error.message,
                 errorStack: error.stack,
                 timestamp: new Date().toISOString()
@@ -249,54 +266,66 @@ class ContractRecurringService {
         }
     }
 
-    async updateBillingDates(contractId) {
+    async billingCreatePayment(contractId, { billingData, transaction }) {
         try {
-            this.logger.info('Iniciando atualização de datas de faturamento', { 
-                contractId,
-                timestamp: new Date().toISOString()
-            });
+            // Definir método de pagamento padrão (1 = Padrão)
+            const paymentMethodId = 1;
 
-            // Buscar contrato atual
-            const contract = await this.repository.findById(contractId);
-
-            if (!contract) {
-                throw new DatabaseError('Contrato não encontrado');
-            }
-
-            // Definir datas de faturamento
-            const currentDate = new Date();
-            const lastBillingDate = currentDate;
-            const nextBillingDate = new Date(currentDate);
-            
-            // Incrementar próximo faturamento em 1 mês
-            nextBillingDate.setMonth(nextBillingDate.getMonth() + 1);
-
-            // Preparar dados para atualização
-            const updateData = {
-                last_billing_date: lastBillingDate,
-                next_billing_date: nextBillingDate
+            // Preparar dados do pagamento
+            const paymentData = {
+                movement_id: billingData.movement_id,
+                payment_method_id: 1,
+                total_amount: billingData.total_amount,
+                due_date: billingData.due_date
             };
 
-            // Atualizar contrato
-            const updatedContract = await this.repository.update(contractId, updateData);
+            // Criar pagamento
+            const payment = await this.movementPaymentService.create(paymentData, { transaction });
 
-            this.logger.info('Datas de faturamento atualizadas com sucesso', { 
-                contractId,
-                lastBillingDate,
-                nextBillingDate,
-                timestamp: new Date().toISOString()
-            });
-
-            return updatedContract;
+            return payment;
         } catch (error) {
-            this.logger.error('Erro ao atualizar datas de faturamento', {
+            this.logger.error('Erro ao criar pagamento de movimento', {
                 contractId,
                 errorMessage: error.message,
-                errorStack: error.stack,
-                timestamp: new Date().toISOString()
+                errorStack: error.stack
             });
             throw error;
         }
+    }
+
+    async updateBillingDates(contractId, client) {
+        const contract = await this.repository.findById(contractId);
+        
+        // Calcular próxima data de faturamento
+        const { dueDate, reference } = this.calculateBillingDueDate(contract);
+
+        // Preparar dados para atualização
+        const updateData = {
+            next_billing_date: dueDate,
+            billing_reference: reference
+        };
+
+        // Usar o cliente de transação para atualizar
+        const query = `
+            UPDATE contracts_recurring 
+            SET next_billing_date = $1, billing_reference = $2 
+            WHERE contract_id = $3
+            RETURNING *
+        `;
+
+        const result = await client.query(query, [
+            updateData.next_billing_date, 
+            updateData.billing_reference, 
+            contractId
+        ]);
+
+        this.logger.info('Datas de faturamento atualizadas', { 
+            contractId, 
+            nextBillingDate: updateData.next_billing_date,
+            billingReference: updateData.billing_reference
+        });
+
+        return result.rows[0];
     }
 
     async findAll(page = 1, limit = 10, filters = {}) {
@@ -392,6 +421,38 @@ class ContractRecurringService {
             // Lançar erro personalizado
             throw new DatabaseError('Falha ao listar contratos recorrentes');
         }
+    }
+
+    async createMovementItems(movement, items, client = null) {
+        const movementItemService = new (require('../../movement-items/movement-item.service'))();
+
+        const createdItems = [];
+        for (const item of items) {
+            const movementItemData = {
+                movement_id: movement.movement_id,
+                item_id: item.item_id,
+                quantity: Number(item.quantity),
+                unit_price: Number(item.unit_price),
+                total_price: Number(item.total_price || (item.quantity * item.unit_price).toFixed(2)),
+                description: item.description || null
+            };
+
+            this.logger.info('Criando Item de Movimento', { movementItemData });
+
+            try {
+                const createdItem = await movementItemService.create(movementItemData, client);
+                createdItems.push(createdItem);
+            } catch (error) {
+                this.logger.error('Erro ao criar item de movimento', {
+                    errorMessage: error.message,
+                    errorStack: error.stack,
+                    movementItemData
+                });
+                throw error;
+            }
+        }
+
+        return createdItems;
     }
 
     calculateBillingDueDate(contract, currentDate = new Date()) {
