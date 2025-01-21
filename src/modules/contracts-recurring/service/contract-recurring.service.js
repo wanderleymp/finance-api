@@ -514,6 +514,55 @@ class ContractRecurringService {
         }
     }
 
+    async contractAdjustment(contractIds) {
+        try {
+            this.logger.info('Iniciando processamento de reajuste de contratos', { 
+                totalContracts: contractIds.length 
+            });
+
+            const results = [];
+
+            // Iniciar transação
+            const client = await this.repository.getClient();
+
+            try {
+                await client.query('BEGIN');
+
+                for (const contractId of contractIds) {
+                    // Buscar contrato recorrente
+                    const contract = await this.repository.findById(contractId, client);
+
+                    results.push({
+                        contract
+                    });
+                }
+
+                // Commitar transação
+                await client.query('COMMIT');
+
+                this.logger.info('Processamento de reajuste de contratos concluído', { 
+                    resultCount: results.length 
+                });
+
+                return results;
+            } catch (error) {
+                // Rollback em caso de erro
+                await client.query('ROLLBACK');
+                throw error;
+            } finally {
+                // Liberar cliente de volta ao pool
+                client.release();
+            }
+        } catch (error) {
+            this.logger.error('Erro no processamento de reajuste de contratos', {
+                errorName: error.name,
+                errorMessage: error.message,
+                errorStack: error.stack
+            });
+            throw error;
+        }
+    }
+
     calculateBillingDueDate(contract, currentDate = new Date(), reference = 'current') {
         // Validar entrada
         if (!contract) {

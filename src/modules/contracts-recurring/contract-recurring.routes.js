@@ -27,4 +27,6 @@ router.delete('/:id', controller.delete.bind(controller));
 router.post('/:id/billing', controller.processSingleContractBilling.bind(controller));
 router.post('/billing', controller.processBilling.bind(controller));
 
+router.post('/:id/adjustment', controller.processSingleContractAdjustment.bind(controller));
+
 module.exports = router;

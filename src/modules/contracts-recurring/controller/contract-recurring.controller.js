@@ -134,6 +134,38 @@ class ContractRecurringController {
             next(error);
         }
     }
+
+    async contractAdjustment(req, res, next) {
+        try {
+            const { contractIds } = req.body;
+
+            if (!contractIds || !Array.isArray(contractIds) || contractIds.length === 0) {
+                return res.status(400).json({ error: 'Lista de contratos inválida' });
+            }
+
+            const result = await this.service.contractAdjustment(contractIds);
+
+            res.json(result);
+        } catch (error) {
+            next(error);
+        }
+    }
+
+    async processSingleContractAdjustment(req, res, next) {
+        try {
+            const { id } = req.params;
+
+            if (!id) {
+                return res.status(400).json({ error: 'ID do contrato é obrigatório' });
+            }
+
+            const result = await this.service.contractAdjustment([id]);
+
+            res.json(result[0]);
+        } catch (error) {
+            next(error);
+        }
+    }
 }
 
 module.exports = ContractRecurringController;

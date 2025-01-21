@@ -8,44 +8,62 @@ class ContractRecurringRepository extends BaseRepository {
 
 
 
-    async findById(id) {
-        try {
-            logger.info('Buscando contrato recorrente', { id });
-            const query = `
-                SELECT 
-                    p.full_name, 
-                    cg.group_name, 
-                    cr.* 
-                FROM public.contracts_recurring cr
-                JOIN movements m ON cr.model_movement_id = m.movement_id
-                JOIN persons p ON m.person_id = p.person_id
-                JOIN contract_groups cg ON cr.contract_group_id = cg.contract_group_id
-                WHERE cr.contract_id = $1
-            `;
+    async findById(id, client = null) {
+        logger.info('Buscando contrato recorrente', { id });
 
-            logger.info('Query de busca de contrato', { query, id });
+        const query = `
+            SELECT 
+                p.full_name, 
+                cg.group_name, 
+                cr.*,
+                m.*,
+                json_agg(json_build_object(
+                    'payment_id', mp.payment_id,
+                    'payment_method_id', mp.payment_method_id,
+                    'total_amount', mp.total_amount
+                )) as payments,
+                json_agg(mi.*) as movement_items
+            FROM public.contracts_recurring cr
+            JOIN movements m ON cr.model_movement_id = m.movement_id
+            JOIN persons p ON m.person_id = p.person_id
+            JOIN movement_payments mp ON m.movement_id = mp.movement_id
+            JOIN contract_groups cg ON cr.contract_group_id = cg.contract_group_id
+            JOIN movement_items mi ON m.movement_id = mi.movement_id
+            WHERE cr.contract_id = $1
+            GROUP BY 
+                p.full_name, 
+                cg.group_name, 
+                cr.contract_id, cr.contract_name, cr.contract_value, cr.start_date, cr.end_date, 
+                cr.recurrence_period, cr.due_day, cr.days_before_due, cr.status, 
+                cr.model_movement_id, cr.last_billing_date, cr.next_billing_date, 
+                cr.contract_group_id, cr.billing_reference, cr.representative_person_id, 
+                cr.commissioned_value, cr.account_entry_id, cr.last_decimo_billing_year,
+                m.movement_id, m.movement_type_id, m.movement_status_id, m.person_id, 
+                m.total_amount, m.description, m.movement_date,
+                mp.payment_id, mp.payment_method_id, mp.total_amount, 
+                mp.status
+        `;
 
-            const result = await this.pool.query(query, [id]);
+        logger.info('Query de busca de contrato', { query, id });
 
-            logger.info('Resultado da busca', { 
-                rowCount: result.rows.length,
-                rows: result.rows
-            });
+        const pool = client || this.pool;
+        const result = await pool.query(query, [id]);
 
-            if (result.rows.length === 0) {
-                logger.warn('Nenhum contrato encontrado', { id });
-                return null;
-            }
+        logger.info('Resultado da busca', { 
+            rowCount: result.rows.length,
+            rows: result.rows
+        });
 
-            return result.rows[0];
-        } catch (error) {
-            logger.error('Erro ao buscar contrato recorrente por ID', { 
-                id, 
-                errorMessage: error.message,
-                errorStack: error.stack 
-            });
-            throw error;
+        if (result.rows.length === 0) {
+            logger.warn('Nenhum contrato encontrado', { id });
+            return null;
         }
+
+        return result.rows[0];
+    }
+
+    async getClient() {
+        return await this.pool.connect();
     }
 
     async create(data) {
