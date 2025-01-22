@@ -34,6 +34,7 @@ const TaskRepository = require('./modules/tasks/repositories/task.repository');
 const N8nService = require('./services/n8n.service');
 const ContractGroupModule = require('./modules/contract-groups/contract-group.module');
 const ContractMovementModule = require('./modules/contract-movements/contract-movement.module');
+const ContractAdjustmentHistoryModule = require('./modules/contract-adjustment-history/contract-adjustment-history.module');
 
 const movementDependencies = {
     movementRepository: new MovementRepository(),
@@ -326,6 +327,10 @@ contractRecurringRoutes(app);
 // Adicionar rotas de contract-groups e contract-movements
 ContractGroupRoutes(app);
 ContractMovementRoutes(app);
+
+// Adicionar rotas de histórico de ajuste de contrato
+const ContractAdjustmentHistoryRoutes = require('./modules/contract-adjustment-history/contract-adjustment-history.module');
+ContractAdjustmentHistoryRoutes(app);
 
 // Rota 404 para capturar requisições não encontradas
 app.use((req, res, next) => {
