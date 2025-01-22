@@ -1,9 +1,23 @@
 const ContractRecurringService = require('../service/contract-recurring.service');
+const ContractRecurringRepository = require('../repository/contract-recurring.repository');
+const MovementRepository = require('../../movements/movement.repository');
+const MovementService = require('../../movements/movement.service');
+const ContractAdjustmentHistoryRepository = require('../../contract-adjustment-history/repository/contract-adjustment-history.repository');
 const { logger } = require('../../../middlewares/logger');
+const { systemDatabase } = require('../../../config/database');
 
 class ContractRecurringController {
     constructor() {
-        this.service = new ContractRecurringService();
+        this.service = new ContractRecurringService(
+            new ContractRecurringRepository(),
+            new MovementRepository(),
+            new MovementService({
+                movementRepository: new MovementRepository()
+            }),
+            new ContractAdjustmentHistoryRepository(),
+            logger
+        );
+        this.logger = logger;
     }
 
     async findAll(req, res, next) {
@@ -151,31 +165,54 @@ class ContractRecurringController {
         }
     }
 
-    async processSingleContractAdjustment(req, res, next) {
+    async processSingleContractAdjustment(req, res) {
         try {
-            const { id } = req.params;
+            // Extrair dados do corpo da requisição
             const { 
-                adjustmentValue, 
-                adjustmentType, 
                 adjustmentMode, 
-                description, 
-                changedBy 
+                adjustmentType, 
+                adjustmentValue, 
+                description 
             } = req.body;
 
-            if (!id) {
-                return res.status(400).json({ error: 'ID do contrato é obrigatório' });
-            }
+            // Extrair ID do contrato dos parâmetros da rota
+            const { id } = req.params;
 
-            const result = await this.service.calculateContractAdjustment(
+            // Recuperar ID do usuário do token JWT
+            const changedBy = req.user ? req.user.userId : null;
+
+            // Garantir que changedBy seja um número
+            const changedById = changedBy ? Number(changedBy) : null;
+
+            this.logger.info('Dados de ajuste de contrato', {
+                contractId: id,
+                changedBy,
+                changedById,
+                userInfo: req.user
+            });
+
+            // Processar ajuste do contrato
+            const adjustmentResult = await this.service.processContractAdjustment(
                 id, 
                 adjustmentValue, 
                 adjustmentType, 
-                adjustmentMode
+                adjustmentMode,
+                changedById,
+                description
             );
 
-            res.json(result);
+            // Retornar resultado do ajuste
+            return res.status(200).json(adjustmentResult);
+
         } catch (error) {
-            next(error);
+            // Log do erro
+            this.logger.error(`Erro no ajuste de contrato: ${error.message}`);
+
+            // Retornar erro
+            return res.status(500).json({
+                message: 'Erro ao processar ajuste de contrato',
+                error: error.message
+            });
         }
     }
 }

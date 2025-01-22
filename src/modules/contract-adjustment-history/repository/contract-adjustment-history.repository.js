@@ -51,7 +51,22 @@ class ContractAdjustmentHistoryRepository extends BaseRepository {
 
   async create(data, client = null) {
     try {
-      logger.info('Criando histórico de ajuste de contrato', { data });
+      logger.info('Criando histórico de ajuste de contrato', { 
+        data,
+        contractId: data.contract_id,
+        changedBy: data.changed_by,
+        changedByType: typeof data.changed_by
+      });
+
+      logger.info('Dados para criação de histórico de ajuste', {
+        contractId: data.contract_id,
+        previousValue: data.previous_value,
+        newValue: data.new_value,
+        changeType: data.change_type,
+        changedBy: data.changed_by,
+        changeDate: data.change_date,
+        description: data.description
+      });
 
       const query = `
         INSERT INTO public.contract_adjustment_history (
@@ -59,18 +74,22 @@ class ContractAdjustmentHistoryRepository extends BaseRepository {
           previous_value, 
           new_value, 
           change_type, 
-          changed_by
+          changed_by,
+          change_date,
+          description
         ) VALUES (
-          $1, $2, $3, $4, $5
+          $1, $2, $3, $4, $5, $6, $7
         ) RETURNING *
       `;
 
       const values = [
-        data.contractId,
-        data.previousValue,
-        data.newValue,
-        data.changeType,
-        data.changedBy
+        data.contract_id,
+        data.previous_value,
+        data.new_value,
+        data.change_type,
+        data.changed_by,
+        data.change_date || new Date(),
+        data.description
       ];
 
       logger.info('Query de criação de histórico de ajuste', { query, values });
@@ -139,4 +158,4 @@ class ContractAdjustmentHistoryRepository extends BaseRepository {
   }
 }
 
-module.exports = new ContractAdjustmentHistoryRepository();
+module.exports = ContractAdjustmentHistoryRepository;
