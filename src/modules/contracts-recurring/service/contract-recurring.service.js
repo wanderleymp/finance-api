@@ -915,7 +915,8 @@ class ContractRecurringService {
             // Atualizar movimento total
             const updateMovementQuery = `
                 UPDATE public.movements 
-                SET total_amount = total_amount * $1
+                SET total_amount = total_amount * $1,
+                total_items = total_amount * $1
                 WHERE movement_id = $2
             `;
             await client.query(updateMovementQuery, [adjustmentFactor, movement.movement_id]);
