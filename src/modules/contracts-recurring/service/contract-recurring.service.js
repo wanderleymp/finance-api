@@ -605,7 +605,7 @@ class ContractRecurringService {
                     }
 
                     // Converter para string com duas casas decimais
-                    const formattedNewContractValue = formattedNewValue.toFixed(2);
+                    const formattedNewContractValue = formattedNewValue.toFixed(0);
 
                     // Preparar dados de atualização
                     const updateData = {
@@ -745,6 +745,9 @@ class ContractRecurringService {
                 throw new Error('Tipo de ajuste inválido');
         }
 
+        // Arredondar valor calculado para número inteiro
+        newValue = Math.round(newValue);
+
         // Log do cálculo
         this.logger.info('Resultado do cálculo de ajuste', {
             currentValue: currentContractValue,
@@ -754,28 +757,23 @@ class ContractRecurringService {
             adjustmentMode
         });
 
-        // Arredondar valor
-        const roundedNewValue = adjustmentMode === 'ceiling' 
-            ? Math.ceil(newValue) 
-            : Number(newValue.toFixed(2));
-
         // Buscar movimento modelo
         const movement = await this.movementRepository.findById(contract.model_movement_id);
 
         // Calcular fator de ajuste para itens de movimento
-        const adjustmentFactor = roundedNewValue / currentContractValue;
+        const adjustmentFactor = newValue / currentContractValue;
 
         // Log final
         this.logger.info('Ajuste de contrato finalizado', {
             contractId,
             currentValue: currentContractValue,
-            newValue: roundedNewValue,
+            newValue,
             adjustmentFactor
         });
 
         return {
             currentValue: currentContractValue,
-            newValue: roundedNewValue,
+            newValue,
             movement,
             contract,
             adjustmentFactor
@@ -881,7 +879,7 @@ class ContractRecurringService {
             }
 
             // Converter para string com duas casas decimais
-            const formattedNewContractValue = newContractValue.toFixed(2);
+            const formattedNewContractValue = newContractValue.toFixed(0);
 
             // Atualizar contrato
             const updateContractQuery = `
@@ -912,7 +910,7 @@ class ContractRecurringService {
                 WHERE movement_id = $2
             `;
             const adjustmentFactor = newContractValue / currentValue;
-            await client.query(updateMovementItemsQuery, [adjustmentFactor, contract.model_movement_id]);
+            await client.query(updateMovementItemsQuery, [adjustmentFactor, movement.movement_id]);
 
             // Atualizar movimento total
             const updateMovementQuery = `
@@ -920,7 +918,7 @@ class ContractRecurringService {
                 SET total_amount = total_amount * $1
                 WHERE movement_id = $2
             `;
-            await client.query(updateMovementQuery, [adjustmentFactor, contract.model_movement_id]);
+            await client.query(updateMovementQuery, [adjustmentFactor, movement.movement_id]);
 
             // Preparar dados para histórico de ajuste
             const adjustmentHistoryData = {
@@ -953,13 +951,13 @@ class ContractRecurringService {
             });
 
             return {
-                calculation,
-                contract: {
-                    ...contract,
-                    contract_value: newContractValue
-                }
+                contractId: contract.contract_id,
+                contractName: contract.contract_name,
+                personName: contract.person_name,
+                oldValue: currentValue,
+                newValue: newContractValue,
+                adjustmentHistory: adjustmentHistory
             };
-
         } catch (error) {
             // Rollback da transação em caso de erro
             await client.query('ROLLBACK');
