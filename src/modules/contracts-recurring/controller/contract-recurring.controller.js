@@ -154,14 +154,26 @@ class ContractRecurringController {
     async processSingleContractAdjustment(req, res, next) {
         try {
             const { id } = req.params;
+            const { 
+                adjustmentValue, 
+                adjustmentType, 
+                adjustmentMode, 
+                description, 
+                changedBy 
+            } = req.body;
 
             if (!id) {
                 return res.status(400).json({ error: 'ID do contrato é obrigatório' });
             }
 
-            const result = await this.service.contractAdjustment([id]);
+            const result = await this.service.calculateContractAdjustment(
+                id, 
+                adjustmentValue, 
+                adjustmentType, 
+                adjustmentMode
+            );
 
-            res.json(result[0]);
+            res.json(result);
         } catch (error) {
             next(error);
         }

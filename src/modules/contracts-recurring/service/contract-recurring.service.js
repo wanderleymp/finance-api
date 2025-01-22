@@ -515,56 +515,228 @@ class ContractRecurringService {
         }
     }
 
-    async contractAdjustment(contractIds) {
+    async contractAdjustment(contractIds, adjustmentValue, adjustmentType, adjustmentMode, description, changedBy) {
+        // Se contractIds for um número ou string, converter para array
+        if (typeof contractIds === 'number' || typeof contractIds === 'string') {
+            contractIds = [contractIds];
+        }
+
+        // Validar parâmetros de entrada
+        if (!contractIds || !Array.isArray(contractIds) || contractIds.length === 0) {
+            throw new Error('Lista de IDs de contrato é obrigatória');
+        }
+
+        if (adjustmentValue === undefined || adjustmentValue === null) {
+            throw new Error('Valor de ajuste é obrigatório');
+        }
+
+        // Validar tipo de ajuste
+        if (!['percentage', 'value'].includes(adjustmentType)) {
+            throw new Error('Tipo de ajuste inválido. Use "percentage" ou "value"');
+        }
+
+        // Validar modo de ajuste
+        if (!['increase', 'decrease'].includes(adjustmentMode)) {
+            throw new Error('Modo de ajuste inválido. Use "increase" ou "decrease"');
+        }
+
+        if (!description || description.trim() === '') {
+            throw new Error('Descrição do ajuste é obrigatória');
+        }
+
+        // Validar changedBy
+        if (!changedBy) {
+            throw new Error('Usuário que realizou o ajuste é obrigatório');
+        }
+
+        // Armazenar payload original para retorno
+        const payloadData = {
+            contractIds,
+            adjustmentValue,
+            adjustmentType,
+            adjustmentMode,
+            description,
+            changedBy
+        };
+
+        const results = [];
+        const client = await this.repository.pool.connect();
+
         try {
-            this.logger.info('Iniciando processamento de reajuste de contratos', { 
-                totalContracts: contractIds.length 
+            // Inicia a transação
+            await client.query('BEGIN');
+            this.logger.info('Iniciando processamento de ajuste de contratos', { 
+                contractIds, 
+                adjustmentValue, 
+                adjustmentType,
+                adjustmentMode,
+                description,
+                changedBy 
             });
 
-            const results = [];
+            for (const contractId of contractIds) {
+                try {
+                    // Buscar dados do contrato
+                    const contract = await this.repository.findById(contractId);
+                    
+                    // Calcular novo valor do contrato
+                    let newContractValue = contract.contract_value;
+                    
+                    // Calcular ajuste baseado no tipo e modo
+                    if (adjustmentType === 'percentage') {
+                        const percentageValue = adjustmentValue / 100;
+                        newContractValue += adjustmentMode === 'increase' 
+                            ? Math.ceil(contract.contract_value * percentageValue) 
+                            : -Math.ceil(contract.contract_value * percentageValue);
+                    } else {
+                        newContractValue += adjustmentMode === 'increase' 
+                            ? Math.ceil(adjustmentValue) 
+                            : -Math.ceil(adjustmentValue);
+                    }
 
-            // Iniciar transação
-            const client = await this.repository.getClient();
+                    // Arredondar para cima
+                    newContractValue = Math.ceil(newContractValue);
 
-            try {
-                await client.query('BEGIN');
+                    // Remover casas decimais se for um número inteiro
+                    const formattedCurrentValue = Number.isInteger(contract.contract_value) 
+                        ? Math.ceil(contract.contract_value) 
+                        : Number(contract.contract_value.toFixed(2));
+                    
+                    const formattedNewValue = Number.isInteger(newContractValue) 
+                        ? Math.ceil(newContractValue) 
+                        : Number(newContractValue.toFixed(2));
 
-                for (const contractId of contractIds) {
-                    // Buscar contrato recorrente
-                    const contract = await this.repository.findById(contractId, client);
+                    // Preparar dados de atualização
+                    const updateData = {
+                        contract_value: formattedNewValue
+                    };
+
+                    // Atualizar contrato
+                    const updatedContract = await this.repository.update(contractId, updateData, client);
+                    
+                    // Criar histórico de ajuste
+                    const adjustmentHistoryData = {
+                        contractId,
+                        previousValue: contract.contract_value,
+                        newValue: newContractValue,
+                        changeType: adjustmentType,
+                        adjustmentMode: adjustmentMode,
+                        changedBy,
+                        description
+                    };
+
+                    // Usar repositório de histórico de ajuste
+                    const ContractAdjustmentHistoryRepository = require('../../contract-adjustment-history/repository/contract-adjustment-history.repository');
+                    const adjustmentHistory = await ContractAdjustmentHistoryRepository.create(adjustmentHistoryData, client);
 
                     results.push({
-                        contract
+                        contractId,
+                        previousValue: formattedCurrentValue,
+                        newValue: formattedNewValue,
+                        adjustmentHistory: adjustmentHistory,
+                        originalContract: contract,
+                        payloadData // Adicionar dados do payload original
+                    });
+
+                    this.logger.info('Contrato ajustado com sucesso', { 
+                        contractId, 
+                        previousValue: formattedCurrentValue, 
+                        newValue: formattedNewValue,
+                        adjustmentMode
+                    });
+                } catch (contractError) {
+                    this.logger.error('Erro ao ajustar contrato individual', { 
+                        contractId, 
+                        error: contractError.message 
+                    });
+                    // Continuar processando outros contratos em caso de erro
+                    results.push({
+                        contractId,
+                        error: contractError.message,
+                        payloadData // Adicionar dados do payload original mesmo em caso de erro
                     });
                 }
-
-                // Commitar transação
-                await client.query('COMMIT');
-
-                this.logger.info('Processamento de reajuste de contratos concluído', { 
-                    resultCount: results.length 
-                });
-
-                return results;
-            } catch (error) {
-                // Rollback em caso de erro
-                await client.query('ROLLBACK');
-                throw error;
-            } finally {
-                // Liberar cliente de volta ao pool
-                client.release();
             }
+
+            // Commit da transação
+            await client.query('COMMIT');
+
+            return {
+                results,
+                payloadData // Retornar payload original junto com os resultados
+            };
         } catch (error) {
-            this.logger.error('Erro no processamento de reajuste de contratos', {
-                errorName: error.name,
-                errorMessage: error.message,
-                errorStack: error.stack
+            // Rollback em caso de erro
+            await client.query('ROLLBACK');
+
+            this.logger.error('Erro no processamento de ajuste de contratos', { 
+                error: error.message,
+                contractIds 
             });
+
             throw error;
+        } finally {
+            // Liberar cliente de conexão
+            client.release();
         }
     }
 
-    calculateBillingDueDate(contract, currentDate = new Date(), reference = 'current') {
+    async calculateContractAdjustment(contractId, adjustmentValue, adjustmentType, adjustmentMode) {
+        // Buscar dados do contrato
+        const contract = await this.repository.findById(contractId);
+        
+        // Converter valor do contrato para número
+        let currentContractValue = Number(contract.contract_value);
+        
+        // Converter valor de ajuste para número
+        adjustmentValue = Number(adjustmentValue);
+        
+        // Calcular novo valor do contrato
+        let newContractValue = currentContractValue;
+        
+        // Calcular ajuste baseado no tipo e modo
+        if (adjustmentType === 'percentage') {
+            const percentageValue = adjustmentValue / 100;
+            const adjustmentAmount = currentContractValue * percentageValue;
+            
+            newContractValue += adjustmentMode === 'increase' 
+                ? adjustmentAmount 
+                : -adjustmentAmount;
+        } else {
+            newContractValue += adjustmentMode === 'increase' 
+                ? adjustmentValue 
+                : -adjustmentValue;
+        }
+
+        // Arredondar valores sempre para cima
+        const formattedCurrentValue = Math.ceil(currentContractValue);
+        const formattedNewValue = Math.ceil(newContractValue);
+
+        // Calcular diferença
+        const difference = formattedNewValue - formattedCurrentValue;
+
+        // Retornar objeto com todos os detalhes
+        return {
+            payload: {
+                contractId,
+                adjustmentValue,
+                adjustmentType,
+                adjustmentMode
+            },
+            contract: {
+                id: contract.id,
+                contractName: contract.contract_name,
+                currentValue: formattedCurrentValue
+            },
+            calculation: {
+                currentValue: formattedCurrentValue,
+                newValue: formattedNewValue,
+                difference: difference
+            }
+        };
+    }
+
+    async calculateBillingDueDate(contract, currentDate = new Date(), reference = 'current') {
         // Validar entrada
         if (!contract) {
             throw new Error('Contrato inválido');
