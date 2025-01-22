@@ -976,6 +976,77 @@ class ContractRecurringService {
         }
     }
 
+    async processContractAdjustmentBatch(payload) {
+        const { 
+            contract_id: contractIds = [], 
+            adjustmentValue, 
+            adjustmentType, 
+            adjustmentMode, 
+            description 
+        } = payload;
+
+        // Log de entrada
+        this.logger.info('Processando ajuste em lote de contratos', { 
+            contractIds, 
+            adjustmentValue, 
+            adjustmentType, 
+            adjustmentMode 
+        });
+
+        // Se nenhum contrato for especificado, buscar contratos ativos
+        let targetContractIds = contractIds;
+        if (targetContractIds.length === 0) {
+            const activeContractsResult = await this.findAll(1, 1000, { status: 'active' });
+            targetContractIds = activeContractsResult.data.map(contract => contract.contract_id);
+        }
+
+        // Log dos contratos selecionados
+        this.logger.info('Contratos selecionados para ajuste', { 
+            totalContracts: targetContractIds.length 
+        });
+
+        // Processar ajuste para cada contrato
+        const adjustmentResults = [];
+        for (const contractId of targetContractIds) {
+            try {
+                const adjustmentResult = await this.processContractAdjustment(
+                    contractId, 
+                    adjustmentValue, 
+                    adjustmentType, 
+                    adjustmentMode, 
+                    null, // changedBy
+                    description
+                );
+                
+                adjustmentResults.push({
+                    contractId,
+                    success: true,
+                    details: adjustmentResult
+                });
+            } catch (error) {
+                this.logger.error('Erro ao processar ajuste de contrato', {
+                    contractId,
+                    error: error.message
+                });
+                
+                adjustmentResults.push({
+                    contractId,
+                    success: false,
+                    error: error.message
+                });
+            }
+        }
+
+        // Log do resultado final
+        this.logger.info('Processamento de ajuste em lote concluído', {
+            totalProcessed: adjustmentResults.length,
+            successCount: adjustmentResults.filter(r => r.success).length,
+            failureCount: adjustmentResults.filter(r => !r.success).length
+        });
+
+        return adjustmentResults;
+    }
+
     async calculateBillingDueDate(contract, currentDate = new Date(), reference = 'current') {
         // Validar entrada
         if (!contract) {

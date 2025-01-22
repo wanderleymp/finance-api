@@ -215,6 +215,30 @@ class ContractRecurringController {
             });
         }
     }
+
+    async processBatchContractAdjustment(req, res, next) {
+        try {
+            const payload = req.body;
+            
+            // Log da requisição de ajuste em lote
+            this.logger.info('Requisição de ajuste em lote de contratos', { 
+                payload 
+            });
+
+            const result = await this.service.processContractAdjustmentBatch(payload);
+            
+            // Log do resultado
+            this.logger.info('Ajuste em lote de contratos processado', { 
+                totalContracts: result.length,
+                successCount: result.filter(r => r.success).length,
+                failureCount: result.filter(r => !r.success).length
+            });
+
+            res.json(result);
+        } catch (error) {
+            next(error);
+        }
+    }
 }
 
 module.exports = ContractRecurringController;
