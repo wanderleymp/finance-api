@@ -400,7 +400,8 @@ class ContractRecurringService {
             // Preparar filtros
             const queryFilters = {
                 status: filters.status,
-                contract_group_id: filters.contract_group_id
+                contract_group_id: filters.contract_group_id,
+                search: filters.search
             };
 
             // Usar findAll do repositório base

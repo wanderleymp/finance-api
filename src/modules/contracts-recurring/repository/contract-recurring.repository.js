@@ -188,7 +188,17 @@ class ContractRecurringRepository extends BaseRepository {
             const queryParams = [];
             let paramCount = 1;
 
-            // Filtros adicionais
+            // Filtro de busca geral
+            if (filters.search) {
+                whereConditions.push(`(
+                    cr.contract_name ILIKE $${paramCount} OR 
+                    p.full_name ILIKE $${paramCount}
+                )`);
+                queryParams.push(`%${filters.search}%`);
+                paramCount++;
+            }
+
+            // Filtros adicionais anteriores
             if (filters.contract_name) {
                 whereConditions.push(`cr.contract_name ILIKE $${paramCount}`);
                 queryParams.push(`%${filters.contract_name}%`);
