@@ -85,6 +85,12 @@ class NuvemFiscalService {
         }
       });
 
+      logger.info('Resposta da consulta NFSe na Nuvem Fiscal', {
+        integrationNfseId,
+        status: response.status,
+        data: response.data
+      });
+
       return response.data;
     } catch (error) {
       if (error.response?.status === 404) {

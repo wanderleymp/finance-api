@@ -955,27 +955,100 @@ class NfseService {
             // 2. Consulta status na Nuvem Fiscal usando o método que já funciona
             const nfseRemota = await nuvemFiscalService.consultarNfse(nfseLocal.integration_nfse_id);
 
-            // 3. Se status mudou, atualiza
-            if (nfseLocal.invoice.status !== nfseRemota.status) {
-                await this.nfseRepository.updateStatus(nfseId, nfseRemota.status, {
-                    mensagens: nfseRemota.mensagens || []
-                });
+            logger.info('Resposta da consulta da NFSe', {
+                nfseId,
+                statusLocal: nfseLocal.invoice.status,
+                statusRemoto: nfseRemota.status,
+                dadosRemoto: nfseRemota
+            });
 
-                // 4. Adiciona evento na invoice se não existir
+            // Busca último evento para comparar mensagens
+            let ultimoEvento = null;
+            try {
+                ultimoEvento = await this.invoiceEventRepository.findLastEventByInvoiceAndType(
+                    nfseLocal.invoice_id,
+                    'ATUALIZACAO_STATUS_NFSE'
+                );
+            } catch (error) {
+                logger.error('Erro ao buscar último evento', {
+                    nfseId,
+                    error: error.message,
+                    stack: error.stack
+                });
+                // Se der erro ao buscar evento, assumimos que não existe
+                ultimoEvento = null;
+            }
+
+            // Verifica se houve mudança no status ou nas mensagens
+            const mensagensAtuais = JSON.stringify(nfseRemota.mensagens || []);
+            const mensagensAnteriores = ultimoEvento ? ultimoEvento.event_data : '[]';
+            const houveMudancaStatus = nfseLocal.invoice.status !== nfseRemota.status;
+            
+            // Só considera mudança nas mensagens se o status também mudou
+            // Ou se não existir evento anterior
+            const houveMudancaMensagens = !ultimoEvento || (
+                houveMudancaStatus && 
+                mensagensAtuais !== mensagensAnteriores
+            );
+
+            logger.info('Comparação de status e mensagens', {
+                nfseId,
+                statusAtual: nfseLocal.invoice.status,
+                statusNovo: nfseRemota.status,
+                houveMudancaStatus,
+                houveMudancaMensagens,
+                temEventoAnterior: !!ultimoEvento,
+                statusEventoAnterior: ultimoEvento?.status
+            });
+
+            // Só cria evento se:
+            // 1. Não existe evento anterior, ou
+            // 2. O status mudou
+            if (!ultimoEvento || houveMudancaStatus) {
+                // Se status mudou, atualiza na NFSe
+                if (houveMudancaStatus) {
+                    await this.nfseRepository.updateStatus(nfseId, nfseRemota.status, {
+                        mensagens: nfseRemota.mensagens || []
+                    });
+                }
+
+                // Determina a mensagem do evento baseado no status e mensagens
+                let mensagemEvento = '';
+                if (nfseRemota.status === 'autorizado') {
+                    mensagemEvento = 'Nota Fiscal autorizada com sucesso';
+                } else if (nfseRemota.status === 'erro') {
+                    // Se tem mensagens de erro, usa a primeira como mensagem principal
+                    if (nfseRemota.mensagens && nfseRemota.mensagens.length > 0) {
+                        mensagemEvento = `Erro na NFSe: ${nfseRemota.mensagens[0].descricao}`;
+                    } else {
+                        mensagemEvento = 'Erro ao processar NFSe';
+                    }
+                } else if (nfseRemota.status === 'processando') {
+                    mensagemEvento = 'NFSe em processamento';
+                } else if (nfseRemota.status === 'cancelado') {
+                    mensagemEvento = 'NFSe cancelada';
+                } else {
+                    mensagemEvento = `Status da NFSe alterado para: ${nfseRemota.status}`;
+                }
+
+                // Cria evento com as novas informações
                 const evento = await this.invoiceEventRepository.create({
                     invoice_id: nfseLocal.invoice_id,
-                    tipo_evento: 'ATUALIZACAO_STATUS_NFSE',
+                    event_type: 'ATUALIZACAO_STATUS_NFSE',
+                    event_date: new Date(),
+                    event_data: mensagensAtuais,
                     status: nfseRemota.status,
-                    dados_evento: JSON.stringify({
-                        status_anterior: nfseLocal.invoice.status,
-                        mensagens: nfseRemota.mensagens || []
-                    })
+                    message: mensagemEvento
                 });
 
-                logger.info('Status da NFSe atualizado com sucesso', {
+                logger.info('Novo evento de NFSe criado', {
                     nfseId,
                     statusAnterior: nfseLocal.invoice.status,
-                    novoStatus: nfseRemota.status
+                    novoStatus: nfseRemota.status,
+                    houveMudancaStatus,
+                    houveMudancaMensagens,
+                    eventoId: evento.event_id,
+                    mensagem: mensagemEvento
                 });
 
                 // Busca NFSe atualizada
@@ -983,19 +1056,19 @@ class NfseService {
 
                 return {
                     success: true,
-                    message: 'Status da NFSe atualizado com sucesso',
+                    message: houveMudancaStatus ? 'Status da NFSe atualizado com sucesso' : 'Mensagens da NFSe atualizadas com sucesso',
                     nfse: nfseAtualizada,
                     evento
                 };
             } else {
-                logger.info('Status da NFSe já está atualizado', {
+                logger.info('Nenhuma mudança detectada na NFSe', {
                     nfseId,
-                    status: nfseLocal.invoice.status
+                    status: nfseRemota.status
                 });
 
                 return {
                     success: true,
-                    message: 'Status da NFSe já está atualizado',
+                    message: 'NFSe já está atualizada',
                     nfse: nfseLocal,
                     evento: null
                 };
