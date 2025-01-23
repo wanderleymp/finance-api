@@ -16,7 +16,7 @@ class NfseService {
     constructor() {
         this.nfseRepository = new NfseRepository();
         this.invoiceRepository = new invoiceRepository(); 
-        this.invoiceEventRepository = invoiceEventRepository;
+        this.invoiceEventRepository = new invoiceEventRepository();
         this.ambiente = process.env.NFSE_AMBIENTE || 'homologacao';
         this.nuvemFiscalUrl = 'https://api.nuvemfiscal.com.br/nfse';
         this.nuvemFiscalApiKey = process.env.NUVEM_FISCAL_API_KEY;
@@ -940,54 +940,70 @@ class NfseService {
      */
     async atualizarStatusNfse(nfseId) {
         try {
-            // Busca NFSe no banco
+            // 1. Busca NFSe local
             const nfseLocal = await this.nfseRepository.findById(nfseId);
             if (!nfseLocal) {
                 throw new Error('NFSe não encontrada');
             }
 
-            // Consulta status na Nuvem Fiscal
-            const response = await axios.get(
-                `https://api.nuvemfiscal.com.br/nfse/${nfseLocal.integration_nfse_id}`,
-                {
-                    headers: {
-                        'Authorization': `Bearer ${this.nuvemFiscalApiKey}`,
-                        'Content-Type': 'application/json'
-                    }
-                }
-            );
-
-            const nfseRemota = response.data;
-
-            logger.info('Status da NFSe consultado na Nuvem Fiscal para atualização', {
+            logger.info('Iniciando atualização de status da NFSe', { 
                 nfseId,
                 integrationNfseId: nfseLocal.integration_nfse_id,
-                statusAtual: nfseLocal.status,
-                novoStatus: nfseRemota.status
+                statusAtual: nfseLocal.invoice.status
             });
 
-            // Atualiza status no banco
-            const nfseAtualizada = await this.nfseRepository.updateStatus(nfseId, nfseRemota.status);
+            // 2. Consulta status na Nuvem Fiscal usando o método que já funciona
+            const nfseRemota = await nuvemFiscalService.consultarNfse(nfseLocal.integration_nfse_id);
 
-            // Cria evento de atualização
-            const evento = await this.invoiceEventRepository.create({
-                invoice_id: nfseAtualizada.invoice_id,
-                event_type: 'NFSE_STATUS_UPDATED',
-                event_date: new Date(),
-                event_data: JSON.stringify(nfseRemota),
-                status: nfseRemota.status,
-                message: nfseRemota.mensagens?.length > 0 ? nfseRemota.mensagens[0] : 'Status da NFSe atualizado'
-            });
+            // 3. Se status mudou, atualiza
+            if (nfseLocal.invoice.status !== nfseRemota.status) {
+                await this.nfseRepository.updateStatus(nfseId, nfseRemota.status, {
+                    mensagens: nfseRemota.mensagens || []
+                });
 
-            return {
-                nfse: nfseAtualizada,
-                evento: evento
-            };
+                // 4. Adiciona evento na invoice se não existir
+                const evento = await this.invoiceEventRepository.create({
+                    invoice_id: nfseLocal.invoice_id,
+                    tipo_evento: 'ATUALIZACAO_STATUS_NFSE',
+                    status: nfseRemota.status,
+                    dados_evento: JSON.stringify({
+                        status_anterior: nfseLocal.invoice.status,
+                        mensagens: nfseRemota.mensagens || []
+                    })
+                });
+
+                logger.info('Status da NFSe atualizado com sucesso', {
+                    nfseId,
+                    statusAnterior: nfseLocal.invoice.status,
+                    novoStatus: nfseRemota.status
+                });
+
+                // Busca NFSe atualizada
+                const nfseAtualizada = await this.nfseRepository.findById(nfseId);
+
+                return {
+                    success: true,
+                    message: 'Status da NFSe atualizado com sucesso',
+                    nfse: nfseAtualizada,
+                    evento
+                };
+            } else {
+                logger.info('Status da NFSe já está atualizado', {
+                    nfseId,
+                    status: nfseLocal.invoice.status
+                });
+
+                return {
+                    success: true,
+                    message: 'Status da NFSe já está atualizado',
+                    nfse: nfseLocal,
+                    evento: null
+                };
+            }
         } catch (error) {
-            logger.error('Erro ao atualizar status da NFSe', { 
-                error: error.message, 
-                stack: error.stack,
-                nfseId 
+            logger.error('Erro ao atualizar status da NFSe', {
+                error: error.message,
+                nfseId
             });
             throw error;
         }

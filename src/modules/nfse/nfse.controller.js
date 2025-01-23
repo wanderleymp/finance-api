@@ -355,7 +355,7 @@ class NfseController {
             logger.info('Status da NFSe atualizado com sucesso', {
                 id,
                 novoStatus: resultado.nfse.status,
-                eventoId: resultado.evento.event_id,
+                eventoId: resultado.evento?.event_id, 
                 method: 'atualizarStatusNfse',
                 service: 'NFSeController'
             });
