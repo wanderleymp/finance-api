@@ -913,7 +913,7 @@ class NfseService {
                 status: nuvemFiscalResponse.status,
                 environment: nuvemFiscalResponse.ambiente || 'producao',
                 total_amount: nuvemFiscalResponse.valores?.servico || 0,
-                movement_id: nuvemFiscalResponse.referencia, // Assumindo que referencia é o movement_id
+                movement_id: nuvemFiscalResponse.referencia, // Assumindo que referencia é o movement_id,
                 integration_id: 10, // Valor padrão
             });
 
@@ -1046,7 +1046,7 @@ class NfseService {
             }
 
             logger.info('Iniciando atualização de status da NFSe', { 
-                nfseId,
+                nfseId, 
                 integrationNfseId: nfseLocal.integration_nfse_id,
                 statusAtual: nfseLocal.invoice.status
             });
@@ -1104,11 +1104,64 @@ class NfseService {
             // 1. Não existe evento anterior, ou
             // 2. O status mudou
             if (!ultimoEvento || houveMudancaStatus) {
-                // Se status mudou, atualiza na NFSe
+                // Se status mudou, atualiza na NFSe e Invoice
                 if (houveMudancaStatus) {
-                    await this.nfseRepository.updateStatus(nfseId, nfseRemota.status, {
-                        mensagens: nfseRemota.mensagens || []
+                    logger.info('DEBUG: Iniciando atualização de status', {
+                        nfseId,
+                        statusAtual: nfseLocal.status,
+                        statusNovo: nfseRemota.status,
+                        dadosNfseRemota: JSON.stringify(nfseRemota)
                     });
+
+                    const dadosAtualizacao = {
+                        status: nfseRemota.status
+                    };
+
+                    // Adicionar mensagens de erro se existirem
+                    if (nfseRemota.mensagens && nfseRemota.mensagens.length > 0) {
+                        dadosAtualizacao.error_messages = nfseRemota.mensagens.map(msg => 
+                            `${msg.codigo}: ${msg.descricao}`
+                        );
+                    }
+
+                    // Tratamento para status 'erro'
+                    if (nfseRemota.status === 'erro') {
+                        logger.warn('DEBUG: NFSe com status de erro', {
+                            nfseId,
+                            mensagens: JSON.stringify(nfseRemota.mensagens)
+                        });
+
+                        await this.atualizarInvoiceNfse(nfseLocal.invoice_id, dadosAtualizacao);
+                    }
+
+                    // Tratamento para status 'autorizada' ou 'autorizado'
+                    if (['autorizada', 'autorizado'].includes(nfseRemota.status)) {
+                        // Garantir campos corretos
+                        dadosAtualizacao.number = String(nfseRemota.numero);
+                        dadosAtualizacao.series = String(nfseRemota.DPS?.serie || '');
+
+                        logger.info('DEBUG: Preparando atualização de invoice para status autorizada', {
+                            invoiceId: nfseLocal.invoice_id,
+                            dadosAtualizacao: JSON.stringify(dadosAtualizacao)
+                        });
+
+                        // Chamar método centralizado
+                        const invoiceAtualizada = await this.atualizarInvoiceNfse(nfseLocal.invoice_id, dadosAtualizacao);
+
+                        logger.info('DEBUG: Invoice atualizada após autorização', {
+                            invoiceId: nfseLocal.invoice_id,
+                            invoiceAtualizada: JSON.stringify(invoiceAtualizada)
+                        });
+                    }
+
+                    // Log final antes da atualização no repositório
+                    logger.info('DEBUG: Dados finais de atualização', {
+                        nfseId,
+                        dadosAtualizacao: JSON.stringify(dadosAtualizacao)
+                    });
+
+                    // Atualiza NFSe e Invoice em uma única chamada
+                    await this.nfseRepository.updateStatus(nfseId, nfseRemota.status, dadosAtualizacao);
                 }
 
                 // Determina a mensagem do evento baseado no status e mensagens
@@ -1176,6 +1229,37 @@ class NfseService {
             logger.error('Erro ao atualizar status da NFSe', {
                 error: error.message,
                 nfseId
+            });
+            throw error;
+        }
+    }
+
+    // Método centralizado para atualizar invoice
+    async atualizarInvoiceNfse(invoiceId, dadosAtualizacao) {
+        logger.info('Tentativa de atualização de invoice', {
+            invoiceId,
+            dadosAtualizacao,
+            stackTrace: new Error().stack
+        });
+
+        try {
+            const invoiceAtualizada = await this.invoiceRepository.update(
+                invoiceId, 
+                dadosAtualizacao
+            );
+
+            logger.info('Invoice atualizada com sucesso', {
+                invoiceId,
+                invoiceAtualizada
+            });
+
+            return invoiceAtualizada;
+        } catch (error) {
+            logger.error('Erro ao atualizar invoice', {
+                invoiceId,
+                dadosAtualizacao,
+                error: error.message,
+                stack: error.stack
             });
             throw error;
         }

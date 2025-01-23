@@ -132,20 +132,43 @@ class NfseRepository extends BaseRepository {
      * Atualiza o status da NFSe
      * @param {number} nfseId - ID da NFSe
      * @param {string} status - Novo status
+     * @param {Object} dadosAtualizacao - Dados adicionais para atualização
      * @returns {Promise<Object>} NFSe atualizada
      */
-    async updateStatus(nfseId, status) {
+    async updateStatus(nfseId, status, dadosAtualizacao = {}) {
         try {
+            const setClauses = [`status = $1`];
+            const values = [status];
+            let paramIndex = 2;
+
+            // Adicionar cláusulas dinâmicas para outros campos
+            if (dadosAtualizacao.number) {
+                setClauses.push(`number = $${paramIndex}`);
+                values.push(dadosAtualizacao.number);
+                paramIndex++;
+            }
+
+            if (dadosAtualizacao.series) {
+                setClauses.push(`series = $${paramIndex}`);
+                values.push(dadosAtualizacao.series);
+                paramIndex++;
+            }
+
+            // Adicionar timestamp de atualização
+            setClauses.push(`updated_at = CURRENT_TIMESTAMP`);
+            
             const query = `
                 UPDATE invoices i
-                SET status = $1, updated_at = CURRENT_TIMESTAMP
+                SET ${setClauses.join(', ')}
                 FROM ${this.tableName} n
                 WHERE n.invoice_id = i.invoice_id
-                AND n.nfse_id = $2
+                AND n.nfse_id = $${paramIndex}
                 RETURNING i.*, n.*
             `;
             
-            const result = await this.pool.query(query, [status, nfseId]);
+            values.push(nfseId);
+            
+            const result = await this.pool.query(query, values);
             
             if (result.rows.length === 0) {
                 throw new Error('NFSe não encontrada');
@@ -153,7 +176,7 @@ class NfseRepository extends BaseRepository {
             
             return result.rows[0];
         } catch (error) {
-            logger.error('Erro ao atualizar status da NFSe', { error, nfseId, status });
+            logger.error('Erro ao atualizar status da NFSe', { error, nfseId, status, dadosAtualizacao });
             throw new DatabaseError('Erro ao atualizar status da NFSe', error);
         }
     }
