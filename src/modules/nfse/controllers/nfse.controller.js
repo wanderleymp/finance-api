@@ -108,28 +108,86 @@ class NFSeController {
 
   /**
    * Consulta status de uma NFSe
-   * @param {number} nfseId - ID da NFSe
-   * @returns {Promise<Object>} Status da NFSe
+   * @param {Object} req - Request do Express
+   * @param {Object} res - Response do Express
    */
-  async consultarStatusNfse(nfseId) {
-    return await this.nfseService.consultarStatusNfse(nfseId);
+  async consultarStatusNfse(req, res) {
+    try {
+      const { id } = req.params;
+      logger.info('Consultando status da NFSe', {
+        id,
+        method: 'consultarStatusNfse',
+        service: 'NFSeController'
+      });
+
+      const status = await this.nfseService.consultarStatusNfse(id);
+      res.json(status);
+    } catch (error) {
+      logger.error('Erro ao consultar status da NFSe', {
+        error: error.message,
+        id: req.params.id,
+        method: 'consultarStatusNfse',
+        service: 'NFSeController'
+      });
+      res.status(400).json({
+        error: 'Erro ao consultar status da NFSe'
+      });
+    }
   }
 
   /**
    * Lista todas as NFSes com status "processando"
-   * @returns {Promise<Array>} Lista de NFSes pendentes
+   * @param {Object} req - Request do Express
+   * @param {Object} res - Response do Express
    */
-  async listarNfsesProcessando() {
-    return await this.nfseService.listarNfsesProcessando();
+  async listarNfsesProcessando(req, res) {
+    try {
+      logger.info('Listando NFSes com status processando', {
+        method: 'listarNfsesProcessando',
+        service: 'NFSeController'
+      });
+
+      const nfses = await this.nfseService.listarNfsesProcessando();
+      res.json(nfses);
+    } catch (error) {
+      logger.error('Erro ao listar NFSes processando', {
+        error: error.message,
+        method: 'listarNfsesProcessando',
+        service: 'NFSeController'
+      });
+      res.status(400).json({
+        error: 'Erro ao listar NFSes processando'
+      });
+    }
   }
 
   /**
    * Atualiza o status de uma NFSe
-   * @param {number} nfseId - ID da NFSe
-   * @returns {Promise<Object>} NFSe atualizada
+   * @param {Object} req - Request do Express
+   * @param {Object} res - Response do Express
    */
-  async atualizarStatusNfse(nfseId) {
-    return await this.nfseService.atualizarStatusNfse(nfseId);
+  async atualizarStatusNfse(req, res) {
+    try {
+      const { id } = req.params;
+      logger.info('Atualizando status da NFSe', {
+        id,
+        method: 'atualizarStatusNfse',
+        service: 'NFSeController'
+      });
+
+      const nfse = await this.nfseService.atualizarStatusNfse(id);
+      res.json(nfse);
+    } catch (error) {
+      logger.error('Erro ao atualizar status da NFSe', {
+        error: error.message,
+        id: req.params.id,
+        method: 'atualizarStatusNfse',
+        service: 'NFSeController'
+      });
+      res.status(400).json({
+        error: 'Erro ao atualizar status da NFSe'
+      });
+    }
   }
 }
 

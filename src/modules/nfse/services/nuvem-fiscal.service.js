@@ -71,40 +71,26 @@ class NuvemFiscalService {
 
   /**
    * Consulta NFSe na Nuvem Fiscal
-   * @param {string} cnpj - CNPJ para consulta
-   * @param {Object} [filtros={}] - Filtros de consulta
-   * @param {string} [ambiente='PRODUCAO'] - Ambiente de consulta
+   * @param {string} integrationNfseId - ID da NFSe na Nuvem Fiscal
    * @returns {Promise<Object>} Resultado da consulta
    */
-  async consultarNfse(cnpj, filtros = {}, ambiente = 'PRODUCAO') {
+  async consultarNfse(integrationNfseId) {
     try {
-      // Obtém token válido
-      const token = await this.tokenService.obterToken(ambiente);
-
-      // Configura headers
-      const headers = {
-        'Authorization': token,
-        'Content-Type': 'application/json',
-        'Accept': 'application/json'
-      };
-
-      // Configura parâmetros de consulta
-      const params = new URLSearchParams({
-        cnpj,
-        ...filtros
+      const token = await this.tokenService.obterToken('producao');
+      const response = await axios.get(`${this.baseUrl}/${integrationNfseId}`, { 
+        headers: {
+          'Authorization': token,
+          'Content-Type': 'application/json',
+          'Accept': 'application/json'
+        }
       });
-
-      // Faz requisição de consulta
-      const response = await axios.get(`${this.baseUrl}/nfse?${params}`, { headers });
 
       return response.data;
     } catch (error) {
-      logger.error('Erro ao consultar NFSe na Nuvem Fiscal', {
-        errorMessage: error.message,
-        cnpj,
-        filtros
-      });
-      throw error;
+      if (error.response?.status === 404) {
+        throw new Error('NFSe não encontrada na Nuvem Fiscal');
+      }
+      throw new Error('Erro ao consultar NFSe na Nuvem Fiscal');
     }
   }
 

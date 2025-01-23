@@ -256,6 +256,122 @@ class NfseController {
             return errorResponse(res, 500, 'Erro ao criar NFSe', error);
         }
     }
+
+    /**
+     * Consulta status de uma NFSe
+     * @param {Object} req - Request do Express
+     * @param {Object} res - Response do Express
+     */
+    async consultarStatusNfse(req, res) {
+        try {
+            const { id } = req.params;
+
+            logger.info('Consultando status da NFSe', {
+                id,
+                method: 'consultarStatusNfse',
+                service: 'NFSeController'
+            });
+
+            const status = await this.nfseService.consultarStatusNfse(Number(id));
+            
+            logger.info('Status da NFSe consultado com sucesso', {
+                id,
+                statusLocal: status.local.status,
+                statusRemoto: status.remoto.status,
+                method: 'consultarStatusNfse',
+                service: 'NFSeController'
+            });
+
+            res.json(status);
+        } catch (error) {
+            // Log do erro com detalhes para debug, mas sem dados sensíveis
+            logger.error('Erro ao consultar status da NFSe', {
+                errorMessage: error.message,
+                id: req.params.id,
+                method: 'consultarStatusNfse',
+                service: 'NFSeController'
+            });
+
+            // Retorna mensagem amigável para o usuário
+            res.status(400).json({
+                success: false,
+                message: 'Erro ao consultar status da NFSe',
+                error: {
+                    message: error.message || 'Não foi possível consultar o status da NFSe no momento'
+                }
+            });
+        }
+    }
+
+    /**
+     * Lista todas as NFSes com status "processando"
+     * @param {Object} req - Request do Express
+     * @param {Object} res - Response do Express
+     */
+    async listarNfsesProcessando(req, res) {
+        try {
+            logger.info('Listando NFSes com status processando', {
+                method: 'listarNfsesProcessando',
+                service: 'NFSeController'
+            });
+
+            const nfses = await this.nfseService.listarNfsesProcessando();
+            
+            logger.info('NFSes processando listadas com sucesso', {
+                quantidade: nfses.length,
+                method: 'listarNfsesProcessando',
+                service: 'NFSeController'
+            });
+
+            return successResponse(res, 200, nfses);
+        } catch (error) {
+            logger.error('Erro ao listar NFSes processando', {
+                error: error.message,
+                stack: error.stack,
+                method: 'listarNfsesProcessando',
+                service: 'NFSeController'
+            });
+            return errorResponse(res, 400, 'Erro ao listar NFSes processando', error);
+        }
+    }
+
+    /**
+     * Atualiza o status de uma NFSe
+     * @param {Object} req - Request do Express
+     * @param {Object} res - Response do Express
+     */
+    async atualizarStatusNfse(req, res) {
+        try {
+            const { id } = req.params;
+
+            logger.info('Atualizando status da NFSe', {
+                id,
+                method: 'atualizarStatusNfse',
+                service: 'NFSeController'
+            });
+
+            const resultado = await this.nfseService.atualizarStatusNfse(Number(id));
+            
+            logger.info('Status da NFSe atualizado com sucesso', {
+                id,
+                novoStatus: resultado.nfse.status,
+                eventoId: resultado.evento.event_id,
+                method: 'atualizarStatusNfse',
+                service: 'NFSeController'
+            });
+
+            return successResponse(res, 200, resultado);
+        } catch (error) {
+            logger.error('Erro ao atualizar status da NFSe', {
+                error: error.message,
+                id: req.params.id,
+                stack: error.stack,
+                method: 'atualizarStatusNfse',
+                service: 'NFSeController'
+            });
+            return errorResponse(res, 400, 'Erro ao atualizar status da NFSe', error);
+        }
+    }
 }
 
 module.exports = NfseController;

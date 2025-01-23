@@ -15,6 +15,43 @@ class N8NService {
             nosso_numero: `${payload.boleto_id}`.padStart(8, '0')
         };
     }
+
+    async consultarStatusNfse(integrationNfseId) {
+        const url = `https://api.nuvemfiscal.com.br/nfse/${integrationNfseId}`;
+        
+        this.logger.info('Mock N8N: Consultando status da NFSe', { 
+            integrationNfseId,
+            url 
+        });
+        
+        // Simula uma chamada ao N8N que consulta a Nuvem Fiscal
+        const nuvemFiscalResponse = {
+            "@id": integrationNfseId,
+            "created_at": new Date().toISOString(),
+            "status": "processando",
+            "ambiente": "homologacao",
+            "referencia": "15",
+            "dps": {
+                "competencia": "2025-01",
+                "valor_servico": 21.00,
+                "valor_iss": 0.42
+            },
+            "mensagens": []
+        };
+
+        this.logger.info('Mock N8N: Retorno completo da Nuvem Fiscal', { 
+            url,
+            integrationNfseId,
+            response: nuvemFiscalResponse
+        });
+        
+        // Retorna apenas os campos necessários
+        return {
+            status: nuvemFiscalResponse.status,
+            mensagens: nuvemFiscalResponse.mensagens,
+            updated_at: new Date().toISOString()
+        };
+    }
 }
 
 module.exports = new N8NService();
