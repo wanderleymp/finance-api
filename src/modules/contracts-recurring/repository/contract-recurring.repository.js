@@ -215,12 +215,22 @@ class ContractRecurringRepository extends BaseRepository {
                 SELECT 
                     p.full_name, 
                     cg.group_name, 
-                    cr.*
+                    cr.*,
+                    json_agg(
+                        json_build_object(
+                            'movement_id', cm.movement_id,
+                            'movement_date', m2.movement_date,
+                            'total_amount', m2.total_amount
+                        )
+                    ) AS billings
                 FROM public.contracts_recurring cr
                 JOIN movements m ON cr.model_movement_id = m.movement_id
                 JOIN persons p ON m.person_id = p.person_id
                 JOIN contract_groups cg ON cr.contract_group_id = cg.contract_group_id
+                LEFT JOIN contract_movements cm ON cr.contract_id = cm.contract_id
+                LEFT JOIN movements m2 ON cm.movement_id = m2.movement_id
                 ${whereClause}
+                GROUP BY p.full_name, cg.group_name, cr.contract_id
                 ORDER BY cr.next_billing_date ASC
             `;
 
