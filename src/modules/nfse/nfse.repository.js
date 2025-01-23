@@ -9,6 +9,56 @@ class NfseRepository extends BaseRepository {
     }
 
     /**
+     * Busca uma NFSe por ID incluindo relacionamentos
+     * @param {number} id - ID da NFSe
+     * @returns {Promise<Object>} NFSe encontrada com dados da invoice
+     */
+    async findById(id) {
+        try {
+            const query = `
+                SELECT 
+                    n.nfse_id,
+                    n.invoice_id,
+                    n.integration_nfse_id,
+                    n.service_value,
+                    n.iss_value,
+                    n.aliquota_service,
+                    i.status as invoice_status
+                FROM nfse n
+                LEFT JOIN invoices i ON i.invoice_id = n.invoice_id
+                WHERE n.nfse_id = $1
+            `;
+            
+            const result = await this.pool.query(query, [id]);
+            
+            if (result.rows.length === 0) {
+                return null;
+            }
+
+            const nfse = result.rows[0];
+            return {
+                nfse_id: nfse.nfse_id,
+                invoice_id: nfse.invoice_id,
+                integration_nfse_id: nfse.integration_nfse_id,
+                service_value: nfse.service_value,
+                iss_value: nfse.iss_value,
+                aliquota_service: nfse.aliquota_service,
+                invoice: {
+                    status: nfse.invoice_status
+                }
+            };
+        } catch (error) {
+            logger.error('Erro ao buscar NFSe por ID no repositório', {
+                error: error.message,
+                id,
+                method: 'findById',
+                service: 'NfseRepository'
+            });
+            throw new Error('Erro ao buscar NFSe no banco de dados');
+        }
+    }
+
+    /**
      * Busca NFSes por ID de invoice
      * @param {number} invoiceId - ID da invoice
      * @returns {Promise<Array>} Lista de NFSes
