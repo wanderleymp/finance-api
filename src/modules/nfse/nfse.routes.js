@@ -1,81 +1,100 @@
-const express = require('express');
+const { Router } = require('express');
+const NfseController = require('./nfse.controller');
+const { validateRequest } = require('../../middlewares/validator');
+const { logger } = require('../../middlewares/logger');
 const { authMiddleware } = require('../../middlewares/auth');
-const { validateRequest } = require('../../middlewares/requestValidator');
 const { 
     listNFSeSchema, 
     createNFSeSchema, 
     updateStatusSchema, 
     cancelNFSeSchema 
 } = require('./validators/nfse.validator');
-const { logger } = require('../../middlewares/logger');
 
-module.exports = (controller) => {
-    const router = express.Router();
+/**
+ * Configura rotas de NFSe com suporte a injeção de dependência
+ * @param {Object} dependencies Dependências para injeção no controlador
+ * @returns {Router} Roteador configurado
+ */
+class NfseRoutes {
+    constructor(dependencies = {}) {
+        this.router = Router();
+        const nfseService = dependencies.nfseService || dependencies;
+        this.nfseController = new NfseController(nfseService);
+        this.setupRoutes();
+    }
 
-    // Middleware de log para todas as rotas
-    router.use((req, res, next) => {
-        logger.info('Requisição NFSe recebida', {
-            method: req.method,
-            path: req.path,
-            body: req.body,
-            params: req.params,
-            query: req.query
+    setupRoutes() {
+        // Middleware de autenticação para todas as rotas
+        this.router.use(authMiddleware);
+
+        // Middleware de log para todas as rotas
+        this.router.use((req, res, next) => {
+            logger.info('Requisição NFSe recebida', {
+                method: req.method,
+                path: req.path,
+                query: req.query,
+                body: req.body
+            });
+            next();
         });
-        next();
-    });
 
-    // Middleware de autenticação para todas as rotas
-    router.use(authMiddleware);
+        // Buscar todos os NFSes
+        this.router.get('/', 
+            (req, res, next) => validateRequest(listNFSeSchema, 'query')(req, res, next),
+            (req, res, next) => this.nfseController.findAll(req, res, next)
+        );
 
-    // Buscar todos os NFSes
-    router.get('/', 
-        validateRequest(listNFSeSchema, 'query'),
-        controller.findAll.bind(controller)
-    );
+        // Emitir NFSe
+        this.router.post('/emitir', 
+            (req, res, next) => validateRequest(createNFSeSchema, 'body')(req, res, next),
+            (req, res, next) => this.nfseController.emitirNfse(req, res, next)
+        );
 
-    // Buscar NFSe por ID
-    router.get('/:id', 
-        controller.findById.bind(controller)
-    );
+        // Criar NFSe com retorno
+        this.router.post('/criar-nfse', 
+            (req, res, next) => validateRequest(createNFSeSchema, 'body')(req, res, next),
+            (req, res, next) => this.nfseController.criarNfseComRetorno(req, res, next)
+        );
 
-    // Buscar NFSes por ID da invoice
-    router.get('/invoice/:invoiceId', 
-        controller.findByInvoiceId.bind(controller)
-    );
+        // Lista todas NFSes com status "processando"
+        this.router.get('/status/pending', 
+            (req, res, next) => this.nfseController.listarNfsesProcessando(req, res, next)
+        );
 
-    // Buscar NFSes por ID de integração
-    router.get('/integration/:integrationId', 
-        controller.findByIntegrationId.bind(controller)
-    );
+        // Consulta status de uma NFSe específica
+        this.router.get('/:id/status', 
+            (req, res, next) => this.nfseController.consultarStatusNfse(req, res, next)
+        );
 
-    // Emitir NFSe
-    router.post('/emitir', 
-        validateRequest(createNFSeSchema, 'body'),
-        controller.emitirNfse.bind(controller)
-    );
+        // Atualiza manualmente o status de uma NFSe
+        this.router.put('/:id/update-status', 
+            (req, res, next) => this.nfseController.atualizarStatusNfse(req, res, next)
+        );
 
-    // Criar NFSe a partir do retorno da Nuvem Fiscal
-    router.post('/criar-nfse', 
-        validateRequest(createNFSeSchema, 'body'),
-        controller.criarNfseComRetorno.bind(controller)
-    );
+        // Buscar NFSe por ID
+        this.router.get('/:id', 
+            (req, res, next) => this.nfseController.findById(req, res, next)
+        );
 
-    // Atualizar status do NFSe
-    router.patch('/:id/status', 
-        validateRequest(updateStatusSchema, 'body'),
-        controller.update.bind(controller)
-    );
+        // Atualizar status do NFSe
+        this.router.patch('/:id/status', 
+            (req, res, next) => validateRequest(updateStatusSchema, 'body')(req, res, next),
+            (req, res, next) => this.nfseController.update(req, res, next)
+        );
 
-    // Cancelar NFSe
-    router.post('/:id/cancel', 
-        validateRequest(cancelNFSeSchema, 'body'),
-        controller.update.bind(controller)
-    );
+        // Cancelar NFSe
+        this.router.post('/:id/cancel', 
+            (req, res, next) => validateRequest(cancelNFSeSchema, 'body')(req, res, next),
+            (req, res, next) => this.nfseController.update(req, res, next)
+        );
+    }
 
-    // Remover NFSe
-    router.delete('/:id', 
-        controller.delete.bind(controller)
-    );
+    getRouter() {
+        return this.router;
+    }
+}
 
-    return router;
+module.exports = (dependencies = {}) => {
+    const routes = new NfseRoutes(dependencies);
+    return routes.getRouter();
 };

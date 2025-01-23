@@ -109,12 +109,12 @@ class NuvemFiscalService {
   }
 
   /**
-   * Consulta NFSe específica por ID na Nuvem Fiscal
+   * Consulta status da NFSe na Nuvem Fiscal
    * @param {string} nfseId - ID da NFSe na Nuvem Fiscal
    * @param {string} [ambiente='PRODUCAO'] - Ambiente de consulta
    * @returns {Promise<Object>} Resultado da consulta
    */
-  async consultarNfsePorId(nfseId, ambiente = 'PRODUCAO') {
+  async consultarStatusNfse(nfseId, ambiente = 'PRODUCAO') {
     try {
       // Obtém token válido
       const token = await this.tokenService.obterToken(ambiente);
@@ -131,7 +131,7 @@ class NuvemFiscalService {
 
       return response.data;
     } catch (error) {
-      logger.error('Erro ao consultar NFSe por ID na Nuvem Fiscal', {
+      logger.error('Erro ao consultar NFSe na Nuvem Fiscal', {
         errorMessage: error.message,
         nfseId
       });

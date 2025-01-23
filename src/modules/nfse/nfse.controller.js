@@ -36,15 +36,38 @@ class NfseController {
      */
     async findById(req, res) {
         try {
-            const { id } = req.params;
-            const result = await this.nfseService.findById(Number(id));
-            return successResponse(res, 200, result);
-        } catch (error) {
-            logger.error('NfseController.findById - Erro', {
-                error: error.message,
-                id: req.params.id
+            logger.info('Buscando NFSe por ID', {
+                id: req.params.id,
+                method: 'findById',
+                service: 'NfseController'
             });
-            return errorResponse(res, 404, 'NFSe não encontrado', error);
+
+            const nfse = await this.nfseService.findById(req.params.id);
+            
+            if (!nfse) {
+                logger.warn('NFSe não encontrada', {
+                    id: req.params.id,
+                    method: 'findById',
+                    service: 'NfseController'
+                });
+                return res.status(404).json({ error: 'NFSe não encontrada' });
+            }
+
+            logger.info('NFSe encontrada com sucesso', {
+                id: req.params.id,
+                method: 'findById',
+                service: 'NfseController'
+            });
+
+            return res.json(nfse);
+        } catch (error) {
+            logger.error('Erro ao buscar NFSe', {
+                id: req.params.id,
+                error: error.message,
+                method: 'findById',
+                service: 'NfseController'
+            });
+            return res.status(500).json({ error: 'Erro ao buscar NFSe' });
         }
     }
 

@@ -456,21 +456,40 @@ class NfseService {
         }
     }
 
-    /**
-     * Busca uma NFSE por ID
-     * @param {number} id - ID da NFSE
-     * @returns {Promise<Object>} NFSE encontrada
-     */
     async findById(id) {
         try {
-            const nfse = await NfseRepository.findById(id);
+            logger.info('Buscando NFSe no banco de dados', {
+                id,
+                method: 'findById',
+                service: 'NfseService'
+            });
+
+            const nfse = await this.nfseRepository.findById(Number(id));
+            
             if (!nfse) {
-                throw new NotFoundError('NFSE não encontrada');
+                logger.warn('NFSe não encontrada no banco de dados', {
+                    id,
+                    method: 'findById',
+                    service: 'NfseService'
+                });
+                return null;
             }
+
+            logger.info('NFSe encontrada com sucesso', {
+                id,
+                method: 'findById',
+                service: 'NfseService'
+            });
+
             return nfse;
         } catch (error) {
-            logger.error('Erro ao buscar NFSE por ID', { error, id });
-            throw error;
+            logger.error('Erro ao buscar NFSe no banco de dados', {
+                id,
+                error: error.message,
+                method: 'findById',
+                service: 'NfseService'
+            });
+            throw new Error('Erro ao buscar NFSe no banco de dados');
         }
     }
 
@@ -838,6 +857,112 @@ class NfseService {
                 stack: error.stack,
                 nuvemFiscalResponse 
             });
+            throw error;
+        }
+    }
+
+    /**
+     * Consulta status atual de uma NFSe
+     * @param {number} nfseId - ID da NFSe
+     * @returns {Promise<Object>} Status local e remoto da NFSe
+     */
+    async consultarStatusNfse(nfseId) {
+        try {
+            // Busca NFSe no banco
+            const nfseLocal = await this.nfseRepository.findById(nfseId);
+            if (!nfseLocal) {
+                throw new Error('NFSe não encontrada');
+            }
+
+            // Consulta status na Nuvem Fiscal
+            const nfseRemota = await this.nuvemFiscalService.consultarStatusNfse(nfseLocal.integration_nfse_id);
+
+            return {
+                local: {
+                    status: nfseLocal.status,
+                    updated_at: nfseLocal.updated_at
+                },
+                remoto: {
+                    status: nfseRemota.status,
+                    mensagens: nfseRemota.mensagens,
+                    updated_at: nfseRemota.updated_at
+                }
+            };
+        } catch (error) {
+            logger.error('Erro ao consultar status da NFSe', { error, nfseId });
+            throw error;
+        }
+    }
+
+    /**
+     * Lista todas as NFSes com status "processando"
+     * @returns {Promise<Array>} Lista de NFSes pendentes com status local e remoto
+     */
+    async listarNfsesProcessando() {
+        try {
+            // Busca todas NFSes com status processando
+            const nfsesPendentes = await this.nfseRepository.findByStatus('processando');
+            
+            // Para cada NFSe, consulta status na Nuvem Fiscal
+            const statusCompleto = await Promise.all(nfsesPendentes.map(async (nfse) => {
+                const statusRemoto = await this.nuvemFiscalService.consultarStatusNfse(nfse.integration_nfse_id);
+                return {
+                    nfse_id: nfse.nfse_id,
+                    integration_nfse_id: nfse.integration_nfse_id,
+                    local: {
+                        status: nfse.status,
+                        updated_at: nfse.updated_at
+                    },
+                    remoto: {
+                        status: statusRemoto.status,
+                        mensagens: statusRemoto.mensagens,
+                        updated_at: statusRemoto.updated_at
+                    }
+                };
+            }));
+
+            return statusCompleto;
+        } catch (error) {
+            logger.error('Erro ao listar NFSes processando', { error });
+            throw error;
+        }
+    }
+
+    /**
+     * Atualiza o status de uma NFSe consultando a Nuvem Fiscal
+     * @param {number} nfseId - ID da NFSe
+     * @returns {Promise<Object>} NFSe atualizada com novo status e evento
+     */
+    async atualizarStatusNfse(nfseId) {
+        try {
+            // Busca NFSe no banco
+            const nfseLocal = await this.nfseRepository.findById(nfseId);
+            if (!nfseLocal) {
+                throw new Error('NFSe não encontrada');
+            }
+
+            // Consulta status na Nuvem Fiscal
+            const nfseRemota = await this.nuvemFiscalService.consultarStatusNfse(nfseLocal.integration_nfse_id);
+
+            // Atualiza status no banco
+            const nfseAtualizada = await this.nfseRepository.updateStatus(nfseId, nfseRemota.status);
+
+            // Cria evento de atualização
+            const evento = await this.invoiceEventRepository.create({
+                invoice_id: nfseAtualizada.invoice_id,
+                event_type: 'NFSE_STATUS_UPDATED',
+                event_date: new Date(),
+                event_data: JSON.stringify(nfseRemota),
+                status: nfseRemota.status,
+                message: nfseRemota.mensagens.length > 0 ? nfseRemota.mensagens[0] : 'Status da NFSe atualizado'
+            });
+
+            return {
+                nfse: nfseAtualizada,
+                evento: evento
+            };
+        } catch (error) {
+            logger.error('Erro ao atualizar status da NFSe', { error, nfseId });
             throw error;
         }
     }

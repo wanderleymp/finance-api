@@ -105,6 +105,32 @@ class NFSeController {
       });
     }
   }
+
+  /**
+   * Consulta status de uma NFSe
+   * @param {number} nfseId - ID da NFSe
+   * @returns {Promise<Object>} Status da NFSe
+   */
+  async consultarStatusNfse(nfseId) {
+    return await this.nfseService.consultarStatusNfse(nfseId);
+  }
+
+  /**
+   * Lista todas as NFSes com status "processando"
+   * @returns {Promise<Array>} Lista de NFSes pendentes
+   */
+  async listarNfsesProcessando() {
+    return await this.nfseService.listarNfsesProcessando();
+  }
+
+  /**
+   * Atualiza o status de uma NFSe
+   * @param {number} nfseId - ID da NFSe
+   * @returns {Promise<Object>} NFSe atualizada
+   */
+  async atualizarStatusNfse(nfseId) {
+    return await this.nfseService.atualizarStatusNfse(nfseId);
+  }
 }
 
 module.exports = NFSeController;

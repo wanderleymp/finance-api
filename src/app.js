@@ -28,6 +28,9 @@ const MovementPaymentService = require('./modules/movement-payments/movement-pay
 const InstallmentService = require('./modules/installments/installment.service');
 const BoletoService = require('./modules/boletos/boleto.service');
 const NfseService = require('./modules/nfse/nfse.service');
+const NfseController = require('./modules/nfse/nfse.controller');
+const NfseRepository = require('./modules/nfse/nfse.repository');
+const InvoiceEventRepository = require('./modules/invoice-events/invoice-event.repository');
 const BillingMessageService = require('./modules/messages/billing/billing-message.service');
 const TaskService = require('./modules/tasks/services/task.service');
 const TaskRepository = require('./modules/tasks/repositories/task.repository');
@@ -95,9 +98,11 @@ const MessagesModule = require('./modules/messages/messages.module');
 const servicesRoutes = require('./modules/services/service.routes');
 const invoicesModule = require('./modules/invoices/invoice.module');
 const invoiceEventModule = require('./modules/invoice-events/invoice-event.module');
-const NfseController = require('./modules/nfse/nfse.controller');
-const nfseController = new NfseController(new (require('./modules/nfse/nfse.service'))());
-const nfseRoutes = require('./modules/nfse/nfse.routes')(nfseController);
+const nfseController = new NfseController(new NfseService());
+const nfseRoutes = require('./modules/nfse/nfse.routes');
+const ContractGroupRoutes = require('./modules/contract-groups/contract-group.routes');
+const ContractMovementRoutes = require('./modules/contract-movements/contract-movement.routes');
+const ContractAdjustmentHistoryRoutes = require('./modules/contract-adjustment-history/contract-adjustment-history.module');
 
 const app = express();
 
@@ -297,17 +302,21 @@ app.use((req, res, next) => {
 
 // Middleware para redirecionar /nfse para /nfses
 app.use((req, res, next) => {
-    if (req.path === '/nfse') {
-        return res.redirect('/nfses');
+    if (req.path.startsWith('/nfse/') || req.path === '/nfse') {
+        const newPath = req.path.replace('/nfse', '/nfses');
+        logger.info('Redirecionando requisição', {
+            from: req.path,
+            to: newPath,
+            method: req.method
+        });
+        req.url = newPath;
     }
     next();
 });
 
-// Configurar rotas de parcelas - remover duplicação
-app.use('/installments', InstallmentModule(app));
-
-// Registra o módulo de NFSes
-app.use('/nfses', nfseRoutes);
+// Inicialização do módulo NFSe
+const nfseService = new NfseService();
+app.use('/nfses', nfseRoutes({ nfseService }));
 
 // Registra o módulo de serviços
 app.use('/services', servicesRoutes);
@@ -317,19 +326,14 @@ invoiceEventModule.register(app);
 invoicesModule.register(app);
 
 // Adicionar importação de rotas de contract-groups
-const ContractGroupRoutes = require('./modules/contract-groups/contract-group.routes');
-const ContractMovementRoutes = require('./modules/contract-movements/contract-movement.routes');
+ContractGroupRoutes(app);
+ContractMovementRoutes(app);
 
 // Adicionar rotas de contratos recorrentes
 const contractRecurringRoutes = require('./modules/contracts-recurring/contract-recurring.module');
 contractRecurringRoutes(app);
 
-// Adicionar rotas de contract-groups e contract-movements
-ContractGroupRoutes(app);
-ContractMovementRoutes(app);
-
 // Adicionar rotas de histórico de ajuste de contrato
-const ContractAdjustmentHistoryRoutes = require('./modules/contract-adjustment-history/contract-adjustment-history.module');
 ContractAdjustmentHistoryRoutes(app);
 
 // Rota 404 para capturar requisições não encontradas
