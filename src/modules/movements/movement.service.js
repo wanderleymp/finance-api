@@ -27,7 +27,6 @@ class MovementService extends IMovementService {
         installmentRepository,
         movementPaymentService = null,
         personContactRepository,
-        boletoRepository,
         boletoService,
         movementPaymentRepository = null,
         installmentService,
@@ -73,7 +72,6 @@ class MovementService extends IMovementService {
         }
         
         this.personContactRepository = personContactRepository;
-        this.boletoRepository = boletoRepository;
         this.boletoService = boletoService;
         this.installmentService = installmentService;
         // Manter a lógica de fallback para criação do licenseRepository
@@ -545,7 +543,7 @@ class MovementService extends IMovementService {
                     status: 'A_EMITIR'
                 };
 
-                const boleto = await this.boletoRepository.createBoleto(boletoData);
+                const boleto = await this.boletoService.createBoleto(boletoData);
                 boletos.push(boleto);
             }
 
