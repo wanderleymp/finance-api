@@ -20,8 +20,9 @@ class NuvemFiscalService {
 
       // Configura headers
       const headers = {
-        'Authorization': `Bearer ${token}`,
-        'Content-Type': 'application/json'
+        'Authorization': token,
+        'Content-Type': 'application/json',
+        'Accept': 'application/json'
       };
 
       logger.info('Enviando payload para Nuvem Fiscal', { 
@@ -82,8 +83,9 @@ class NuvemFiscalService {
 
       // Configura headers
       const headers = {
-        'Authorization': `Bearer ${token}`,
-        'Content-Type': 'application/json'
+        'Authorization': token,
+        'Content-Type': 'application/json',
+        'Accept': 'application/json'
       };
 
       // Configura parâmetros de consulta
@@ -107,6 +109,37 @@ class NuvemFiscalService {
   }
 
   /**
+   * Consulta NFSe específica por ID na Nuvem Fiscal
+   * @param {string} nfseId - ID da NFSe na Nuvem Fiscal
+   * @param {string} [ambiente='PRODUCAO'] - Ambiente de consulta
+   * @returns {Promise<Object>} Resultado da consulta
+   */
+  async consultarNfsePorId(nfseId, ambiente = 'PRODUCAO') {
+    try {
+      // Obtém token válido
+      const token = await this.tokenService.obterToken(ambiente);
+
+      // Configura headers
+      const headers = {
+        'Authorization': token,
+        'Content-Type': 'application/json',
+        'Accept': 'application/json'
+      };
+
+      // Faz requisição de consulta
+      const response = await axios.get(`https://api.nuvemfiscal.com.br/nfse/${nfseId}`, { headers });
+
+      return response.data;
+    } catch (error) {
+      logger.error('Erro ao consultar NFSe por ID na Nuvem Fiscal', {
+        errorMessage: error.message,
+        nfseId
+      });
+      throw error;
+    }
+  }
+
+  /**
    * Cancela uma NFSe na Nuvem Fiscal
    * @param {string} chaveNfse - Chave de identificação da NFSe
    * @param {string} [ambiente='PRODUCAO'] - Ambiente de cancelamento
@@ -119,8 +152,9 @@ class NuvemFiscalService {
 
       // Configura headers
       const headers = {
-        'Authorization': `Bearer ${token}`,
-        'Content-Type': 'application/json'
+        'Authorization': token,
+        'Content-Type': 'application/json',
+        'Accept': 'application/json'
       };
 
       // Faz requisição de cancelamento

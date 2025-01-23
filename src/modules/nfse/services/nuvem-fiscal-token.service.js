@@ -85,16 +85,19 @@ class NuvemFiscalTokenService {
 
       const { access_token, expires_in } = response.data;
 
+      // Formata o token no padrão Bearer
+      const formattedToken = `Bearer ${access_token}`;
+
       // Salva o token no repositório de tokens temporários
       await temporaryTokenRepository.create({
-        token: access_token,
+        token: formattedToken,
         credentialId: credenciais.credential_id,
         expiresInSeconds: expires_in
       });
 
       logger.info('Novo token obtido da Nuvem Fiscal', { ambiente });
 
-      return access_token;
+      return formattedToken;
     } catch (error) {
       logger.error('Erro ao obter token da Nuvem Fiscal', {
         error: error.message,

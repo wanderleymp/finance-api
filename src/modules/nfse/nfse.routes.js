@@ -48,18 +48,6 @@ module.exports = (controller) => {
         controller.findByIntegrationId.bind(controller)
     );
 
-    // Criar novo NFSe
-    router.post('/', 
-        validateRequest(createNFSeSchema, 'body'),
-        controller.create.bind(controller)
-    );
-
-    // Criar NFSe
-    router.post('/criar-nfse', 
-        validateRequest(createNFSeSchema, 'body'),
-        controller.criarNfse.bind(controller)
-    );
-
     // Emitir NFSe
     router.post('/emitir', 
         validateRequest(createNFSeSchema, 'body'),

@@ -270,8 +270,6 @@ class NfseService {
                     environment: response.ambiente,
                     movement_id: parseInt(dadosNFSe.referencia),
                     total_amount: dadosNFSe.infDPS.valores.vServPrest.vServ,
-                    created_at: new Date(response.created_at),
-                    updated_at: new Date(response.created_at)
                 });
 
                 // 2. Criar NFSe
@@ -327,9 +325,13 @@ class NfseService {
         } catch (error) {
             logger.error('Erro ao emitir NFSe na Nuvem Fiscal', { 
                 errorMessage: error.message,
-                cnpjEmitente,
                 errorResponse: error.response?.data,
-                errorStack: error.stack
+                errorStack: error.stack,
+                payload: payload ? {
+                    prestador: payload.prest,
+                    ambiente: payload.ambiente,
+                    referencia: payload.referencia
+                } : null
             });
             throw error;
         }
@@ -587,7 +589,6 @@ class NfseService {
         } catch (error) {
             logger.error('Erro ao consultar NFSe na Nuvem Fiscal', {
                 errorMessage: error.message,
-                cnpjEmitente,
                 errorResponse: error.response?.data,
                 errorStack: error.stack
             });
@@ -648,8 +649,6 @@ class NfseService {
                     environment: mockNuvemFiscalResponse.ambiente,
                     movement_id: movementId,
                     total_amount: nfsePayload.infDPS.valores.vServPrest.vServ,
-                    created_at: new Date(mockNuvemFiscalResponse.created_at),
-                    updated_at: new Date(mockNuvemFiscalResponse.created_at)
                 });
 
                 // 2. Criar NFSe
@@ -723,8 +722,6 @@ class NfseService {
                     environment: nuvemFiscalResponse.ambiente,
                     movement_id: movementId,
                     total_amount: detailedMovement.items.reduce((total, item) => total + parseFloat(item.total_price || 0), 0),
-                    created_at: new Date(nuvemFiscalResponse.created_at),
-                    updated_at: new Date(nuvemFiscalResponse.created_at)
                 });
 
                 // 2. Criar NFSe
