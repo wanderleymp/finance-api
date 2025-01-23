@@ -25,14 +25,50 @@ class NfseService {
 
     async emitirNfse(detailedMovement, ambiente = 'homologacao') {
         try {
+            // Adicionar ID da pessoa para contexto de erro
+            this.personId = detailedMovement?.person?.person_id;
+
+            // Log inicial com todos os dados recebidos
             logger.info('Dados recebidos para emissão de NFSe', { 
-                movementId: detailedMovement.movement.movement_id,
-                licenseData: detailedMovement.license,
-                personData: detailedMovement.person,
-                itemsData: detailedMovement.items
+                movementId: detailedMovement?.movement?.movement_id,
+                licenseData: detailedMovement?.license,
+                personData: detailedMovement?.person,
+                itemsData: detailedMovement?.items
             });
 
-            // Preparar dados para o payload
+            // Verificações de nulidade e log de detalhes
+            if (!detailedMovement) {
+                logger.error('Objeto detailedMovement é nulo', { detailedMovement });
+                throw new ValidationError('Dados do movimento não podem ser nulos');
+            }
+
+            if (!detailedMovement.movement) {
+                logger.error('Objeto movement é nulo', { movement: detailedMovement.movement });
+                throw new ValidationError('Dados do movimento não podem ser nulos');
+            }
+
+            if (!detailedMovement.license) {
+                logger.error('Objeto license é nulo', { license: detailedMovement.license });
+                throw new ValidationError('Dados da licença não podem ser nulos');
+            }
+
+            if (!detailedMovement.person) {
+                logger.error('Objeto person é nulo', { person: detailedMovement.person });
+                throw new ValidationError('Dados da pessoa não podem ser nulos');
+            }
+
+            if (!detailedMovement.items || detailedMovement.items.length === 0) {
+                logger.error('Itens do movimento são nulos ou vazios', { items: detailedMovement.items });
+                throw new ValidationError('Itens do movimento não podem ser nulos');
+            }
+
+            // Log de verificação de documentos
+            logger.info('Verificação de documentos', {
+                licenseDocuments: detailedMovement.license.person.documents,
+                personDocuments: detailedMovement.person.documents
+            });
+
+            // Preparar dados para o payload com verificações adicionais
             const payloadData = {
                 movimento: {
                     id: detailedMovement.movement.movement_id,
@@ -40,10 +76,10 @@ class NfseService {
                     referencia: detailedMovement.movement.movement_id.toString()
                 },
                 prestador: {
-                    cnpj: detailedMovement.license.person.documents[0].document_value.replace(/\D/g, ''),
+                    cnpj: this.extrairDocumento(detailedMovement.license.person.documents, 'CNPJ'),
                     nome: detailedMovement.license.person.full_name
                 },
-                tomador_documento: detailedMovement.person.documents[0].document_value.replace(/\D/g, ''),
+                tomador_documento: this.extrairDocumento(detailedMovement.person.documents),
                 tomador_razao_social: detailedMovement.person.full_name,
                 servico: [{
                     cnae: detailedMovement.items[0].cnae,
@@ -58,11 +94,11 @@ class NfseService {
                 }
             };
 
-            // Log do payload montado
+            // Log do payload montado com verificações
             logger.info('Payload montado para emissão de NFSe', { 
-                movementId: detailedMovement.movement.movement_id,
-                referencia: payloadData.movimento.referencia,
+                movementId: payloadData.movimento.id,
                 prestadorCnpj: payloadData.prestador.cnpj,
+                tomadorDocumento: payloadData.tomador_documento,
                 valorServico: payloadData.valores.servico
             });
 
@@ -74,7 +110,7 @@ class NfseService {
 
             // Log do payload construído para Nuvem Fiscal
             logger.info('Payload construído para Nuvem Fiscal', { 
-                movementId: detailedMovement.movement.movement_id,
+                movementId: payloadData.movimento.id,
                 nfsePayload 
             });
 
@@ -83,7 +119,7 @@ class NfseService {
 
             // Log da resposta da Nuvem Fiscal
             logger.info('Resposta da Nuvem Fiscal para emissão de NFSe', { 
-                movementId: detailedMovement.movement.movement_id,
+                movementId: payloadData.movimento.id,
                 nfseId: nfseResponse.id,
                 status: nfseResponse.status
             });
@@ -93,7 +129,7 @@ class NfseService {
 
             // Log da criação da NFSe
             logger.info('NFSe criada no banco de dados', {
-                movementId: detailedMovement.movement.movement_id,
+                movementId: payloadData.movimento.id,
                 nfseId: nfseCriada.data.nfse_id,
                 integrationNfseId: nfseCriada.data.integration_nfse_id
             });
@@ -106,13 +142,69 @@ class NfseService {
                 nfseCriada
             };
         } catch (error) {
-            logger.error('Erro ao emitir e salvar NFSe', { 
-                movementId: detailedMovement.movement.movement_id,
+            // Tratamento de erro mais específico
+            if (error instanceof ValidationError) {
+                logger.error('Erro de validação na emissão de NFSe', {
+                    errorMessage: error.message,
+                    errorCode: error.code,
+                    details: error.details
+                });
+
+                throw new ValidationError(error.message, {
+                    code: error.code || 'NFSE_VALIDATION_ERROR',
+                    details: {
+                        ...error.details,
+                        movementId: detailedMovement?.movement?.movement_id
+                    }
+                });
+            }
+
+            // Tratamento para outros tipos de erro
+            logger.error('Erro inesperado na emissão de NFSe', {
                 errorMessage: error.message,
-                errorStack: error.stack
+                errorStack: error.stack,
+                movementId: detailedMovement?.movement?.movement_id
             });
-            throw error;
+
+            throw new Error('Não foi possível emitir a NFSe. Erro interno do servidor.', {
+                cause: error,
+                details: {
+                    movementId: detailedMovement?.movement?.movement_id
+                }
+            });
         }
+    }
+
+    extrairDocumento(documentos, tipoDocumento = null) {
+        logger.info('Extraindo documento', { documentos, tipoDocumento });
+
+        if (!documentos || documentos.length === 0) {
+            logger.error('Nenhum documento encontrado', { documentos, tipoDocumento });
+            throw new ValidationError('Documento do tomador não encontrado. Por favor, verifique o cadastro.', {
+                code: 'MISSING_DOCUMENT',
+                details: {
+                    tipoDocumento,
+                    personId: this.personId // Adicionar ID da pessoa para rastreabilidade
+                }
+            });
+        }
+
+        const documento = tipoDocumento 
+            ? documentos.find(doc => doc.document_type === tipoDocumento)
+            : documentos[0];
+
+        if (!documento || !documento.document_value) {
+            logger.error('Documento inválido', { documento, tipoDocumento });
+            throw new ValidationError('Documento do tomador inválido. É necessário cadastrar um documento válido.', {
+                code: 'INVALID_DOCUMENT',
+                details: {
+                    tipoDocumento,
+                    personId: this.personId // Adicionar ID da pessoa para rastreabilidade
+                }
+            });
+        }
+
+        return documento.document_value.replace(/\D/g, '');
     }
 
     validarDadosNfse(data) {
@@ -713,8 +805,7 @@ class NfseService {
                     id: transaction.invoiceEvent.event_id,
                     invoiceId: transaction.invoiceEvent.invoice_id,
                     eventType: transaction.invoiceEvent.event_type
-                },
-                originalResponse: transaction.mockNuvemFiscalResponse
+                }
             });
 
             return transaction;
