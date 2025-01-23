@@ -76,10 +76,10 @@ class NfseService {
                     referencia: detailedMovement.movement.movement_id.toString()
                 },
                 prestador: {
-                    cnpj: this.extrairDocumento(detailedMovement.license.person.documents, 'CNPJ'),
+                    cnpj: this.extrairDocumento(detailedMovement.license.person.documents, 'CNPJ').documentValue,
                     nome: detailedMovement.license.person.full_name
                 },
-                tomador_documento: this.extrairDocumento(detailedMovement.person.documents),
+                tomador_documento: this.extrairDocumento(detailedMovement.person.documents).documentValue,
                 tomador_razao_social: detailedMovement.person.full_name,
                 servico: [{
                     cnae: detailedMovement.items[0].cnae,
@@ -184,7 +184,7 @@ class NfseService {
                 code: 'MISSING_DOCUMENT',
                 details: {
                     tipoDocumento,
-                    personId: this.personId // Adicionar ID da pessoa para rastreabilidade
+                    personId: this.personId
                 }
             });
         }
@@ -199,12 +199,16 @@ class NfseService {
                 code: 'INVALID_DOCUMENT',
                 details: {
                     tipoDocumento,
-                    personId: this.personId // Adicionar ID da pessoa para rastreabilidade
+                    personId: this.personId
                 }
             });
         }
 
-        return documento.document_value.replace(/\D/g, '');
+        // Mantém o documento no formato original
+        return {
+            documentValue: documento.document_value.replace(/\D/g, ''),
+            documentType: documento.document_type
+        };
     }
 
     validarDadosNfse(data) {
@@ -246,7 +250,9 @@ class NfseService {
 
         const primeiroEndereco = data.personData.addresses[0];
 
-        return {
+        const tomadorDocumento = this.extrairDocumento(data.personData.documents);
+        
+        const payload = {
             provedor: "padrao",
             ambiente: "producao",
             referencia: data.movimento.referencia,
@@ -258,7 +264,7 @@ class NfseService {
                     CNPJ: data.prestador.cnpj
                 },
                 toma: {
-                    CPF: data.tomador_documento,
+                    [tomadorDocumento.documentType === 'CNPJ' ? 'CNPJ' : 'CPF']: tomadorDocumento.documentValue,
                     xNome: data.tomador_razao_social,
                     end: {
                         endNac: {
@@ -291,6 +297,8 @@ class NfseService {
                 }
             }
         };
+
+        return payload;
     }
 
     async emitirNfseNuvemFiscal(dadosNFSe, licenseData) {

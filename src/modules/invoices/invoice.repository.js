@@ -1,6 +1,6 @@
 const { logger } = require('../../middlewares/logger');
 const BaseRepository = require('../../repositories/base/BaseRepository');
-const { DatabaseError } = require('../../utils/errors');
+const { DatabaseError, ValidationError } = require('../../utils/errors');
 const IInvoiceRepository = require('./interfaces/IInvoiceRepository');
 
 class InvoiceRepository extends BaseRepository {
@@ -15,9 +15,26 @@ class InvoiceRepository extends BaseRepository {
      */
     async create(data) {
         try {
+            // Validar reference_id
+            if (!data.reference_id) {
+                logger.error('Tentativa de criar fatura sem reference_id', { data });
+                throw new ValidationError('É necessário informar um reference_id para criar a fatura', {
+                    code: 'MISSING_REFERENCE_ID',
+                    details: data
+                });
+            }
+
+            // Log de rastreamento
+            console.log('Criando Invoice', { 
+                movementId: data.movement_id,
+                type: data.type,
+                timestamp: new Date().toISOString(),
+                caller: new Error().stack.split('\n')[2]?.trim()
+            });
+
             const fields = Object.keys(data);
             const values = Object.values(data);
-            const placeholders = fields.map((_, index) => `$${index + 1}`).join(', ');
+            const placeholders = values.map((_, index) => `$${index + 1}`);
             
             const query = `
                 INSERT INTO ${this.tableName} (${fields.join(', ')}, created_at, updated_at)
