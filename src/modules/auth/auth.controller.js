@@ -25,6 +25,12 @@ class AuthController {
                 userAgent: req.get('user-agent')
             });
 
+            logger.debug('DEBUG: Login attempt', { 
+                username: loginDto.username, 
+                ip: req.ip, 
+                userAgent: req.get('user-agent') 
+            });
+
             const result = await this.service.login(
                 loginDto.username,
                 loginDto.password,
@@ -33,9 +39,18 @@ class AuthController {
                 req.get('user-agent')
             );
 
+            logger.debug('DEBUG: Login successful', { 
+                userId: result.user.user_id, 
+                username: result.user.username 
+            });
+
             handleResponse(res, result);
         } catch (error) {
             logger.error('Login error', { error });
+            logger.debug('DEBUG: Login error', { 
+                error: error.message, 
+                stack: error.stack 
+            });
             handleError(res, error);
         }
     }

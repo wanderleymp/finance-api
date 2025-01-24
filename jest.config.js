@@ -1,33 +1,15 @@
 module.exports = {
-    testEnvironment: 'node',
-    coverageDirectory: 'coverage',
-    collectCoverageFrom: [
-        'src/**/*.js',
-        '!src/**/*.test.js',
-        '!src/config/**',
-        '!src/migrations/**',
-        '!src/seeds/**',
-        '!src/docs/**'
-    ],
-    coverageThreshold: {
-        global: {
-            branches: 80,
-            functions: 80,
-            lines: 80,
-            statements: 80
-        }
-    },
-    testMatch: [
-        '**/src/**/__tests__/**/*.test.js',
-        '**/tests/**/*.test.js'
-    ],
-    setupFiles: [
-        '<rootDir>/.jest/setEnvVars.js'
-    ],
-    moduleNameMapper: {
-        '^@/(.*)$': '<rootDir>/src/$1'
-    },
-    clearMocks: true,
-    resetMocks: true,
-    restoreMocks: true
+  preset: 'ts-jest',
+  testEnvironment: 'node',
+  roots: ['<rootDir>/src'],
+  transform: {
+    '^.+\\.ts$': 'ts-jest'
+  },
+  testRegex: '(/__tests__/.*|(\\.|/)(test|spec))\\.ts$',
+  moduleFileExtensions: ['ts', 'js', 'json', 'node'],
+  collectCoverage: true,
+  clearMocks: true,
+  coverageDirectory: 'coverage',
+  testPathIgnorePatterns: ['/node_modules/'],
+  setupFiles: ['dotenv/config']
 };

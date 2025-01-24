@@ -6,7 +6,6 @@ const fs = require('fs');
 const path = require('path');
 const { logger } = require('./middlewares/logger');
 const { systemDatabase } = require('./config/database');
-const { initializeTaskWorker } = require('./modules/tasks/init');
 
 async function startServer() {
     try {
@@ -49,18 +48,6 @@ async function startServer() {
         process.exit(1);
     }
 }
-
-app.use((req, res, next) => {
-    console.log('GLOBAL MIDDLEWARE: Requisição recebida', {
-        method: req.method,
-        path: req.path,
-        headers: req.headers,
-        body: req.body,
-        params: req.params,
-        query: req.query
-    });
-    next();
-});
 
 // Teste de deploy simples - sem impacto no sistema
 startServer();
