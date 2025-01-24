@@ -177,6 +177,17 @@ class MovementRepository extends BaseRepository {
                         }
                     }
                 }
+
+                // Se incluir invoices
+                if (includeOptions.includes('invoices')) {
+                    const movementReferenceIds = processedItems.map(m => m.movement_id.toString());
+                    const invoices = await this.findInvoicesByReferenceIds(movementReferenceIds);
+
+                    processedItems = processedItems.map(movement => ({
+                        ...movement,
+                        invoices: invoices.filter(i => i.reference_id === movement.movement_id.toString())
+                    }));
+                }
             }
 
             const totalPages = Math.ceil(result.meta.totalItems / limit);
@@ -705,6 +716,34 @@ class MovementRepository extends BaseRepository {
         } catch (error) {
             logger.error('Erro ao buscar movimento detalhado:', error);
             throw error;
+        }
+    }
+
+    /**
+     * Busca invoices por referência de movimento
+     * @param {Array} referenceIds - Lista de IDs de referência
+     * @returns {Promise<Array>} Lista de invoices
+     */
+    async findInvoicesByReferenceIds(referenceIds) {
+        try {
+            if (!referenceIds || referenceIds.length === 0) return [];
+
+            const query = `
+                SELECT 
+                    invoice_id, 
+                    reference_id, 
+                    status, 
+                    pdf_url, 
+                    xml_url
+                FROM invoices
+                WHERE reference_id = ANY($1)
+            `;
+
+            const result = await this.pool.query(query, [referenceIds]);
+            return result.rows;
+        } catch (error) {
+            logger.error('Erro ao buscar invoices por reference_ids', { error, referenceIds });
+            throw new DatabaseError('Erro ao buscar invoices', error);
         }
     }
 }
