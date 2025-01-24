@@ -36,9 +36,40 @@ const cancelNFSeSchema = Joi.object({
     motivo: Joi.string().required()
 });
 
+const processarPdfNfseSchema = Joi.object({
+    integrationNfseId: Joi.string()
+        .required()
+        .trim()
+        .min(1)
+        .max(50)
+        .description('ID de integração da NFSe'),
+    
+    invoiceId: Joi.string()
+        .required()
+        .trim()
+        .min(1)
+        .max(50)
+        .description('ID da invoice relacionada'),
+    
+    options: Joi.object({
+        ambiente: Joi.string()
+            .valid('homologacao', 'producao')
+            .default('homologacao')
+            .description('Ambiente de emissão da NFSe'),
+        
+        rodape: Joi.string()
+            .optional()
+            .max(200)
+            .description('Rodapé opcional para o PDF')
+    })
+    .optional()
+    .description('Opções adicionais para processamento do PDF')
+});
+
 module.exports = {
     listNFSeSchema,
     createNFSeSchema,
     updateStatusSchema,
-    cancelNFSeSchema
+    cancelNFSeSchema,
+    processarPdfNfseSchema
 };

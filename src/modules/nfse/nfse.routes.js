@@ -7,7 +7,8 @@ const {
     listNFSeSchema, 
     createNFSeSchema, 
     updateStatusSchema, 
-    cancelNFSeSchema 
+    cancelNFSeSchema,
+    processarPdfNfseSchema 
 } = require('./validators/nfse.validator');
 
 /**
@@ -86,6 +87,11 @@ class NfseRoutes {
         this.router.post('/:id/cancel', 
             (req, res, next) => validateRequest(cancelNFSeSchema, 'body')(req, res, next),
             (req, res, next) => this.nfseController.update(req, res, next)
+        );
+
+        // Processar PDF de NFSe
+        this.router.post('/:id/pdf', 
+            (req, res, next) => this.nfseController.processarPdf(req, res, next)
         );
     }
 

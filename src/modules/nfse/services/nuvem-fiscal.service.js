@@ -161,6 +161,64 @@ class NuvemFiscalService {
       throw error;
     }
   }
+
+  /**
+   * Baixa o PDF de uma NFSe
+   * @param {string} integrationNfseId - ID de integração da NFSe
+   * @param {Object} [options={}] - Opções adicionais
+   * @returns {Promise<Buffer>} Buffer do PDF
+   */
+  async downloadNfsePdf(integrationNfseId, options = {}) {
+    try {
+      // Obtém token válido
+      const ambiente = options.ambiente || 'PRODUCAO';
+      const token = await this.tokenService.obterToken(ambiente);
+
+      // Configura headers
+      const headers = {
+        'Authorization': token,
+        'Content-Type': 'application/json',
+        'Accept': 'application/json'
+      };
+
+      logger.info('Baixando PDF da NFSe', { 
+        integrationNfseId,
+        ambiente 
+      });
+
+      // Faz requisição para baixar PDF
+      const response = await axios.get(
+        `${this.baseUrl}/${integrationNfseId}/pdf`, 
+        { 
+          headers, 
+          responseType: 'arraybuffer' 
+        }
+      );
+
+      logger.info('PDF da NFSe baixado com sucesso', { 
+        integrationNfseId,
+        tamanho: response.data.length 
+      });
+
+      return response.data;
+    } catch (error) {
+      logger.error('Erro ao baixar PDF da NFSe', { 
+        integrationNfseId,
+        error: error.message,
+        stack: error.stack
+      });
+
+      // Tratamento de erros específicos
+      if (error.response) {
+        logger.error('Detalhes do erro da Nuvem Fiscal', {
+          status: error.response.status,
+          data: error.response.data.toString()
+        });
+      }
+
+      throw error;
+    }
+  }
 }
 
 module.exports = (tokenService) => new NuvemFiscalService(tokenService);

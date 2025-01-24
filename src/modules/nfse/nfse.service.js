@@ -12,6 +12,7 @@ const NuvemFiscalService = require('../nuvemFiscal/nuvemFiscal.service');
 const invoiceRepository = require('../invoices/invoice.repository');
 const invoiceEventRepository = require('../invoices/invoice-event.repository');
 const n8nService = require('../n8n/n8n.service');
+const { FileStorageDomainService } = require('../../newArch/fileStorage/domain/services/file-storage.domain.service'); // Nova dependência
 
 class NfseService {
     constructor() {
@@ -22,6 +23,9 @@ class NfseService {
         this.nuvemFiscalUrl = 'https://api.nuvemfiscal.com.br/nfse';
         this.nuvemFiscalApiKey = process.env.NUVEM_FISCAL_API_KEY;
         this.n8nService = n8nService;
+
+        // Novas dependências
+        this.fileStorageService = new FileStorageDomainService();
     }
 
     async emitirNfse(detailedMovement, ambiente = 'homologacao') {
@@ -430,12 +434,7 @@ class NfseService {
             logger.error('Erro ao emitir NFSe na Nuvem Fiscal', { 
                 errorMessage: error.message,
                 errorResponse: error.response?.data,
-                errorStack: error.stack,
-                payload: payload ? {
-                    prestador: payload.prest,
-                    ambiente: payload.ambiente,
-                    referencia: payload.referencia
-                } : null
+                errorStack: error.stack
             });
             throw error;
         }
@@ -1070,7 +1069,7 @@ class NfseService {
             // Verifica se houve mudança no status ou nas mensagens
             const mensagensAtuais = JSON.stringify(nfseRemota.mensagens || []);
             const mensagensAnteriores = ultimoEvento ? ultimoEvento.event_data : '[]';
-            const houveMudancaStatus = nfseLocal.invoice.status !== nfseRemota.status;
+            const houveMudancaStatus = nfseLocal.invoice.status.toUpperCase() !== nfseRemota.status.toUpperCase();
             
             // Só considera mudança nas mensagens se o status também mudou
             // Ou se não existir evento anterior
@@ -1114,7 +1113,7 @@ class NfseService {
                     }
 
                     // Tratamento para status 'erro'
-                    if (nfseRemota.status === 'erro') {
+                    if (nfseRemota.status.toUpperCase() === 'ERRO') {
                         logger.warn('DEBUG: NFSe com status de erro', {
                             nfseId,
                             mensagens: JSON.stringify(nfseRemota.mensagens)
@@ -1124,7 +1123,7 @@ class NfseService {
                     }
 
                     // Tratamento para status 'autorizada' ou 'autorizado'
-                    if (['autorizada', 'autorizado'].includes(nfseRemota.status)) {
+                    if (['AUTORIZADA', 'AUTORIZADO'].includes(nfseRemota.status.toUpperCase())) {
                         // Garantir campos corretos
                         dadosAtualizacao.number = String(nfseRemota.numero);
                         dadosAtualizacao.series = String(nfseRemota.DPS?.serie || '');
@@ -1155,18 +1154,18 @@ class NfseService {
 
                 // Determina a mensagem do evento baseado no status e mensagens
                 let mensagemEvento = '';
-                if (nfseRemota.status === 'autorizado') {
+                if (nfseRemota.status.toUpperCase() === 'AUTORIZADO') {
                     mensagemEvento = 'Nota Fiscal autorizada com sucesso';
-                } else if (nfseRemota.status === 'erro') {
+                } else if (nfseRemota.status.toUpperCase() === 'ERRO') {
                     // Se tem mensagens de erro, usa a primeira como mensagem principal
                     if (nfseRemota.mensagens && nfseRemota.mensagens.length > 0) {
                         mensagemEvento = `Erro na NFSe: ${nfseRemota.mensagens[0].descricao}`;
                     } else {
                         mensagemEvento = 'Erro ao processar NFSe';
                     }
-                } else if (nfseRemota.status === 'processando') {
+                } else if (nfseRemota.status.toUpperCase() === 'PROCESSANDO') {
                     mensagemEvento = 'NFSe em processamento';
-                } else if (nfseRemota.status === 'cancelado') {
+                } else if (nfseRemota.status.toUpperCase() === 'CANCELADO') {
                     mensagemEvento = 'NFSe cancelada';
                 } else {
                     mensagemEvento = `Status da NFSe alterado para: ${nfseRemota.status}`;
@@ -1301,6 +1300,209 @@ class NfseService {
             logger.error('Erro no processo de download de XML da NFSe', { 
                 integrationNfseId, 
                 error: error.message 
+            });
+            throw error;
+        }
+    }
+
+    // Método para processar PDF da NFSe
+    async processarPdfNfse(nfseId) {
+        try {
+            // Log inicial
+            logger.info('Iniciando processamento de PDF da NFSe', { 
+                nfseId
+            });
+
+            // Buscar dados da NFSe
+            const nfse = await this.nfseRepository.findById(nfseId);
+            if (!nfse) {
+                logger.error('NFSe não encontrada no repositório', { nfseId });
+                const error = new NotFoundError('NFSe não encontrada');
+                error.details = { nfseId };
+                throw error;
+            }
+
+            // Verificar se existe integration_nfse_id
+            if (!nfse.integration_nfse_id) {
+                logger.error('NFSe não possui integration_nfse_id', { 
+                    nfseId, 
+                    nfse 
+                });
+                const error = new ValidationError('Integration NFSe ID não encontrado');
+                error.details = { nfseId, nfse };
+                throw error;
+            }
+
+            // Consultar status da NFSe na Nuvem Fiscal
+            const statusNfse = await nuvemFiscalService.consultarStatusNfse(nfse.integration_nfse_id);
+            
+            // Verificar se a NFSe está autorizada
+            if (!statusNfse || statusNfse.status.toUpperCase() !== 'AUTORIZADA') {
+                // Preparar mensagem de erro detalhada
+                const errorMessages = statusNfse?.mensagens?.map(msg => 
+                    `Código ${msg.codigo}: ${msg.descricao}. ${msg.correcao || ''}`
+                ).join('; ') || 'Status não autorizado';
+
+                logger.error('NFSe não está autorizada', { 
+                    nfseId, 
+                    integrationNfseId: nfse.integration_nfse_id,
+                    statusNfse,
+                    errorMessages
+                });
+
+                // Lançar erro com mensagens detalhadas
+                const error = new ValidationError(`Nota fiscal não autorizada`);
+                error.details = {
+                    nfseId,
+                    integrationNfseId: nfse.integration_nfse_id,
+                    statusNfse,
+                    errorMessages
+                };
+                error.message = errorMessages;
+                throw error;
+            }
+
+            // Buscar dados da invoice
+            const invoice = await this.invoiceRepository.findById(nfse.invoice_id);
+            if (!invoice) {
+                const error = new NotFoundError('Invoice não encontrada');
+                error.details = { nfseId, invoiceId: nfse.invoice_id };
+                throw error;
+            }
+
+            // Passo 1: Baixar PDF da Nuvem Fiscal
+            try {
+                const pdfBuffer = await nuvemFiscalService.downloadNfsePdf(
+                    nfse.integration_nfse_id
+                );
+
+                // Passo 2: Salvar no File Storage
+                const metadata = {
+                    contentType: 'application/pdf',
+                    size: pdfBuffer.length,
+                    originalName: `nfse/pdf/nfse_${nfse.integration_nfse_id}.pdf`,
+                    bucketName: process.env.MINIO_BUCKET_NAME || 'finance',
+                    tags: {
+                        nfseId,
+                        invoiceId: invoice.invoice_id,
+                        source: 'nuvem-fiscal'
+                    }
+                };
+
+                let fileId;
+                try {
+                    fileId = await this.fileStorageService.uploadFile(
+                        pdfBuffer, 
+                        metadata
+                    );
+                } catch (uploadError) {
+                    logger.error('Erro ao fazer upload do arquivo', {
+                        nfseId,
+                        integrationNfseId: nfse.integration_nfse_id,
+                        errorMessage: uploadError.message,
+                        errorCode: uploadError.code,
+                        errorDetails: uploadError
+                    });
+
+                    // Verificar se é um erro de bucket inexistente
+                    if (uploadError.code === 'NoSuchBucket') {
+                        const createBucketError = new ValidationError('Bucket de armazenamento não configurado');
+                        createBucketError.details = {
+                            nfseId,
+                            integrationNfseId: nfse.integration_nfse_id,
+                            bucketName: metadata.bucketName
+                        };
+                        throw createBucketError;
+                    }
+
+                    throw uploadError;
+                }
+
+                // Passo 3: Gerar URL pública
+                let pdfUrl;
+                try {
+                    pdfUrl = await this.generatePublicUrl(fileId);
+                } catch (urlError) {
+                    logger.error('Erro ao gerar URL pública', {
+                        nfseId,
+                        fileId,
+                        errorMessage: urlError.message,
+                        errorCode: urlError.code,
+                        errorDetails: urlError
+                    });
+
+                    // Se falhar na geração da URL, ainda pode ser útil ter o arquivo
+                    pdfUrl = null;
+                }
+
+                // Passo 4: Atualizar Invoice
+                await this.invoiceRepository.update(
+                    invoice.invoice_id, 
+                    { pdf_url: pdfUrl }
+                );
+
+                // Log de sucesso
+                logger.info('Processamento de PDF da NFSe concluído', { 
+                    nfseId,
+                    pdfUrl,
+                    integrationNfseId: nfse.integration_nfse_id
+                });
+
+                return {
+                    pdfUrl,
+                    invoice: { ...invoice, pdf_url: pdfUrl }
+                };
+            } catch (downloadError) {
+                // Log detalhado de erro no download
+                logger.error('Erro ao baixar PDF da NFSe', { 
+                    nfseId,
+                    integrationNfseId: nfse.integration_nfse_id,
+                    errorMessage: downloadError.message,
+                    errorResponse: downloadError.response?.data,
+                    errorStatus: downloadError.response?.status,
+                    stack: downloadError.stack
+                });
+
+                // Tratamento específico para diferentes tipos de erro
+                const error = downloadError.response?.status === 404 
+                    ? new NotFoundError('PDF da NFSe não encontrado na Nuvem Fiscal')
+                    : downloadError;
+                
+                error.details = {
+                    nfseId,
+                    integrationNfseId: nfse.integration_nfse_id,
+                    errorResponse: downloadError.response?.data
+                };
+
+                throw error;
+            }
+        } catch (error) {
+            // Log de erro
+            logger.error('Erro no processamento de PDF da NFSe', { 
+                nfseId,
+                error: error.message,
+                details: error.details,
+                stack: error.stack
+            });
+            throw error;
+        }
+    }
+
+    // Método auxiliar para gerar URL pública
+    async generatePublicUrl(fileId) {
+        try {
+            const bucketName = process.env.MINIO_BUCKET_NAME || 'finance';
+            const domain = process.env.S3_PUBLIC_DOMAIN || 's3.agilefinance.com.br';
+            
+            // Gerar URL pública
+            const publicUrl = `https://${domain}/${bucketName}/${fileId}`;
+
+            return publicUrl;
+        } catch (error) {
+            logger.error('Erro ao gerar URL pública', {
+                fileId,
+                errorMessage: error.message,
+                errorStack: error.stack
             });
             throw error;
         }

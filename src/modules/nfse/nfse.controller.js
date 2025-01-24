@@ -372,6 +372,42 @@ class NfseController {
             return errorResponse(res, 400, 'Erro ao atualizar status da NFSe', error);
         }
     }
+
+    /**
+     * Processar e obter PDF de uma NFSe
+     * @param {Object} req Objeto de requisição do Express
+     * @param {Object} res Objeto de resposta do Express
+     * @returns {Promise<void>}
+     */
+    async processarPdf(req, res) {
+        try {
+            const { id } = req.params;
+
+            logger.info('Processando PDF da NFSe', { 
+                nfseId: id
+            });
+
+            // Chama o serviço para processar o PDF
+            const resultado = await this.nfseService.processarPdfNfse(id);
+
+            // Retorna resposta de sucesso
+            return successResponse(res, 200, resultado, 'PDF processado com sucesso');
+        } catch (error) {
+            // Log e tratamento de erro
+            logger.error('Erro no processamento de PDF da NFSe', { 
+                error: error.message,
+                stack: error.stack
+            });
+
+            // Retorna resposta de erro
+            return errorResponse(
+                res, 
+                error.status || 500, 
+                'Falha no processamento do PDF da NFSe', 
+                error
+            );
+        }
+    }
 }
 
 module.exports = NfseController;
