@@ -8,6 +8,7 @@ const { formatCNPJ, formatCPF } = require('../../utils/formatters');
 const temporaryTokenService = require('../tokens/services/temporary-token.service');
 const nuvemFiscalTokenService = require('./services/nuvem-fiscal-token.service');
 const nuvemFiscalService = require('./services/nuvem-fiscal.service')(nuvemFiscalTokenService);
+const NuvemFiscalService = require('../nuvemFiscal/nuvemFiscal.service');
 const invoiceRepository = require('../invoices/invoice.repository');
 const invoiceEventRepository = require('../invoices/invoice-event.repository');
 const n8nService = require('../n8n/n8n.service');
@@ -778,8 +779,8 @@ class NfseService {
                     invoice_id: invoice.invoice_id,
                     integration_nfse_id: mockNuvemFiscalResponse.id,
                     service_value: nfsePayload.infDPS.valores.vServPrest.vServ,
-                    iss_value: nfsePayload.infDPS.valores.vServPrest.vServ * (nfsePayload.infDPS.valores.trib.tribMun.pAliq / 100),
-                    aliquota_service: nfsePayload.infDPS.valores.trib.tribMun.pAliq
+                    iss_value: 0, // TODO: Calcular ISS
+                    aliquota_service: 2 // TODO: Definir alíquota correta
                 });
 
                 // 3. Criar Invoice Event
@@ -869,23 +870,11 @@ class NfseService {
                 return { invoice, nfse, invoiceEvent };
             });
 
-            // Log detalhado dos dados inseridos
-            logger.info('Dados de NFSe inseridos no banco', {
-                invoice: {
-                    id: transaction.invoice.invoice_id,
-                    referenceId: transaction.invoice.reference_id,
-                    status: transaction.invoice.status
-                },
-                nfse: {
-                    id: transaction.nfse.nfse_id,
-                    invoiceId: transaction.nfse.invoice_id,
-                    integrationNfseId: transaction.nfse.integration_nfse_id
-                },
-                invoiceEvent: {
-                    id: transaction.invoiceEvent.event_id,
-                    invoiceId: transaction.invoiceEvent.invoice_id,
-                    eventType: transaction.invoiceEvent.event_type
-                }
+            // Log detalhado da NFSe criada
+            logger.info('NFSe criada com sucesso', {
+                nfseId: transaction.nfse.nfse_id,
+                invoiceId: transaction.nfse.invoice_id,
+                integrationNfseId: transaction.nfse.integration_nfse_id
             });
 
             return transaction;
@@ -1260,6 +1249,58 @@ class NfseService {
                 dadosAtualizacao,
                 error: error.message,
                 stack: error.stack
+            });
+            throw error;
+        }
+    }
+
+    // Baixar PDF do DANFSE
+    async downloadNfsePdf(integrationNfseId, options = {}) {
+        try {
+            logger.info('Preparando download de PDF da NFSe', { 
+                integrationNfseId,
+                options 
+            });
+
+            const pdfBuffer = await nuvemFiscalService.downloadNfsePdf(integrationNfseId, options);
+
+            // Lógica adicional, se necessário (salvar em disco, etc)
+            logger.info('PDF da NFSe processado com sucesso', { 
+                integrationNfseId,
+                tamanhoArquivo: pdfBuffer.byteLength 
+            });
+
+            return pdfBuffer;
+        } catch (error) {
+            logger.error('Erro no processo de download de PDF da NFSe', { 
+                integrationNfseId, 
+                error: error.message 
+            });
+            throw error;
+        }
+    }
+
+    // Baixar XML da NFSe
+    async downloadNfseXml(integrationNfseId, options = {}) {
+        try {
+            logger.info('Preparando download de XML da NFSe', { 
+                integrationNfseId,
+                options 
+            });
+
+            const xmlContent = await nuvemFiscalService.downloadNfseXml(integrationNfseId, options);
+
+            // Lógica adicional, se necessário (salvar em disco, etc)
+            logger.info('XML da NFSe processado com sucesso', { 
+                integrationNfseId,
+                tamanhoArquivo: xmlContent.length 
+            });
+
+            return xmlContent;
+        } catch (error) {
+            logger.error('Erro no processo de download de XML da NFSe', { 
+                integrationNfseId, 
+                error: error.message 
             });
             throw error;
         }
