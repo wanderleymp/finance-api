@@ -9,6 +9,7 @@ const MovementStatusRepository = require('../../movement-statuses/movement-statu
 const PaymentMethodRepository = require('../../payment-methods/payment-method.repository');
 const InstallmentRepository = require('../../installments/installment.repository');
 const MovementPaymentRepository = require('../../movement-payments/movement-payment.repository');
+const MovementPaymentService = require('../../movement-payments/movement-payment.service');
 const ContractMovementService = require('../../contract-movements/service/contract-movement.service');
 const MovementItemService = require('../../movement-items/movement-item.service');
 const MovementItemRepository = require('../../movement-items/movement-item.repository');
@@ -31,6 +32,14 @@ class ContractRecurringService {
         this.movementItemRepository = new MovementItemRepository();
         this.dataSource = systemDatabase;
         this.logger = logger || console;
+        
+        const movementPaymentRepository = new MovementPaymentRepository();
+        const installmentRepository = new InstallmentRepository();
+        
+        this.movementPaymentService = new MovementPaymentService({
+            movementPaymentRepository,
+            installmentRepository
+        });
     }
 
     async billing(contractIds) {
@@ -52,7 +61,7 @@ class ContractRecurringService {
                     });
                     
                     // Preparar dados de faturamento
-                    const billingData = await this.billingPrepareData(contractId);
+                    const billingData = await this.billingPrepareData(contract);
                     this.logger.info('Dados de faturamento preparados', { 
                         contractId, 
                         billingData 
@@ -214,14 +223,11 @@ class ContractRecurringService {
         }
     }
 
-    async billingPrepareData(contractId) {
+    async billingPrepareData(contract) {
         try {
-            // Buscar contrato
-            const contract = await this.findById(contractId);
-
             // Log detalhado de dados do contrato
             this.logger.info('Preparação de Faturamento - Dados do Contrato', {
-                contractId,
+                contractId: contract.contract_id,
                 contractDetails: JSON.stringify(contract),
                 lastBillingDate: contract.last_billing_date,
                 nextBillingDate: contract.next_billing_date
@@ -237,21 +243,18 @@ class ContractRecurringService {
                 originalNextBillingDate: contract.next_billing_date
             });
 
-            // Buscar movimento modelo
-            const modelMovement = await this.movementRepository.findById(contract.model_movement_id);
-
             // Preparar dados de faturamento
             const billingData = {
                 due_date: dueDate, // ATENÇÃO: Usar dueDate calculado
                 next_billing_date: dueDate, // Atualizar next_billing_date
-                items: await this.movementService.findMovementItemsByMovementId(contract.model_movement_id),
-                license_id: modelMovement.license_id,
-                movement_status_id: modelMovement.movement_status_id,
-                movement_type_id: modelMovement.movement_type_id,
-                payment_method_id: modelMovement.payment_method_id,
-                person_id: modelMovement.person_id,
+                items: contract.items,
+                license_id: contract.license_id,
+                movement_status_id: contract.movement_status_id,
+                movement_type_id: contract.movement_type_id,
+                payment_method_id: contract.payment_method,
+                person_id: contract.person_id,
                 reference: reference,
-                total_amount: modelMovement.total_amount
+                total_amount: contract.contract_value
             };
 
             // Log final dos dados de billing
@@ -262,7 +265,7 @@ class ContractRecurringService {
             return billingData;
         } catch (error) {
             this.logger.error('Erro na preparação de dados de faturamento', {
-                contractId,
+                contractId: contract.contract_id,
                 errorMessage: error.message,
                 errorStack: error.stack
             });
@@ -329,7 +332,7 @@ class ContractRecurringService {
             };
 
             // Criar pagamento
-            const payment = await this.movementPaymentRepository.create(paymentData, { transaction });
+            const payment = await this.movementPaymentService.create(paymentData, { transaction });
 
             return payment;
         } catch (error) {
@@ -402,7 +405,6 @@ class ContractRecurringService {
         } catch (error) {
             // Log de erro detalhado
             this.logger.error('Erro ao listar contratos recorrentes', {
-                errorName: error.name,
                 errorMessage: error.message,
                 errorStack: error.stack,
                 page,
@@ -453,11 +455,7 @@ class ContractRecurringService {
             this.logger.info('Criando Item de Movimento', { movementItemData });
 
             try {
-                const createdItem = await this.movementService.updateMovementItem(
-                    { movement_item_id: item.movement_item_id },
-                    movementItemData,
-                    client
-                );
+                const createdItem = await movementItemService.create(movementItemData, client);
                 createdItems.push(createdItem);
             } catch (error) {
                 this.logger.error('Erro ao criar item de movimento', {

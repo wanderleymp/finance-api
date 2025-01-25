@@ -19,6 +19,9 @@ class ContractRecurringRepository extends BaseRepository {
                 cr.*,
                 mp.payment_method_id AS payment_method,
                 pm.method_name,
+                m.movement_status_id,
+	            m.movement_type_id,
+	            m.license_id,
                 (SELECT 
                      json_agg(
                          json_build_object(
@@ -75,7 +78,10 @@ class ContractRecurringRepository extends BaseRepository {
                 cg.group_name, 
                 cr.contract_id, 
                 mp.payment_method_id,
-                pm.method_name
+                pm.method_name,
+                m.movement_status_id,
+	            m.movement_type_id,
+	m.license_id
         `;
 
         logger.info('Query de busca de contrato', { query, id });
