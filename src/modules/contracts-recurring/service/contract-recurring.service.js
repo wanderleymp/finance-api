@@ -156,6 +156,28 @@ class ContractRecurringService {
                 }))
             });
 
+            // Adicionar notificação assíncrona para movimentos processados com sucesso
+            const successfulMovements = results
+                .filter(result => result.status === 'success' && result.movement)
+                .map(result => result.movement.movement_id);
+
+            // Executar notificações em paralelo sem bloquear o retorno
+            if (successfulMovements.length > 0) {
+                this.logger.info('Preparando notificações assíncronas para movimentos', {
+                    movementIds: successfulMovements
+                });
+
+                successfulMovements.forEach(movementId => {
+                    this.delayNotification(movementId)
+                        .catch(error => {
+                            this.logger.error('Erro na notificação assíncrona', {
+                                movementId,
+                                errorMessage: error.message
+                            });
+                        });
+                });
+            }
+
             return results;
 
         } catch (globalError) {

@@ -4,14 +4,15 @@ const { DatabaseError } = require('../utils/errors');
 
 class N8NService {
     constructor() {
+        // Corrigir uso de variáveis de ambiente
         this.baseURL = process.env.N8N_URL;
-        this.apiKey = 'ffcaa89a3e19bd98e911475c7974309b';
-        this.apiSecret = 'apikey';
-
+        this.apiKey = process.env.N8N_API_KEY; // Corrigido para usar N8N_API_KEY
+        this.apiSecret = process.env.N8N_API_SECRET; // Corrigido para usar N8N_API_SECRET
+        
         logger.error('Inicialização do N8NService', {
             baseURL: this.baseURL,
-            apiKeyLength: this.apiKey.length,
-            apiSecretLength: this.apiSecret.length
+            apiKeyLength: this.apiKey ? this.apiKey.length : 0,
+            apiSecretLength: this.apiSecret ? this.apiSecret.length : 0
         });
 
         if (!this.baseURL || !this.apiKey || !this.apiSecret) {
@@ -250,8 +251,7 @@ class N8NService {
             const headers = {
                 'Content-Type': 'application/json',
                 'Authorization': `Basic ${encodedAuth}`,
-                'X-API-KEY': process.env.N8N_API_KEY,
-                'X-API-SECRET': process.env.N8N_API_SECRET,
+                'apikey': process.env.N8N_API_KEY,
                 // Headers adicionais para rastreabilidade
                 'X-Request-Source': 'finance-api',
                 'X-Request-Type': 'billing-notification'
