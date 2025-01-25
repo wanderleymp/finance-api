@@ -489,6 +489,66 @@ class MovementController {
             });
         }
     }
+
+    /**
+     * Notifica faturamento de um movimento
+     * @route POST /movements/:id/notify-billing
+     */
+    async notifyBilling(req, res) {
+        try {
+            // Captura movementId de diferentes formas
+            const movementId = parseInt(
+                req.params.movementId || 
+                req.params.id || 
+                req.body.movement_id
+            );
+
+            // Validação de ID
+            if (!movementId || isNaN(movementId)) {
+                return res.status(400).json({
+                    message: 'ID de movimento inválido',
+                    details: {
+                        params: req.params,
+                        body: req.body
+                    }
+                });
+            }
+
+            logger.info('Controller: Notificando faturamento de movimento', { 
+                movementId,
+                requestBody: req.body,
+                requestHeaders: req.headers
+            });
+
+            const result = await this.service.notifyBilling(movementId);
+
+            logger.info('Controller: Notificação de faturamento concluída', { 
+                movementId, 
+                result 
+            });
+
+            return res.status(200).json({
+                message: 'Notificação de faturamento enviada com sucesso',
+                data: result
+            });
+        } catch (error) {
+            logger.error('Controller: Erro na notificação de faturamento', {
+                movementId: req.params.movementId || req.params.id || req.body.movement_id,
+                errorName: error.name,
+                errorMessage: error.message,
+                errorStack: error.stack,
+                fullError: error
+            });
+
+            return res.status(500).json({
+                message: 'Erro ao notificar faturamento',
+                error: {
+                    message: error.message,
+                    details: error.toString()
+                }
+            });
+        }
+    }
 }
 
 module.exports = MovementController;

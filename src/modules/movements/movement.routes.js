@@ -21,12 +21,13 @@ class MovementRoutes {
         this.router = Router();
         const movementService = dependencies.movementService || dependencies;
         this.movementController = new MovementController({ movementService });
+        this.authMiddleware = dependencies.authMiddleware || authMiddleware;
         this.setupRoutes();
     }
 
     setupRoutes() {
         // Middleware de autenticação para todas as rotas
-        this.router.use(authMiddleware);
+        this.router.use(this.authMiddleware);
 
         // Middleware de log para todas as rotas
         this.router.use((req, res, next) => {
@@ -121,6 +122,9 @@ class MovementRoutes {
             .post('/:id/cancel', this.movementController.cancel.bind(this.movementController))
             .post('/:id/nfse', 
                 this.movementController.createMovementNFSe.bind(this.movementController)
+            )
+            .post('/:id/notify-billing', 
+                this.movementController.notifyBilling.bind(this.movementController)
             );
 
         // Adiciona rotas de items

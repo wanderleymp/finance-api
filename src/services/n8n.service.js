@@ -222,45 +222,37 @@ class N8NService {
      * Notifica um movimento de faturamento via N8N
      */
     async notifyBillingMovement(movementId) {
+        // Log inicial com todas as variáveis de ambiente
+        logger.info('Configurações de ambiente N8N', {
+            N8N_URL: 'https://n8n.webhook.agilefinance.com.br/webhook',
+            API_KEY_LENGTH: 32
+        });
+
+        logger.info('Iniciando notificação de faturamento', { movementId });
+
+        // Validar movementId
+        if (!movementId) {
+            throw new Error('Movement ID é obrigatório');
+        }
+
+        const payload = { movement_id: movementId };
+
+        // Chave de API fixa
+        const apiKey = 'ffcaa89a3e19bd98e911475c7974309b';
+
+        const headers = {
+            'Content-Type': 'application/json',
+            'apikey': apiKey
+        };
+
         try {
-            // Log detalhado de entrada
-            logger.info('Iniciando notificação de faturamento N8N', {
-                movementId,
-                timestamp: new Date().toISOString(),
-                baseURL: this.baseURL,
-                apiKeyPresent: !!process.env.N8N_API_KEY,
-                apiSecretPresent: !!process.env.N8N_API_SECRET
-            });
-
-            if (!this.baseURL || !process.env.N8N_API_KEY || !process.env.N8N_API_SECRET) {
-                const errorMsg = 'Configurações do N8N incompletas para notificação de faturamento';
-                logger.error(errorMsg, {
-                    baseURL: !!this.baseURL,
-                    apiKey: !!process.env.N8N_API_KEY,
-                    apiSecret: !!process.env.N8N_API_SECRET
-                });
-                throw new Error(errorMsg);
-            }
-
-            // Preparação de headers idêntica à criação de boleto
-            const authString = `${process.env.N8N_API_KEY}:${process.env.N8N_API_SECRET}`;
-            const encodedAuth = Buffer.from(authString).toString('base64');
-
-            const payload = { movement_id: movementId };
-
-            const headers = {
-                'Content-Type': 'application/json',
-                'Authorization': `Basic ${encodedAuth}`,
-                'apikey': process.env.N8N_API_KEY,
-                // Headers adicionais para rastreabilidade
-                'X-Request-Source': 'finance-api',
-                'X-Request-Type': 'billing-notification'
-            };
-
-            // Log detalhado dos headers
-            logger.info('Headers para notificação de faturamento', {
-                headersKeys: Object.keys(headers),
-                payloadKeys: Object.keys(payload)
+            logger.info('Detalhes da requisição N8N', {
+                url: 'https://n8n.webhook.agilefinance.com.br/webhook/mensagem/faturamento',
+                payload,
+                headers: {
+                    ...headers,
+                    'apikey': '[REDACTED]'
+                }
             });
 
             const response = await axios.post(
@@ -268,36 +260,35 @@ class N8NService {
                 payload, 
                 { 
                     headers,
-                    timeout: 10000 // Timeout de 10 segundos
+                    timeout: 10000 // 10 segundos de timeout
                 }
             );
 
-            // Log de sucesso com detalhes da resposta
-            logger.info('Notificação de faturamento enviada com sucesso no N8N', {
-                movementId,
+            logger.info('Notificação de faturamento enviada com sucesso', { 
+                movementId, 
                 responseStatus: response.status,
-                responseData: response.data,
-                timestamp: new Date().toISOString()
+                responseData: response.data
             });
 
             return response.data;
         } catch (error) {
-            // Log de erro detalhado
-            logger.error('Erro ao enviar notificação de faturamento para N8N', {
+            // Log extremamente detalhado do erro
+            logger.error('Erro ao notificar faturamento', {
                 movementId,
-                errorName: error.name,
+                errorType: error.constructor.name,
                 errorMessage: error.message,
-                errorStack: error.stack,
-                errorResponse: error.response ? {
-                    status: error.response.status,
-                    data: error.response.data
-                } : null,
-                timestamp: new Date().toISOString()
+                errorResponse: error.response?.data,
+                errorStatus: error.response?.status,
+                errorHeaders: error.response?.headers,
+                requestHeaders: headers,
+                requestPayload: payload,
+                fullError: error
             });
-            throw new Error(`Falha na requisição N8N de notificação: ${error.message}`);
+
+            throw new Error(`Falha ao notificar faturamento: ${error.message}`);
         }
     }
 }
 
-// Singleton para reutilizar a mesma instância
-module.exports = new N8NService();
+// Exporta a classe, não a instância
+module.exports = N8NService;

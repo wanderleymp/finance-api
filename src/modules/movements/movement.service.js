@@ -15,6 +15,7 @@ const LicenseRepository = require('../../repositories/licenseRepository');
 const MovementItemRepository = require('../movement-items/movement-item.repository');
 const ServiceRepository = require('../services/service-repository'); 
 const NfseService = require('../nfse/nfse.service');
+const N8nService = require('../../services/n8n.service'); // Corrigido import do N8N Service
 const { systemDatabase } = require('../../config/database');
 
 class MovementService extends IMovementService {
@@ -35,6 +36,7 @@ class MovementService extends IMovementService {
         nfseService,
         serviceRepository,
         billingMessageService,
+        n8nService, // Adicionado parâmetro n8nService
         logger = console
     }) {
         super();
@@ -87,6 +89,15 @@ class MovementService extends IMovementService {
         this.nfseService = nfseService;
         this.serviceRepository = serviceRepository;
         this.billingMessageService = billingMessageService;
+        
+        // Fallback para n8nService
+        if (!n8nService) {
+            const N8NService = require('../../services/n8n.service');
+            n8nService = new N8NService();
+        }
+        
+        this.n8nService = n8nService; // Adicionado atributo n8nService
+        
         this.pool = systemDatabase.pool;
         
         // Adicionar fallback para logger
@@ -166,11 +177,11 @@ class MovementService extends IMovementService {
             const movement = await this.movementRepository.findById(id);
             
             if (!movement) {
-                logger.warn('Movimento não encontrado', { movementId: id });
-                return null;
+                this.logger.warn('Movimento não encontrado', { movementId: id });
+                throw new Error(`Movimento ${id} não encontrado`);
             }
 
-            logger.info('Buscando detalhes da pessoa', {
+            this.logger.info('Buscando detalhes da pessoa', {
                 personId: movement.person_id,
                 repositoryMethod: 'findPersonWithDetails'
             });
@@ -178,7 +189,7 @@ class MovementService extends IMovementService {
             const personRepository = new (require('../persons/person.repository'))();
             const personDetails = await personRepository.findPersonWithDetails(movement.person_id);
 
-            logger.info('Detalhes encontrados', {
+            this.logger.info('Detalhes encontrados', {
                 movementId: movement.movement_id,
                 personId: movement.person_id,
             });
@@ -187,7 +198,7 @@ class MovementService extends IMovementService {
             const contacts = personDetails.contacts || [];
             
             // Log adicional para detalhes de contatos
-            logger.info('Detalhes de contatos', {
+            this.logger.info('Detalhes de contatos', {
                 totalContacts: contacts.length,
                 contactTypes: contacts.map(c => c.type)
             });
@@ -195,17 +206,18 @@ class MovementService extends IMovementService {
             // Processa mensagem
             await this.billingMessageService.processBillingMessage(movement, personDetails, contacts);
             
-            logger.info('Mensagem de faturamento enviada com sucesso', {
+            this.logger.info('Mensagem de faturamento enviada com sucesso', {
                 movementId: movement.movement_id,
                 personId: personDetails.person_id
             });
+
+            return movement;
         } catch (error) {
-            logger.error('Erro ao processar mensagem de faturamento', {
+            this.logger.error('Erro ao processar mensagem de faturamento', {
                 error: error,
                 errorMessage: error.message,
                 errorStack: error.stack,
-                movementId: movement.movement_id,
-                personId: personDetails.person_id
+                movementId: id
             });
             throw error;
         }
@@ -790,6 +802,45 @@ class MovementService extends IMovementService {
         });
 
         return movementItems;
+    }
+
+    /**
+     * Notifica faturamento de movimento via N8N
+     * @param {number} movementId - ID do movimento a ser notificado
+     * @returns {Promise<Object>} Resposta da notificação
+     */
+    async notifyBilling(movementId) {
+        try {
+            this.logger.info('Iniciando notificação de faturamento', {
+                movementId,
+                timestamp: new Date().toISOString()
+            });
+
+            // Verifica se o movimento existe
+            const movement = await this.findOne(movementId);
+            if (!movement) {
+                throw new Error(`Movimento ${movementId} não encontrado`);
+            }
+
+            // Chama o serviço de notificação do N8N
+            const notificationResult = await this.n8nService.notifyBillingMovement(movementId);
+
+            this.logger.info('Notificação de faturamento concluída', {
+                movementId,
+                notificationResult,
+                timestamp: new Date().toISOString()
+            });
+
+            return notificationResult;
+        } catch (error) {
+            this.logger.error('Erro na notificação de faturamento', {
+                movementId,
+                errorMessage: error.message,
+                errorStack: error.stack,
+                timestamp: new Date().toISOString()
+            });
+            throw error;
+        }
     }
 
     validateMovementData(data, isUpdate = false) {
