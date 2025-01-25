@@ -45,10 +45,10 @@ class ContractRecurringService {
             for (const contractId of contractIds) {
                 try {
                     // Buscar dados do contrato
-                    const contractDetails = await this.repository.findById(contractId);
+                    const contract = await this.findById(contractId);
                     this.logger.info('Detalhes do contrato encontrados', { 
                         contractId, 
-                        contractName: contractDetails.contract_name 
+                        contractName: contract.contract_name 
                     });
                     
                     // Preparar dados de faturamento
@@ -100,7 +100,7 @@ class ContractRecurringService {
                     }
                     
                     // Criar movimento de contrato
-                    const contractMovement = await this.createContractMovement(contractDetails, {
+                    const contractMovement = await this.createContractMovement(contract, {
                         movement_id: movement.movement_id,
                         value: movement.total_amount,
                         type: 'RECURRING',
@@ -111,7 +111,7 @@ class ContractRecurringService {
                     });
 
                     // Atualizar datas de faturamento do contrato
-                    const updatedContract = await this.updateBillingDates(contractDetails, {
+                    const updatedContract = await this.updateBillingDates(contract, {
                         movement_date: movement.movement_date
                     });
 
@@ -217,7 +217,7 @@ class ContractRecurringService {
     async billingPrepareData(contractId) {
         try {
             // Buscar contrato
-            const contract = await this.repository.findById(contractId);
+            const contract = await this.findById(contractId);
 
             // Log detalhado de dados do contrato
             this.logger.info('Preparação de Faturamento - Dados do Contrato', {
@@ -415,6 +415,27 @@ class ContractRecurringService {
         }
     }
 
+    async findById(id) {
+        this.logger.info('Buscando contrato recorrente por ID', { id });
+
+        try {
+            const contract = await this.repository.findById(id);
+
+            if (!contract) {
+                this.logger.warn('Contrato não encontrado', { id });
+                throw new Error('Contrato não encontrado');
+            }
+
+            return contract;
+        } catch (error) {
+            this.logger.error('Erro ao buscar contrato recorrente', { 
+                id, 
+                errorMessage: error.message 
+            });
+            throw error;
+        }
+    }
+
     async createMovementItems(movement, items, client = null) {
         const movementItemService = new (require('../../movement-items/movement-item.service'))();
 
@@ -564,7 +585,7 @@ class ContractRecurringService {
             for (const contractId of contractIds) {
                 try {
                     // Buscar dados do contrato
-                    const contract = await this.repository.findById(contractId);
+                    const contract = await this.findById(contractId);
                     
                     // Calcular novo valor do contrato
                     let newContractValue = contract.contract_value;
@@ -702,7 +723,7 @@ class ContractRecurringService {
         });
 
         // Buscar contrato
-        const contract = await this.repository.findById(contractId);
+        const contract = await this.findById(contractId);
         
         // Log do contrato encontrado
         this.logger.info('Detalhes do contrato', {

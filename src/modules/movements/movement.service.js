@@ -779,6 +779,19 @@ class MovementService extends IMovementService {
         }
     }
 
+    async findMovementItemsByMovementId(movementId) {
+        if (!movementId) {
+            throw new ValidationError('Movement ID é obrigatório');
+        }
+
+        const movementItems = await this.movementItemRepository.find({
+            where: { movement_id: movementId },
+            relations: ['service', 'product'] // Adicione relações conforme necessário
+        });
+
+        return movementItems;
+    }
+
     validateMovementData(data, isUpdate = false) {
         // Validações básicas se não for update
         if (!isUpdate) {

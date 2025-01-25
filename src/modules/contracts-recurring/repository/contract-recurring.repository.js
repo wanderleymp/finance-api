@@ -13,35 +13,69 @@ class ContractRecurringRepository extends BaseRepository {
 
         const query = `
             SELECT 
+                p.person_id,
                 p.full_name, 
                 cg.group_name, 
                 cr.*,
-                m.*,
-                json_agg(json_build_object(
-                    'payment_id', mp.payment_id,
-                    'payment_method_id', mp.payment_method_id,
-                    'total_amount', mp.total_amount
-                )) as payments,
-                json_agg(mi.*) as movement_items
-            FROM public.contracts_recurring cr
-            JOIN movements m ON cr.model_movement_id = m.movement_id
-            JOIN persons p ON m.person_id = p.person_id
-            JOIN movement_payments mp ON m.movement_id = mp.movement_id
-            JOIN contract_groups cg ON cr.contract_group_id = cg.contract_group_id
-            JOIN movement_items mi ON m.movement_id = mi.movement_id
-            WHERE cr.contract_id = $1
+                mp.payment_method_id AS payment_method,
+                pm.method_name,
+                (SELECT 
+                     json_agg(
+                         json_build_object(
+                             'item_id', mi.item_id,
+                             'quantity', mi.quantity,
+                             'unit_price', mi.unit_price,
+                             'total_price', mi.total_price,
+                             'item_name', i.name
+                         )
+                     )
+                 FROM 
+                     movement_items mi
+                 JOIN 
+                     items i ON mi.item_id = i.item_id
+                 WHERE 
+                     mi.movement_id = cr.model_movement_id
+                ) AS items,
+                (SELECT 
+                     json_agg(ca.*)
+                 FROM 
+                     contract_adjustment_history ca
+                 WHERE 
+                     ca.contract_id = cr.contract_id
+                ) AS contract_adjustments,
+                json_agg(
+                    json_build_object(
+                        'movement_id', cm.movement_id,
+                        'total_amount', cmm.total_amount,
+                        'movement_date', cmm.movement_date,
+                        'description', cmm.description
+                    )
+                ) AS billings
+            FROM 
+                public.contracts_recurring cr
+            JOIN 
+                movements m ON cr.model_movement_id = m.movement_id
+            JOIN 
+                persons p ON m.person_id = p.person_id
+            JOIN 
+                contract_groups cg ON cr.contract_group_id = cg.contract_group_id
+            LEFT JOIN 
+                movement_payments mp ON m.movement_id = mp.movement_id
+            JOIN 
+                payment_methods pm ON mp.payment_method_id = pm.payment_method_id
+            LEFT JOIN 
+                contract_movements cm ON cr.contract_id = cm.contract_id
+            LEFT JOIN 
+                movements cmm ON cm.movement_id = cmm.movement_id
+            WHERE 
+                cr.contract_id = $1
             GROUP BY 
+                p.person_id,
                 p.full_name, 
                 cg.group_name, 
-                cr.contract_id, cr.contract_name, cr.contract_value, cr.start_date, cr.end_date, 
-                cr.recurrence_period, cr.due_day, cr.days_before_due, cr.status, 
-                cr.model_movement_id, cr.last_billing_date, cr.next_billing_date, 
-                cr.contract_group_id, cr.billing_reference, cr.representative_person_id, 
-                cr.commissioned_value, cr.account_entry_id, cr.last_decimo_billing_year,
-                m.movement_id, m.movement_type_id, m.movement_status_id, m.person_id, 
-                m.total_amount, m.description, m.movement_date,
-                mp.payment_id, mp.payment_method_id, mp.total_amount, 
-                mp.status
+                cr.contract_id, 
+                mp.payment_method_id,
+                pm.method_name
         `;
 
         logger.info('Query de busca de contrato', { query, id });
@@ -198,6 +232,52 @@ class ContractRecurringRepository extends BaseRepository {
                 paramCount++;
             }
 
+            // Filtro por grupo de contrato
+            if (filters.contract_group_id) {
+                whereConditions.push(`cr.contract_group_id = $${paramCount}`);
+                queryParams.push(filters.contract_group_id);
+                paramCount++;
+            }
+
+            // Filtro por último ajuste
+            if (filters.last_adjustment === 'null') {
+                whereConditions.push(`(
+                    cr.last_adjustment IS NULL 
+                    OR cr.last_adjustment = '' 
+                    OR cr.last_adjustment = 'undefined'
+                )`);
+
+                logger.info('Filtro last_adjustment:', {
+                    filterValue: filters.last_adjustment,
+                    whereCondition: whereConditions[whereConditions.length - 1]
+                });
+            } else {
+                Object.keys(filters).forEach(key => {
+                    const match = key.match(/^last_adjustment((<|>|<=|>=|=)(.+))?$/);
+                    if (match) {
+                        const operator = match[2] || '=';
+                        const value = match[3] || filters[key];
+                        
+                        if (value === 'null') {
+                            whereConditions.push('cr.last_adjustment IS NULL');
+                        } else if (value && value !== 'null') {
+                            let sqlOperator;
+                            switch (operator) {
+                                case '<': sqlOperator = '<'; break;
+                                case '<=': sqlOperator = '<='; break;
+                                case '>': sqlOperator = '>'; break;
+                                case '>=': sqlOperator = '>='; break;
+                                default: sqlOperator = '=';
+                            }
+
+                            whereConditions.push(`cr.last_adjustment ${sqlOperator} $${paramCount}`);
+                            queryParams.push(new Date(value));
+                            paramCount++;
+                        }
+                    }
+                });
+            }
+
             // Filtros adicionais anteriores
             if (filters.contract_name) {
                 whereConditions.push(`cr.contract_name ILIKE $${paramCount}`);
@@ -234,9 +314,9 @@ class ContractRecurringRepository extends BaseRepository {
                 ORDER BY cr.next_billing_date ASC
             `;
 
-            // Query de contagem
+            // Consulta de contagem
             const countQuery = `
-                SELECT COUNT(*) as total 
+                SELECT COUNT(DISTINCT cr.contract_id) as total
                 FROM public.contracts_recurring cr
                 JOIN movements m ON cr.model_movement_id = m.movement_id
                 JOIN persons p ON m.person_id = p.person_id
@@ -244,22 +324,18 @@ class ContractRecurringRepository extends BaseRepository {
                 ${whereClause}
             `;
 
-            logger.info('Detalhes da query customizada', {
+            logger.info('Query customizada:', customQuery);
+            logger.info('Parâmetros da query:', queryParams);
+
+            const result = await super.findAll(page, limit, filters, {
                 customQuery,
-                whereClause,
+                countQuery,
                 queryParams
             });
 
-            return super.findAll(page, limit, filters, {
-                customQuery,
-                countQuery,
-                queryParams,
-                whereClause
-            });
+            return result;
         } catch (error) {
-            logger.error('Erro ao buscar contratos recorrentes', { 
-                error: error.message 
-            });
+            logger.error('Erro ao buscar contratos recorrentes:', error);
             throw error;
         }
     }
