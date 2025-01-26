@@ -33,11 +33,7 @@ module.exports = (installmentController) => {
 
     router.get('/details', 
         validateRequest(installmentSchema.listInstallments, 'query'),
-        (req, res, next) => {
-            // Adiciona include=boletos automaticamente
-            req.query.include = 'boletos';
-            installmentController.index.bind(installmentController)(req, res, next);
-        }
+        installmentController.findDetails.bind(installmentController)
     );
 
     router.get('/:id',

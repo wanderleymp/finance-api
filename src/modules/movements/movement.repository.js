@@ -10,16 +10,28 @@ class MovementRepository extends BaseRepository {
 
     async findAll(page = 1, limit = 10, filters = {}) {
         try {
+            // Log de diagnóstico inicial
+            logger.info('Parâmetros recebidos', { 
+                page, 
+                limit, 
+                filters: JSON.stringify(filters) 
+            });
+
             // Extrair filtros especiais
             const { 
                 orderBy = 'movement_date', 
                 orderDirection = 'DESC', 
                 startDate, 
                 endDate,
-                include,
                 search,
                 ...otherFilters 
             } = filters;
+
+            // Log de diagnóstico de ordenação
+            logger.info('Configurações de ordenação', { 
+                orderBy, 
+                orderDirection 
+            });
 
             // Converter movement_status_id para números se forem strings
             if (filters.movement_status_id) {
@@ -41,14 +53,12 @@ class MovementRepository extends BaseRepository {
             // Mapear o campo de ordenação
             const mappedOrderBy = orderByMapping[orderBy] || orderBy;
 
-            // Remover declaração duplicada e usar diretamente dos filtros
-            const orderBySecondary = filters.orderBySecondary || 'movement_id';
-            const orderDirectionSecondary = filters.orderDirectionSecondary || 'DESC';
+            // Log de diagnóstico de mapeamento
+            logger.info('Mapeamento de campos', { 
+                mappedOrderBy 
+            });
 
-            // Mapear o campo de ordenação secundária
-            const mappedOrderBySecondary = orderByMapping[orderBySecondary] || orderBySecondary;
-
-            // Construir cláusula WHERE para filtros de data
+            // Construir cláusula WHERE para filtros
             const whereConditions = [];
             const queryParams = [];
 
@@ -88,202 +98,293 @@ class MovementRepository extends BaseRepository {
             const countQuery = `
                 SELECT COUNT(*) as total 
                 FROM movements m
-                LEFT JOIN movement_statuses ms ON m.movement_status_id = ms.movement_status_id
-                LEFT JOIN movement_types mt ON m.movement_type_id = mt.movement_type_id
                 LEFT JOIN persons p ON m.person_id = p.person_id
                 ${whereClause}
             `;
 
-            // Query personalizada com joins e alias definido
-            const customQuery = `
-                SELECT 
-                    m.movement_id,
-                    m.movement_type_id,
-                    m.movement_status_id,
-                    m.person_id,
-                    m.movement_date,
-                    m.description,
-                    m.created_at,
-                    COALESCE(SUM(mp.total_amount), 0) as total_amount,
-                    ms.status_name,
-                    mt.type_name,
-                    p.full_name as person_name
-                FROM movements m
-                LEFT JOIN movement_statuses ms ON m.movement_status_id = ms.movement_status_id
-                LEFT JOIN movement_types mt ON m.movement_type_id = mt.movement_type_id
-                LEFT JOIN persons p ON m.person_id = p.person_id
-                LEFT JOIN movement_payments mp ON m.movement_id = mp.movement_id
-                ${whereClause}
-                GROUP BY 
-                    m.movement_id, 
-                    ms.status_name, 
-                    mt.type_name, 
-                    p.full_name
-                ${`ORDER BY m.${mappedOrderBy} ${orderDirection}, m.${mappedOrderBySecondary} ${orderDirectionSecondary}`}
-            `;
-
-            // Usa o método findAll do BaseRepository com query personalizada
-            const result = await super.findAll(page, limit, {}, {
-                customQuery,
-                countQuery,
-                queryParams
+            // Log de diagnóstico de consultas
+            logger.info('Consultas SQL', { 
+                countQuery, 
+                whereClause, 
+                queryParams: JSON.stringify(queryParams) 
             });
 
-            // Processamento adicional para includes, se necessário
-            let processedItems = result.items || [];
-            if (include) {
-                const includeOptions = include.split('.');
-                
-                // Lógica para processamento de includes
-                if (includeOptions.includes('payments')) {
-                    const movementIds = processedItems.map(m => m.movement_id);
-                    const payments = await this.findPaymentsByMovementIds(movementIds);
-                    
-                    processedItems = processedItems.map(movement => ({
-                        ...movement,
-                        payments: payments.filter(p => p.movement_id === movement.movement_id)
-                    }));
+            // Query principal com todos os relacionamentos
+            const customQuery = `
+                WITH movement_data AS (
+                    SELECT 
+                        m.*,
+                        p.full_name,
+                        ms.status_name,
+                        mt.type_name,
+                        ROW_NUMBER() OVER (
+                            ORDER BY 
+                                CASE 
+                                    WHEN $${queryParams.length + 1} = 'movement_date' THEN m.movement_date::text
+                                    WHEN $${queryParams.length + 1} = 'movement_id' THEN m.movement_id::text
+                                    WHEN $${queryParams.length + 1} = 'movement_type_id' THEN m.movement_type_id::text
+                                    WHEN $${queryParams.length + 1} = 'movement_status_id' THEN m.movement_status_id::text
+                                    ELSE m.movement_date::text
+                                END 
+                                ${orderDirection}, 
+                                m.movement_id::text DESC
+                        ) as row_num
+                    FROM movements m
+                    LEFT JOIN persons p ON m.person_id = p.person_id
+                    LEFT JOIN movement_statuses ms ON m.movement_status_id = ms.movement_status_id
+                    LEFT JOIN movement_types mt ON m.movement_type_id = mt.movement_type_id
+                    ${whereClause}
+                ),
+                payments_data AS (
+                    SELECT 
+                        mp.movement_id,
+                        jsonb_agg(
+                            jsonb_build_object(
+                                'payment_id', mp.payment_id,
+                                'payment_method_id', mp.payment_method_id,
+                                'total_amount', mp.total_amount,
+                                'status', mp.status
+                            )
+                        ) AS payments
+                    FROM movement_payments mp
+                    GROUP BY mp.movement_id
+                ),
+                installments_data AS (
+                    SELECT 
+                        mp.movement_id,
+                        jsonb_agg(
+                            jsonb_build_object(
+                                'installment_id', i.installment_id,
+                                'installment_number', i.installment_number,
+                                'due_date', i.due_date,
+                                'amount', i.amount,
+                                'balance', i.balance,
+                                'status', i.status,
+                                'boletos', (
+                                    SELECT jsonb_agg(
+                                        jsonb_build_object(
+                                            'boleto_id', b.boleto_id,
+                                            'status', b.status,
+                                            'generated_at', b.generated_at
+                                        )
+                                    )
+                                    FROM boletos b
+                                    WHERE b.installment_id = i.installment_id
+                                )
+                            )
+                        ) AS installments
+                    FROM movement_payments mp
+                    JOIN installments i ON i.payment_id = mp.payment_id
+                    GROUP BY mp.movement_id
+                ),
+                invoices_data AS (
+                    SELECT 
+                        movement_id,
+                        jsonb_agg(
+                            jsonb_build_object(
+                                'invoice_id', invoice_id,
+                                'number', number,
+                                'total_amount', total_amount,
+                                'status', status,
+                                'pdf_url', pdf_url,
+                                'xml_url', xml_url
+                            )
+                        ) AS invoices
+                    FROM invoices
+                    GROUP BY movement_id
+                )
+                SELECT 
+                    md.*,
+                    COALESCE(pd.payments, '[]'::jsonb) AS payments,
+                    COALESCE(id.installments, '[]'::jsonb) AS installments,
+                    COALESCE(iv.invoices, '[]'::jsonb) AS invoices
+                FROM movement_data md
+                LEFT JOIN payments_data pd ON md.movement_id = pd.movement_id
+                LEFT JOIN installments_data id ON md.movement_id = id.movement_id
+                LEFT JOIN invoices_data iv ON md.movement_id = iv.movement_id
+                WHERE md.row_num BETWEEN (($${queryParams.length + 2} - 1) * $${queryParams.length + 3} + 1) AND ($${queryParams.length + 2} * $${queryParams.length + 3})
+            `;
 
-                    // Se incluir installments
-                    if (includeOptions.includes('installments')) {
-                        const paymentIds = payments.map(p => p.payment_id);
-                        logger.debug('Buscando installments', { paymentIds });
-                        const installments = await this.findInstallmentsByPaymentIds(paymentIds);
-                        logger.debug('Installments encontrados', { count: installments.length, installments });
+            // Adicionar parâmetros de paginação
+            queryParams.push(mappedOrderBy, page, limit);
 
-                        processedItems = processedItems.map(movement => ({
-                            ...movement,
-                            payments: movement.payments.map(payment => ({
-                                ...payment,
-                                installments: installments.filter(i => i.payment_id === payment.payment_id)
-                            }))
-                        }));
+            // Log de diagnóstico de parâmetros finais
+            logger.info('Parâmetros finais da query', { 
+                mappedOrderBy, 
+                page, 
+                limit,
+                finalQueryParams: JSON.stringify(queryParams)
+            });
 
-                        // Se incluir boletos
-                        if (includeOptions.includes('boletos')) {
-                            const installmentIds = installments.map(i => i.installment_id);
-                            const boletos = await this.findBoletosByInstallmentIds(installmentIds);
+            // Executar consultas
+            const [countResult, movementsResult] = await Promise.all([
+                this.pool.query(countQuery, queryParams.slice(0, -3)),
+                this.pool.query(customQuery, queryParams)
+            ]);
 
-                            processedItems = processedItems.map(movement => ({
-                                ...movement,
-                                payments: movement.payments.map(payment => ({
-                                    ...payment,
-                                    installments: payment.installments.map(installment => ({
-                                        ...installment,
-                                        boletos: boletos.filter(b => b.installment_id === installment.installment_id)
-                                    }))
-                                }))
-                            }));
-                        }
-                    }
-                }
+            const totalItems = parseInt(countResult.rows[0].total, 10);
+            const totalPages = Math.ceil(totalItems / limit);
 
-                // Se incluir invoices
-                if (includeOptions.includes('invoices')) {
-                    const movementReferenceIds = processedItems.map(m => m.movement_id.toString());
-                    const invoices = await this.findInvoicesByReferenceIds(movementReferenceIds);
-
-                    processedItems = processedItems.map(movement => ({
-                        ...movement,
-                        invoices: invoices.filter(i => i.reference_id === movement.movement_id.toString())
-                    }));
-                }
-            }
-
-            const totalPages = Math.ceil(result.meta.totalItems / limit);
-            const currentPage = Math.min(page, totalPages);
+            // Log de diagnóstico
+            logger.info('Diagnóstico de movimentos', {
+                totalItems,
+                totalPages,
+                currentPage: page,
+                itemsPerPage: limit,
+                movementsFound: movementsResult.rows.length,
+                movementDetails: movementsResult.rows.map(movement => ({
+                    movement_id: movement.movement_id,
+                    description: movement.description,
+                    total_amount: movement.total_amount,
+                    full_name: movement.full_name,
+                    status_name: movement.status_name,
+                    type_name: movement.type_name,
+                    paymentsCount: movement.payments ? movement.payments.length : 0,
+                    invoicesCount: movement.invoices ? movement.invoices.length : 0
+                }))
+            });
 
             return {
-                items: processedItems,
+                items: movementsResult.rows,
                 meta: {
-                    totalItems: result.meta.totalItems,
-                    itemCount: processedItems.length,
+                    currentPage: page,
+                    itemCount: movementsResult.rows.length,
                     itemsPerPage: limit,
-                    totalPages,
-                    currentPage
+                    totalItems,
+                    totalPages
                 },
                 links: {
                     first: `/movements?page=1&limit=${limit}`,
-                    previous: currentPage > 1 ? `/movements?page=${currentPage - 1}&limit=${limit}` : null,
-                    next: currentPage < totalPages ? `/movements?page=${currentPage + 1}&limit=${limit}` : null,
+                    previous: page > 1 ? `/movements?page=${page - 1}&limit=${limit}` : null,
+                    next: page < totalPages ? `/movements?page=${page + 1}&limit=${limit}` : null,
                     last: `/movements?page=${totalPages}&limit=${limit}`
                 }
             };
         } catch (error) {
-            logger.error('Repository: Erro ao buscar movimentos', {
-                error: error.message,
+            logger.error('Erro ao buscar movimentos', { 
+                error: error.message, 
                 filters,
-                stack: error.stack
+                stack: error.stack 
             });
-            
-            // Retorno de último recurso
-            return {
-                items: [],
-                meta: {
-                    totalItems: 0,
-                    itemCount: 0,
-                    itemsPerPage: limit,
-                    totalPages: 1,
-                    currentPage: page
-                },
-                links: {
-                    first: `/movements?page=1&limit=${limit}`,
-                    previous: null,
-                    next: null,
-                    last: `/movements?page=1&limit=${limit}`
-                }
-            };
+            throw error;
         }
     }
 
-    async findById(id, detailed = false) {
+    async findById(id, detailed = true) {
         try {
-            logger.info('Repository: Buscando movimento por ID', { id, detailed });
+            logger.info('Buscando movimento por ID', { 
+                movementId: id, 
+                detailed 
+            });
 
-            let query;
-            if (detailed) {
-                query = `
+            const query = `
+                WITH movement_data AS (
                     SELECT 
                         m.*,
-                        mt.type_name,
-                        ms.status_name
+                        p.full_name,
+                        ms.status_name,
+                        mt.type_name
                     FROM movements m
-                    LEFT JOIN movement_types mt ON mt.movement_type_id = m.movement_type_id
-                    LEFT JOIN movement_statuses ms ON ms.movement_status_id = m.movement_status_id
+                    LEFT JOIN persons p ON m.person_id = p.person_id
+                    LEFT JOIN movement_statuses ms ON m.movement_status_id = ms.movement_status_id
+                    LEFT JOIN movement_types mt ON m.movement_type_id = mt.movement_type_id
                     WHERE m.movement_id = $1
-                `;
-            } else {
-                query = `
+                ),
+                payments_data AS (
                     SELECT 
-                        m.*
-                    FROM movements m
-                    WHERE m.movement_id = $1
-                `;
-            }
+                        mp.*,
+                        jsonb_agg(
+                            jsonb_build_object(
+                                'installment_id', i.installment_id,
+                                'payment_id', i.payment_id,
+                                'installment_number', i.installment_number,
+                                'due_date', i.due_date,
+                                'amount', i.amount,
+                                'balance', i.balance,
+                                'status', i.status,
+                                'boletos', (
+                                    SELECT jsonb_agg(
+                                        jsonb_build_object(
+                                            'boleto_id', b.boleto_id,
+                                            'status', b.status,
+                                            'generated_at', b.generated_at,
+                                            'external_data', b.external_data
+                                        )
+                                    )
+                                    FROM boletos b
+                                    WHERE b.installment_id = i.installment_id
+                                )
+                            )
+                        ) AS installments
+                    FROM movement_payments mp
+                    LEFT JOIN installments i ON mp.payment_id = i.payment_id
+                    WHERE mp.movement_id = $1
+                    GROUP BY 
+                        mp.payment_id, 
+                        mp.movement_id, 
+                        mp.payment_method_id, 
+                        mp.total_amount, 
+                        mp.status, 
+                        mp.created_at, 
+                        mp.updated_at
+                ),
+                invoices_data AS (
+                    SELECT 
+                        jsonb_agg(
+                            jsonb_build_object(
+                                'invoice_id', iv.invoice_id,
+                                'number', iv.number,
+                                'total_amount', iv.total_amount,
+                                'status', iv.status,
+                                'pdf_url', iv.pdf_url,
+                                'xml_url', iv.xml_url
+                            )
+                        ) AS invoices
+                    FROM invoices iv
+                    WHERE iv.movement_id = $1
+                )
+                SELECT 
+                    md.*,
+                    md.full_name,
+                    md.status_name,
+                    md.type_name,
+                    COALESCE(pd.payments, '[]'::jsonb) AS payments,
+                    COALESCE(id.invoices, '[]'::jsonb) AS invoices
+                FROM movement_data md
+                CROSS JOIN payments_data pd
+                CROSS JOIN invoices_data id
+            `;
 
-            logger.info('Repository: Executando query', { 
-                query, 
-                id, 
-                queryParams: [id] 
-            });
-
-            const { rows, rowCount } = await this.pool.query(query, [id]);
-
-            logger.info('Repository: Resultado da busca', { 
-                rowCount, 
-                hasRows: rows.length > 0 
-            });
-
-            if (rowCount === 0) {
+            const result = await this.pool.query(query, [id]);
+            
+            if (result.rows.length === 0) {
+                logger.warn('Movimento não encontrado', { movementId: id });
                 return null;
             }
 
-            return rows[0];
+            const movement = result.rows[0];
+
+            // Log detalhado de diagnóstico
+            logger.info('Diagnóstico de movimento', {
+                movementId: id,
+                paymentsCount: movement.payments ? movement.payments.length : 0,
+                invoicesCount: movement.invoices ? movement.invoices.length : 0,
+                movementDetails: {
+                    movement_id: movement.movement_id,
+                    description: movement.description,
+                    total_amount: movement.total_amount,
+                    full_name: movement.full_name,
+                    status_name: movement.status_name,
+                    type_name: movement.type_name
+                }
+            });
+
+            return movement;
         } catch (error) {
-            logger.error('Repository: Erro ao buscar movimento por ID', {
-                error: error.message,
-                error_stack: error.stack,
-                id
+            logger.error('Erro ao buscar movimento por ID', { 
+                error: error.message, 
+                movementId: id,
+                stack: error.stack 
             });
             throw error;
         }
@@ -463,77 +564,172 @@ class MovementRepository extends BaseRepository {
     }
 
     async findInstallmentsByPaymentIds(paymentIds) {
+        if (!paymentIds || paymentIds.length === 0) {
+            logger.warn('Nenhum ID de pagamento fornecido para busca de parcelas');
+            return [];
+        }
+
         try {
+            // Log detalhado dos IDs de pagamento recebidos
+            logger.info('Diagnóstico de IDs de pagamento', { 
+                paymentIds, 
+                count: paymentIds.length,
+                paymentIdsDetails: paymentIds.map(id => ({
+                    id, 
+                    type: typeof id
+                }))
+            });
+
             const query = `
-                SELECT * FROM installments 
-                WHERE payment_id = ANY($1)
+                SELECT 
+                    i.*,
+                    mp.movement_id,
+                    mp.total_amount as payment_total_amount,
+                    mp.status as payment_status
+                FROM installments i
+                JOIN movement_payments mp ON i.payment_id = mp.payment_id
+                WHERE i.payment_id = ANY($1)
+                ORDER BY i.due_date
             `;
+
             const result = await this.pool.query(query, [paymentIds]);
+            
+            // Log detalhado de diagnóstico com mais informações
+            logger.info('Diagnóstico de parcelas', { 
+                totalInstallments: result.rows.length,
+                paymentIdsUsed: paymentIds,
+                installmentsDetails: result.rows.map(installment => ({
+                    installment_id: installment.installment_id,
+                    payment_id: installment.payment_id,
+                    movement_id: installment.movement_id,
+                    due_date: installment.due_date,
+                    amount: installment.amount,
+                    status: installment.status
+                })),
+                // Adicionar diagnóstico de junções
+                joinDiagnostics: {
+                    paymentsWithInstallments: new Set(result.rows.map(r => r.payment_id)).size,
+                    movementsWithInstallments: new Set(result.rows.map(r => r.movement_id)).size
+                }
+            });
+
             return result.rows;
         } catch (error) {
-            logger.error('Erro ao buscar parcelas', { error: error.message });
+            logger.error('Erro ao buscar parcelas', { 
+                error: error.message,
+                paymentIds 
+            });
             return [];
         }
     }
 
     async findBoletosByInstallmentIds(installmentIds) {
-        try {
-            if (!installmentIds || installmentIds.length === 0) {
-                return [];
-            }
+        if (!installmentIds || installmentIds.length === 0) {
+            logger.warn('Nenhum ID de parcela fornecido para busca de boletos');
+            return [];
+        }
 
-            logger.debug('Repository: Buscando boletos por IDs de parcelas', { 
-                installmentIds,
-                count: installmentIds.length 
+        try {
+            // Log detalhado dos IDs de parcelas recebidos
+            logger.info('Diagnóstico de IDs de parcelas', { 
+                installmentIds, 
+                count: installmentIds.length,
+                installmentIdsDetails: installmentIds.map(id => ({
+                    id, 
+                    type: typeof id
+                }))
             });
 
             const query = `
-                WITH RankedBoletos AS (
+                WITH installment_details AS (
+                    SELECT 
+                        i.installment_id,
+                        i.payment_id,
+                        mp.movement_id,
+                        mp.total_amount as payment_total_amount,
+                        mp.status as payment_status
+                    FROM installments i
+                    JOIN movement_payments mp ON i.payment_id = mp.payment_id
+                    WHERE i.installment_id = ANY($1)
+                ),
+                boleto_details AS (
                     SELECT 
                         b.*,
-                        ROW_NUMBER() OVER (
-                            PARTITION BY b.installment_id 
-                            ORDER BY b.boleto_id DESC
-                        ) as row_num
+                        i.installment_id,
+                        i.payment_id,
+                        i.movement_id,
+                        i.payment_total_amount,
+                        i.payment_status
                     FROM boletos b
-                    WHERE b.installment_id = ANY($1)
+                    JOIN installment_details i ON b.installment_id = i.installment_id
                 )
                 SELECT 
-                    installment_id,
-                    boleto_id,
-                    boleto_number,
-                    boleto_url,
-                    status,
-                    generated_at,
-                    codigo_barras,
-                    linha_digitavel,
-                    pix_copia_e_cola,
-                    external_boleto_id
-                FROM RankedBoletos
-                WHERE row_num = 1
+                    bd.*,
+                    p.full_name as person_name,
+                    m.description as movement_description
+                FROM boleto_details bd
+                JOIN persons p ON (
+                    SELECT person_id 
+                    FROM movements 
+                    WHERE movement_id = bd.movement_id
+                ) = p.person_id
+                JOIN movements m ON bd.movement_id = m.movement_id
             `;
 
             const result = await this.pool.query(query, [installmentIds]);
             
-            logger.debug('Repository: Boletos encontrados', { 
-                count: result.rows.length 
+            // Log detalhado de diagnóstico com mais informações
+            logger.info('Diagnóstico de boletos', { 
+                totalBoletos: result.rows.length,
+                installmentIdsUsed: installmentIds,
+                boletoDetails: result.rows.map(boleto => ({
+                    boleto_id: boleto.boleto_id,
+                    installment_id: boleto.installment_id,
+                    payment_id: boleto.payment_id,
+                    movement_id: boleto.movement_id,
+                    status: boleto.status,
+                    person_name: boleto.person_name,
+                    movement_description: boleto.movement_description,
+                    payment_total_amount: boleto.payment_total_amount,
+                    payment_status: boleto.payment_status
+                })),
+                // Adicionar diagnóstico de junções
+                joinDiagnostics: {
+                    installmentsWithBoletos: new Set(result.rows.map(r => r.installment_id)).size,
+                    paymentsWithBoletos: new Set(result.rows.map(r => r.payment_id)).size,
+                    movementsWithBoletos: new Set(result.rows.map(r => r.movement_id)).size
+                }
             });
+
+            // Verificar integridade das junções
+            const joinIntegrity = {
+                installmentIds: {
+                    requested: installmentIds.length,
+                    found: new Set(result.rows.map(r => r.installment_id)).size
+                },
+                paymentIds: {
+                    requested: new Set(result.rows.map(r => r.payment_id)).size,
+                    found: new Set(result.rows.map(r => r.payment_id)).size
+                },
+                movementIds: {
+                    requested: new Set(result.rows.map(r => r.movement_id)).size,
+                    found: new Set(result.rows.map(r => r.movement_id)).size
+                }
+            };
+
+            logger.warn('Integridade das junções de boletos', joinIntegrity);
 
             return result.rows;
         } catch (error) {
-            logger.error('Repository: Erro ao buscar boletos por IDs de parcelas', {
-                error: error.message,
-                installmentIds
+            logger.error('Erro ao buscar boletos por IDs de parcelas', { 
+                error: error.message, 
+                installmentIds,
+                stack: error.stack 
             });
-            throw error;
+            throw new DatabaseError('Falha ao buscar boletos', error);
         }
     }
 
-    /**
-     * Busca items de um movimento
-     * @param {number} movementId - ID do movimento
-     * @returns {Promise<Array>} Lista de items
-     */
     async findItems(movementId) {
         try {
             logger.info('Repository: Buscando items do movimento', { movementId });

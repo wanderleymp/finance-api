@@ -23,6 +23,9 @@ class MovementResponseDTO {
         if (data.installments) {
             this.installments = data.installments;
         }
+        if (data.boletos) {
+            this.boletos = data.boletos;
+        }
         if (data.total_paid !== undefined) {
             this.total_paid = data.total_paid;
         }

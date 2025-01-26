@@ -117,6 +117,66 @@ class InstallmentController {
     }
 
     /**
+     * Busca detalhes de parcelas com filtros
+     */
+    async findDetails(req, res) {
+        try {
+            const { 
+                page = 1, 
+                limit = 10, 
+                start_date, 
+                end_date, 
+                full_name,
+                sort = 'due_date',
+                order = 'desc',
+                ...otherFilters 
+            } = req.query;
+
+            logger.info('Controller: Buscando detalhes de parcelas', { 
+                filters: { 
+                    start_date, 
+                    end_date, 
+                    full_name,
+                    sort,
+                    order,
+                    ...otherFilters 
+                } 
+            });
+
+            const filters = {
+                ...otherFilters,
+                start_date,
+                end_date,
+                full_name,
+                sort,
+                order
+            };
+
+            const result = await this.service.findInstallmentsDetails(
+                parseInt(page), 
+                parseInt(limit), 
+                filters
+            );
+
+            return res.json(result);
+        } catch (error) {
+            logger.error('Erro ao buscar detalhes de parcelas', { 
+                error: error.message,
+                stack: error.stack 
+            });
+            return res.status(500).json({
+                message: 'Erro interno ao buscar detalhes de parcelas',
+                errors: [
+                    {
+                        code: 'FIND_INSTALLMENTS_DETAILS_ERROR',
+                        message: error.message
+                    }
+                ]
+            });
+        }
+    }
+
+    /**
      * Gera boleto para parcela
      */
     async generateBoleto(req, res, next) {

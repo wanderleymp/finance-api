@@ -443,6 +443,155 @@ class InstallmentService {
             throw error;
         }
     }
+
+    /**
+     * Busca detalhes de parcelas com filtros
+     * @param {number} page Página atual
+     * @param {number} limit Limite de itens por página
+     * @param {Object} filters Filtros de busca
+     * @returns {Promise<Object>} Detalhes das parcelas
+     */
+    async findInstallmentsDetails(page = 1, limit = 10, filters = {}) {
+        try {
+            logger.info('Service: Buscando detalhes de parcelas', { 
+                page, 
+                limit, 
+                filters 
+            });
+
+            // Definir colunas de ordenação válidas
+            const validSortColumns = [
+                'due_date', 
+                'amount', 
+                'installment_number', 
+                'status', 
+                'full_name'
+            ];
+
+            // Validar e definir coluna de ordenação
+            const sort = filters.sort && validSortColumns.includes(filters.sort) 
+                ? filters.sort 
+                : 'due_date';
+
+            // Validar direção de ordenação
+            const order = filters.order && ['asc', 'desc'].includes(filters.order.toLowerCase())
+                ? filters.order.toUpperCase()
+                : 'DESC';
+
+            // Construir query base
+            const baseQuery = `
+                SELECT 
+                    i.installment_id,
+                    i.payment_id,
+                    i.installment_number,
+                    i.due_date,
+                    i.expected_date,
+                    i.amount,
+                    i.balance,
+                    i.status,
+                    p.full_name,
+                    m.movement_id,
+                    m.description as movement_description,
+                    mp.total_amount as payment_total_amount,
+                    mp.status as payment_status
+                FROM installments i
+                JOIN movement_payments mp ON i.payment_id = mp.payment_id
+                JOIN movements m ON mp.movement_id = m.movement_id
+                JOIN persons p ON m.person_id = p.person_id
+                WHERE 1=1
+            `;
+
+            // Preparar parâmetros e condições
+            const queryParams = [];
+            const conditions = [];
+
+            // Filtro por data inicial
+            if (filters.start_date) {
+                conditions.push(`i.due_date >= $${queryParams.length + 1}`);
+                queryParams.push(filters.start_date);
+            }
+
+            // Filtro por data final
+            if (filters.end_date) {
+                conditions.push(`i.due_date <= $${queryParams.length + 1}`);
+                queryParams.push(filters.end_date);
+            }
+
+            // Filtro por nome
+            if (filters.full_name) {
+                conditions.push(`p.full_name ILIKE $${queryParams.length + 1}`);
+                queryParams.push(`%${filters.full_name}%`);
+            }
+
+            // Adicionar condições à query
+            const whereClause = conditions.length > 0 
+                ? `AND ${conditions.join(' AND ')}` 
+                : '';
+
+            // Mapeamento de colunas para ordenação
+            const sortColumnMap = {
+                'due_date': 'i.due_date',
+                'amount': 'i.amount',
+                'installment_number': 'i.installment_number',
+                'status': 'i.status',
+                'full_name': 'p.full_name'
+            };
+
+            // Query com paginação e ordenação
+            const paginatedQuery = `
+                ${baseQuery} ${whereClause}
+                ORDER BY ${sortColumnMap[sort]} ${order}
+                LIMIT $${queryParams.length + 1} OFFSET $${queryParams.length + 2}
+            `;
+
+            // Query de contagem
+            const countQuery = `
+                SELECT COUNT(*) as total
+                FROM installments i
+                JOIN movement_payments mp ON i.payment_id = mp.payment_id
+                JOIN movements m ON mp.movement_id = m.movement_id
+                JOIN persons p ON m.person_id = p.person_id
+                WHERE 1=1 ${whereClause}
+            `;
+
+            // Adicionar parâmetros de paginação
+            queryParams.push(limit, (page - 1) * limit);
+
+            // Executar queries
+            const [resultRows, countResult] = await Promise.all([
+                this.pool.query(paginatedQuery, queryParams),
+                this.pool.query(countQuery, queryParams.slice(0, -2))
+            ]);
+
+            const totalItems = parseInt(countResult.rows[0].total);
+            const totalPages = Math.ceil(totalItems / limit);
+
+            // Retornar resultado
+            return {
+                items: resultRows.rows,
+                meta: {
+                    currentPage: page,
+                    itemCount: resultRows.rows.length,
+                    itemsPerPage: limit,
+                    totalItems,
+                    totalPages
+                },
+                links: {
+                    first: `/installments/details?page=1&limit=${limit}&sort=${sort}&order=${order}`,
+                    previous: page > 1 ? `/installments/details?page=${page - 1}&limit=${limit}&sort=${sort}&order=${order}` : null,
+                    next: page < totalPages ? `/installments/details?page=${page + 1}&limit=${limit}&sort=${sort}&order=${order}` : null,
+                    last: `/installments/details?page=${totalPages}&limit=${limit}&sort=${sort}&order=${order}`
+                }
+            };
+        } catch (error) {
+            logger.error('Erro ao buscar detalhes de parcelas', { 
+                error: error.message,
+                stack: error.stack,
+                filters 
+            });
+            throw error;
+        }
+    }
 }
 
 module.exports = InstallmentService;

@@ -151,6 +151,17 @@ class MovementService extends IMovementService {
             // Definir provider_id como o mesmo que person_id se não existir
             movement.provider_id = movement.provider_id || movement.person_id;
 
+            // Log de debug para boletos
+            if (movement.boletos) {
+                logger.info('Service: Boletos encontrados', { 
+                    boletosCount: movement.boletos.length,
+                    boletoDetails: movement.boletos.map(b => ({
+                        id: b.boleto_id, 
+                        status: b.status
+                    }))
+                });
+            }
+
             // Retorna movimento com todas as informações
             return {
                 ...movement
@@ -230,103 +241,45 @@ class MovementService extends IMovementService {
      * @param {boolean} detailed - Flag para busca detalhada
      * @returns {Promise<Object>} Lista paginada de movimentos
      */
-    async findAll(page = 1, limit = 10, filters = {}, detailed = false) {
+    async findAll(page = 1, limit = 10, filters = {}) {
         try {
-            // Normaliza parâmetros
-            if (typeof page === 'object') {
-                [filters, page, limit, detailed] = [page, 1, 10, false];
+            logger.info('Service: Iniciando busca de movimentos', { 
+                page, 
+                limit, 
+                filters 
+            });
+
+            // Chama o repositório para buscar movimentos
+            const result = await this.movementRepository.findAll(page, limit, filters);
+
+            // Log de diagnóstico para boletos
+            if (result.items) {
+                const boletosCount = result.items.reduce((total, movement) => {
+                    const movementBoletosCount = movement.boletos ? movement.boletos.length : 0;
+                    return total + movementBoletosCount;
+                }, 0);
+
+                logger.info('Diagnóstico de boletos no serviço', {
+                    totalMovements: result.items.length,
+                    movementsWithBoletos: result.items.filter(m => m.boletos && m.boletos.length > 0).length,
+                    totalBoletosCount: boletosCount,
+                    boletosDetails: result.items.flatMap(movement => 
+                        (movement.boletos || []).map(boleto => ({
+                            movement_id: movement.movement_id,
+                            boleto_id: boleto.boleto_id,
+                            status: boleto.status
+                        }))
+                    )
+                });
             }
 
-            page = Number(page) || 1;
-            limit = Number(limit) || 10;
-
-            logger.debug('MovementService.findAll - Entrada DETALHADA', { 
-                filters: JSON.stringify(filters), 
-                page, 
-                limit,
-                detailed,
-                filtersType: typeof filters,
-                pageType: typeof page,
-                limitType: typeof limit
-            });
-
-            // Executa busca no repositório
-            const result = await this.movementRepository.findAll(page, limit, filters);
-            
-            logger.debug('MovementService.findAll - Resultado Repositório DETALHADO', { 
-                resultKeys: Object.keys(result),
-                itemsCount: result.items ? result.items.length : 0,
-                resultJSON: JSON.stringify(result)
-            });
-
-            // Se detailed for true, adiciona detalhes de cada movimento
-            const processedItems = detailed 
-                ? await Promise.all(
-                    (result.items || []).map(async (movement) => {
-                        try {
-                            const detailedMovement = await this.findById(movement.movement_id, true);
-                            return detailedMovement;
-                        } catch (error) {
-                            logger.warn('Erro ao buscar detalhes do movimento', { 
-                                movementId: movement.movement_id,
-                                error: error.message 
-                            });
-                            return movement;
-                        }
-                    })
-                )
-                : (result.items || []);
-
-            // Prepara resultado final
-            const processedResult = {
-                items: processedItems,
-                meta: result.meta || {
-                    totalItems: 0,
-                    itemCount: 0,
-                    itemsPerPage: limit,
-                    totalPages: 1,
-                    currentPage: page
-                },
-                links: result.links || {
-                    first: `/movements?page=1&limit=${limit}`,
-                    previous: null,
-                    next: null,
-                    last: `/movements?page=1&limit=${limit}`
-                }
-            };
-
-            logger.debug('MovementService.findAll - Resultado Processado DETALHADO', { 
-                processedResultKeys: Object.keys(processedResult),
-                processedItemsCount: processedResult.items.length,
-                processedResultJSON: JSON.stringify(processedResult)
-            });
-
-            return processedResult;
+            return result;
         } catch (error) {
-            logger.error('Erro ao buscar movimentos', { 
-                error: error.message, 
-                stack: error.stack,
-                filters: JSON.stringify(filters),
-                errorObject: JSON.stringify(error, Object.getOwnPropertyNames(error))
+            logger.error('Service: Erro ao buscar movimentos', {
+                error: error.message,
+                stack: error.stack
             });
-            
-            // Retorno de último recurso
-            return {
-                items: [],
-                meta: {
-                    totalItems: 0,
-                    itemCount: 0,
-                    itemsPerPage: limit,
-                    totalPages: 1,
-                    currentPage: page
-                },
-                links: {
-                    first: `/movements?page=1&limit=${limit}`,
-                    previous: null,
-                    next: null,
-                    last: `/movements?page=1&limit=${limit}`
-                }
-            };
+            throw error;
         }
     }
 
