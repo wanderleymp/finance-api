@@ -1,82 +1,84 @@
-const express = require('express');
+const { Router } = require('express');
+const InstallmentController = require('./installment.controller');
 const { validateRequest } = require('../../middlewares/requestValidator');
+const { logger } = require('../../middlewares/logger');
 const { authMiddleware } = require('../../middlewares/auth');
 const installmentSchema = require('./schemas/installment.schema');
 
 /**
- * @param {import('./installment.controller')} installmentController 
+ * Configura rotas de parcelas com suporte a injeção de dependência
+ * @param {Object} dependencies Dependências para injeção no controlador
+ * @returns {Router} Roteador configurado
  */
-module.exports = (installmentController) => {
-    const router = express.Router();
+class InstallmentRoutes {
+    constructor(dependencies = {}) {
+        this.router = Router();
+        const installmentService = dependencies.installmentService || dependencies;
+        this.installmentController = new InstallmentController({ installmentService });
+        this.authMiddleware = dependencies.authMiddleware || authMiddleware;
+        this.setupRoutes();
+    }
 
-    // Log de debug para todas as rotas
-    router.use((req, res, next) => {
-        console.log('Installments Route Debug:', {
-            method: req.method,
-            path: req.path,
-            originalUrl: req.originalUrl,
-            body: req.body,
-            params: req.params,
-            query: req.query
+    setupRoutes() {
+        // Middleware de autenticação para todas as rotas
+        this.router.use(this.authMiddleware);
+
+        // Middleware de log para todas as rotas
+        this.router.use((req, res, next) => {
+            logger.info('Requisição de parcelas recebida', {
+                method: req.method,
+                path: req.path,
+                body: req.body,
+                params: req.params,
+                query: req.query
+            });
+            next();
         });
-        next();
-    });
 
-    // Middleware de autenticação para todas as rotas
-    router.use(authMiddleware);
+        // Rotas RESTful de parcelas
+        this.router
+            .get('/', 
+                validateRequest(installmentSchema.listInstallments, 'query'),
+                this.installmentController.index.bind(this.installmentController)
+            )
+            .get('/details', 
+                validateRequest(installmentSchema.listInstallments, 'query'),
+                this.installmentController.findDetails.bind(this.installmentController)
+            )
+            .get('/:id', 
+                validateRequest(installmentSchema.getInstallmentById, 'params'),
+                this.installmentController.show.bind(this.installmentController)
+            )
+            .get('/:id/details', 
+                validateRequest(installmentSchema.getInstallmentById, 'params'),
+                this.installmentController.showDetails.bind(this.installmentController)
+            )
+            .post('/:id/boletos', 
+                validateRequest(installmentSchema.generateBoleto, 'params'),
+                this.installmentController.generateBoleto.bind(this.installmentController)
+            )
+            .patch('/:id/due-date', 
+                validateRequest(installmentSchema.updateDueDate, 'body'),
+                this.installmentController.updateDueDate.bind(this.installmentController)
+            )
+            .patch('/:id', 
+                validateRequest(installmentSchema.updateInstallment, 'body'),
+                this.installmentController.updateInstallment.bind(this.installmentController)
+            )
+            .put('/:id/payment', 
+                validateRequest(installmentSchema.registerPayment, 'body'),
+                this.installmentController.registerPayment.bind(this.installmentController)
+            )
+            .post('/:id/boleto/cancelar', 
+                validateRequest(installmentSchema.cancelBoletos, 'params'),
+                this.installmentController.cancelBoleto.bind(this.installmentController)
+            );
 
-    // Rotas
-    router.get('/', 
-        validateRequest(installmentSchema.listInstallments, 'query'),
-        installmentController.index.bind(installmentController)
-    );
+        return this.router;
+    }
+}
 
-    router.get('/details', 
-        validateRequest(installmentSchema.listInstallments, 'query'),
-        installmentController.findDetails.bind(installmentController)
-    );
-
-    router.get('/:id',
-        validateRequest(installmentSchema.getInstallmentById, 'params'),
-        installmentController.show.bind(installmentController)
-    );
-
-    router.get('/:id/details',
-        validateRequest(installmentSchema.getInstallmentById, 'params'),
-        installmentController.showDetails.bind(installmentController)
-    );
-
-    router.post('/:id/boletos',
-        validateRequest(installmentSchema.generateBoleto, 'params'),
-        installmentController.generateBoleto.bind(installmentController)
-    );
-
-    // Atualiza a data de vencimento de uma parcela
-    router.patch('/:id/due-date', 
-        validateRequest(installmentSchema.updateDueDate, 'params'),
-        installmentController.updateDueDate.bind(installmentController)
-    );
-
-    // Atualiza o valor de uma parcela
-    router.patch('/:id', 
-        validateRequest(installmentSchema.updateInstallment, 'params'),
-        validateRequest(installmentSchema.updateInstallment, 'body'),
-        installmentController.updateInstallment.bind(installmentController)
-    );
-
-    // Registra o pagamento de uma parcela
-    router.put('/:id/payment',
-        validateRequest(installmentSchema.registerPaymentParams, 'params'),
-        validateRequest(installmentSchema.registerPayment, 'body'),
-        installmentController.registerPayment.bind(installmentController)
-    );
-
-    // Cancela boletos de uma parcela
-    router.put('/:id/boleto/cancelar', 
-        authMiddleware,
-        validateRequest(installmentSchema.cancelBoletos),
-        installmentController.cancelInstallmentBoletos.bind(installmentController)
-    );
-
-    return router;
+module.exports = (dependencies = {}) => {
+    const routes = new InstallmentRoutes(dependencies);
+    return routes.router;
 };

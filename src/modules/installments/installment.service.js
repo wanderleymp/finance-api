@@ -4,10 +4,11 @@ const CreateInstallmentDTO = require('./dto/create-installment.dto');
 const UpdateInstallmentDTO = require('./dto/update-installment.dto');
 const InstallmentResponseDTO = require('./dto/installment-response.dto');
 const moment = require('moment-timezone');
+const InstallmentRepository = require('./installment.repository');
 
 class InstallmentService {
     constructor({ 
-        installmentRepository, 
+        installmentRepository = new InstallmentRepository(), 
         boletoService,
         boletoRepository,
         n8nService
@@ -16,6 +17,7 @@ class InstallmentService {
         this.boletoService = boletoService;
         this.boletoRepository = boletoRepository;
         this.n8nService = n8nService;
+        this.pool = this.repository.pool;
     }
 
     async listInstallments(page = 1, limit = 10, filters = {}) {
@@ -493,7 +495,11 @@ class InstallmentService {
                     m.movement_id,
                     m.description as movement_description,
                     mp.total_amount as payment_total_amount,
-                    mp.status as payment_status
+                    mp.status as payment_status,
+                    (SELECT COALESCE(json_agg(b.*) FILTER (WHERE b.installment_id IS NOT NULL), '[]'::json)
+                     FROM boletos b
+                     WHERE b.installment_id = i.installment_id 
+                     AND b.status = 'A_RECEBER') as boletos
                 FROM installments i
                 JOIN movement_payments mp ON i.payment_id = mp.payment_id
                 JOIN movements m ON mp.movement_id = m.movement_id
@@ -557,11 +563,26 @@ class InstallmentService {
             // Adicionar parâmetros de paginação
             queryParams.push(limit, (page - 1) * limit);
 
+            logger.info('Detalhes da consulta', {
+                baseQuery,
+                whereClause,
+                queryParams,
+                conditions,
+                sort,
+                order
+            });
+
             // Executar queries
             const [resultRows, countResult] = await Promise.all([
                 this.pool.query(paginatedQuery, queryParams),
                 this.pool.query(countQuery, queryParams.slice(0, -2))
             ]);
+
+            logger.info('Detalhes dos boletos', {
+                installmentId: resultRows.rows[0]?.installment_id,
+                boletosCount: resultRows.rows[0]?.boletos?.length,
+                boletosDetails: resultRows.rows[0]?.boletos
+            });
 
             const totalItems = parseInt(countResult.rows[0].total);
             const totalPages = Math.ceil(totalItems / limit);

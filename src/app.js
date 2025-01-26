@@ -292,6 +292,8 @@ ItemModule.register(app);
 const movementItemModule = new MovementItemModule();
 app.use('/movement-items', movementItemModule.getRouter());
 
+const installmentModule = require('./modules/installments/installment.module')(app);
+
 // Middleware para redirecionar /instalments para /installments
 app.use((req, res, next) => {
     if (req.path === '/instalments') {
