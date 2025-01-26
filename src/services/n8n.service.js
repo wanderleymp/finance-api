@@ -290,5 +290,5 @@ class N8NService {
     }
 }
 
-// Exporta a classe, não a instância
-module.exports = N8NService;
+// Exporta a instância do serviço como singleton
+module.exports = new N8NService();

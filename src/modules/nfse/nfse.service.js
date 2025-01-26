@@ -11,7 +11,7 @@ const nuvemFiscalService = require('./services/nuvem-fiscal.service')(nuvemFisca
 const NuvemFiscalService = require('../nuvemFiscal/nuvemFiscal.service');
 const invoiceRepository = require('../invoices/invoice.repository');
 const invoiceEventRepository = require('../invoices/invoice-event.repository');
-const n8nService = require('../n8n/n8n.service');
+const n8nService = require('../../services/n8n.service');
 const { FileStorageDomainService } = require('../../newArch/fileStorage/domain/services/file-storage.domain.service'); // Nova dependência
 
 class NfseService {

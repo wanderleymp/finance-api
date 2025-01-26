@@ -92,8 +92,7 @@ class MovementService extends IMovementService {
         
         // Fallback para n8nService
         if (!n8nService) {
-            const N8NService = require('../../services/n8n.service');
-            n8nService = new N8NService();
+            n8nService = require('../../services/n8n.service');
         }
         
         this.n8nService = n8nService; // Adicionado atributo n8nService

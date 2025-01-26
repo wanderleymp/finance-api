@@ -302,7 +302,7 @@ class ContractRecurringService {
                 payment_method_id: billingData.payment_method_id,
                 total_amount: billingData.total_amount,
                 due_date: dueDate,
-                generateBoleto: billingData.boleto || false
+                generateBoleto: true
             };
 
             // Passar o cliente de transação corretamente
