@@ -100,35 +100,50 @@ class InstallmentService {
         }
     }
 
-    async createInstallment(data) {
-        const client = await this.repository.pool.connect();
+    async createInstallment(data, client = null) {
         try {
-            await client.query('BEGIN');
+            // Se não tiver cliente de transação, criar um novo
+            const shouldManageTransaction = !client;
+            const transactionClient = client || await this.repository.pool.connect();
 
-            // Criar DTO e validar
-            const dto = new CreateInstallmentDTO(data);
-            dto.validate();
+            try {
+                if (shouldManageTransaction) {
+                    await transactionClient.query('BEGIN');
+                }
 
-            // Criar parcela
-            const installment = await this.repository.createWithClient(client, {
-                payment_id: dto.payment_id,
-                installment_number: dto.installment_number,
-                due_date: dto.due_date,
-                amount: dto.amount,
-                balance: dto.balance,
-                status: dto.status,
-                account_entry_id: dto.account_entry_id
-            });
+                // Criar DTO e validar
+                const dto = new CreateInstallmentDTO(data);
+                dto.validate();
 
-            await client.query('COMMIT');
+                // Criar parcela
+                const installment = await this.repository.createWithClient(transactionClient, {
+                    payment_id: dto.payment_id,
+                    installment_number: dto.installment_number,
+                    due_date: dto.due_date,
+                    amount: dto.amount,
+                    balance: dto.balance,
+                    status: dto.status,
+                    account_entry_id: dto.account_entry_id
+                });
 
-            return new InstallmentResponseDTO(installment);
+                if (shouldManageTransaction) {
+                    await transactionClient.query('COMMIT');
+                }
+
+                return new InstallmentResponseDTO(installment);
+            } catch (error) {
+                if (shouldManageTransaction) {
+                    await transactionClient.query('ROLLBACK');
+                }
+                throw error;
+            } finally {
+                if (shouldManageTransaction && transactionClient) {
+                    transactionClient.release();
+                }
+            }
         } catch (error) {
-            await client.query('ROLLBACK');
             logger.error('Erro ao criar parcela', { error });
             throw error;
-        } finally {
-            client.release();
         }
     }
 

@@ -203,12 +203,11 @@ class ContractRecurringService {
             });
 
             // Calcular próxima data de faturamento
-            const { dueDate, reference } = this.calculateBillingDueDate(contract);
+            const dueDate = await this.calculateBillingDueDate(contract);
 
             // Log de datas calculadas
             this.logger.info('Preparação de Faturamento - Datas Calculadas', {
                 calculatedDueDate: dueDate,
-                calculatedReference: reference,
                 originalNextBillingDate: contract.next_billing_date
             });
 
@@ -222,7 +221,7 @@ class ContractRecurringService {
                 movement_type_id: contract.movement_type_id,
                 payment_method_id: contract.payment_method,
                 person_id: contract.person_id,
-                reference: reference,
+                reference: this.formatBillingReference(dueDate, 'current'),
                 total_amount: contract.contract_value
             };
 
@@ -289,26 +288,37 @@ class ContractRecurringService {
 
     async billingCreatePayment(contractId, { billingData, transaction }) {
         try {
-            // Definir método de pagamento padrão (1 = Padrão)
-            const paymentMethodId = 1;
+            // Garantir que temos uma data de vencimento
+            const dueDate = billingData.due_date || await this.calculateBillingDueDate(billingData);
 
-            // Preparar dados do pagamento
+            this.logger.info('Criando pagamento para faturamento', {
+                contractId,
+                movementId: billingData.movement_id,
+                dueDate
+            });
+
             const paymentData = {
                 movement_id: billingData.movement_id,
-                payment_method_id: 1,
+                payment_method_id: billingData.payment_method_id,
                 total_amount: billingData.total_amount,
-                due_date: billingData.due_date
+                due_date: dueDate,
+                generateBoleto: billingData.boleto || false
             };
 
-            // Criar pagamento
-            const payment = await this.movementPaymentService.create(paymentData, { transaction });
+            // Passar o cliente de transação corretamente
+            const payment = await this.movementPaymentService.create(paymentData, transaction);
+
+            this.logger.info('Pagamento criado com sucesso', {
+                paymentId: payment.payment_id,
+                installments: payment.installments?.length || 0
+            });
 
             return payment;
         } catch (error) {
-            this.logger.error('Erro ao criar pagamento de movimento', {
+            this.logger.error('Erro ao criar pagamento', {
+                error: error.message,
                 contractId,
-                errorMessage: error.message,
-                errorStack: error.stack
+                billingData
             });
             throw error;
         }
@@ -1066,61 +1076,40 @@ class ContractRecurringService {
         return adjustmentResults;
     }
 
-    async calculateBillingDueDate(contract, currentDate = new Date(), reference = 'current') {
-        // Validar entrada
-        if (!contract) {
-            throw new Error('Contrato inválido');
-        }
+    async calculateBillingDueDate(billingData) {
+        try {
+            const { next_billing_date, due_day } = billingData;
 
-        // Determinar a data de próximo faturamento
-        const nextBillingDate = contract.next_billing_date;
-
-        if (!nextBillingDate) {
-            throw new Error('Data de próximo faturamento não encontrada');
-        }
-
-        // Converter para objeto Date se for string
-        const billingDate = typeof nextBillingDate === 'string' 
-            ? new Date(nextBillingDate) 
-            : new Date(nextBillingDate);
-
-        // Determinar o dia de vencimento
-        const dueDayOfMonth = contract.due_day || billingDate.getDate();
-
-        // Clonar a data para não modificar o original
-        const dueDate = new Date(billingDate);
-
-        // Lógica para calcular dueDate baseado no tipo de referência
-        if (reference === 'next') {
-            // Para 'next', adiciona 1 mês e ajusta para o dia de vencimento
-            dueDate.setMonth(dueDate.getMonth() + 1);
-            dueDate.setDate(dueDayOfMonth);
-        } else if (reference === 'current') {
-            // Para 'current', ajusta para o dia de vencimento
-            dueDate.setDate(dueDayOfMonth);
-
-            // Se a data de vencimento for menor que hoje, adiciona 1 dia
-            if (dueDate < currentDate) {
-                dueDate.setDate(currentDate.getDate() + 1);
+            if (!next_billing_date) {
+                throw new Error('Data de próximo faturamento não encontrada');
             }
+
+            // Converter para objeto Date
+            const nextBillingDate = new Date(next_billing_date);
+            
+            // Criar data de vencimento com o dia especificado
+            const dueDate = new Date(nextBillingDate);
+            dueDate.setDate(due_day || 10); // Se não tiver due_day, usa 10
+            
+            // Se a data de vencimento for anterior à data de faturamento, avança um mês
+            if (dueDate < nextBillingDate) {
+                dueDate.setMonth(dueDate.getMonth() + 1);
+            }
+
+            this.logger.info('Cálculo de data de vencimento', {
+                nextBillingDate: nextBillingDate.toISOString(),
+                dueDate: dueDate.toISOString(),
+                dueDay: due_day
+            });
+
+            return dueDate.toISOString();
+        } catch (error) {
+            this.logger.error('Erro ao calcular data de vencimento', {
+                error: error.message,
+                billingData
+            });
+            throw error;
         }
-
-        // Gerar referência no formato MM/YYYY
-        const billingReference = this.formatBillingReference(dueDate, reference);
-
-        this.logger.info('Cálculo de data de vencimento', {
-            contractId: contract.contract_id,
-            nextBillingDate: billingDate,
-            dueDate,
-            reference: billingReference,
-            referenceType: reference,
-            timestamp: new Date().toISOString()
-        });
-
-        return {
-            dueDate,
-            reference: billingReference
-        };
     }
 
     formatBillingReference(date, reference = 'current') {

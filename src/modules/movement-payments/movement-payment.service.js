@@ -180,24 +180,31 @@ class MovementPaymentService extends IMovementPaymentService {
         }
     }
 
-    async create(data, options = {}) {
+    async create(data, client = null) {
         try {
-            const { transaction = null, generateBoleto = true } = options;
+            logger.info('Service: Iniciando criação de pagamento', { data });
 
-            logger.info('Service: Criando movimento_payment', { data, generateBoleto });
+            // Validar dados do pagamento
+            if (!data.movement_id) {
+                throw new ValidationError('ID do movimento é obrigatório');
+            }
+            if (!data.payment_method_id) {
+                throw new ValidationError('ID do método de pagamento é obrigatório');
+            }
+            if (!data.total_amount) {
+                throw new ValidationError('Valor total é obrigatório');
+            }
 
-            // Criar payment
-            const payment = await this.repository.create(data);
-            logger.info('Service: Movimento_payment criado', { payment });
-
-            // Buscar o payment method para ver o número de parcelas
+            // Buscar método de pagamento
             const paymentMethod = await this.paymentMethodsService.findById(data.payment_method_id);
-            
-            // Log detalhado do método de pagamento encontrado
-            logger.info('Service: Payment method encontrado', { 
-                paymentMethod,
-                paymentMethodId: data.payment_method_id 
-            });
+
+            // Criar pagamento usando o cliente de transação
+            const payment = await this.repository.create({
+                movement_id: data.movement_id,
+                payment_method_id: data.payment_method_id,
+                total_amount: data.total_amount,
+                due_date: data.due_date
+            }, client);
 
             // Gerar parcelas
             let installments = [];
@@ -216,9 +223,9 @@ class MovementPaymentService extends IMovementPaymentService {
             // Usar due_date personalizado ou calcular automaticamente
             const baseDueDate = data.due_date ? new Date(data.due_date) : new Date();
 
-            if (isBoletoPagamento && generateBoleto) {
+            if (isBoletoPagamento && data.generateBoleto) {
                 // Se for boleto, usa o InstallmentGenerator que já cuida da criação do boleto
-                installments = await this.installmentGenerator.generateInstallments(payment, paymentMethod, baseDueDate);
+                installments = await this.installmentGenerator.generateInstallments(payment, paymentMethod, baseDueDate, client);
             } else {
                 // Para outros métodos de pagamento, usa o InstallmentService
                 const installmentAmount = data.total_amount / installmentCount;
@@ -236,7 +243,7 @@ class MovementPaymentService extends IMovementPaymentService {
                         due_date: dueDate.toISOString().split('T')[0],
                         status: 'PENDING',
                         account_entry_id: paymentMethod.account_entry_id
-                    });
+                    }, client);
 
                     installments.push(installment);
                 }
@@ -253,29 +260,11 @@ class MovementPaymentService extends IMovementPaymentService {
                 installments
             };
         } catch (error) {
-            // Log detalhado do erro
-            logger.error('Service: Erro ao criar movimento_payment', {
+            logger.error('Service: Erro ao criar pagamento', {
                 error: error.message,
-                errorName: error.constructor.name,
-                error_stack: error.stack,
-                inputData: data,
-                paymentMethodId: data?.payment_method_id
+                data
             });
-
-            // Tratamento de erro para frontend
-            if (error instanceof ValidationError) {
-                throw error; // Já é um erro tratado
-            }
-
-            // Erros genéricos
-            if (error.message.includes('payment_method_id')) {
-                throw new ValidationError('Método de pagamento inválido', {
-                    paymentMethodId: data?.payment_method_id
-                });
-            }
-
-            // Erro genérico para o frontend
-            throw new Error('Erro ao processar pagamento. Por favor, tente novamente.');
+            throw error;
         }
     }
 
