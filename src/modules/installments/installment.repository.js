@@ -13,247 +13,284 @@ class InstallmentRepository {
     }
 
     buildWhereClause(filters = {}) {
+        logger.info('Repository: Iniciando buildWhereClause', { filters });
+
         const conditions = [];
         const params = [];
         let paramCount = 0;
 
-        // Normaliza o filtro de nome para full_name
-        const fullName = filters.full_name || filters.fullName;
-        
-        // Normaliza filtros de data com suporte a múltiplos formatos
+        // Inicialização padronizada para todos os filtros
+        const fullName = filters.full_name || filters.fullName || filters.search;
         const startDate = filters.start_date || filters.startDate;
         const endDate = filters.end_date || filters.endDate;
 
+        logger.info('Repository: Filtros normalizados', { 
+            fullName,
+            startDate,
+            endDate,
+            originalFilters: filters
+        });
+
         if (startDate && endDate) {
-            // Converte para ISO com início do dia e fim do dia
             const formattedStartDate = moment(startDate).startOf('day').toISOString();
             const formattedEndDate = moment(endDate).endOf('day').toISOString();
             
-            conditions.push(`i.due_date BETWEEN $${++paramCount} AND $${++paramCount}`);
+            conditions.push(`i.due_date >= $${++paramCount} AND i.due_date <= $${++paramCount}`);
             params.push(formattedStartDate, formattedEndDate);
+            
+            logger.info('Repository: Adicionado filtro de data', {
+                startDate: formattedStartDate,
+                endDate: formattedEndDate,
+                paramCount
+            });
         }
 
-        // Restante do método original
         if (fullName) {
             conditions.push(`p.full_name ILIKE $${++paramCount}`);
             params.push(`%${fullName}%`);
+            
+            logger.info('Repository: Adicionado filtro de nome', {
+                fullName,
+                paramCount
+            });
         }
 
         if (filters.status) {
             conditions.push(`i.status = $${++paramCount}`);
             params.push(filters.status);
+            
+            logger.info('Repository: Adicionado filtro de status', {
+                status: filters.status,
+                paramCount
+            });
         }
 
         if (filters.payment_id) {
             conditions.push(`i.payment_id = $${++paramCount}`);
             params.push(filters.payment_id);
+            
+            logger.info('Repository: Adicionando filtro de payment_id', {
+                payment_id: filters.payment_id,
+                paramCount
+            });
         }
 
         if (filters.installment_number) {
             conditions.push(`i.installment_number = $${++paramCount}`);
             params.push(filters.installment_number);
+            
+            logger.info('Repository: Adicionando filtro de installment_number', {
+                installment_number: filters.installment_number,
+                paramCount
+            });
         }
 
         if (filters.amount) {
             conditions.push(`i.amount = $${++paramCount}`);
             params.push(filters.amount);
-        }
-
-        const whereClause = conditions.length > 0 ? `WHERE ${conditions.join(' AND ')}` : '';
-
-        return { whereClause, queryParams: params, paramCount };
-    }
-
-    async listInstallments(filters = {}, page = 1, limit = 10) {
-        const offset = (page - 1) * limit;
-        
-        // Mapeamento de campos de ordenação
-        const sortMapping = {
-            'due_date': 'i.due_date',
-            'amount': 'i.amount',
-            'status': 'i.status',
-            'payment_id': 'i.payment_id'
-        };
-
-        // Definir campo de ordenação padrão
-        const sortField = filters.sort ? sortMapping[filters.sort] || 'i.due_date' : 'i.due_date';
-        const sortOrder = filters.order || 'desc';
-
-        let query = `
-            SELECT 
-                i.installment_id,
-                i.payment_id,
-                i.installment_number,
-                i.due_date,
-                i.amount,
-                i.balance,
-                i.status,
-                i.account_entry_id,
-                i.expected_date,
-                COUNT(*) OVER() as total_count
-            FROM public.installments i
-            JOIN payments p ON i.payment_id = p.payment_id
-            WHERE 1=1
-        `;
-
-        const queryParams = [];
-        let paramIndex = 1;
-
-        // Adicionar filtros
-        if (filters.status) {
-            query += ` AND i.status = $${paramIndex}`;
-            queryParams.push(filters.status);
-            paramIndex++;
-        }
-
-        if (filters.payment_id) {
-            query += ` AND i.payment_id = $${paramIndex}`;
-            queryParams.push(filters.payment_id);
-            paramIndex++;
-        }
-
-        // Filtros de data
-        const startDate = filters.start_date || filters.startDate;
-        const endDate = filters.end_date || filters.endDate;
-
-        if (startDate) {
-            query += ` AND i.due_date >= $${paramIndex}`;
-            queryParams.push(startDate);
-            paramIndex++;
-        }
-
-        if (endDate) {
-            query += ` AND i.due_date <= $${paramIndex}`;
-            queryParams.push(endDate);
-            paramIndex++;
-        }
-
-        // Adicionar ordenação
-        query += ` ORDER BY ${sortField} ${sortOrder}`;
-
-        // Adicionar paginação
-        query += ` LIMIT $${paramIndex} OFFSET $${paramIndex + 1}`;
-        queryParams.push(limit, offset);
-
-        try {
-            const result = await this.pool.query(query, queryParams);
-
-            const totalCount = result.rows.length > 0 ? parseInt(result.rows[0].total_count) : 0;
-            const totalPages = Math.ceil(totalCount / limit);
-
-            return {
-                items: result.rows.map(row => {
-                    delete row.total_count;
-                    return row;
-                }),
-                meta: {
-                    totalItems: totalCount,
-                    itemCount: result.rows.length,
-                    itemsPerPage: limit,
-                    totalPages: totalPages,
-                    currentPage: page
-                },
-                links: {
-                    first: `?page=1&limit=${limit}`,
-                    previous: page > 1 ? `?page=${page - 1}&limit=${limit}` : null,
-                    next: page < totalPages ? `?page=${page + 1}&limit=${limit}` : null,
-                    last: `?page=${totalPages}&limit=${limit}`
-                }
-            };
-        } catch (error) {
-            this.logger.error('Erro ao listar installments', { 
-                error: error.message, 
-                stack: error.stack,
-                filters,
-                page,
-                limit 
+            
+            logger.info('Repository: Adicionando filtro de amount', {
+                amount: filters.amount,
+                paramCount
             });
-            throw error;
         }
+
+        logger.info('Repository: Resultado final buildWhereClause', {
+            conditions,
+            params,
+            totalParams: paramCount
+        });
+
+        return { conditions, params };
     }
 
     async findAll(page = 1, limit = 10, filters = {}) {
         try {
-            const includeBoletos = filters.include === 'boletos';
-            const { whereClause, queryParams } = this.buildWhereClause(filters);
-            
-            // Log de depuração
-            logger.info('Filtros de parcelas', { 
-                filters, 
-                whereClause, 
-                queryParams 
+            logger.info('Repository: Parâmetros recebidos no findAll', { 
+                page, 
+                limit, 
+                filters: JSON.stringify(filters)
             });
-            
-            // Calculamos o offset aqui para garantir que está correto
-            const parsedPage = parseInt(page) || 1;
-            const parsedLimit = parseInt(limit) || 10;
-            const offset = (parsedPage - 1) * parsedLimit;
-            
-            const query = `
+
+            const { conditions, params } = this.buildWhereClause(filters);
+
+            const offset = (page - 1) * limit;
+
+            const baseQuery = `
                 SELECT 
                     i.installment_id,
                     i.payment_id,
                     i.installment_number,
                     i.due_date,
+                    i.expected_date,
                     i.amount,
                     i.balance,
                     i.status,
-                    i.account_entry_id,
-                    i.expected_date,
-                    mp.movement_id,
-                    m.description as movement_description,
-                    m.movement_type_id as movement_type,
-                    m.movement_status_id as movement_status,
                     p.full_name,
-                    p.full_name as person_name,
-                    CASE 
-                        WHEN $${queryParams.length + 1} = true THEN (
-                            SELECT json_agg(b.*)
-                            FROM boletos b
-                            WHERE b.installment_id = i.installment_id AND b.status = 'A_RECEBER'
-                        )
-                        ELSE NULL
-                    END as boletos
+                    m.movement_id,
+                    m.description as movement_description,
+                    mp.total_amount as payment_total_amount,
+                    mp.status as payment_status,
+                    (SELECT COALESCE(json_agg(b.*) FILTER (WHERE b.installment_id IS NOT NULL), '[]'::json)
+                     FROM boletos b
+                     WHERE b.installment_id = i.installment_id 
+                     AND b.status = 'A_RECEBER') as boletos
                 FROM installments i
-                LEFT JOIN movement_payments mp ON i.payment_id = mp.payment_id
-                LEFT JOIN movements m ON mp.movement_id = m.movement_id
-                LEFT JOIN persons p ON m.person_id = p.person_id
-                ${whereClause ? whereClause + ' AND ' : 'WHERE '}m.movement_status_id = 2 AND m.is_template = false
-                ORDER BY i.due_date DESC, i.installment_number
-                LIMIT $${queryParams.length + 2} OFFSET $${queryParams.length + 3}
+                JOIN movement_payments mp ON i.payment_id = mp.payment_id
+                JOIN movements m ON mp.movement_id = m.movement_id
+                JOIN persons p ON m.person_id = p.person_id
+                ${conditions.length > 0 ? `WHERE ${conditions.join(' AND ')}` : ''}
             `;
 
             const countQuery = `
-                SELECT COUNT(*)::integer as total
+                SELECT COUNT(*) as total
                 FROM installments i
-                LEFT JOIN movement_payments mp ON i.payment_id = mp.payment_id
-                LEFT JOIN movements m ON mp.movement_id = m.movement_id
-                LEFT JOIN persons p ON m.person_id = p.person_id
-                ${whereClause ? whereClause + ' AND ' : 'WHERE '}m.movement_status_id = 2 AND m.is_template = false
+                JOIN movement_payments mp ON i.payment_id = mp.payment_id
+                JOIN movements m ON mp.movement_id = m.movement_id
+                JOIN persons p ON m.person_id = p.person_id
+                ${conditions.length > 0 ? `WHERE ${conditions.join(' AND ')}` : ''}
             `;
 
-            const fullQueryParams = [...queryParams, includeBoletos, parsedLimit, offset];
+            const sortOrder = filters.order || 'DESC';
+            const sortField = filters.sort || 'due_date';
 
-            // Executa as queries
+            const finalQuery = `
+                ${baseQuery}
+                ORDER BY ${sortField} ${sortOrder}
+                LIMIT $${params.length + 1} OFFSET $${params.length + 2}
+            `;
+
+            const finalQueryParams = [...params, limit, offset];
+
+            logger.info('Repository: Detalhes da consulta SQL completa', {
+                baseQuery,
+                finalQuery,
+                conditions: conditions.join(' AND '),
+                params: finalQueryParams,
+                order: sortOrder,
+                sort: sortField,
+                limit,
+                offset
+            });
+
             const [dataResult, countResult] = await Promise.all([
-                this.pool.query(query, fullQueryParams),
-                this.pool.query(countQuery, queryParams)
+                this.pool.query(finalQuery, finalQueryParams),
+                this.pool.query(countQuery, params)
             ]);
 
+            const totalItems = parseInt(countResult.rows[0].total, 10);
+            const totalPages = Math.ceil(totalItems / limit);
+
+            logger.info('Repository: Resultado da consulta', {
+                totalItems,
+                totalPages,
+                currentPage: page,
+                itemsReturned: dataResult.rows.length
+            });
+
             return {
-                data: dataResult.rows,
-                total: parseInt(countResult.rows[0]?.total || 0),
-                page: parsedPage,
-                limit: parsedLimit
+                items: dataResult.rows,
+                meta: {
+                    currentPage: page,
+                    itemCount: dataResult.rows.length,
+                    itemsPerPage: limit,
+                    totalItems,
+                    totalPages
+                },
+                links: {
+                    first: `/installments/details?page=1&limit=${limit}&sort=${sortField}&order=${sortOrder}`,
+                    previous: page > 1 ? `/installments/details?page=${page - 1}&limit=${limit}&sort=${sortField}&order=${sortOrder}` : null,
+                    next: page < totalPages ? `/installments/details?page=${page + 1}&limit=${limit}&sort=${sortField}&order=${sortOrder}` : null,
+                    last: `/installments/details?page=${totalPages}&limit=${limit}&sort=${sortField}&order=${sortOrder}`
+                }
             };
-            
         } catch (error) {
-            logger.error('Erro ao listar parcelas', {
+            logger.error('Repository: Erro ao buscar parcelas', {
                 error: error.message,
-                filters,
+                stack: error.stack,
+                filters
+            });
+            throw new DatabaseError('Erro ao buscar parcelas', error);
+        }
+    }
+
+    async findAllWithDetails(page = 1, limit = 10, filters = {}) {
+        try {
+            logger.info('Repository: Iniciando busca de parcelas com detalhes', { 
+                page, 
+                limit, 
+                filters 
+            });
+
+            const offset = (page - 1) * limit;
+            const { sort = 'due_date', order = 'DESC', ...searchFilters } = filters;
+
+            logger.info('Repository: Parâmetros de paginação e ordenação', {
+                offset,
+                sort,
+                order,
+                searchFilters
+            });
+
+            const baseQuery = `
+                SELECT 
+                    i.installment_id,
+                    i.payment_id,
+                    i.installment_number,
+                    i.due_date,
+                    i.expected_date,
+                    i.amount,
+                    i.balance,
+                    i.status,
+                    p.full_name,
+                    m.movement_id,
+                    m.description as movement_description,
+                    mp.total_amount as payment_total_amount,
+                    mp.status as payment_status,
+                    (SELECT COALESCE(json_agg(b.*) FILTER (WHERE b.installment_id IS NOT NULL), '[]'::json)
+                     FROM boletos b
+                     WHERE b.installment_id = i.installment_id 
+                     AND b.status = 'A_RECEBER') as boletos
+                FROM installments i
+                JOIN movement_payments mp ON i.payment_id = mp.payment_id
+                JOIN movements m ON mp.movement_id = m.movement_id
+                JOIN persons p ON m.person_id = p.person_id
+                WHERE 1=1
+            `;
+
+            const { conditions, params } = this.buildWhereClause(searchFilters);
+            const whereClause = conditions.length > 0 ? `AND ${conditions.join(' AND ')}` : '';
+
+            logger.info('Repository: Query construída', {
+                baseQuery,
+                whereClause,
+                params
+            });
+
+            // Adiciona parâmetros de paginação
+            params.push(limit, offset);
+
+            const query = `${baseQuery} ${whereClause} ORDER BY i.${sort} ${order} LIMIT $${params.length - 1} OFFSET $${params.length}`;
+            
+            logger.info('Repository: Executando query final', {
+                finalQuery: query,
+                paramCount: params.length
+            });
+
+            const result = await this.pool.query(query, params);
+
+            logger.info('Repository: Resultado da query', {
+                rowCount: result.rowCount,
+                success: true
+            });
+
+            return result.rows;
+        } catch (error) {
+            logger.error('Repository: Erro ao buscar parcelas com detalhes', {
+                error: error.message,
                 stack: error.stack
             });
-            throw new DatabaseError('Erro ao listar parcelas');
+            throw new DatabaseError('Erro ao buscar parcelas com detalhes', error);
         }
     }
 
@@ -289,7 +326,7 @@ class InstallmentRepository {
 
     async findByPaymentId(paymentId) {
         try {
-            const { whereClause, queryParams } = this.buildWhereClause({ payment_id: paymentId });
+            const { conditions, params } = this.buildWhereClause({ payment_id: paymentId });
             const query = `
                 SELECT 
                     i.installment_id,
@@ -302,11 +339,11 @@ class InstallmentRepository {
                     i.account_entry_id,
                     i.expected_date
                 FROM installments i
-                ${whereClause}
+                ${conditions.length > 0 ? `WHERE ${conditions.join(' AND ')}` : ''}
                 ORDER BY i.installment_number
             `;
 
-            const { rows } = await this.pool.query(query, queryParams);
+            const { rows } = await this.pool.query(query, params);
             return rows;
         } catch (error) {
             logger.error('Erro ao buscar parcelas do pagamento', {
@@ -455,7 +492,7 @@ class InstallmentRepository {
 
     async findPaymentByInstallmentId(installmentId) {
         try {
-            const { whereClause, queryParams } = this.buildWhereClause({ installment_id: installmentId });
+            const { conditions, params } = this.buildWhereClause({ installment_id: installmentId });
             const query = `
                 SELECT 
                     p.payment_id,
@@ -466,12 +503,12 @@ class InstallmentRepository {
                 JOIN movement_payments p ON i.payment_id = p.payment_id
                 JOIN movements m ON m.movement_id = p.movement_id
                 LEFT JOIN persons p ON m.person_id = p.person_id
-                ${whereClause}
+                ${conditions.length > 0 ? `WHERE ${conditions.join(' AND ')}` : ''}
             `;
 
             logger.info('Repository: Buscando pagamento por ID da parcela', { installmentId });
 
-            const result = await this.pool.query(query, queryParams);
+            const result = await this.pool.query(query, params);
 
             if (result.rows.length === 0) {
                 return null;
@@ -481,7 +518,7 @@ class InstallmentRepository {
         } catch (error) {
             logger.error('Repository: Erro ao buscar pagamento por ID da parcela', {
                 error: error.message,
-                error_stack: error.stack,
+                errorStack: error.stack,
                 installmentId
             });
             throw error;
@@ -685,6 +722,75 @@ class InstallmentRepository {
         }
     }
 
+    async getInstallmentById(installmentId) {
+        try {
+            logger.info('Buscando detalhes da parcela', { 
+                id, 
+                method: 'findInstallmentWithDetails' 
+            });
+
+            const query = `
+                SELECT 
+                    p.full_name,
+                    m.movement_id, 
+                    m.movement_status_id,
+                    i.installment_id,
+                    i.payment_id,
+                    i.account_entry_id,
+                    i.installment_number,
+                    i.due_date,
+                    i.amount,
+                    i.balance,
+                    i.status,
+                    i.expected_date,
+                    b.boleto_id,
+                    b.boleto_number,
+                    b.boleto_url,
+                    b.status as boleto_status,
+                    b.generated_at as boleto_generated_at
+                FROM installments i
+                LEFT JOIN movement_payments mp ON i.payment_id = mp.payment_id
+                LEFT JOIN movements m ON mp.movement_id = m.movement_id
+                LEFT JOIN persons p ON m.person_id = p.person_id
+                LEFT JOIN (
+                    SELECT DISTINCT ON (installment_id)
+                        installment_id, 
+                        boleto_id,
+                        boleto_number,
+                        boleto_url,
+                        status,
+                        generated_at
+                    FROM boletos
+                    WHERE status = 'A_RECEBER'
+                    ORDER BY installment_id, boleto_id DESC
+                ) b ON b.installment_id = i.installment_id
+                WHERE i.installment_id = $1 
+                AND m.movement_status_id = 2
+            `;
+
+            logger.info('Executando query de detalhes da parcela', { 
+                query, 
+                id 
+            });
+
+            const { rows } = await this.pool.query(query, [installmentId]);
+            
+            logger.info('Resultado da busca de detalhes da parcela', { 
+                rowCount: rows.length,
+                firstRow: rows[0]
+            });
+
+            return rows[0] || null;
+        } catch (error) {
+            logger.error('Erro ao buscar detalhes da parcela', {
+                error: error.message,
+                errorStack: error.stack,
+                id
+            });
+            throw new DatabaseError('Erro ao buscar detalhes da parcela', error);
+        }
+    }
+
     /**
      * Atualiza a data de vencimento de uma parcela
      * @param {number} installmentId - ID da parcela
@@ -723,48 +829,6 @@ class InstallmentRepository {
         }
     }
 
-    async getInstallmentById(installmentId) {
-        try {
-            const query = `
-                SELECT 
-                    i.installment_id,
-                    i.payment_id,
-                    i.installment_number,
-                    i.due_date,
-                    i.amount,
-                    i.balance,
-                    i.status,
-                    i.account_entry_id,
-                    i.expected_date,
-                    mp.movement_id,
-                    m.description as movement_description,
-                    m.movement_type_id as movement_type,
-                    m.movement_status_id as movement_status,
-                    p.full_name,
-                    p.full_name as person_name,
-                    (
-                        SELECT json_agg(b.*)
-                        FROM boletos b
-                        WHERE b.installment_id = i.installment_id AND b.status = 'A_RECEBER'
-                    ) as boletos
-                FROM installments i
-                LEFT JOIN movement_payments mp ON i.payment_id = mp.payment_id
-                LEFT JOIN movements m ON mp.movement_id = m.movement_id
-                LEFT JOIN persons p ON m.person_id = p.person_id
-                WHERE i.installment_id = $1
-            `;
-
-            const result = await this.pool.query(query, [installmentId]);
-            return result.rows[0];
-        } catch (error) {
-            logger.error('Erro ao buscar parcela por ID', {
-                error: error.message,
-                installmentId,
-                stack: error.stack
-            });
-            throw new DatabaseError('Erro ao buscar parcela por ID');
-        }
-    }
 }
 
 module.exports = InstallmentRepository;

@@ -276,6 +276,43 @@ class BoletoRepository extends BaseRepository {
             throw error;
         }
     }
+
+    /**
+     * Busca boletos por ID da parcela
+     * @param {number} installmentId - ID da parcela
+     * @returns {Promise<Array>} Lista de boletos da parcela
+     */
+    async findByInstallmentId(installmentId) {
+        try {
+            logger.info('Repository: Buscando boletos por ID da parcela', { installmentId });
+            
+            const query = `
+                SELECT 
+                    b.*,
+                    i.due_date,
+                    i.amount
+                FROM boletos b
+                JOIN installments i ON b.installment_id = i.installment_id
+                WHERE b.installment_id = $1
+                ORDER BY b.boleto_id DESC
+            `;
+            
+            const result = await this.pool.query(query, [installmentId]);
+            
+            logger.info('Repository: Boletos encontrados', { 
+                installmentId, 
+                count: result.rows.length 
+            });
+            
+            return result.rows;
+        } catch (error) {
+            logger.error('Repository: Erro ao buscar boletos por ID da parcela', { 
+                error: error.message, 
+                installmentId 
+            });
+            throw error;
+        }
+    }
 }
 
 module.exports = BoletoRepository;
