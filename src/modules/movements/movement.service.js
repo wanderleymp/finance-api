@@ -254,7 +254,7 @@ class MovementService extends IMovementService {
             if (!filters.orderDirection) filters.orderDirection = 'DESC';
 
             // Chama o repositório para buscar movimentos
-            const result = await this.movementRepository.findAll(page, limit, filters);
+            const result = await this.movementRepository.findAll(page, limit, this.prepareFilters(filters));
 
             // Log de diagnóstico para boletos
             if (result.items) {
@@ -896,6 +896,12 @@ class MovementService extends IMovementService {
     prepareFilters(filters) {
         const preparedFilters = { ...filters };
         delete preparedFilters.detailed; // Remove o detailed dos filtros pois não é usado na query
+
+        // Converte status para movement_status_id
+        if (preparedFilters.status) {
+            preparedFilters.movement_status_id = preparedFilters.status;
+            delete preparedFilters.status;
+        }
 
         // Converte strings para números
         if (preparedFilters.person_id) {
