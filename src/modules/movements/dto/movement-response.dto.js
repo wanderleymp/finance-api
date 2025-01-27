@@ -56,10 +56,49 @@ class MovementResponseDTO {
         this.total_paid = data.total_paid || 0;
         this.total_value = data.total_value || 0;
         this.remaining_amount = data.remaining_amount || 0;
+        this.full_name = data.full_name;
 
         // Inclui pagamentos se existirem
         if (data.payments) {
-            this.payments = data.payments.map(payment => new PaymentDTO(payment));
+            this.payments = data.payments.map(payment => ({
+                payment_id: payment.payment_id,
+                payment_method_id: payment.payment_method_id,
+                total_amount: payment.total_amount,
+                status: payment.status
+            }));
+        }
+
+        // Inclui parcelas se existirem
+        if (data.installments) {
+            this.installments = data.installments.map(installment => ({
+                installment_id: installment.installment_id,
+                installment_number: installment.installment_number,
+                due_date: installment.due_date,
+                amount: installment.amount,
+                balance: installment.balance,
+                status: installment.status
+            }));
+        }
+
+        // Inclui boletos se existirem
+        if (data.boletos) {
+            this.boletos = data.boletos.map(boleto => ({
+                boleto_id: boleto.boleto_id,
+                status: boleto.status,
+                generated_at: boleto.generated_at
+            }));
+        }
+
+        // Inclui notas fiscais se existirem
+        if (data.invoices) {
+            this.invoices = data.invoices.map(invoice => ({
+                invoice_id: invoice.invoice_id,
+                number: invoice.number,
+                total_amount: invoice.total_amount,
+                status: invoice.status,
+                pdf_url: invoice.pdf_url,
+                xml_url: invoice.xml_url
+            }));
         }
 
         // Inclui items se existirem

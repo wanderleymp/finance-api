@@ -246,8 +246,8 @@ class MovementRepository extends BaseRepository {
                 detailed 
             });
 
-            const query = `
-                WITH base_movement AS (
+            const customQuery = `
+                WITH movement_data AS (
                     SELECT 
                         m.*,
                         p.full_name,
@@ -259,80 +259,91 @@ class MovementRepository extends BaseRepository {
                     LEFT JOIN movement_types mt ON m.movement_type_id = mt.movement_type_id
                     WHERE m.movement_id = $1
                 ),
-                payments AS (
+                payments_data AS (
                     SELECT 
                         mp.movement_id,
-                        COALESCE(
-                            jsonb_agg(
-                                jsonb_build_object(
-                                    'payment_id', mp.payment_id,
-                                    'payment_method_id', mp.payment_method_id,
-                                    'total_amount', mp.total_amount,
-                                    'status', mp.status,
-                                    'installments', COALESCE(
-                                        (
-                                            SELECT jsonb_agg(
-                                                jsonb_build_object(
-                                                    'installment_id', i.installment_id,
-                                                    'installment_number', i.installment_number,
-                                                    'due_date', i.due_date,
-                                                    'amount', i.amount,
-                                                    'balance', i.balance,
-                                                    'status', i.status,
-                                                    'boletos', COALESCE(
-                                                        (
-                                                            SELECT jsonb_agg(
-                                                                jsonb_build_object(
-                                                                    'boleto_id', b.boleto_id,
-                                                                    'status', b.status,
-                                                                    'generated_at', b.generated_at
-                                                                )
-                                                            )
-                                                            FROM boletos b
-                                                            WHERE b.installment_id = i.installment_id
-                                                        ),
-                                                        '[]'::jsonb
-                                                    )
-                                                )
-                                            )
-                                            FROM installments i
-                                            WHERE i.payment_id = mp.payment_id
-                                        ),
-                                        '[]'::jsonb
-                                    ),
-                                    'invoices', COALESCE(
-                                        (
-                                            SELECT jsonb_agg(
-                                                jsonb_build_object(
-                                                    'invoice_id', inv.invoice_id,
-                                                    'number', inv.number,
-                                                    'total_amount', inv.total_amount,
-                                                    'status', inv.status,
-                                                    'pdf_url', inv.pdf_url,
-                                                    'xml_url', inv.xml_url
-                                                )
-                                            )
-                                            FROM invoices inv
-                                            WHERE inv.movement_id = mp.movement_id
-                                        ),
-                                        '[]'::jsonb
-                                    )
-                                )
-                            ),
-                            '[]'::jsonb
-                        ) AS payment_details
+                        jsonb_agg(
+                            jsonb_build_object(
+                                'payment_id', mp.payment_id,
+                                'payment_method_id', mp.payment_method_id,
+                                'total_amount', mp.total_amount,
+                                'status', mp.status
+                            )
+                        ) AS payments
                     FROM movement_payments mp
                     WHERE mp.movement_id = $1
                     GROUP BY mp.movement_id
+                ),
+                installments_data AS (
+                    SELECT 
+                        mp.movement_id,
+                        i.installment_id,
+                        jsonb_agg(
+                            jsonb_build_object(
+                                'installment_id', i.installment_id,
+                                'installment_number', i.installment_number,
+                                'due_date', i.due_date,
+                                'amount', i.amount,
+                                'balance', i.balance,
+                                'status', i.status
+                            )
+                        ) AS installments
+                    FROM movement_payments mp
+                    JOIN installments i ON mp.payment_id = i.payment_id
+                    WHERE mp.movement_id = $1
+                    GROUP BY mp.movement_id, i.installment_id
+                ),
+                boletos_data AS (
+                    SELECT 
+                        i.installment_id,
+                        jsonb_agg(
+                            jsonb_build_object(
+                                'boleto_id', b.boleto_id,
+                                'status', b.status,
+                                'generated_at', b.generated_at
+                            )
+                        ) AS boletos
+                    FROM installments i
+                    LEFT JOIN boletos b ON i.installment_id = b.installment_id
+                    WHERE i.installment_id IN (
+                        SELECT i2.installment_id 
+                        FROM movement_payments mp2
+                        JOIN installments i2 ON mp2.payment_id = i2.payment_id
+                        WHERE mp2.movement_id = $1
+                    )
+                    GROUP BY i.installment_id
+                ),
+                invoices_data AS (
+                    SELECT 
+                        movement_id,
+                        jsonb_agg(
+                            jsonb_build_object(
+                                'invoice_id', inv.invoice_id,
+                                'number', inv.number,
+                                'total_amount', inv.total_amount,
+                                'status', inv.status,
+                                'pdf_url', inv.pdf_url,
+                                'xml_url', inv.xml_url
+                            )
+                        ) AS invoices
+                    FROM invoices inv
+                    WHERE movement_id = $1
+                    GROUP BY movement_id
                 )
                 SELECT 
-                    bm.*,
-                    COALESCE(p.payment_details, '[]'::jsonb) AS payment_details
-                FROM base_movement bm
-                LEFT JOIN payments p ON bm.movement_id = p.movement_id
+                    md.*,
+                    COALESCE(pd.payments, '[]'::jsonb) AS payments,
+                    COALESCE(id.installments, '[]'::jsonb) AS installments,
+                    COALESCE(bd.boletos, '[]'::jsonb) AS boletos,
+                    COALESCE(iv.invoices, '[]'::jsonb) AS invoices
+                FROM movement_data md
+                LEFT JOIN payments_data pd ON md.movement_id = pd.movement_id
+                LEFT JOIN installments_data id ON md.movement_id = id.movement_id
+                LEFT JOIN boletos_data bd ON id.installment_id = bd.installment_id
+                LEFT JOIN invoices_data iv ON md.movement_id = iv.movement_id
             `;
 
-            const result = await this.pool.query(query, [id]);
+            const result = await this.pool.query(customQuery, [id]);
             
             if (result.rows.length === 0) {
                 logger.warn('Movimento não encontrado', { movementId: id });
@@ -350,7 +361,11 @@ class MovementRepository extends BaseRepository {
                     total_amount: movement.total_amount,
                     full_name: movement.full_name,
                     status_name: movement.status_name,
-                    type_name: movement.type_name
+                    type_name: movement.type_name,
+                    payments: movement.payments?.length || 0,
+                    installments: movement.installments?.length || 0,
+                    boletos: movement.boletos?.length || 0,
+                    invoices: movement.invoices?.length || 0
                 }
             });
 
