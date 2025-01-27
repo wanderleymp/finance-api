@@ -4,6 +4,7 @@ class BoletoDTO {
         this.status = data.status;
         this.generated_at = data.generated_at;
         this.boleto_number = data.boleto_number;
+        this.boleto_url = data.boleto_url;
     }
 }
 
@@ -85,7 +86,8 @@ class MovementResponseDTO {
             this.boletos = data.boletos.map(boleto => ({
                 boleto_id: boleto.boleto_id,
                 status: boleto.status,
-                generated_at: boleto.generated_at
+                generated_at: boleto.generated_at,
+                boleto_url: boleto.boleto_url
             }));
         }
 

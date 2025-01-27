@@ -109,7 +109,8 @@ class MovementRepository extends BaseRepository {
                             jsonb_build_object(
                                 'boleto_id', b.boleto_id,
                                 'status', b.status,
-                                'generated_at', b.generated_at
+                                'generated_at', b.generated_at,
+                                'boleto_url', b.boleto_url
                             )
                         ) AS boletos
                     FROM installments i
@@ -300,7 +301,8 @@ class MovementRepository extends BaseRepository {
                             jsonb_build_object(
                                 'boleto_id', b.boleto_id,
                                 'status', b.status,
-                                'generated_at', b.generated_at
+                                'generated_at', b.generated_at,
+                                'boleto_url', b.boleto_url
                             )
                         ) AS boletos
                     FROM installments i
