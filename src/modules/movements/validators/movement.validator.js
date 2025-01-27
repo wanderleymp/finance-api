@@ -11,7 +11,16 @@ const listMovementsSchema = Joi.object({
         Joi.array().items(Joi.number().integer())
     ),
     movement_type_id: Joi.number().integer(),
-    person_id: Joi.number().integer()
+    person_id: Joi.number().integer(),
+    orderBy: Joi.string().valid(
+        'movement_date',
+        'movement_id',
+        'movement_type_id',
+        'movement_status_id',
+        'total_amount'
+    ).default('movement_date'),
+    orderDirection: Joi.string().valid('ASC', 'DESC').default('DESC'),
+    search: Joi.string().allow('').optional()
 }).custom((value, helpers) => {
     if (value.movement_date_start && value.movement_date_end) {
         const start = new Date(value.movement_date_start);

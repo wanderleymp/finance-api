@@ -249,6 +249,10 @@ class MovementService extends IMovementService {
                 filters 
             });
 
+            // Garantir que orderBy e orderDirection estejam definidos
+            if (!filters.orderBy) filters.orderBy = 'movement_date';
+            if (!filters.orderDirection) filters.orderDirection = 'DESC';
+
             // Chama o repositório para buscar movimentos
             const result = await this.movementRepository.findAll(page, limit, filters);
 

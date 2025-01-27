@@ -10,90 +10,31 @@ class MovementRepository extends BaseRepository {
 
     async findAll(page = 1, limit = 10, filters = {}) {
         try {
-            // Log de diagnóstico inicial
+            // Log dos parâmetros recebidos
             logger.info('Parâmetros recebidos', { 
                 page, 
                 limit, 
-                filters: JSON.stringify(filters) 
+                filters: JSON.stringify(filters)
             });
 
-            // Extrair filtros especiais
-            const { 
-                orderBy = 'movement_date', 
-                orderDirection = 'DESC', 
-                startDate, 
-                endDate,
-                search,
-                ...otherFilters 
-            } = filters;
+            // Configurar ordenação padrão
+            const orderBy = filters.orderBy || 'movement_date';
+            const orderDirection = filters.orderDirection || 'DESC';
 
-            // Log de diagnóstico de ordenação
-            logger.info('Configurações de ordenação', { 
-                orderBy, 
-                orderDirection 
+            // Log das configurações de ordenação
+            logger.info('Configurações de ordenação', {
+                orderBy,
+                orderDirection
             });
 
-            // Converter movement_status_id para números se forem strings
-            if (filters.movement_status_id) {
-                if (Array.isArray(filters.movement_status_id)) {
-                    filters.movement_status_id = filters.movement_status_id.map(Number);
-                } else {
-                    filters.movement_status_id = Number(filters.movement_status_id);
-                }
-            }
-
-            // Mapeamento de campos de ordenação
-            const orderByMapping = {
-                'date': 'movement_date',
-                'id': 'movement_id',
-                'type': 'movement_type_id',
-                'status': 'movement_status_id',
-                'movement_date': 'movement_date'
-            };
-
-            // Mapear o campo de ordenação
-            const mappedOrderBy = orderByMapping[orderBy] || orderBy;
-
-            // Log de diagnóstico de mapeamento
-            logger.info('Mapeamento de campos', { 
-                mappedOrderBy 
+            // Mapeamento de campos
+            const mappedOrderBy = this.mapOrderByField(orderBy);
+            logger.info('Mapeamento de campos', {
+                mappedOrderBy
             });
-
-            // Construir cláusula WHERE para filtros
-            const whereConditions = [];
-            const queryParams = [];
-
-            // Filtro de status
-            if (filters.movement_status_id) {
-                if (Array.isArray(filters.movement_status_id)) {
-                    whereConditions.push(`m.movement_status_id IN (${filters.movement_status_id.map((_, index) => `$${queryParams.length + index + 1}`).join(', ')})`);
-                    queryParams.push(...filters.movement_status_id);
-                } else {
-                    whereConditions.push(`m.movement_status_id = $${queryParams.length + 1}`);
-                    queryParams.push(filters.movement_status_id);
-                }
-            }
-
-            // Filtro de data
-            if (startDate && endDate) {
-                whereConditions.push(`m.movement_date BETWEEN $${queryParams.length + 1} AND $${queryParams.length + 2}`);
-                queryParams.push(startDate, endDate);
-            }
-
-            // Filtro de busca textual
-            if (search) {
-                const searchTerm = `%${search}%`;
-                whereConditions.push(`(
-                    m.description ILIKE $${queryParams.length + 1} OR 
-                    p.full_name ILIKE $${queryParams.length + 2}
-                )`);
-                queryParams.push(searchTerm, searchTerm);
-            }
 
             // Construir cláusula WHERE
-            const whereClause = whereConditions.length > 0 
-                ? `WHERE ${whereConditions.join(' AND ')}` 
-                : '';
+            const { whereClause, queryParams: whereParams } = this.buildWhereClause(filters);
 
             // Query para contagem total
             const countQuery = `
@@ -103,116 +44,118 @@ class MovementRepository extends BaseRepository {
                 ${whereClause}
             `;
 
-            // Log de diagnóstico de consultas
-            logger.info('Consulta SQL - Count', { 
+            // Log da query de contagem
+            logger.info('Consulta SQL - Count', {
                 countQuery,
                 whereClause,
-                queryParams: queryParams.slice(0, -3)
+                queryParams: whereParams
             });
 
-            logger.info('Consulta SQL - Movimentos', {
-                customQuery: `
-                    WITH movement_data AS (
-                        SELECT 
-                            m.*,
-                            p.full_name,
-                            ms.status_name,
-                            mt.type_name,
-                            ROW_NUMBER() OVER (
-                                ORDER BY 
-                                    CASE $${queryParams.length + 1}
-                                        WHEN 'movement_date' THEN m.movement_date::text
-                                        WHEN 'movement_id' THEN m.movement_id::text
-                                        WHEN 'movement_type_id' THEN m.movement_type_id::text
-                                        WHEN 'movement_status_id' THEN m.movement_status_id::text
-                                        ELSE m.movement_date::text
-                                    END ${orderDirection},
-                                    m.movement_date DESC,
-                                    m.movement_id DESC
-                            ) as row_num
-                        FROM movements m
-                        LEFT JOIN persons p ON m.person_id = p.person_id
-                        LEFT JOIN movement_statuses ms ON m.movement_status_id = ms.movement_status_id
-                        LEFT JOIN movement_types mt ON m.movement_type_id = mt.movement_type_id
-                        ${whereClause}
-                    ),
-                    payments_data AS (
-                        SELECT 
-                            mp.movement_id,
-                            jsonb_agg(
-                                jsonb_build_object(
-                                    'payment_id', mp.payment_id,
-                                    'payment_method_id', mp.payment_method_id,
-                                    'total_amount', mp.total_amount,
-                                    'status', mp.status
-                                )
-                            ) AS payments
-                        FROM movement_payments mp
-                        GROUP BY mp.movement_id
-                    ),
-                    installments_data AS (
-                        SELECT 
-                            mp.movement_id,
-                            i.installment_id,
-                            jsonb_agg(
-                                jsonb_build_object(
-                                    'installment_id', i.installment_id,
-                                    'installment_number', i.installment_number,
-                                    'due_date', i.due_date,
-                                    'amount', i.amount,
-                                    'balance', i.balance,
-                                    'status', i.status
-                                )
-                            ) AS installments
-                        FROM movement_payments mp
-                        JOIN installments i ON mp.payment_id = i.payment_id
-                        GROUP BY mp.movement_id, i.installment_id
-                    ),
-                    boletos_data AS (
-                        SELECT 
-                            i.installment_id,
-                            jsonb_agg(
-                                jsonb_build_object(
-                                    'boleto_id', b.boleto_id,
-                                    'status', b.status,
-                                    'generated_at', b.generated_at
-                                )
-                            ) AS boletos
-                        FROM installments i
-                        LEFT JOIN boletos b ON i.installment_id = b.installment_id
-                        GROUP BY i.installment_id
-                    ),
-                    invoices_data AS (
-                        SELECT 
-                            movement_id,
-                            jsonb_agg(
-                                jsonb_build_object(
-                                    'invoice_id', inv.invoice_id,
-                                    'number', inv.number,
-                                    'total_amount', inv.total_amount,
-                                    'status', inv.status,
-                                    'pdf_url', inv.pdf_url,
-                                    'xml_url', inv.xml_url
-                                )
-                            ) AS invoices
-                        FROM invoices inv
-                        GROUP BY movement_id
-                    )
+            // Query principal com todos os relacionamentos
+            const customQuery = `
+                WITH movement_data AS (
                     SELECT 
-                        md.*,
-                        COALESCE(pd.payments, '[]'::jsonb) AS payments,
-                        COALESCE(id.installments, '[]'::jsonb) AS installments,
-                        COALESCE(bd.boletos, '[]'::jsonb) AS boletos,
-                        COALESCE(iv.invoices, '[]'::jsonb) AS invoices
-                    FROM movement_data md
-                    LEFT JOIN payments_data pd ON md.movement_id = pd.movement_id
-                    LEFT JOIN installments_data id ON md.movement_id = id.movement_id
-                    LEFT JOIN boletos_data bd ON id.installment_id = bd.installment_id
-                    LEFT JOIN invoices_data iv ON md.movement_id = iv.movement_id
-                    WHERE md.row_num BETWEEN (($${queryParams.length + 2} - 1) * $${queryParams.length + 3} + 1) AND ($${queryParams.length + 2} * $${queryParams.length + 3})
-                `,
+                        m.*,
+                        p.full_name,
+                        ms.status_name,
+                        mt.type_name,
+                        ROW_NUMBER() OVER (
+                            ORDER BY 
+                                m.movement_date DESC,
+                                m.movement_id DESC
+                        ) as row_num
+                    FROM movements m
+                    LEFT JOIN persons p ON m.person_id = p.person_id
+                    LEFT JOIN movement_statuses ms ON m.movement_status_id = ms.movement_status_id
+                    LEFT JOIN movement_types mt ON m.movement_type_id = mt.movement_type_id
+                    ${whereClause}
+                ),
+                payments_data AS (
+                    SELECT 
+                        mp.movement_id,
+                        jsonb_agg(
+                            jsonb_build_object(
+                                'payment_id', mp.payment_id,
+                                'payment_method_id', mp.payment_method_id,
+                                'total_amount', mp.total_amount,
+                                'status', mp.status
+                            )
+                        ) AS payments
+                    FROM movement_payments mp
+                    GROUP BY mp.movement_id
+                ),
+                installments_data AS (
+                    SELECT 
+                        mp.movement_id,
+                        i.installment_id,
+                        jsonb_agg(
+                            jsonb_build_object(
+                                'installment_id', i.installment_id,
+                                'installment_number', i.installment_number,
+                                'due_date', i.due_date,
+                                'amount', i.amount,
+                                'balance', i.balance,
+                                'status', i.status
+                            )
+                        ) AS installments
+                    FROM movement_payments mp
+                    JOIN installments i ON mp.payment_id = i.payment_id
+                    GROUP BY mp.movement_id, i.installment_id
+                ),
+                boletos_data AS (
+                    SELECT 
+                        i.installment_id,
+                        jsonb_agg(
+                            jsonb_build_object(
+                                'boleto_id', b.boleto_id,
+                                'status', b.status,
+                                'generated_at', b.generated_at
+                            )
+                        ) AS boletos
+                    FROM installments i
+                    LEFT JOIN boletos b ON i.installment_id = b.installment_id
+                    GROUP BY i.installment_id
+                ),
+                invoices_data AS (
+                    SELECT 
+                        movement_id,
+                        jsonb_agg(
+                            jsonb_build_object(
+                                'invoice_id', inv.invoice_id,
+                                'number', inv.number,
+                                'total_amount', inv.total_amount,
+                                'status', inv.status,
+                                'pdf_url', inv.pdf_url,
+                                'xml_url', inv.xml_url
+                            )
+                        ) AS invoices
+                    FROM invoices inv
+                    GROUP BY movement_id
+                )
+                SELECT 
+                    md.*,
+                    COALESCE(pd.payments, '[]'::jsonb) AS payments,
+                    COALESCE(id.installments, '[]'::jsonb) AS installments,
+                    COALESCE(bd.boletos, '[]'::jsonb) AS boletos,
+                    COALESCE(iv.invoices, '[]'::jsonb) AS invoices
+                FROM movement_data md
+                LEFT JOIN payments_data pd ON md.movement_id = pd.movement_id
+                LEFT JOIN installments_data id ON md.movement_id = id.movement_id
+                LEFT JOIN boletos_data bd ON id.installment_id = bd.installment_id
+                LEFT JOIN invoices_data iv ON md.movement_id = iv.movement_id
+                WHERE md.row_num BETWEEN ($${whereParams.length + 1} - 1) * $${whereParams.length + 2} + 1 
+                    AND ($${whereParams.length + 1} * $${whereParams.length + 2})
+                ORDER BY md.movement_date DESC, md.movement_id DESC
+            `;
+
+            // Parâmetros para a query principal
+            const queryParams = [...whereParams, page, limit];
+
+            // Log da query principal
+            logger.info('Consulta SQL - Movimentos', {
+                customQuery,
                 whereClause,
-                orderBy: mappedOrderBy,
+                orderBy,
                 orderDirection,
                 page,
                 limit,
@@ -221,107 +164,8 @@ class MovementRepository extends BaseRepository {
 
             // Executar consultas
             const [countResult, movementsResult] = await Promise.all([
-                this.pool.query(countQuery, queryParams.slice(0, -3)),
-                this.pool.query(`
-                    WITH movement_data AS (
-                        SELECT 
-                            m.*,
-                            p.full_name,
-                            ms.status_name,
-                            mt.type_name,
-                            ROW_NUMBER() OVER (
-                                ORDER BY 
-                                    CASE $${queryParams.length + 1}
-                                        WHEN 'movement_date' THEN m.movement_date::text
-                                        WHEN 'movement_id' THEN m.movement_id::text
-                                        WHEN 'movement_type_id' THEN m.movement_type_id::text
-                                        WHEN 'movement_status_id' THEN m.movement_status_id::text
-                                        ELSE m.movement_date::text
-                                    END ${orderDirection},
-                                    m.movement_date DESC,
-                                    m.movement_id DESC
-                            ) as row_num
-                        FROM movements m
-                        LEFT JOIN persons p ON m.person_id = p.person_id
-                        LEFT JOIN movement_statuses ms ON m.movement_status_id = ms.movement_status_id
-                        LEFT JOIN movement_types mt ON m.movement_type_id = mt.movement_type_id
-                        ${whereClause}
-                    ),
-                    payments_data AS (
-                        SELECT 
-                            mp.movement_id,
-                            jsonb_agg(
-                                jsonb_build_object(
-                                    'payment_id', mp.payment_id,
-                                    'payment_method_id', mp.payment_method_id,
-                                    'total_amount', mp.total_amount,
-                                    'status', mp.status
-                                )
-                            ) AS payments
-                        FROM movement_payments mp
-                        GROUP BY mp.movement_id
-                    ),
-                    installments_data AS (
-                        SELECT 
-                            mp.movement_id,
-                            i.installment_id,
-                            jsonb_agg(
-                                jsonb_build_object(
-                                    'installment_id', i.installment_id,
-                                    'installment_number', i.installment_number,
-                                    'due_date', i.due_date,
-                                    'amount', i.amount,
-                                    'balance', i.balance,
-                                    'status', i.status
-                                )
-                            ) AS installments
-                        FROM movement_payments mp
-                        JOIN installments i ON mp.payment_id = i.payment_id
-                        GROUP BY mp.movement_id, i.installment_id
-                    ),
-                    boletos_data AS (
-                        SELECT 
-                            i.installment_id,
-                            jsonb_agg(
-                                jsonb_build_object(
-                                    'boleto_id', b.boleto_id,
-                                    'status', b.status,
-                                    'generated_at', b.generated_at
-                                )
-                            ) AS boletos
-                        FROM installments i
-                        LEFT JOIN boletos b ON i.installment_id = b.installment_id
-                        GROUP BY i.installment_id
-                    ),
-                    invoices_data AS (
-                        SELECT 
-                            movement_id,
-                            jsonb_agg(
-                                jsonb_build_object(
-                                    'invoice_id', inv.invoice_id,
-                                    'number', inv.number,
-                                    'total_amount', inv.total_amount,
-                                    'status', inv.status,
-                                    'pdf_url', inv.pdf_url,
-                                    'xml_url', inv.xml_url
-                                )
-                            ) AS invoices
-                        FROM invoices inv
-                        GROUP BY movement_id
-                    )
-                    SELECT 
-                        md.*,
-                        COALESCE(pd.payments, '[]'::jsonb) AS payments,
-                        COALESCE(id.installments, '[]'::jsonb) AS installments,
-                        COALESCE(bd.boletos, '[]'::jsonb) AS boletos,
-                        COALESCE(iv.invoices, '[]'::jsonb) AS invoices
-                    FROM movement_data md
-                    LEFT JOIN payments_data pd ON md.movement_id = pd.movement_id
-                    LEFT JOIN installments_data id ON md.movement_id = id.movement_id
-                    LEFT JOIN boletos_data bd ON id.installment_id = bd.installment_id
-                    LEFT JOIN invoices_data iv ON md.movement_id = iv.movement_id
-                    WHERE md.row_num BETWEEN (($${queryParams.length + 2} - 1) * $${queryParams.length + 3} + 1) AND ($${queryParams.length + 2} * $${queryParams.length + 3})
-                `, queryParams)
+                this.pool.query(countQuery, whereParams),
+                this.pool.query(customQuery, queryParams)
             ]);
 
             const totalItems = parseInt(countResult.rows[0].total, 10);
@@ -633,6 +477,74 @@ class MovementRepository extends BaseRepository {
             });
             throw new DatabaseError('Erro ao remover movimento', error);
         }
+    }
+
+    mapOrderByField(orderBy) {
+        const orderByMapping = {
+            'date': 'movement_date',
+            'id': 'movement_id',
+            'type': 'movement_type_id',
+            'status': 'movement_status_id',
+            'movement_date': 'movement_date'
+        };
+        return orderByMapping[orderBy] || orderBy;
+    }
+
+    buildWhereClause(filters) {
+        const whereConditions = [];
+        const queryParams = [];
+
+        // Extrair filtros especiais
+        const { 
+            orderBy,
+            orderDirection,
+            startDate, 
+            endDate,
+            search,
+            ...otherFilters 
+        } = filters;
+
+        // Converter movement_status_id para números se forem strings
+        if (filters.movement_status_id) {
+            if (Array.isArray(filters.movement_status_id)) {
+                filters.movement_status_id = filters.movement_status_id.map(Number);
+            } else {
+                filters.movement_status_id = Number(filters.movement_status_id);
+            }
+        }
+
+        // Filtro de status
+        if (filters.movement_status_id) {
+            if (Array.isArray(filters.movement_status_id)) {
+                whereConditions.push(`m.movement_status_id IN (${filters.movement_status_id.map((_, index) => `$${queryParams.length + index + 1}`).join(', ')})`);
+                queryParams.push(...filters.movement_status_id);
+            } else {
+                whereConditions.push(`m.movement_status_id = $${queryParams.length + 1}`);
+                queryParams.push(filters.movement_status_id);
+            }
+        }
+
+        // Filtro de data
+        if (startDate && endDate) {
+            whereConditions.push(`m.movement_date BETWEEN $${queryParams.length + 1} AND $${queryParams.length + 2}`);
+            queryParams.push(startDate, endDate);
+        }
+
+        // Filtro de busca textual
+        if (search) {
+            const searchTerm = `%${search}%`;
+            whereConditions.push(`(
+                m.description ILIKE $${queryParams.length + 1} OR 
+                p.full_name ILIKE $${queryParams.length + 1}
+            )`);
+            queryParams.push(searchTerm);
+        }
+
+        const whereClause = whereConditions.length > 0 
+            ? `WHERE ${whereConditions.join(' AND ')}` 
+            : '';
+
+        return { whereClause, queryParams };
     }
 
     getWhereClause(filters = {}) {
