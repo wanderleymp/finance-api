@@ -448,7 +448,8 @@ class InstallmentService {
 
     async findInstallmentsDetails(page = 1, limit = 10, filters = {}) {
         try {
-            logger.info('Service: Buscando detalhes de parcelas', { 
+            logger.info('Service: Iniciando findInstallmentsDetails', { 
+                method: 'findInstallmentsDetails',
                 page, 
                 limit, 
                 filters 
@@ -456,6 +457,13 @@ class InstallmentService {
 
             // Buscar parcelas usando o método do repository
             const items = await this.repository.findAllWithDetails(page, limit, filters);
+
+            logger.info('Service: Resultado do findAllWithDetails', {
+                method: 'findInstallmentsDetails',
+                itemsCount: items?.length || 0,
+                firstItem: items?.[0],
+                hasMovementStatusFilter: items?.[0]?.movement_status_id === 2
+            });
 
             if (!items || items.length === 0) {
                 logger.info('Service: Nenhuma parcela encontrada', { 

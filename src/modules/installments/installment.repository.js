@@ -139,7 +139,8 @@ class InstallmentRepository {
                 JOIN movement_payments mp ON i.payment_id = mp.payment_id
                 JOIN movements m ON mp.movement_id = m.movement_id
                 JOIN persons p ON m.person_id = p.person_id
-                ${conditions.length > 0 ? `WHERE ${conditions.join(' AND ')}` : ''}
+                WHERE m.movement_status_id = 2
+                ${conditions.length > 0 ? `AND ${conditions.join(' AND ')}` : ''}
             `;
 
             const countQuery = `
@@ -148,7 +149,8 @@ class InstallmentRepository {
                 JOIN movement_payments mp ON i.payment_id = mp.payment_id
                 JOIN movements m ON mp.movement_id = m.movement_id
                 JOIN persons p ON m.person_id = p.person_id
-                ${conditions.length > 0 ? `WHERE ${conditions.join(' AND ')}` : ''}
+                WHERE m.movement_status_id = 2
+                ${conditions.length > 0 ? `AND ${conditions.join(' AND ')}` : ''}
             `;
 
             const sortOrder = filters.order || 'DESC';
@@ -249,13 +251,13 @@ class InstallmentRepository {
                     mp.status as payment_status,
                     (SELECT COALESCE(json_agg(b.*) FILTER (WHERE b.installment_id IS NOT NULL), '[]'::json)
                      FROM boletos b
-                     WHERE b.installment_id = i.installment_id 
+                     WHERE m.movement_status_id = 2 AND b.installment_id = i.installment_id 
                      AND b.status = 'A_RECEBER') as boletos
                 FROM installments i
                 JOIN movement_payments mp ON i.payment_id = mp.payment_id
                 JOIN movements m ON mp.movement_id = m.movement_id
                 JOIN persons p ON m.person_id = p.person_id
-                WHERE 1=1
+                WHERE m.movement_status_id = 2
             `;
 
             const { conditions, params } = this.buildWhereClause(searchFilters);
@@ -272,6 +274,15 @@ class InstallmentRepository {
 
             const query = `${baseQuery} ${whereClause} ORDER BY i.${sort} ${order} LIMIT $${params.length - 1} OFFSET $${params.length}`;
             
+            logger.info('Repository: Query completa para debug', {
+                method: 'findAllWithDetails',
+                query: query,
+                params: params,
+                baseQuery: baseQuery,
+                whereClause: whereClause,
+                paramCount: params.length
+            });
+
             logger.info('Repository: Executando query final', {
                 finalQuery: query,
                 paramCount: params.length
