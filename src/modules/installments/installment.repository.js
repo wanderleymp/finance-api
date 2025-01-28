@@ -32,10 +32,10 @@ class InstallmentRepository {
         });
 
         if (startDate && endDate) {
-            const formattedStartDate = moment(startDate).startOf('day').toISOString();
-            const formattedEndDate = moment(endDate).endOf('day').toISOString();
+            const formattedStartDate = moment(startDate).startOf('day').format('YYYY-MM-DD');
+            const formattedEndDate = moment(endDate).startOf('day').format('YYYY-MM-DD');
             
-            conditions.push(`i.due_date >= $${++paramCount} AND i.due_date <= $${++paramCount}`);
+            conditions.push(`DATE(i.due_date) >= $${++paramCount} AND DATE(i.due_date) <= $${++paramCount}`);
             params.push(formattedStartDate, formattedEndDate);
             
             logger.info('Repository: Adicionado filtro de data', {
