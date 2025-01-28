@@ -7,6 +7,7 @@ const router = express.Router();
 const controller = new ContractRecurringController();
 
 router.get('/pending-billings', controller.findPendingBillings.bind(controller));
+router.get('/billing', controller.findAll.bind(controller));
 router.get('/', controller.findAll.bind(controller));
 router.get('/:id', controller.findById.bind(controller));
 
