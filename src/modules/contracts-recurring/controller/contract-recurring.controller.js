@@ -119,12 +119,16 @@ class ContractRecurringController {
 
     async processBilling(req, res, next) {
         try {
-            const { body = [] } = req;
+            const contractIds = req.body.body || req.body;
 
-            const result = await this.service.billing(body);
+            if (!Array.isArray(contractIds)) {
+                return res.status(400).json({ error: 'Lista de contratos inválida' });
+            }
+
+            const result = await this.service.billing(contractIds);
             
             logger.info('Processamento de faturamento concluído', { 
-                totalContracts: body.length 
+                totalContracts: contractIds.length 
             });
 
             return res.status(200).json(result);
