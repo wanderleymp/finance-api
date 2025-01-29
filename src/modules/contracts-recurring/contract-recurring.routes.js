@@ -31,4 +31,11 @@ router.put(
 
 router.delete('/:id', controller.delete.bind(controller));
 
+// Nova rota para ajuste de contrato recorrente
+router.post(
+    '/:id/adjustment', 
+    validate('body', contractRecurringValidator.adjustment),
+    controller.processSingleContractAdjustment.bind(controller)
+);
+
 module.exports = router;

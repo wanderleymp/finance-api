@@ -27,6 +27,14 @@ const contractRecurringValidator = {
         model_movement_id: Joi.number().integer().optional(),
         contract_group_id: Joi.number().integer().optional(),
         billing_reference: Joi.string().valid('current', 'previous').optional()
+    }),
+
+    // Nova validação para ajuste de contrato
+    adjustment: Joi.object({
+        adjustmentMode: Joi.string().valid('increase', 'decrease').required(),
+        adjustmentType: Joi.string().valid('percentage', 'fixed').required(),
+        adjustmentValue: Joi.number().positive().required(),
+        description: Joi.string().optional()
     })
 };
 
