@@ -23,13 +23,12 @@ router.put(
     controller.update.bind(controller)
 );
 
+// Nova rota para atualizar item de contrato recorrente
+router.put(
+    '/:id/items/:movementItemId', 
+    controller.updateContractRecurringItem.bind(controller)
+);
+
 router.delete('/:id', controller.delete.bind(controller));
-
-router.post('/:id/billing', controller.processSingleContractBilling.bind(controller));
-router.post('/billing', controller.processBilling.bind(controller));
-
-router.post('/:id/adjustment', controller.processSingleContractAdjustment.bind(controller));
-
-router.post('/adjustment', controller.processBatchContractAdjustment.bind(controller));
 
 module.exports = router;

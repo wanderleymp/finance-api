@@ -25,7 +25,8 @@ class ContractRecurringService {
         movementService, 
         contractAdjustmentHistoryRepository, 
         logger,
-        contractMovementService
+        contractMovementService,
+        movementItemService
     ) {
         this.repository = repository || new ContractRecurringRepository();
         this.movementRepository = movementRepository || new MovementRepository();
@@ -44,6 +45,7 @@ class ContractRecurringService {
         });
 
         this.contractMovementService = contractMovementService || new ContractMovementService();
+        this.movementItemService = movementItemService || new MovementItemService();
         this.n8nService = N8NService;
     }
 
@@ -1162,6 +1164,80 @@ class ContractRecurringService {
                 timestamp: new Date().toISOString()
             });
             throw error;
+        }
+    }
+
+    async updateContractRecurringItem(contractId, movementItemId, updateData) {
+        this.logger.info('Iniciando atualização de item de contrato recorrente', {
+            contractId, 
+            movementItemId, 
+            updateData
+        });
+
+        const client = await this.dataSource.pool.connect();
+
+        try {
+            await client.query('BEGIN');
+
+            // Atualizar item de movimento
+            const updatedMovementItem = await this.movementItemService.update(movementItemId, updateData);
+            this.logger.info('Item de movimento atualizado', { 
+                updatedMovementItem,
+                movementId: updatedMovementItem.movement_id 
+            });
+
+            // Buscar o movimento associado com todos os detalhes
+            const movement = await this.movementRepository.findById(updatedMovementItem.movement_id);
+            this.logger.info('Detalhes completos do movimento', { 
+                movementId: movement.movement_id,
+                totalItems: movement.total_items,
+                totalAmount: movement.total_amount
+            });
+
+            // Buscar itens do movimento para verificar total
+            const movementItems = await this.movementItemRepository.findByMovementId(movement.movement_id);
+            const calculatedTotalItems = movementItems.reduce((total, item) => total + Number(item.total_price), 0);
+            
+            // Comentado: Atualização manual do movimento
+            // Mantido para referência futura, mas não está sendo executado
+            /*
+            const calculatedTotalAmount = calculatedTotalItems - Number(movement.discount || 0) + Number(movement.addition || 0);
+            const updatedMovement = await this.movementRepository.update(movement.movement_id, {
+                total_items: calculatedTotalItems,
+                total_amount: calculatedTotalAmount
+            });
+            */
+
+            // Atualizar valor do contrato diretamente no repositório
+            const updatedContract = await this.repository.update(contractId, {
+                contract_value: calculatedTotalItems
+            });
+
+            this.logger.info('Contrato atualizado', { 
+                contractId,
+                oldValue: movement.total_amount,
+                newValue: calculatedTotalItems,
+                updatedContract
+            });
+
+            await client.query('COMMIT');
+
+            return {
+                movementItem: updatedMovementItem,
+                contract: updatedContract
+            };
+        } catch (error) {
+            await client.query('ROLLBACK');
+            this.logger.error('Erro ao atualizar item de contrato recorrente', {
+                contractId,
+                movementItemId,
+                updateData,
+                errorMessage: error.message,
+                errorStack: error.stack
+            });
+            throw error;
+        } finally {
+            client.release();
         }
     }
 }

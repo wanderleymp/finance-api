@@ -20,7 +20,8 @@ class ContractRecurringDetailedDTO {
             account_entry_id: entity.account_entry_id,
             last_decimo_billing_year: entity.last_decimo_billing_year,
             group_name: entity.group_name,
-            full_name: entity.full_name
+            full_name: entity.full_name,
+            items: entity.items // Já retorna o array de itens
         };
     }
 }

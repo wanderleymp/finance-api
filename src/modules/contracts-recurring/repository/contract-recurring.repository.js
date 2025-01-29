@@ -26,6 +26,7 @@ class ContractRecurringRepository extends BaseRepository {
                      json_agg(
                          json_build_object(
                              'item_id', mi.item_id,
+                             'movement_item_id', mi.movement_item_id,
                              'quantity', mi.quantity,
                              'unit_price', mi.unit_price,
                              'total_price', mi.total_price,

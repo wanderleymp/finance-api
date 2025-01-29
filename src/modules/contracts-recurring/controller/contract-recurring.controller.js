@@ -3,6 +3,7 @@ const ContractRecurringRepository = require('../repository/contract-recurring.re
 const MovementRepository = require('../../movements/movement.repository');
 const MovementService = require('../../movements/movement.service');
 const ContractAdjustmentHistoryRepository = require('../../contract-adjustment-history/repository/contract-adjustment-history.repository');
+const MovementItemService = require('../../movement-items/movement-item.service');
 const { logger } = require('../../../middlewares/logger');
 const { systemDatabase } = require('../../../config/database');
 
@@ -18,6 +19,7 @@ class ContractRecurringController {
             logger
         );
         this.logger = logger;
+        this.movementItemService = new MovementItemService();
     }
 
     async findAll(req, res, next) {
@@ -236,6 +238,57 @@ class ContractRecurringController {
                 totalContracts: result.length,
                 successCount: result.filter(r => r.success).length,
                 failureCount: result.filter(r => !r.success).length
+            });
+
+            res.json(result);
+        } catch (error) {
+            next(error);
+        }
+    }
+
+    async updateContractItem(req, res, next) {
+        try {
+            const { contractId, movementItemId } = req.params;
+            const { item_id, quantidade, valorUnitario } = req.body;
+
+            // Validar se o item pertence ao movimento do contrato
+            const movementItem = await this.movementItemService.findById(movementItemId);
+            
+            if (movementItem.item_id !== item_id) {
+                throw new Error('Item de movimento não corresponde ao item informado');
+            }
+
+            // Usar MovementItemService para atualizar o item
+            await this.movementItemService.update(movementItemId, {
+                quantity: quantidade,
+                unit_price: valorUnitario
+            });
+
+            // Buscar o contrato atualizado com todos os detalhes
+            const updatedContract = await this.service.findById(Number(contractId));
+
+            // Retornar o contrato completo
+            res.json(updatedContract);
+        } catch (error) {
+            next(error);
+        }
+    }
+
+    async updateContractRecurringItem(req, res, next) {
+        try {
+            const { id: contractId, movementItemId } = req.params;
+            const updateData = req.body;
+
+            const result = await this.service.updateContractRecurringItem(
+                Number(contractId), 
+                Number(movementItemId), 
+                updateData
+            );
+            
+            this.logger.info('Item de contrato recorrente atualizado', { 
+                contractId, 
+                movementItemId,
+                updateData 
             });
 
             res.json(result);

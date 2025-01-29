@@ -134,16 +134,22 @@ class MovementItemRepository extends BaseRepository {
             // Se nenhum cliente for fornecido, usar pool padrão
             const queryClient = client || this.pool;
 
-            // Query para calcular o total dos itens do movimento
+            // Query para calcular o total dos itens e o total do movimento
             const query = `
                 UPDATE movements m
-                SET total_items = (
-                    SELECT COALESCE(SUM(total_price), 0)
-                    FROM movement_items mi
-                    WHERE mi.movement_id = $1
-                )
+                SET 
+                    total_items = (
+                        SELECT COALESCE(SUM(total_price), 0)
+                        FROM movement_items mi
+                        WHERE mi.movement_id = $1
+                    ),
+                    total_amount = (
+                        SELECT COALESCE(SUM(total_price), 0) - COALESCE(m.discount, 0) + COALESCE(m.addition, 0)
+                        FROM movement_items mi
+                        WHERE mi.movement_id = $1
+                    )
                 WHERE m.movement_id = $1
-                RETURNING total_items
+                RETURNING total_items, total_amount
             `;
             
             // Definir timeout para evitar bloqueios longos
@@ -155,7 +161,18 @@ class MovementItemRepository extends BaseRepository {
 
             const result = await queryClient.query(queryConfig);
             
-            return result.rows[0]?.total_items || 0;
+            const updatedMovement = result.rows[0] || {};
+            
+            logger.info('Atualização do total do movimento', {
+                movementId,
+                totalItems: updatedMovement.total_items,
+                totalAmount: updatedMovement.total_amount
+            });
+
+            return {
+                totalItems: updatedMovement.total_items || 0,
+                totalAmount: updatedMovement.total_amount || 0
+            };
         } catch (error) {
             // Log detalhado do erro
             logger.error('Erro ao atualizar total do movimento:', {
