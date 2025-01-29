@@ -38,4 +38,12 @@ router.post(
     controller.processSingleContractAdjustment.bind(controller)
 );
 
+// Rotas de billing para contratos recorrentes
+router.post('/billing', controller.processBilling.bind(controller));
+
+router.post(
+    '/:id/billing', 
+    controller.processSingleContractBilling.bind(controller)
+);
+
 module.exports = router;
