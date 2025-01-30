@@ -37,7 +37,8 @@ class MovementService extends IMovementService {
         serviceRepository,
         billingMessageService,
         n8nService, // Adicionado parâmetro n8nService
-        logger = console
+        logger = console,
+        taskService
     }) {
         super();
         
@@ -54,27 +55,47 @@ class MovementService extends IMovementService {
         this.paymentMethodRepository = paymentMethodRepository;
         this.installmentRepository = installmentRepository;
         
-        // Fallback para movementPaymentService
-        if (!movementPaymentService && movementPaymentRepository) {
-            const MovementPaymentService = require('../movement-payments/movement-payment.service');
-            movementPaymentService = new MovementPaymentService({
-                movementPaymentRepository,
-                installmentRepository,
-                boletoService
+        // Fallback para movementPaymentRepository
+        if (!movementPaymentRepository) {
+            const MovementPaymentRepository = require('../movement-payments/movement-payment.repository');
+            movementPaymentRepository = new MovementPaymentRepository();
+        }
+        this.movementPaymentRepository = movementPaymentRepository;
+
+        // Fallback para boletoService
+        if (!boletoService) {
+            const BoletoService = require('../boletos/boleto.service');
+            const BoletoRepository = require('../boletos/boleto.repository');
+            const boletoRepository = new BoletoRepository();
+            const N8nService = require('../../services/n8n.service');
+            
+            boletoService = new BoletoService({
+                boletoRepository,
+                n8nService: N8nService,
+                taskService
             });
         }
-        
-        this.movementPaymentService = movementPaymentService;
-        this.movementPaymentRepository = movementPaymentRepository;
-        
-        // Fallback para movementPaymentRepository
-        if (!this.movementPaymentRepository) {
-            const MovementPaymentRepository = require('../movement-payments/movement-payment.repository');
-            this.movementPaymentRepository = new MovementPaymentRepository();
+        this.boletoService = boletoService;
+
+        // Fallback para installmentRepository
+        if (!installmentRepository) {
+            const InstallmentRepository = require('../installments/installment.repository');
+            installmentRepository = new InstallmentRepository();
         }
+        this.installmentRepository = installmentRepository;
+
+        // Inicialização do movementPaymentService
+        if (!movementPaymentService) {
+            const MovementPaymentService = require('../movement-payments/movement-payment.service');
+            movementPaymentService = new MovementPaymentService({
+                movementPaymentRepository: this.movementPaymentRepository,
+                installmentRepository: this.installmentRepository,
+                boletoService: this.boletoService
+            });
+        }
+        this.movementPaymentService = movementPaymentService;
         
         this.personContactRepository = personContactRepository;
-        this.boletoService = boletoService;
         this.installmentService = installmentService;
         // Manter a lógica de fallback para criação do licenseRepository
         this.licenseRepository = licenseRepository || new LicenseRepository();
@@ -101,6 +122,7 @@ class MovementService extends IMovementService {
         
         // Adicionar fallback para logger
         this.logger = logger;
+        this.taskService = taskService;
     }
 
     /**
@@ -288,185 +310,211 @@ class MovementService extends IMovementService {
     }
 
     async create(data, client = null) {
-        const executeTransaction = async (transactionClient) => {
-            logger.info('Service: Criando novo movimento', { data });
+        try {
+            // Se não houver client externo, usa o método transaction do repository
+            if (!client) {
+                return await this.movementRepository.transaction(async (transactionClient) => {
+                    return await this._createWithTransaction(data, transactionClient);
+                });
+            }
 
-            // Separar dados do movimento e do pagamento
+            // Se houver client externo, usa ele diretamente
+            return await this._createWithTransaction(data, client);
+        } catch (error) {
+            logger.error('Service: Erro ao criar movimento', {
+                error: error.message,
+                stack: error.stack
+            });
+            throw error;
+        }
+    }
+
+    /**
+     * Cria os itens do movimento dentro da transação
+     * @param {Array} items - Array com os itens do movimento
+     * @param {number} movementId - ID do movimento
+     * @param {Object} client - Cliente de transação do PostgreSQL
+     */
+    async _createMovementItems(items, movementId, client) {
+        if (!items || items.length === 0) {
+            logger.info('Service: Nenhum item para criar');
+            return;
+        }
+
+        logger.info('Service: Iniciando criação dos itens do movimento', { 
+            movementId,
+            itemCount: items.length 
+        });
+
+        for (const item of items) {
+            const itemData = {
+                movement_id: movementId,
+                item_id: item.item_id,
+                quantity: item.quantity,
+                unit_price: item.unit_price,
+                total_price: item.quantity * item.unit_price
+            };
+
+            // Usando o client da transação
+            const createdItem = await this.movementItemRepository.createWithClient(client, itemData);
+            logger.info('Service: Item de movimento criado com sucesso', { 
+                movementId,
+                itemData,
+                createdItem
+            });
+        }
+    }
+
+    async _createWithTransaction(data, client) {
+        try {
+            // Tratamento do payload
             const { 
-                items, 
-                boleto = false, 
-                nfse = false, 
-                notificar = false, 
-                due_date,
-                ...movementData 
+                items = [],                    // Array de itens do movimento
+                boleto = false,                // Flag para geração de boleto
+                nfse = false,                  // Flag para emissão de NFSe
+                notificar = false,             // Flag para notificação
+                payment_method_id,             // ID do método de pagamento
+                person_id,                     // ID da pessoa
+                movement_type_id,              // ID do tipo de movimento
+                license_id,                    // ID da licença
+                description,                   // Descrição do movimento
+                total_amount,                  // Valor total
+                addition = 0,                  // Valor adicional
+                discount = 0,                  // Valor de desconto
+                user_id,                       // ID do usuário (vem do token JWT)
+                due_date = null,               // Data de vencimento
+                ...otherData                   // Outros dados não mapeados
             } = data;
 
-            // Validar dados do movimento
-            const validatedData = this.validateMovementData(movementData);
+            // Validação de campos obrigatórios
+            const requiredFields = {
+                person_id,
+                movement_type_id,
+                license_id,
+                description
+            };
 
-            // Definir data do movimento se não fornecida
-            validatedData.movement_date = validatedData.movement_date || new Date().toISOString().split('T')[0];
-            
-            // Definir status padrão se não fornecido
-            validatedData.movement_status_id = validatedData.movement_status_id || 2; // Assumindo que 2 é o status padrão
+            for (const [field, value] of Object.entries(requiredFields)) {
+                if (!value) {
+                    logger.error('Service: Campo obrigatório não informado', { field });
+                    throw new ValidationError(`Campo ${field} é obrigatório`);
+                }
+            }
 
-            // Adicionar informações de boleto, notificação e data de vencimento
-            validatedData.boleto = boleto;
-            validatedData.nfse = nfse;
-            validatedData.notificar = notificar;
-            validatedData.due_date = due_date || new Date(new Date().setDate(new Date().getDate() + 30)).toISOString().split('T')[0];
-
-            // Criar movimento usando o cliente de transação
-            const movement = await this.movementRepository.create(validatedData);
-            logger.info('Service: Movimento criado', { movement });
-
-            // Criar itens do movimento
+            // Cálculo do total baseado nos itens se não fornecido
+            let calculatedTotalAmount = total_amount;
             if (items && items.length > 0) {
-                const MovementItemService = require('../movement-items/movement-item.service');
-                const movementItemService = new MovementItemService();
-
-                for (const item of items) {
-                    try {
-                        await movementItemService.create({
-                            ...item,
-                            movement_id: movement.movement_id
-                        });
-                    } catch (error) {
-                        logger.error('Service: Erro ao criar item de movimento', {
-                            error: error.message,
-                            item,
-                            movementId: movement.movement_id
-                        });
-                        throw error;
-                    }
-                }
+                calculatedTotalAmount = items.reduce((sum, item) => {
+                    return sum + (item.quantity * item.unit_price);
+                }, 0);
             }
 
-            // Após criar o movimento, envia mensagem de faturamento
-            try {
-                const person = await this.personRepository.findById(validatedData.person_id);
+            // Aplicação de desconto e adição ao total
+            calculatedTotalAmount = calculatedTotalAmount + addition - discount;
 
-                // Cria pagamento se método de pagamento estiver presente
-                if (validatedData.payment_method_id) {
-                    const paymentData = {
-                        payment_method_id: validatedData.payment_method_id,
-                        total_amount: movement.total_amount,
-                        movement_id: movement.movement_id,
-                        person_id: validatedData.person_id
-                    };
+            // Preparação dos dados do movimento
+            const movementData = {
+                person_id,
+                movement_type_id,
+                license_id,
+                description,
+                total_amount: calculatedTotalAmount,
+                movement_date: new Date().toISOString().split('T')[0],
+                movement_status_id: 2, // Status padrão para novo movimento
+                addition,
+                discount
+            };
 
-                    const payment = await this.createPayment(movement.movement_id, paymentData);
-                    
-                    logger.info('Service: Pagamento criado com sucesso', {
-                        movementId: movement.movement_id,
-                        paymentId: payment?.movement_payment_id
-                    });
-                }
+            // Preparação dos dados de pagamento se método informado
+            const paymentData = payment_method_id ? {
+                payment_method_id,
+                total_amount: calculatedTotalAmount,
+                person_id,
+                generateBoleto: boleto,
+                due_date
+            } : null;
 
-                // Criar boleto se boleto for true
-                if (boleto) {
-                    await this.createBoletosMovimento(movement.movement_id);
-                }
+            // Validações específicas
+            this.validateMovementData(movementData);
 
-                // Notificar se notificar for true
-                if (notificar) {
-                    logger.info('Notificação solicitada para o movimento', { movementId: movement.movement_id });
-                    // Implementar lógica de notificação
-                }
-            } catch (error) {
-                logger.error('Erro ao processar pagamento ou mensagem de faturamento', {
-                    error: error.message,
-                    personId: validatedData.person_id
-                });
-                throw error;
-            }
+            // Criar o movimento usando o repository
+            const createdMovement = await this.movementRepository.createWithClient(movementData, client);
+            logger.info('Service: Movimento criado com sucesso', { 
+                movementId: createdMovement.movement_id,
+                data: movementData
+            });
 
-            return new MovementResponseDTO(movement);
-        };
+            // Criar os itens do movimento
+            await this._createMovementItems(items, createdMovement.movement_id, client);
 
-        // Se cliente for fornecido, usar o cliente, senão iniciar nova transação
-        if (client) {
-            return executeTransaction(client);
-        } else {
-            return this.movementPaymentRepository.transaction(executeTransaction);
+            // Força erro para testar rollback (após criar movimento e itens)
+            throw new Error('Erro forçado para testar rollback após criar movimento e itens');
+
+            // Retorno dos dados tratados
+            return {
+                movementData: createdMovement,
+                paymentData,
+                items,
+                shouldGenerateNfse: nfse,
+                shouldNotify: notificar,
+                shouldGenerateBoleto: boleto
+            };
+
+        } catch (error) {
+            logger.error('Service: Erro ao criar movimento na transação', {
+                error: error.message,
+                stack: error.stack,
+                data: JSON.stringify(data)
+            });
+            throw error; // Re-throw para ser tratado pelo método transaction
         }
     }
 
     async createPayment(movementId, paymentData) {
-        return this.movementPaymentRepository.transaction(async (client) => {
-            logger.info('Service: Criando pagamento para movimento', { 
-                movementId, 
-                paymentData 
+        try {
+            this.logger.info('Service: Criando pagamento para movimento', {
+                movementId,
+                paymentData: {
+                    payment_method_id: paymentData.payment_method_id,
+                    person_id: paymentData.person_id,
+                    total_amount: paymentData.total_amount,
+                    generateBoleto: paymentData.boleto
+                }
             });
 
-            // Validações existentes
-            if (!paymentData.payment_method_id) {
-                logger.warn('Service: Método de pagamento não informado', {
+            // Validar dados
+            if (!movementId || !paymentData.payment_method_id || !paymentData.total_amount) {
+                logger.warn('Service: Dados de pagamento incompletos', {
                     paymentData: JSON.stringify(paymentData)
                 });
-                throw new ValidationError('Método de pagamento é obrigatório');
+                throw new ValidationError('Dados de pagamento incompletos');
             }
 
-            // Validar total_amount
-            if (!paymentData.total_amount || paymentData.total_amount <= 0) {
-                logger.warn('Service: Total de pagamento inválido', {
-                    totalAmount: paymentData.total_amount,
-                    paymentData: JSON.stringify(paymentData)
-                });
-                throw new ValidationError('Valor total do pagamento deve ser maior que zero');
-            }
-
-            // Validar movimento_id
-            if (!paymentData.movement_id) {
-                logger.warn('Service: Movimento não informado', {
-                    paymentData: JSON.stringify(paymentData)
-                });
-                throw new ValidationError('Movimento é obrigatório');
-            }
-
-            const validatedData = {
+            const paymentDataToCreate = {
+                movement_id: movementId,
                 payment_method_id: paymentData.payment_method_id,
                 total_amount: paymentData.total_amount,
-                movement_id: paymentData.movement_id
+                due_date: paymentData.due_date || null,
+                generateBoleto: paymentData.boleto
             };
 
-            // Adicionar campos opcionais
-            if (paymentData.payment_date) {
-                validatedData.payment_date = paymentData.payment_date;
-            }
-
-            if (paymentData.observation) {
-                validatedData.observation = paymentData.observation;
-            }
-
-            logger.info('Service: Dados de pagamento validados com sucesso', {
-                validatedData: JSON.stringify(validatedData)
+            // Criar pagamento
+            const payment = await this.movementPaymentService.create(paymentDataToCreate);
+            logger.info('Service: Pagamento criado com sucesso', {
+                movementId,
+                paymentId: payment?.movement_payment_id,
+                installments: payment?.installments?.length
             });
 
-            try {
-                const payment = await this.movementPaymentService.create({
-                    ...validatedData, 
-                    movement_id: movementId 
-                });
-
-                logger.info('Service: Pagamento criado com sucesso', { 
-                    movementId, 
-                    paymentId: payment.movement_payment_id,
-                    paymentDetails: JSON.stringify(payment)
-                });
-
-                return payment;
-            } catch (error) {
-                logger.error('Service: Erro COMPLETO na criação de pagamento', {
-                    movementId,
-                    paymentData: JSON.stringify(validatedData),
-                    errorMessage: error.message,
-                    errorName: error.constructor.name,
-                    errorStack: error.stack
-                });
-                throw error;
-            }
-        });
+            return payment;
+        } catch (error) {
+            logger.error('Service: Erro ao criar pagamento', {
+                error: error.message,
+                movementId,
+                paymentData
+            });
+            throw error;
+        }
     }
 
     async createBoletosMovimento(movementId) {
@@ -476,10 +524,10 @@ class MovementService extends IMovementService {
             // Buscar parcelas do movimento
             const installments = await this.installmentRepository.findByMovementId(movementId);
             
-            logger.info('Service: Parcelas encontradas', {
+            logger.info('Parcelas encontradas', {
                 movementId,
-                quantidadeParcelas: installments.length,
-                parcelas: installments.map(p => p.installment_id)
+                installmentsCount: installments.length,
+                installmentIds: installments.map(i => i.installment_id)
             });
 
             if (installments.length === 0) {

@@ -84,7 +84,16 @@ class MovementController {
                 throw new ValidationError('Erro de validação', error.details);
             }
 
-            const result = await this.service.create(value);
+            // Extrair userId do token JWT
+            const userId = req.user.userId;
+            
+            // Adicionar userId aos dados do movimento
+            const movementData = {
+                ...value,
+                user_id: userId
+            };
+
+            const result = await this.service.create(movementData);
             return res.json(result);
         } catch (error) {
             logger.error('Controller: Erro ao criar movimento', {
@@ -103,7 +112,7 @@ class MovementController {
 
             return res.status(500).json({
                 success: false,
-                error: 'Erro interno no servidor'
+                error: error.message
             });
         }
     }

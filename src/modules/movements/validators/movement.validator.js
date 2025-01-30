@@ -1,5 +1,14 @@
 const Joi = require('joi');
 
+// Extensão do Joi para incluir mensagens customizadas
+const customJoi = Joi.extend((joi) => ({
+    type: 'number',
+    base: joi.number(),
+    messages: {
+        'total_amount.mismatch': '{{#message}}'
+    }
+}));
+
 const listMovementsSchema = Joi.object({
     page: Joi.number().integer().min(1).default(1),
     limit: Joi.number().integer().min(1).max(100).default(10),
@@ -46,7 +55,7 @@ const createMovementSchema = Joi.object({
         'any.required': 'O identificador da pessoa (person_id) é obrigatório. Selecione um cliente/pessoa para a movimentação.',
         'number.base': 'O identificador da pessoa (person_id) deve ser um número inteiro válido.'
     }),
-    total_amount: Joi.number().required().messages({
+    total_amount: customJoi.number().required().messages({
         'any.required': 'O valor total da movimentação (total_amount) é obrigatório. Calcule o valor total dos itens.',
         'number.base': 'O valor total da movimentação (total_amount) deve ser um número válido.'
     }),
@@ -102,7 +111,7 @@ const createMovementSchema = Joi.object({
             return total + (quantity * unitPrice);
         }, 0);
 
-        if (calculatedTotal !== value.total_amount) {
+        if (Math.abs(calculatedTotal - value.total_amount) > 0.01) {
             return helpers.error('total_amount.mismatch', {
                 message: `O valor total (${value.total_amount}) não corresponde à soma dos itens (${calculatedTotal}). Verifique os preços e quantidades.`
             });
