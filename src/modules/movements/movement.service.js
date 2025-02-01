@@ -29,9 +29,6 @@ class MovementService extends IMovementService {
         movementPaymentService = null,
         personContactRepository,
         boletoService,
-        movementPaymentRepository = null,
-        installmentService,
-        licenseRepository,
         movementItemRepository,
         nfseService,
         serviceRepository,
@@ -53,36 +50,38 @@ class MovementService extends IMovementService {
         this.movementTypeRepository = movementTypeRepository;
         this.movementStatusRepository = movementStatusRepository;
         this.paymentMethodRepository = paymentMethodRepository;
-        this.installmentRepository = installmentRepository;
         
-        // Fallback para movementPaymentRepository
-        if (!movementPaymentRepository) {
-            const MovementPaymentRepository = require('../movement-payments/movement-payment.repository');
-            movementPaymentRepository = new MovementPaymentRepository();
-        }
-        this.movementPaymentRepository = movementPaymentRepository;
-
-        // Fallback para boletoService
-        if (!boletoService) {
-            const BoletoService = require('../boletos/boleto.service');
-            const BoletoRepository = require('../boletos/boleto.repository');
-            const boletoRepository = new BoletoRepository();
-            const N8nService = require('../../services/n8n.service');
-            
-            boletoService = new BoletoService({
-                boletoRepository,
-                n8nService: N8nService,
-                taskService
-            });
-        }
-        this.boletoService = boletoService;
-
         // Fallback para installmentRepository
         if (!installmentRepository) {
             const InstallmentRepository = require('../installments/installment.repository');
             installmentRepository = new InstallmentRepository();
         }
         this.installmentRepository = installmentRepository;
+
+        // Fallback para movementPaymentRepository
+        const MovementPaymentRepository = require('../movement-payments/movement-payment.repository');
+        this.movementPaymentRepository = new MovementPaymentRepository();
+
+        // Fallback para n8nService
+        if (!n8nService) {
+            const N8nService = require('../../services/n8n.service');
+            n8nService = N8nService;
+        }
+        this.n8nService = n8nService;
+
+        // Fallback para boletoService
+        if (!boletoService) {
+            const BoletoService = require('../boletos/boleto.service');
+            const BoletoRepository = require('../boletos/boleto.repository');
+            const boletoRepository = new BoletoRepository();
+            
+            boletoService = new BoletoService({
+                boletoRepository,
+                n8nService: this.n8nService,  // Usando a instância do n8nService
+                taskService
+            });
+        }
+        this.boletoService = boletoService;
 
         // Inicialização do movementPaymentService
         if (!movementPaymentService) {
@@ -96,9 +95,7 @@ class MovementService extends IMovementService {
         this.movementPaymentService = movementPaymentService;
         
         this.personContactRepository = personContactRepository;
-        this.installmentService = installmentService;
-        // Manter a lógica de fallback para criação do licenseRepository
-        this.licenseRepository = licenseRepository || new LicenseRepository();
+        this.licenseRepository = new LicenseRepository();
         
         // Fallback para movementItemRepository
         if (!movementItemRepository) {
@@ -106,7 +103,7 @@ class MovementService extends IMovementService {
             movementItemRepository = new MovementItemRepository();
         }
         this.movementItemRepository = movementItemRepository;
-        
+
         this.nfseService = nfseService;
         this.serviceRepository = serviceRepository;
         this.billingMessageService = billingMessageService;
@@ -329,42 +326,6 @@ class MovementService extends IMovementService {
         }
     }
 
-    /**
-     * Cria os itens do movimento dentro da transação
-     * @param {Array} items - Array com os itens do movimento
-     * @param {number} movementId - ID do movimento
-     * @param {Object} client - Cliente de transação do PostgreSQL
-     */
-    async _createMovementItems(items, movementId, client) {
-        if (!items || items.length === 0) {
-            logger.info('Service: Nenhum item para criar');
-            return;
-        }
-
-        logger.info('Service: Iniciando criação dos itens do movimento', { 
-            movementId,
-            itemCount: items.length 
-        });
-
-        for (const item of items) {
-            const itemData = {
-                movement_id: movementId,
-                item_id: item.item_id,
-                quantity: item.quantity,
-                unit_price: item.unit_price,
-                total_price: item.quantity * item.unit_price
-            };
-
-            // Usando o client da transação
-            const createdItem = await this.movementItemRepository.createWithClient(client, itemData);
-            logger.info('Service: Item de movimento criado com sucesso', { 
-                movementId,
-                itemData,
-                createdItem
-            });
-        }
-    }
-
     async _createWithTransaction(data, client) {
         try {
             // Tratamento do payload
@@ -430,7 +391,6 @@ class MovementService extends IMovementService {
                 payment_method_id,
                 total_amount: calculatedTotalAmount,
                 person_id,
-                generateBoleto: boleto,
                 due_date
             } : null;
 
@@ -438,28 +398,41 @@ class MovementService extends IMovementService {
             this.validateMovementData(movementData);
 
             // Criar o movimento usando o repository
-            const createdMovement = await this.movementRepository.createWithClient(movementData, client);
-            logger.info('Service: Movimento criado com sucesso', { 
-                movementId: createdMovement.movement_id,
-                data: movementData
+            const createdMovement = await this._createMovement(movementData, client);
+            const movementId = createdMovement.movement_id;
+
+            logger.info('Service: Movimento criado com sucesso', {
+                data,
+                movementId
             });
 
-            // Criar os itens do movimento
-            await this._createMovementItems(items, createdMovement.movement_id, client);
+            // Criar itens do movimento
+            const itemsToCreate = data.items || [];
+            logger.info('Service: Iniciando criação dos itens do movimento', {
+                movementId,
+                itemCount: itemsToCreate.length
+            });
 
-            // Força erro para testar rollback (após criar movimento e itens)
-            throw new Error('Erro forçado para testar rollback após criar movimento e itens');
+            for (const itemData of itemsToCreate) {
+                await this._createMovementItem(itemData, movementId, client);
+            }
 
-            // Retorno dos dados tratados
-            return {
-                movementData: createdMovement,
-                paymentData,
-                items,
-                shouldGenerateNfse: nfse,
-                shouldNotify: notificar,
-                shouldGenerateBoleto: boleto
-            };
+            // Só cria pagamento se tiver método de pagamento informado
+            if (data.payment_method_id) {
+                logger.info('Service: Iniciando criação do pagamento do movimento', { 
+                    movementId,
+                    payment_method_id: data.payment_method_id 
+                });
 
+                const paymentToCreate = await this._preparePaymentData(data, movementId);
+                await this._createMovementPayment(paymentToCreate, movementId, client);
+            } else {
+                logger.info('Service: Movimento criado sem pagamento', { 
+                    movementId 
+                });
+            }
+
+            return createdMovement;
         } catch (error) {
             logger.error('Service: Erro ao criar movimento na transação', {
                 error: error.message,
@@ -467,6 +440,126 @@ class MovementService extends IMovementService {
                 data: JSON.stringify(data)
             });
             throw error; // Re-throw para ser tratado pelo método transaction
+        }
+    }
+
+    async _createMovement(data, client) {
+        try {
+            // Validações básicas
+            this.validateMovementData(data);
+
+            // Criar movimento
+            const createdMovement = await this.movementRepository.createWithClient(data, client);
+
+            return createdMovement;
+        } catch (error) {
+            logger.error('Service: Erro ao criar movimento', {
+                error: error.message,
+                stack: error.stack,
+                data: JSON.stringify(data)
+            });
+            throw error;
+        }
+    }
+
+    async _createMovementItem(itemData, movementId, client) {
+        try {
+            // Validações básicas
+            if (!itemData.item_id || !itemData.quantity || !itemData.unit_price) {
+                logger.error('Service: Dados do item inválidos', {
+                    itemData: JSON.stringify(itemData)
+                });
+                throw new ValidationError('Dados do item inválidos');
+            }
+
+            // Criar item do movimento
+            const itemToCreate = {
+                movement_id: movementId,
+                item_id: itemData.item_id,
+                quantity: itemData.quantity,
+                unit_price: itemData.unit_price,
+                total_price: itemData.quantity * itemData.unit_price
+            };
+
+            const createdItem = await this.movementItemRepository.createWithClient(client, itemToCreate);
+
+            logger.info('Service: Item de movimento criado com sucesso', {
+                movementId,
+                itemData: itemToCreate,
+                createdItem
+            });
+
+            return createdItem;
+        } catch (error) {
+            logger.error('Service: Erro ao criar item do movimento', {
+                error: error.message,
+                stack: error.stack,
+                itemData: JSON.stringify(itemData)
+            });
+            throw error;
+        }
+    }
+
+    async _createMovementPayment(paymentData, movementId, client) {
+        try {
+            logger.info('Service: Iniciando criação do pagamento do movimento', { 
+                movementId,
+                paymentData 
+            });
+
+            // Usar os dados de pagamento exatamente como foram preparados
+            const paymentToCreate = {
+                movement_id: movementId,
+                payment_method_id: paymentData.payment_method_id,
+                total_amount: paymentData.total_amount,
+                due_date: paymentData.due_date,
+                generateBoleto: paymentData.generateBoleto
+            };
+
+            // Passar o client da transação corretamente
+            const createdPayment = await this.movementPaymentService.create(paymentToCreate, client);
+
+            logger.info('Service: Pagamento de movimento criado com sucesso', { 
+                movementId,
+                paymentData: paymentToCreate,
+                createdPayment
+            });
+
+            return createdPayment;
+        } catch (error) {
+            logger.error('Service: Erro ao criar pagamento do movimento', {
+                error: error.message,
+                stack: error.stack,
+                paymentData: JSON.stringify(paymentData)
+            });
+            throw error;
+        }
+    }
+
+    async _preparePaymentData(data, movementId) {
+        try {
+            // Preparação dos dados de pagamento
+            const paymentData = {
+                payment_method_id: data.payment_method_id,
+                total_amount: data.total_amount,
+                movement_id: movementId,
+                generateBoleto: true,  // Sempre gera boleto quando o método de pagamento for boleto
+                due_date: data.due_date || null // Passa due_date apenas se existir no request
+            };
+
+            logger.info('Service: Dados de pagamento preparados', {
+                paymentData,
+                movementId
+            });
+
+            return paymentData;
+        } catch (error) {
+            logger.error('Service: Erro ao preparar dados de pagamento', {
+                error: error.message,
+                stack: error.stack,
+                data: JSON.stringify(data)
+            });
+            throw error;
         }
     }
 
@@ -478,7 +571,6 @@ class MovementService extends IMovementService {
                     payment_method_id: paymentData.payment_method_id,
                     person_id: paymentData.person_id,
                     total_amount: paymentData.total_amount,
-                    generateBoleto: paymentData.boleto
                 }
             });
 
@@ -495,7 +587,6 @@ class MovementService extends IMovementService {
                 payment_method_id: paymentData.payment_method_id,
                 total_amount: paymentData.total_amount,
                 due_date: paymentData.due_date || null,
-                generateBoleto: paymentData.boleto
             };
 
             // Criar pagamento
@@ -609,7 +700,7 @@ class MovementService extends IMovementService {
         const cancelResults = await Promise.all(installments.map(async (installment) => {
             try {
                 // Cancela boletos da parcela
-                const canceledBoletos = await this.installmentService.cancelInstallmentBoletos(installment.installment_id);
+                const canceledBoletos = await this.installmentRepository.cancelInstallmentBoletos(installment.installment_id);
                 
                 logger.info('Boletos cancelados da parcela', {
                     installmentId: installment.installment_id,

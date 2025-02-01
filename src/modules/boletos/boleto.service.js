@@ -107,7 +107,7 @@ class BoletoService {
      * @param {object} data - Dados do boleto
      * @returns {Promise<object>} Boleto criado
      */
-    async createBoleto(data) {
+    async createBoleto(data, client = null) {
         try {
             logger.info('Serviço: Criando boleto', { data });
             
@@ -117,38 +117,49 @@ class BoletoService {
             }
 
             // Chama função do postgres para gerar payload do boleto
-            const boletoPayload = await this.repository.generateBoletoJson(data.installment_id);
+            const boletoPayload = await this.repository.generateBoletoJson(data.installment_id, client);
 
             if (!boletoPayload) {
                 throw new Error('Falha ao gerar payload do boleto');
             }
 
-            // Chama serviço do N8N para emissão de boleto
-            const n8nResponse = await this.n8nService.createBoleto({
-                dados: boletoPayload,
-                installment_id: data.installment_id
-            });
+            // Agenda a criação do boleto para ser executada após alguns segundos
+            setTimeout(async () => {
+                try {
+                    // Chama serviço do N8N para emissão de boleto
+                    const n8nResponse = await this.n8nService.createBoleto({
+                        dados: boletoPayload,
+                        installment_id: data.installment_id
+                    });
 
-            logger.info('Resposta do N8N para criação de boleto', { 
-                fullResponse: n8nResponse
-            });
+                    logger.info('Resposta do N8N para criação de boleto', { 
+                        fullResponse: n8nResponse
+                    });
 
-            // Verifica se a resposta contém dados válidos
-            if (!n8nResponse || !Array.isArray(n8nResponse) || n8nResponse.length === 0 || !n8nResponse[0].boleto_id) {
-                const errorMessage = "Não foi possível criar o boleto. Resposta do N8N inválida.";
-                
-                logger.error(errorMessage, { 
-                    fullResponse: n8nResponse 
-                });
+                    // Verifica se a resposta contém dados válidos
+                    if (!n8nResponse || !Array.isArray(n8nResponse) || n8nResponse.length === 0 || !n8nResponse[0].boleto_id) {
+                        const errorMessage = "Não foi possível criar o boleto. Resposta do N8N inválida.";
+                        
+                        logger.error(errorMessage, { 
+                            fullResponse: n8nResponse 
+                        });
+                        return;
+                    }
 
-                throw new Error(errorMessage);
-            }
+                    logger.info('Boleto criado com sucesso no N8N', { 
+                        installment_id: data.installment_id,
+                        boleto_id: n8nResponse[0].boleto_id
+                    });
+                } catch (error) {
+                    logger.error('Erro ao criar boleto no N8N', {
+                        error: error.message,
+                        installment_id: data.installment_id
+                    });
+                }
+            }, 5000); // 5 segundos de delay
 
-            // Usa o primeiro item do array
-            const boletoData = n8nResponse[0];
-
-            // Retorna a resposta do N8N sem criar boleto localmente
-            return n8nResponse;
+            // Retorna sucesso imediatamente
+            return { success: true };
         } catch (error) {
             const n8nErrorMessage = error.response?.data?.message || error.message;
             

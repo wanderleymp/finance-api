@@ -199,12 +199,17 @@ class MovementPaymentService extends IMovementPaymentService {
             const paymentMethod = await this.paymentMethodsService.findById(data.payment_method_id);
 
             // Criar pagamento usando o cliente de transação
-            const payment = await this.repository.create({
-                movement_id: data.movement_id,
-                payment_method_id: data.payment_method_id,
-                total_amount: data.total_amount,
-                due_date: data.due_date
-            }, client);
+            const payment = client 
+                ? await this.repository.createWithClient(client, {
+                    movement_id: data.movement_id,
+                    payment_method_id: data.payment_method_id,
+                    total_amount: data.total_amount
+                })
+                : await this.repository.create({
+                    movement_id: data.movement_id,
+                    payment_method_id: data.payment_method_id,
+                    total_amount: data.total_amount
+                });
 
             // Gerar parcelas
             let installments = [];
@@ -220,12 +225,12 @@ class MovementPaymentService extends IMovementPaymentService {
             const isBoletoPagamento = paymentMethod.payment_document_type_id === 1;
             const installmentCount = paymentMethod.installment_count || 1;
 
-            // Usar due_date personalizado ou calcular automaticamente
-            const baseDueDate = data.due_date ? new Date(data.due_date) : new Date();
+            // Usar due_date apenas se fornecido
+            const baseDueDate = data.due_date ? new Date(data.due_date) : null;
 
             if (isBoletoPagamento && data.generateBoleto) {
                 // Se for boleto, usa o InstallmentGenerator que já cuida da criação do boleto
-                installments = await this.installmentGenerator.generateInstallments(payment, paymentMethod, baseDueDate, client);
+                installments = await this.installmentGenerator.generateInstallments(payment, paymentMethod, baseDueDate, data.generateBoleto, client);
             } else {
                 // Para outros métodos de pagamento, usa o InstallmentService
                 const installmentAmount = data.total_amount / installmentCount;
@@ -252,7 +257,7 @@ class MovementPaymentService extends IMovementPaymentService {
             logger.info('Service: Parcelas geradas', { 
                 installmentsCount: installments.length,
                 paymentId: payment.payment_id,
-                baseDueDate: baseDueDate.toISOString()
+                baseDueDate: baseDueDate ? baseDueDate.toISOString() : null
             });
 
             return {

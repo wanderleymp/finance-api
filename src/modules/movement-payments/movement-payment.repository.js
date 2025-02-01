@@ -1,6 +1,7 @@
 const BaseRepository = require('../../repositories/base/BaseRepository');
 const { logger } = require('../../middlewares/logger');
 const { systemDatabase } = require('../../config/database');
+const { DatabaseError } = require('../../utils/errors');
 
 class MovementPaymentRepository extends BaseRepository {
     constructor() {
@@ -170,7 +171,15 @@ class MovementPaymentRepository extends BaseRepository {
     /**
      * Sobrescreve o método create do BaseRepository para adicionar created_at e updated_at
      */
-    async create(data) {
+    async create(data, client = null) {
+        if (client) {
+            return this.createWithClient(client, {
+                ...data,
+                created_at: new Date(),
+                updated_at: new Date()
+            });
+        }
+
         return super.create({
             ...data,
             created_at: new Date(),

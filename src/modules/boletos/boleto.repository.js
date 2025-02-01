@@ -168,10 +168,11 @@ class BoletoRepository extends BaseRepository {
      * @param {number} installmentId - ID da parcela
      * @returns {Promise<object>} Payload do boleto
      */
-    async generateBoletoJson(installmentId) {
+    async generateBoletoJson(installmentId, client = null) {
         try {
             const query = 'SELECT public.fn_generate_boleto_json($1) as payload';
-            const result = await this.pool.query(query, [installmentId]);
+            const queryRunner = client || this.pool;
+            const result = await queryRunner.query(query, [installmentId]);
             return result.rows[0].payload;
         } catch (error) {
             logger.error('Erro ao gerar payload do boleto', { error: error.message, installmentId });

@@ -10,7 +10,7 @@ class InstallmentGenerator {
     /**
      * Gera parcelas para um pagamento baseado no método de pagamento
      */
-    async generateInstallments(payment, paymentMethod, baseDueDate = null, generateBoleto = true) {
+    async generateInstallments(payment, paymentMethod, baseDueDate = null, generateBoleto = true, client = null) {
         try {
             this.logger.info('Generator: Iniciando geração de parcelas', {
                 payment_id: payment.payment_id,
@@ -42,17 +42,19 @@ class InstallmentGenerator {
             // Gera as datas de vencimento
             const installments = [];
             
-            // Usar baseDueDate se fornecido, senão usar data atual
-            const baseDate = baseDueDate ? new Date(baseDueDate) : new Date();
-
             for (let i = 0; i < numberOfInstallments; i++) {
-                const dueDate = new Date(baseDate);
+                let dueDate;
                 
-                // Se baseDueDate foi fornecido, usar intervalos mensais
+                // Se baseDueDate foi fornecido, usar essa data diretamente
                 if (baseDueDate) {
-                    dueDate.setMonth(dueDate.getMonth() + i);
+                    dueDate = new Date(baseDueDate);
+                    // Se tiver mais de uma parcela, adiciona meses
+                    if (i > 0) {
+                        dueDate.setMonth(dueDate.getMonth() + i);
+                    }
                 } else {
-                    // Senão, usar lógica original de dias
+                    // Senão, usar lógica do método de pagamento
+                    dueDate = new Date();
                     const daysToAdd = i === 0 
                         ? paymentMethod.first_due_date_days 
                         : paymentMethod.first_due_date_days + (paymentMethod.days_between_installments * i);
@@ -85,7 +87,9 @@ class InstallmentGenerator {
                 this.logger.info('Generator: Criando parcela', { installment });
                 
                 try {
-                    const createdInstallment = await this.installmentRepository.create(installment);
+                    const createdInstallment = client
+                        ? await this.installmentRepository.createWithClient(client, installment)
+                        : await this.installmentRepository.create(installment);
                     this.logger.info('Generator: Parcela criada com sucesso', { createdInstallment });
 
                     // Se for pagamento via boleto e generateBoleto for true, gera o boleto
@@ -102,7 +106,7 @@ class InstallmentGenerator {
                             
                             this.logger.info('Generator: Gerando boleto', { boletoData });
                             
-                            await this.boletoService.createBoleto(boletoData);
+                            await this.boletoService.createBoleto(boletoData, client);
                             
                             this.logger.info('Generator: Boleto gerado com sucesso', { 
                                 installment_id: createdInstallment.installment_id 
@@ -221,7 +225,7 @@ class InstallmentGenerator {
                             
                             this.logger.info('Generator: Gerando boleto', { boletoData });
                             
-                            await this.boletoService.createBoleto(boletoData);
+                            await this.boletoService.createBoleto(boletoData, client);
                             
                             this.logger.info('Generator: Boleto gerado com sucesso', { 
                                 installment_id: createdInstallment.installment_id 
