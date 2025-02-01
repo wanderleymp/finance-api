@@ -158,9 +158,9 @@ class ContractRecurringService {
                 }))
             });
 
-            // Adicionar notificação assíncrona para movimentos processados com sucesso
+            // Adicionar notificação assíncrona para movimentos processados
             const successfulMovements = results
-                .filter(result => result.status === 'success' && result.movement)
+                .filter(result => result.movement)
                 .map(result => result.movement.movement_id);
 
             // Executar notificações em paralelo sem bloquear o retorno
@@ -1164,8 +1164,8 @@ class ContractRecurringService {
                 timestamp: new Date().toISOString()
             });
 
-            // Delay de 8 segundos
-            await new Promise(resolve => setTimeout(resolve, 8000));
+            // Delay de 13 segundos (8 + 5 do boleto)
+            await new Promise(resolve => setTimeout(resolve, 13000));
             
             this.logger.info('Iniciando envio de notificação após delay', {
                 movementId,

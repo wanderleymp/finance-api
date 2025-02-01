@@ -382,8 +382,8 @@ class MovementService extends IMovementService {
                 total_amount: calculatedTotalAmount,
                 movement_date: new Date().toISOString().split('T')[0],
                 movement_status_id: 2, // Status padrão para novo movimento
-                addition,
-                discount
+                addition: addition || 0,
+                discount: discount || 0
             };
 
             // Preparação dos dados de pagamento se método informado
@@ -432,6 +432,19 @@ class MovementService extends IMovementService {
                 });
             }
 
+            // Notificar movimento
+            logger.info('Service: Iniciando notificação do movimento', {
+                movementId: createdMovement.movement_id
+            });
+
+            this.delayNotification(createdMovement.movement_id)
+                .catch(error => {
+                    logger.error('Service: Erro na notificação assíncrona do movimento', {
+                        movementId: createdMovement.movement_id,
+                        errorMessage: error.message
+                    });
+                });
+
             return createdMovement;
         } catch (error) {
             logger.error('Service: Erro ao criar movimento na transação', {
@@ -448,8 +461,11 @@ class MovementService extends IMovementService {
             // Validações básicas
             this.validateMovementData(data);
 
+            // Remove o campo notificar antes de salvar no banco
+            const { notificar, ...movementData } = data;
+
             // Criar movimento
-            const createdMovement = await this.movementRepository.createWithClient(data, client);
+            const createdMovement = await this.movementRepository.createWithClient(movementData, client);
 
             return createdMovement;
         } catch (error) {
@@ -1119,6 +1135,41 @@ class MovementService extends IMovementService {
                 errorMessage: error.message,
                 errorName: error.constructor.name,
                 errorStack: error.stack
+            });
+            throw error;
+        }
+    }
+
+    async delayNotification(movementId) {
+        try {
+            logger.info('Service: Preparando notificação de movimento assíncrona', {
+                movementId,
+                timestamp: new Date().toISOString()
+            });
+
+            // Delay de 13 segundos (8 + 5 do boleto)
+            await new Promise(resolve => setTimeout(resolve, 13000));
+            
+            logger.info('Service: Iniciando envio de notificação após delay', {
+                movementId,
+                delayDuration: 13000,
+                timestamp: new Date().toISOString()
+            });
+
+            // Verificar se o boleto foi gerado antes de notificar
+            await this.n8nService.notifyBillingMovement(movementId);
+
+            logger.info('Service: Notificação de movimento concluída com sucesso', {
+                movementId,
+                timestamp: new Date().toISOString()
+            });
+        } catch (error) {
+            logger.error('Service: Erro na notificação de movimento', {
+                movementId,
+                errorName: error.name,
+                errorMessage: error.message,
+                errorStack: error.stack,
+                timestamp: new Date().toISOString()
             });
             throw error;
         }
