@@ -100,7 +100,7 @@ class ContractRecurringService {
                                 ...billingData,
                                 movement_id: movement.movement_id
                             },
-                            transaction: client
+                            client: client
                         });
                     } catch (paymentError) {
                         contractResult.stages.createPayment.error = {
@@ -114,14 +114,14 @@ class ContractRecurringService {
                     contractResult.stages.createContractMovement = { started: new Date() };
                     const contractMovement = await this.createContractMovement(contract, {
                         movement_id: movement.movement_id
-                    });
+                    }, client);
                     contractResult.stages.createContractMovement.completed = new Date();
 
                     // Atualizar datas de faturamento do contrato
                     contractResult.stages.updateBillingDates = { started: new Date() };
                     const updatedContract = await this.updateBillingDates(contract, {
                         movement_date: movement.movement_date
-                    });
+                    }, client);
                     contractResult.stages.updateBillingDates.completed = new Date();
 
                     contractResult.status = payment ? 'success' : 'partial_error';
@@ -288,7 +288,7 @@ class ContractRecurringService {
         }
     }
 
-    async billingCreatePayment(contractId, { billingData, transaction }) {
+    async billingCreatePayment(contractId, { billingData, client }) {
         try {
             // Garantir que temos uma data de vencimento
             const dueDate = billingData.due_date || await this.calculateBillingDueDate(billingData);
@@ -308,7 +308,7 @@ class ContractRecurringService {
             };
 
             // Passar o cliente de transação corretamente
-            const payment = await this.movementPaymentService.create(paymentData, transaction);
+            const payment = await this.movementPaymentService.create(paymentData, client);
 
             this.logger.info('Pagamento criado com sucesso', {
                 paymentId: payment.payment_id,
@@ -326,7 +326,7 @@ class ContractRecurringService {
         }
     }
 
-    async updateBillingDates(contract, movementData) {
+    async updateBillingDates(contract, movementData, client = null) {
         this.logger.info('Preparando atualizar datas de faturamento', {
             contractId: contract.contract_id,
             movementDate: movementData.movement_date
@@ -356,7 +356,8 @@ class ContractRecurringService {
             // Atualizar contrato no repositório
             const updatedContract = await this.repository.update(
                 contract.contract_id, 
-                updatePayload
+                updatePayload,
+                client
             );
 
             this.logger.info('Datas de faturamento do contrato atualizadas', {
@@ -466,7 +467,7 @@ class ContractRecurringService {
         return createdItems;
     }
 
-    async createContractMovement(contract, movementData) {
+    async createContractMovement(contract, movementData, client = null) {
         this.logger.info('Preparando criar movimento de contrato', {
             contractId: contract.contract_id,
             movementId: movementData.movement_id,
@@ -488,7 +489,7 @@ class ContractRecurringService {
                 payload: JSON.stringify(movementPayload)
             });
 
-            const contractMovement = await this.contractMovementService.create(movementPayload);
+            const contractMovement = await this.contractMovementService.create(movementPayload, client);
 
             this.logger.info('Movimento de contrato criado com sucesso', {
                 contractId: contract.contract_id,
@@ -1080,28 +1081,52 @@ class ContractRecurringService {
 
     async calculateBillingDueDate(billingData) {
         try {
-            const { next_billing_date, due_day } = billingData;
+            const { next_billing_date, due_day, reference = 'current' } = billingData;
 
+            // Validações iniciais
             if (!next_billing_date) {
                 throw new Error('Data de próximo faturamento não encontrada');
             }
 
-            // Converter para objeto Date
+            // Data atual e próxima data de faturamento
+            const now = new Date();
             const nextBillingDate = new Date(next_billing_date);
             
-            // Criar data de vencimento com o dia especificado
-            const dueDate = new Date(nextBillingDate);
-            dueDate.setDate(due_day || 10); // Se não tiver due_day, usa 10
+            // Validar se a data de faturamento é válida
+            if (isNaN(nextBillingDate.getTime())) {
+                throw new Error('Data de próximo faturamento inválida');
+            }
+
+            // Dia de vencimento padrão caso não seja fornecido
+            const defaultDueDay = 10;
+            const targetDueDay = due_day || defaultDueDay;
+
+            this.logger.info('Iniciando cálculo de data de vencimento', {
+                reference,
+                nextBillingDate: nextBillingDate.toISOString(),
+                targetDueDay,
+                now: now.toISOString()
+            });
+
+            // Criar data base de vencimento
+            let dueDate = new Date(nextBillingDate.getFullYear(), nextBillingDate.getMonth(), targetDueDay);
             
-            // Se a data de vencimento for anterior à data de faturamento, avança um mês
-            if (dueDate < nextBillingDate) {
+            // Se a data base for menor que hoje, avança um mês
+            if (dueDate <= now) {
                 dueDate.setMonth(dueDate.getMonth() + 1);
             }
 
-            this.logger.info('Cálculo de data de vencimento', {
+            // Para 'next current', sempre avança mais um mês
+            if (reference === 'next current') {
+                dueDate.setMonth(dueDate.getMonth() + 1);
+            }
+
+            this.logger.info('Data de vencimento calculada', {
+                reference,
+                now: now.toISOString(),
                 nextBillingDate: nextBillingDate.toISOString(),
                 dueDate: dueDate.toISOString(),
-                dueDay: due_day
+                targetDueDay
             });
 
             return dueDate.toISOString();
