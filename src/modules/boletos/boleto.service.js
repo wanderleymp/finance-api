@@ -336,6 +336,87 @@ class BoletoService {
             throw error;
         }
     }
+
+    /**
+     * Cancela um boleto utilizando o serviço N8N
+     * @param {string|number} boletoId - ID do boleto a ser cancelado
+     * @returns {Promise<Object>} Resposta do cancelamento
+     */
+    async cancelBoleto(boletoId) {
+        try {
+            logger.info('Serviço: Iniciando cancelamento de boleto', { boletoId });
+
+            // Busca detalhes do boleto
+            const boletoDetails = await this.findById(boletoId);
+            
+            // Extrai external_boleto_id de diferentes formatos
+            const externalBoletoId = 
+                boletoDetails.external_boleto_id || 
+                boletoDetails.external_data?.boleto_id || 
+                boletoDetails.external_data;
+            
+            if (!externalBoletoId) {
+                logger.warn('Boleto sem external_boleto_id para cancelamento', { 
+                    boletoId,
+                    boletoDetails 
+                });
+                throw new Error('External boleto ID não encontrado');
+            }
+
+            // Chama serviço do N8N para cancelamento
+            const n8nResponse = await this.n8nService.cancelBoleto({
+                external_boleto_id: externalBoletoId
+            });
+
+            // Atualiza status do boleto após cancelamento
+            if (n8nResponse && Object.keys(n8nResponse).length > 0) {
+                await this.updateBoleto(boletoId, { 
+                    status: 'CANCELADO' 
+                });
+            }
+
+            logger.info('Serviço: Boleto cancelado com sucesso', { 
+                boletoId, 
+                externalBoletoId 
+            });
+
+            return n8nResponse;
+        } catch (error) {
+            logger.error('Erro ao cancelar boleto', { 
+                boletoId, 
+                error: error.message 
+            });
+            throw error;
+        }
+    }
+
+    /**
+     * Busca boletos associados a uma parcela específica
+     * @param {number} installmentId - ID da parcela
+     * @returns {Promise<Array>} Lista de boletos da parcela
+     */
+    async findByInstallmentId(installmentId) {
+        try {
+            logger.info('Serviço: Buscando boletos por installment ID', { 
+                installmentId 
+            });
+
+            const boletos = await this.repository.findByInstallmentId(installmentId);
+
+            logger.info('Serviço: Boletos encontrados', { 
+                installmentId, 
+                boletosCount: boletos.length 
+            });
+
+            return boletos;
+        } catch (error) {
+            logger.error('Erro ao buscar boletos por installment ID', { 
+                installmentId, 
+                error: error.message 
+            });
+            throw error;
+        }
+    }
 }
 
 module.exports = BoletoService;

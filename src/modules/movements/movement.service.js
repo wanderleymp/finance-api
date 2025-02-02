@@ -2,6 +2,7 @@ const MovementPaymentRepository = require('../movement-payments/movement-payment
 const MovementTypeRepository = require('../movement-types/movement-type.repository');
 const MovementStatusRepository = require('../movement-statuses/movement-status.repository');
 const InstallmentRepository = require('../installments/installment.repository');
+const InstallmentService = require('../installments/installment.service');
 const PersonRepository = require('../persons/person.repository'); 
 const PaymentMethodRepository = require('../payment-methods/payment-method.repository');
 const BillingMessageService = require('../messages/billing/billing-message.service');
@@ -34,6 +35,7 @@ class MovementService extends IMovementService {
         serviceRepository,
         billingMessageService,
         n8nService, // Adicionado parâmetro n8nService
+        installmentService = null, // Adicionado parâmetro installmentService
         logger = console,
         taskService
     }) {
@@ -82,6 +84,16 @@ class MovementService extends IMovementService {
             });
         }
         this.boletoService = boletoService;
+
+        // Fallback para installmentService
+        if (!installmentService) {
+            installmentService = new InstallmentService({
+                installmentRepository: this.installmentRepository,
+                boletoService: this.boletoService,
+                n8nService: this.n8nService
+            });
+        }
+        this.installmentService = installmentService;
 
         // Inicialização do movementPaymentService
         if (!movementPaymentService) {
@@ -715,8 +727,15 @@ class MovementService extends IMovementService {
         // Processamento assíncrono para cancelar boletos
         const cancelResults = await Promise.all(installments.map(async (installment) => {
             try {
-                // Cancela boletos da parcela
-                const canceledBoletos = await this.installmentRepository.cancelInstallmentBoletos(installment.installment_id);
+                // Busca boleto da parcela
+                const installmentBoletos = await this.boletoService.findByInstallmentId(installment.installment_id);
+                
+                // Cancela cada boleto encontrado
+                const canceledBoletos = await Promise.all(
+                    installmentBoletos.map(boleto => 
+                        this.boletoService.cancelBoleto(boleto.boleto_id)
+                    )
+                );
                 
                 logger.info('Boletos cancelados da parcela', {
                     installmentId: installment.installment_id,

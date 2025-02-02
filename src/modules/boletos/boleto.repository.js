@@ -1,9 +1,11 @@
 const BaseRepository = require('../../repositories/base/BaseRepository');
 const { logger } = require('../../middlewares/logger');
+const { systemDatabase } = require('../../config/database');
 
 class BoletoRepository extends BaseRepository {
     constructor() {
         super('boletos', 'boleto_id');
+        this.database = systemDatabase;
     }
 
     /**
@@ -279,37 +281,49 @@ class BoletoRepository extends BaseRepository {
     }
 
     /**
+     * Executa uma consulta SQL personalizada
+     * @param {string} query - Consulta SQL a ser executada
+     * @param {Array} params - Parâmetros da consulta
+     * @returns {Promise<Array>} Resultado da consulta
+     */
+    async query(query, params = []) {
+        try {
+            const result = await this.database.pool.query(query, params);
+            return result.rows;
+        } catch (error) {
+            logger.error('Erro ao executar consulta personalizada', { 
+                query, 
+                params, 
+                error: error.message 
+            });
+            throw error;
+        }
+    }
+
+    /**
      * Busca boletos por ID da parcela
      * @param {number} installmentId - ID da parcela
      * @returns {Promise<Array>} Lista de boletos da parcela
      */
     async findByInstallmentId(installmentId) {
         try {
-            logger.info('Repository: Buscando boletos por ID da parcela', { installmentId });
-            
             const query = `
                 SELECT 
-                    b.*,
-                    i.due_date,
-                    i.amount
-                FROM boletos b
-                JOIN installments i ON b.installment_id = i.installment_id
-                WHERE b.installment_id = $1
-                ORDER BY b.boleto_id DESC
+                    boleto_id, 
+                    boleto_number, 
+                    status, 
+                    generated_at,
+                    external_boleto_id,
+                    boleto_url
+                FROM boletos
+                WHERE installment_id = $1
             `;
-            
-            const result = await this.pool.query(query, [installmentId]);
-            
-            logger.info('Repository: Boletos encontrados', { 
-                installmentId, 
-                count: result.rows.length 
-            });
-            
-            return result.rows;
+
+            return await this.query(query, [installmentId]);
         } catch (error) {
-            logger.error('Repository: Erro ao buscar boletos por ID da parcela', { 
-                error: error.message, 
-                installmentId 
+            logger.error('Erro ao buscar boletos por installment ID', { 
+                installmentId, 
+                error: error.message 
             });
             throw error;
         }

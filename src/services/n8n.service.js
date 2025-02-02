@@ -162,48 +162,74 @@ class N8NService {
 
     /**
      * Cancela um boleto no N8N
+     * @param {Object} boletoData - Dados do boleto a ser cancelado
+     * @returns {Promise<Object>} Resultado do cancelamento
      */
     async cancelBoleto(boletoData) {
-        logger.info('Enviando requisição de cancelamento de boleto para N8N', {
-            payload: boletoData
+        // Log inicial
+        logger.info('Iniciando cancelamento de boleto', {
+            externalBoletoId: boletoData.external_boleto_id
         });
 
-        // Ajusta o payload para o formato do curl
+        // Validar external_boleto_id
+        if (!boletoData.external_boleto_id) {
+            throw new Error('External Boleto ID é obrigatório');
+        }
+
+        // Payload para cancelamento
         const payload = {
             external_boleto_id: boletoData.external_boleto_id
         };
 
-        logger.info('Payload gerado para cancelamento de boleto', {
-            payload,
-            keys: Object.keys(payload),
-            externalBoletoId: payload.external_boleto_id
-        });
+        // Chave de API fixa
+        const apiKey = 'ffcaa89a3e19bd98e911475c7974309b';
+
+        const headers = {
+            'Content-Type': 'application/json',
+            'apikey': apiKey
+        };
 
         try {
-            logger.info('Tentativa de cancelamento de boleto', {
-                apiKey: this.apiKey,
-                apiKeyLength: this.apiKey.length
-            });
-
-            const response = await axios.post('https://n8n.webhook.agilefinance.com.br/webhook/inter/cobranca/cancela', payload, {
+            logger.info('Detalhes da requisição N8N', {
+                url: 'https://n8n.webhook.agilefinance.com.br/webhook/inter/cobranca/cancela',
+                payload,
                 headers: {
-                    'Content-Type': 'application/json',
-                    'apikey': this.apiKey
+                    ...headers,
+                    'apikey': '[REDACTED]'
                 }
             });
 
-            logger.info('Resposta do cancelamento de boleto', {
-                status: response.status,
-                data: response.data
+            const response = await axios.post(
+                'https://n8n.webhook.agilefinance.com.br/webhook/inter/cobranca/cancela', 
+                payload, 
+                { 
+                    headers,
+                    timeout: 10000 // 10 segundos de timeout
+                }
+            );
+
+            logger.info('Boleto cancelado com sucesso', { 
+                externalBoletoId: payload.external_boleto_id, 
+                responseStatus: response.status,
+                responseData: response.data
             });
 
             return response.data;
         } catch (error) {
-            logger.error('Erro no cancelamento de boleto', {
+            // Log extremamente detalhado do erro
+            logger.error('Erro ao cancelar boleto', {
+                externalBoletoId: payload.external_boleto_id,
+                errorType: error.constructor.name,
                 errorMessage: error.message,
-                errorStack: error.stack
+                errorResponse: error.response?.data,
+                errorStatus: error.response?.status,
+                errorHeaders: error.response?.headers,
+                requestHeaders: headers,
+                requestPayload: payload,
+                fullError: error
             });
-            throw error;
+
+            throw new Error(`Falha ao cancelar boleto: ${error.message}`);
         }
     }
 
