@@ -12,7 +12,17 @@ const contractRecurringValidator = {
         status: Joi.string().valid('active', 'inactive', 'paused').default('active'),
         model_movement_id: Joi.number().integer().optional(),
         contract_group_id: Joi.number().integer().optional(),
-        billing_reference: Joi.string().valid('current', 'previous').default('current')
+        billing_reference: Joi.string().valid('current', 'previous', 'next current').default('current'),
+        person_id: Joi.number().integer().required(),
+        movement_type_id: Joi.number().integer().optional(),
+        license_id: Joi.number().integer().required(),
+        items: Joi.array().items(Joi.object({
+            item_id: Joi.number().integer().required(),
+            quantity: Joi.number().precision(2).required(),
+            unit_price: Joi.number().precision(2).required(),
+            total_price: Joi.number().precision(2).optional(),
+            description: Joi.string().allow(null, '').optional()
+        })).min(1).required()
     }),
 
     update: Joi.object({

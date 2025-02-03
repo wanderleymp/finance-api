@@ -190,10 +190,15 @@ class MovementItemRepository extends BaseRepository {
         }
     }
 
-    async create(data) {
+    async create(data, options = {}) {
         try {
             const result = await super.create(data);
-            await this.updateMovementTotal(data.movement_id);
+            
+            // Só atualiza o total se skipTotalUpdate não for true
+            if (!options.skipTotalUpdate) {
+                await this.updateMovementTotal(data.movement_id, options.client);
+            }
+            
             return MovementItemDTO.fromDatabase(result);
         } catch (error) {
             logger.error('Erro ao criar item de movimentação:', error);

@@ -1265,6 +1265,182 @@ class ContractRecurringService {
             client.release();
         }
     }
+
+    async create(data, client = null) {
+        try {
+            // Log do payload recebido
+            this.logger.info('Service: Payload recebido', { data });
+            
+            // Se não houver client externo, usa o método transaction do repository
+            if (!client) {
+                return await this.repository.transaction(async (transactionClient) => {
+                    return await this._createWithTransaction(data, transactionClient);
+                });
+            }
+
+            // Se houver client externo, usa ele diretamente
+            return await this._createWithTransaction(data, client);
+        } catch (error) {
+            this.logger.error('Service: Erro ao criar contrato recorrente', {
+                error: error.message,
+                stack: error.stack
+            });
+            throw error;
+        }
+    }
+
+    async _createWithTransaction(data, client) {
+        try {
+            // Iniciar transação explicitamente
+            this.logger.info('Service: Iniciando transação');
+            await client.query('BEGIN');
+
+            const { 
+                contract_name,
+                contract_value,
+                start_date,
+                person_id,
+                items = []
+            } = data;
+
+            this.logger.info('Service: Iniciando criação do contrato recorrente', { data });
+
+            // Calcular total dos itens uma única vez
+            const totalItems = items.reduce((sum, item) => {
+                const itemTotal = item.total_price || Number((item.quantity * item.unit_price).toFixed(2));
+                return sum + itemTotal;
+            }, 0);
+
+            this.logger.info('Service: Total calculado para o movimento', {
+                totalItems,
+                itemCount: items.length
+            });
+
+            // Criar movimento com o total já calculado
+            const createdMovement = await this.movementRepository.create({
+                person_id,
+                description: contract_name,
+                total_amount: totalItems,
+                total_items: totalItems,
+                movement_date: start_date,
+                is_template: true,
+                movement_type_id: data.movement_type_id || 3,
+                movement_status_id: 1,
+                license_id: data.license_id,
+                addition: 0,
+                discount: 0
+            }, client);
+
+            this.logger.info('Service: Movimento criado com sucesso', {
+                movementId: createdMovement.movement_id,
+                movement: createdMovement
+            });
+
+            // Criar itens do movimento em sequência
+            const createdItems = [];
+            for (const item of items) {
+                const itemData = {
+                    movement_id: createdMovement.movement_id,
+                    item_id: item.item_id,
+                    quantity: item.quantity,
+                    unit_price: item.unit_price,
+                    total_price: item.total_price || Number((item.quantity * item.unit_price).toFixed(2))
+                };
+
+                // Criar item sem atualizar o total do movimento
+                const createdItem = await this.movementItemRepository.create(itemData, client, { skipTotalUpdate: true });
+                createdItems.push(createdItem);
+
+                this.logger.info('Service: Item do movimento criado', {
+                    movementId: createdMovement.movement_id,
+                    itemId: createdItem.movement_item_id,
+                    item: createdItem
+                });
+            }
+
+            this.logger.info('Service: Todos os itens do movimento criados', {
+                movementId: createdMovement.movement_id,
+                itemCount: createdItems.length,
+                totalAmount: totalItems
+            });
+
+            // Criar contrato recorrente
+            const contractData = {
+                model_movement_id: createdMovement.movement_id,
+                contract_name: data.contract_name,
+                contract_value: totalItems, // Usar o total calculado
+                start_date: data.start_date,
+                recurrence_period: data.recurrence_period,
+                due_day: data.due_day,
+                days_before_due: data.days_before_due,
+                status: data.status,
+                contract_group_id: data.contract_group_id,
+                billing_reference: data.billing_reference
+            };
+
+            const createdContract = await this.repository.create(contractData, client);
+
+            this.logger.info('Service: Contrato recorrente criado com sucesso', {
+                contractId: createdContract.contract_recurring_id,
+                modelMovementId: createdContract.model_movement_id,
+                contract: createdContract
+            });
+
+            const result = {
+                contract: createdContract,
+                movement: createdMovement,
+                movementItems: createdItems
+            };
+
+            this.logger.info('Service: Resultado completo', result);
+
+            // Commit da transação
+            this.logger.info('Service: Finalizando transação com sucesso');
+            await client.query('COMMIT');
+
+            return result;
+        } catch (error) {
+            // Rollback explícito em caso de erro
+            this.logger.info('Service: Iniciando rollback da transação');
+            await client.query('ROLLBACK');
+            this.logger.info('Service: Rollback concluído');
+            
+            this.logger.error('Service: Erro ao criar contrato recorrente na transação', {
+                error: error.message,
+                stack: error.stack,
+                data: JSON.stringify(data)
+            });
+            throw error;
+        }
+    }
+
+    async _createContractItem(itemData, contractId, client) {
+        try {
+            // Validações básicas
+            if (!itemData.item_id || !itemData.quantity || !itemData.unit_price) {
+                this.logger.error('Service: Dados do item inválidos', {
+                    itemData: JSON.stringify(itemData)
+                });
+                throw new ValidationError('Dados do item inválidos');
+            }
+
+            const itemToCreate = {
+                ...itemData,
+                contract_id: contractId
+            };
+
+            // Criar item usando o repository
+            return await this.contractItemRepository.createWithClient(itemToCreate, client);
+        } catch (error) {
+            this.logger.error('Service: Erro ao criar item do contrato', {
+                error: error.message,
+                stack: error.stack,
+                itemData: JSON.stringify(itemData),
+                contractId
+            });
+            throw error;
+        }
+    }
 }
 
 module.exports = ContractRecurringService;

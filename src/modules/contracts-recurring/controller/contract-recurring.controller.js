@@ -56,9 +56,8 @@ class ContractRecurringController {
         try {
             const result = await this.service.create(req.body);
             
-            logger.info('Contrato recorrente criado', { 
-                id: result.contract_recurring_id,
-                name: result.contract_name 
+            this.logger.info('Contrato recorrente criado', { 
+                data: result 
             });
 
             res.status(201).json(result);

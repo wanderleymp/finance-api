@@ -107,31 +107,34 @@ class ContractRecurringRepository extends BaseRepository {
         return await this.pool.connect();
     }
 
-    async create(data) {
+    async create(data, client = null) {
         try {
-            const result = await this.pool.query(
+            const queryClient = client || this.pool;
+            const result = await queryClient.query(
                 `INSERT INTO ${this.tableName} (
-                    contract_name, 
-                    description, 
-                    start_date, 
-                    end_date, 
-                    recurrence_type, 
-                    recurrence_interval, 
-                    status, 
-                    total_value, 
-                    contract_group_id
-                ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9) 
+                    model_movement_id,
+                    contract_name,
+                    contract_value,
+                    start_date,
+                    recurrence_period,
+                    due_day,
+                    days_before_due,
+                    status,
+                    contract_group_id,
+                    billing_reference
+                ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10) 
                 RETURNING *`,
                 [
+                    data.model_movement_id,
                     data.contract_name,
-                    data.description,
+                    data.contract_value,
                     data.start_date,
-                    data.end_date,
-                    data.recurrence_type,
-                    data.recurrence_interval,
+                    data.recurrence_period,
+                    data.due_day,
+                    data.days_before_due,
                     data.status || 'active',
-                    data.total_value,
-                    data.contract_group_id
+                    data.contract_group_id,
+                    data.billing_reference
                 ]
             );
 

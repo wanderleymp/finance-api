@@ -11,7 +11,7 @@ class MovementItemService extends IMovementItemService {
         this.repository = new MovementItemRepository();
     }
 
-    async create(data) {
+    async create(data, options = {}) {
         await MovementItemValidator.validateCreate(data);
 
         // Calcula o total_price se não fornecido
@@ -19,15 +19,11 @@ class MovementItemService extends IMovementItemService {
             data.total_price = Number((data.quantity * data.unit_price).toFixed(2));
         }
 
-        const item = await this.repository.create(data);
-        
-        // Atualiza o total do movimento
-        await this.repository.updateMovementTotal(data.movement_id);
-        
+        const item = await this.repository.create(data, options);
         return MovementItemDTO.fromEntity(item);
     }
 
-    async update(id, data) {
+    async update(id, data, options = {}) {
         await MovementItemValidator.validateUpdate(data);
 
         const existingItem = await this.repository.findById(id);
@@ -44,8 +40,10 @@ class MovementItemService extends IMovementItemService {
 
         const item = await this.repository.update(id, data);
         
-        // Atualiza o total do movimento
-        await this.repository.updateMovementTotal(existingItem.movement_id);
+        // Atualiza o total do movimento apenas se skipTotalUpdate não for true
+        if (!options.skipTotalUpdate) {
+            await this.repository.updateMovementTotal(existingItem.movement_id, options.client);
+        }
         
         return MovementItemDTO.fromEntity(item);
     }
