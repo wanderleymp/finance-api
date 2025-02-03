@@ -188,37 +188,41 @@ class MovementPaymentService extends IMovementPaymentService {
             if (!data.movement_id) {
                 throw new ValidationError('ID do movimento é obrigatório');
             }
-            if (!data.payment_method_id) {
-                throw new ValidationError('ID do método de pagamento é obrigatório');
-            }
+            // Validações básicas
             if (!data.total_amount) {
                 throw new ValidationError('Valor total é obrigatório');
             }
 
-            // Buscar método de pagamento
-            const paymentMethod = await this.paymentMethodsService.findById(data.payment_method_id);
+            // Método de pagamento é opcional
+            let paymentMethod = null;
+            if (data.payment_method_id) {
+                paymentMethod = await this.paymentMethodsService.findById(data.payment_method_id);
+                if (!paymentMethod) {
+                    throw new ValidationError('Método de pagamento não encontrado', {
+                        paymentMethodId: data.payment_method_id
+                    });
+                }
+            }
 
             // Criar pagamento usando o cliente de transação
-            const payment = client 
-                ? await this.repository.createWithClient(client, {
-                    movement_id: data.movement_id,
-                    payment_method_id: data.payment_method_id,
-                    total_amount: data.total_amount
-                })
-                : await this.repository.create({
-                    movement_id: data.movement_id,
-                    payment_method_id: data.payment_method_id,
-                    total_amount: data.total_amount
-                });
+            const paymentData = {
+                movement_id: data.movement_id,
+                payment_method_id: data.payment_method_id,
+                total_amount: data.total_amount
+            };
 
-            // Gerar parcelas
+            const payment = client 
+                ? await this.repository.createWithClient(client, paymentData)
+                : await this.repository.create(paymentData);
+
+            // Gerar parcelas apenas se houver método de pagamento
             let installments = [];
             
-            // Verificação segura dos atributos do método de pagamento
             if (!paymentMethod) {
-                throw new ValidationError('Método de pagamento não encontrado', {
-                    paymentMethodId: data.payment_method_id
+                logger.info('Pagamento criado sem método de pagamento - pulando geração de parcelas', {
+                    payment_id: payment.payment_id
                 });
+                return payment;
             }
 
             // Verificar o tipo de documento de pagamento

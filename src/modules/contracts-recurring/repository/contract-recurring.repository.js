@@ -65,7 +65,7 @@ class ContractRecurringRepository extends BaseRepository {
                 contract_groups cg ON cr.contract_group_id = cg.contract_group_id
             LEFT JOIN 
                 movement_payments mp ON m.movement_id = mp.movement_id
-            JOIN 
+            LEFT JOIN 
                 payment_methods pm ON mp.payment_method_id = pm.payment_method_id
             LEFT JOIN 
                 contract_movements cm ON cr.contract_id = cm.contract_id
