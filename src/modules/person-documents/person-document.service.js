@@ -141,19 +141,17 @@ class PersonDocumentService {
                 personId
             });
 
-            if (existingDocument && existingDocument.document_value !== documentData.document_value) {
-                throw new ValidationError('Já existe um documento deste tipo para esta pessoa');
-            }
-
-            // Se já existe um documento com o mesmo valor, apenas retorna ele
-            if (existingDocument && existingDocument.document_value === documentData.document_value) {
-                logger.info('Service: Documento já existe para esta pessoa (por tipo)', {
-                    documentId: existingDocument.id,
-                    personId,
-                    type: documentData.document_type,
-                    value: documentData.document_value
+            // Se já existe um documento do mesmo tipo, atualiza o valor
+            if (existingDocument) {
+                logger.info('Service: Atualizando valor do documento existente', {
+                    documentId: existingDocument.person_document_id,
+                    oldValue: existingDocument.document_value,
+                    newValue: documentData.document_value
                 });
-                return existingDocument;
+                
+                return await this.documentRepo.update(existingDocument.person_document_id, {
+                    document_value: documentData.document_value
+                });
             }
 
             const newDocument = await this.documentRepo.create({

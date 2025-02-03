@@ -707,53 +707,6 @@ class PersonService {
                 // Busca direto do banco, sem cache
                 existingPerson = await this.personRepository.findById(existingDocument.person_id);
                 logger.info('Service: Pessoa encontrada por documento', { existingPerson });
-            } else {
-                // Se não encontrou por CNPJ, busca por razão social com case-sensitive e correspondência exata
-                const personsByName = await this.personRepository.findAll(
-                    { 
-                        full_name: cnpjData.razao_social.trim(), 
-                        type: 'PJ' 
-                    }, 
-                    1, 
-                    1, 
-                    {}, 
-                    { 
-                        exact: true, 
-                        caseSensitive: true 
-                    }
-                );
-                
-                logger.info('Service: Pessoas encontradas por nome', { 
-                    razao_social: cnpjData.razao_social,
-                    total: personsByName?.items?.length || 0,
-                    persons: personsByName?.items || []
-                });
-
-                // Só usa a pessoa encontrada se tiver exatamente uma
-                if (personsByName?.items?.length === 1) {
-                    existingPerson = personsByName.items[0];
-                    logger.info('Service: Pessoa encontrada por nome', { existingPerson });
-                } else if (personsByName?.items?.length > 1) {
-                    // Lança um erro específico quando múltiplas pessoas são encontradas
-                    const errorDetails = {
-                        message: 'Múltiplas pessoas encontradas com o mesmo nome',
-                        razao_social: cnpjData.razao_social,
-                        total_persons: personsByName.items.length,
-                        persons: personsByName.items.map(p => ({
-                            person_id: p.person_id,
-                            full_name: p.full_name,
-                            document_type: 'CNPJ'
-                        }))
-                    };
-
-                    logger.error('Service: Erro de duplicidade', errorDetails);
-
-                    const duplicityError = new Error('Múltiplas pessoas encontradas');
-                    duplicityError.name = 'DuplicityError';
-                    duplicityError.details = errorDetails;
-                    
-                    throw duplicityError;
-                }
             }
 
             // Prepara os dados da pessoa
