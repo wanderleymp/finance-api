@@ -213,6 +213,19 @@ class ContactService {
             throw error;
         }
     }
+
+    async findByValueAndType(value, type, options = {}) {
+        try {
+            return await this.contactRepository.findByValueAndType(value, type, options);
+        } catch (error) {
+            logger.error('Erro ao buscar contato por valor e tipo', {
+                error: error.message,
+                value,
+                type
+            });
+            throw error;
+        }
+    }
 }
 
 module.exports = ContactService;

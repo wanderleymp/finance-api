@@ -1364,12 +1364,20 @@ class ContractRecurringService {
                 totalAmount: totalItems
             });
 
+            // Ajusta a data para manter apenas a parte da data (YYYY-MM-DD)
+            const startDate = new Date(data.start_date);
+            const formattedStartDate = new Date(Date.UTC(
+                startDate.getUTCFullYear(),
+                startDate.getUTCMonth(),
+                startDate.getUTCDate()
+            ));
+
             // Criar contrato recorrente
             const contractData = {
                 model_movement_id: createdMovement.movement_id,
                 contract_name: data.contract_name,
                 contract_value: totalItems, // Usar o total calculado
-                start_date: data.start_date,
+                start_date: formattedStartDate,
                 recurrence_period: data.recurrence_period,
                 due_day: data.due_day,
                 days_before_due: data.days_before_due,

@@ -154,6 +154,28 @@ class ContactRepository extends BaseRepository {
             throw error;
         }
     }
+
+    async findByValueAndType(value, type, { client = null } = {}) {
+        try {
+            const queryClient = client || this.pool;
+            const query = `
+                SELECT *
+                FROM ${this.tableName}
+                WHERE contact_value = $1
+                AND contact_type = $2
+                LIMIT 1
+            `;
+            const result = await queryClient.query(query, [value, type]);
+            return result.rows[0] ? ContactResponseDTO.fromDatabase(result.rows[0]) : null;
+        } catch (error) {
+            logger.error('Erro ao buscar contato por valor e tipo', {
+                error: error.message,
+                value,
+                type
+            });
+            throw error;
+        }
+    }
 }
 
 module.exports = ContactRepository;

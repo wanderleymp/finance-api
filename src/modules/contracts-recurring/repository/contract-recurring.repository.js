@@ -110,6 +110,10 @@ class ContractRecurringRepository extends BaseRepository {
     async create(data, client = null) {
         try {
             const queryClient = client || this.pool;
+            // Formata a data para YYYY-MM-DD
+            const startDate = new Date(data.start_date);
+            const formattedDate = `${startDate.getUTCFullYear()}-${String(startDate.getUTCMonth() + 1).padStart(2, '0')}-${String(startDate.getUTCDate()).padStart(2, '0')}`;
+
             const result = await queryClient.query(
                 `INSERT INTO ${this.tableName} (
                     model_movement_id,
@@ -128,7 +132,7 @@ class ContractRecurringRepository extends BaseRepository {
                     data.model_movement_id,
                     data.contract_name,
                     data.contract_value,
-                    data.start_date,
+                    formattedDate,
                     data.recurrence_period,
                     data.due_day,
                     data.days_before_due,
