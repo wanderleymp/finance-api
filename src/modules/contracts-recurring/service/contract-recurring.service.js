@@ -26,7 +26,8 @@ class ContractRecurringService {
         contractAdjustmentHistoryRepository, 
         logger,
         contractMovementService,
-        movementItemService
+        movementItemService,
+        movementPaymentService
     ) {
         this.repository = repository || new ContractRecurringRepository();
         this.movementRepository = movementRepository || new MovementRepository();
@@ -39,7 +40,7 @@ class ContractRecurringService {
         const movementPaymentRepository = new MovementPaymentRepository();
         const installmentRepository = new InstallmentRepository();
         
-        this.movementPaymentService = new MovementPaymentService({
+        this.movementPaymentService = movementPaymentService || new MovementPaymentService({
             movementPaymentRepository,
             installmentRepository
         });
@@ -1394,10 +1395,48 @@ class ContractRecurringService {
                 contract: createdContract
             });
 
+            // Criar payment e installments se payment_method_id foi fornecido
+            let payment = null;
+            let installments = [];
+            
+            if (data.payment_method_id) {
+                try {
+                    this.logger.info('Service: Iniciando criação de payment', {
+                        movementId: createdMovement.movement_id,
+                        paymentMethodId: data.payment_method_id
+                    });
+
+                    // Criar payment
+                    const paymentData = {
+                        movement_id: createdMovement.movement_id,
+                        payment_method_id: data.payment_method_id,
+                        total_amount: totalItems,
+                        status: 'PENDING'
+                    };
+
+                    const paymentResult = await this.movementPaymentService.createPayment(paymentData);
+                    payment = paymentResult;
+                    installments = paymentResult.installments;
+
+                    this.logger.info('Service: Payment e installments criados com sucesso', {
+                        paymentId: payment.payment_id,
+                        installmentsCount: installments.length
+                    });
+                } catch (error) {
+                    this.logger.error('Service: Erro ao criar payment/installments', {
+                        error: error.message,
+                        stack: error.stack
+                    });
+                    throw error;
+                }
+            }
+
             const result = {
                 contract: createdContract,
                 movement: createdMovement,
-                movementItems: createdItems
+                movementItems: createdItems,
+                payment,
+                installments
             };
 
             this.logger.info('Service: Resultado completo', result);
