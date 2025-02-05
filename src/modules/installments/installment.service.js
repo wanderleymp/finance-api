@@ -117,12 +117,16 @@ class InstallmentService {
                 const dto = new CreateInstallmentDTO(data);
                 dto.validate();
 
+                // Dividir o valor por 100 antes de salvar
+                const amountInCents = dto.amount;
+                const amountInReais = amountInCents / 100;
+
                 // Criar parcela
                 const installment = await this.repository.createWithClient(transactionClient, {
                     payment_id: dto.payment_id,
                     installment_number: dto.installment_number,
                     due_date: dto.due_date,
-                    amount: dto.amount,
+                    amount: amountInReais,
                     balance: dto.balance,
                     status: dto.status,
                     account_entry_id: dto.account_entry_id
@@ -154,11 +158,15 @@ class InstallmentService {
             const dto = new CreateInstallmentDTO(data);
             dto.validate();
 
+            // Dividir o valor por 100 antes de salvar
+            const amountInCents = dto.amount;
+            const amountInReais = amountInCents / 100;
+
             const installment = await this.repository.createWithClient(client, {
                 payment_id: dto.payment_id,
                 installment_number: dto.installment_number,
                 due_date: dto.due_date,
-                amount: dto.amount,
+                amount: amountInReais,
                 balance: dto.balance,
                 status: dto.status,
                 account_entry_id: dto.account_entry_id

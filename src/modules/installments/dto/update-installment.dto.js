@@ -2,8 +2,8 @@ const moment = require('moment-timezone');
 
 class UpdateInstallmentDTO {
     constructor(data) {
-        // Formata amount com 2 casas decimais
-        this.amount = data.amount ? parseFloat(data.amount).toFixed(2) : undefined;
+        // Converte amount para decimal
+        this.amount = this.convertMonetaryValue(data.amount);
         
         // Converte e valida data de vencimento
         if (data.due_date) {
@@ -23,6 +23,25 @@ class UpdateInstallmentDTO {
         this.status = data.status;
         this.payment_date = data.payment_date;
         this.updated_at = new Date();
+    }
+
+    convertMonetaryValue(value) {
+        // Se for número, retorna como está
+        if (typeof value === 'number') return value;
+        
+        // Se for string, remove espaços e converte
+        if (typeof value === 'string') {
+            // Remove R$, espaços e substitui vírgula por ponto
+            const cleanedValue = value
+                .replace('R$', '')
+                .replace(/\s/g, '')
+                .replace(',', '.');
+            
+            // Converte para número
+            return parseFloat(cleanedValue);
+        }
+        
+        return value;
     }
 
     validate() {
