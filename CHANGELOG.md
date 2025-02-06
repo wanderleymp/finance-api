@@ -4,6 +4,12 @@
 ### Adicionado
 - Deploy da versão 1.0.19
 
+## [Não Lançado]
+
+## [1.0.19] - 2025-02-06
+### Adicionado
+- Deploy da versão 1.0.19
+
 # Changelog - Finance API
 
 ## [1.3.0] - 2024-12-16
