@@ -16,102 +16,82 @@ erro() {
     exit 1
 }
 
-# Obter branch atual
-BRANCH_ATUAL=$(git rev-parse --abbrev-ref HEAD)
-
-# Verificar se não está na main
-verificar_branch() {
-    if [[ "$BRANCH_ATUAL" == "main" || "$BRANCH_ATUAL" == "master" ]]; then
-        erro "Não pode fazer deploy diretamente da branch main/master. Use uma branch de feature."
-    fi
-}
-
-# Atualizar repositório local
-atualizar_repositorio() {
-    log "Atualizando repositório local..."
-    git fetch origin
-    git pull origin "$BRANCH_ATUAL"
-}
-
-# Enviar branch atual para remoto
-enviar_branch() {
-    log "Enviando branch ${BRANCH_ATUAL} para o repositório remoto..."
-    git push -u origin "$BRANCH_ATUAL"
-}
-
-# Fazer merge para main
-merge_main() {
-    log "Fazendo merge da branch ${BRANCH_ATUAL} para main..."
+# Atualizar CHANGELOG
+atualizar_changelog() {
+    log "Atualizando CHANGELOG.md..."
     
-    # Trocar para main
-    git checkout main
+    # Obter a versão atual
+    VERSAO_ATUAL=$(node -p "require('./package.json').version")
+    DATA_ATUAL=$(date +%Y-%m-%d)
+    
+    # Adicionar nova entrada no CHANGELOG
+    sed -i '' "1,/## \[Não Lançado\]/c\## [Não Lançado]\n\n## [${VERSAO_ATUAL}] - ${DATA_ATUAL}\n### Adicionado\n- Deploy da versão ${VERSAO_ATUAL}\n" CHANGELOG.md
+}
+
+# Commitar alterações pendentes
+commitar_alteracoes() {
+    log "Commitando alterações pendentes..."
+    git add .
+    git commit -m "Preparando para deploy da versão $(node -p "require('./package.json').version")" || true
+}
+
+# Atualizar repositório online
+atualizar_repositorio() {
+    log "Atualizando repositório online..."
+    git push origin HEAD
+}
+
+# Atualizar branches develop e main
+atualizar_branches() {
+    log "Atualizando branches develop e main..."
     
     # Atualizar main
+    git checkout main
     git pull origin main
-    
-    # Fazer merge
-    git merge "$BRANCH_ATUAL"
-    
-    # Enviar merge para remoto
+    git merge --no-ff HEAD@{1}
     git push origin main
-}
-
-# Fazer merge para develop
-merge_develop() {
-    log "Fazendo merge da branch main para develop..."
-    
-    # Trocar para develop
-    git checkout develop
     
     # Atualizar develop
+    git checkout develop
     git pull origin develop
-    
-    # Fazer merge da main para develop
-    git merge main
-    
-    # Enviar merge para remoto
+    git merge --no-ff main
     git push origin develop
+    
+    # Voltar para branch original
+    git checkout HEAD@{2}
 }
 
-# Construir imagem Docker
-construir_docker() {
-    log "Construindo imagem Docker..."
+# Construir e atualizar imagem Docker
+atualizar_docker() {
+    log "Atualizando imagem Docker..."
+    git checkout main
     npm run docker:build:latest
-}
-
-# Fazer push da imagem Docker
-push_docker() {
-    log "Fazendo push da imagem Docker..."
     docker push wanderleymp/finance-api:latest
 }
 
-# Atualizar versão após deploy bem-sucedido
-atualizar_versao() {
-    log "Atualizando versão..."
+# Criar nova versão
+criar_nova_versao() {
+    log "Criando nova versão..."
     
     # Incrementar versão patch
     npm version patch
-
-    # Capturar a nova versão
+    
+    # Capturar nova versão
     NOVA_VERSAO=$(node -p "require('./package.json').version")
     
-    # Criar nova branch com o nome da versão
+    # Criar nova branch de release
     git checkout -b "release/v${NOVA_VERSAO}"
-
-    # Fazer push da nova branch
     git push -u origin "release/v${NOVA_VERSAO}"
 }
 
 # Função principal de deploy
 main() {
-    verificar_branch
+    atualizar_changelog
+    commitar_alteracoes
     atualizar_repositorio
-    enviar_branch
-    merge_main
-    merge_develop
-    construir_docker
-    push_docker
-    atualizar_versao
+    atualizar_branches
+    atualizar_docker
+    criar_nova_versao
 
     log "Deploy concluído com sucesso! 🚀"
 }
