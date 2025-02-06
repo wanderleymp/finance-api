@@ -16,6 +16,9 @@ erro() {
     exit 1
 }
 
+# Obter branch atual
+BRANCH_ATUAL=$(git rev-parse --abbrev-ref HEAD)
+
 # Atualizar CHANGELOG
 atualizar_changelog() {
     log "Atualizando CHANGELOG.md..."
@@ -24,8 +27,20 @@ atualizar_changelog() {
     VERSAO_ATUAL=$(node -p "require('./package.json').version")
     DATA_ATUAL=$(date +%Y-%m-%d)
     
+    # Criar um novo CHANGELOG temporário
+    cp CHANGELOG.md CHANGELOG.md.bak
+    
     # Adicionar nova entrada no CHANGELOG
-    sed -i '' "1,/## \[Não Lançado\]/c\## [Não Lançado]\n\n## [${VERSAO_ATUAL}] - ${DATA_ATUAL}\n### Adicionado\n- Deploy da versão ${VERSAO_ATUAL}\n" CHANGELOG.md
+    echo "## [Não Lançado]
+
+## [${VERSAO_ATUAL}] - ${DATA_ATUAL}
+### Adicionado
+- Deploy da versão ${VERSAO_ATUAL}
+
+$(cat CHANGELOG.md.bak)" > CHANGELOG.md
+    
+    # Remover backup
+    rm CHANGELOG.md.bak
 }
 
 # Commitar alterações pendentes
@@ -45,10 +60,15 @@ atualizar_repositorio() {
 atualizar_branches() {
     log "Atualizando branches develop e main..."
     
+    # Salvar o hash da branch atual
+    BRANCH_HASH=$(git rev-parse HEAD)
+    
     # Atualizar main
     git checkout main
     git pull origin main
-    git merge --no-ff HEAD@{1}
+    
+    # Fazer merge da branch de release para main
+    git merge --no-ff "$BRANCH_HASH"
     git push origin main
     
     # Atualizar develop
@@ -58,14 +78,14 @@ atualizar_branches() {
     git push origin develop
     
     # Voltar para branch original
-    git checkout HEAD@{2}
+    git checkout "$BRANCH_ATUAL"
 }
 
 # Construir e atualizar imagem Docker
 atualizar_docker() {
     log "Atualizando imagem Docker..."
     git checkout main
-    npm run docker:build:latest
+    docker build --platform linux/amd64 -t wanderleymp/finance-api:latest .
     docker push wanderleymp/finance-api:latest
 }
 
