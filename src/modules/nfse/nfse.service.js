@@ -1,4 +1,5 @@
 const axios = require('axios');
+const moment = require('moment-timezone');
 const { logger } = require('../../middlewares/logger');
 const NfseRepository = require('./nfse.repository');
 const CreateNfseDto = require('./dto/create-nfse.dto');
@@ -253,8 +254,19 @@ class NfseService {
             throw new Error('Dados de endereço do tomador incompletos');
         }
 
-        const primeiroEndereco = data.personData.addresses[0];
+        // Formata data de emissão no fuso horário de Porto Velho
+        const dataEmissao = moment().tz('America/Porto_Velho').format('YYYY-MM-DD[T]HH:mm:ss');
+        
+        // Usa a data do movimento como data de competência
+        const dataCompetencia = moment(data.movimento.movement_date).format('YYYY-MM-DD');
 
+        logger.info('Datas para NFSe', {
+            dataEmissao,
+            dataCompetencia,
+            movementDate: data.movimento.movement_date
+        });
+
+        const primeiroEndereco = data.personData.addresses[0];
         const tomadorDocumento = this.extrairDocumento(data.personData.documents);
         
         const payload = {
@@ -263,8 +275,8 @@ class NfseService {
             referencia: data.movimento.referencia,
             infDPS: {
                 tpAmb: 1,
-                dhEmi: data.movimento.data,
-                dCompet: data.movimento.data.split('T')[0],
+                dhEmi: dataEmissao,        // Data atual no fuso de Porto Velho
+                dCompet: dataCompetencia,   // Data do movimento
                 prest: {
                     CNPJ: data.prestador.cnpj
                 },
