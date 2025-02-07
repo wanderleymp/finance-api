@@ -1222,19 +1222,35 @@ class NfseService {
         }
     }
 
-    // Método centralizado para atualizar invoice
+    // Método centralizado para atualizar invoice e registrar evento
     async atualizarInvoiceNfse(invoiceId, dadosAtualizacao) {
         logger.info('Tentativa de atualização de invoice', {
             invoiceId,
-            dadosAtualizacao,
-            stackTrace: new Error().stack
+            dadosAtualizacao
         });
 
         try {
+            // 1. Atualiza apenas o status na invoice
             const invoiceAtualizada = await this.invoiceRepository.update(
                 invoiceId, 
-                dadosAtualizacao
+                { status: dadosAtualizacao.status }
             );
+
+            // 2. Se tem mensagens de erro, cria evento
+            if (dadosAtualizacao.error_messages) {
+                await this.invoiceEventRepository.create({
+                    invoice_id: invoiceId,
+                    event_type: 'ATUALIZACAO_STATUS_NFSE',
+                    event_data: JSON.stringify(dadosAtualizacao.error_messages),
+                    status: dadosAtualizacao.status
+                });
+
+                logger.info('Evento de erro registrado', {
+                    invoiceId,
+                    status: dadosAtualizacao.status,
+                    mensagens: dadosAtualizacao.error_messages
+                });
+            }
 
             logger.info('Invoice atualizada com sucesso', {
                 invoiceId,
