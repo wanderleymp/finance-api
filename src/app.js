@@ -39,6 +39,7 @@ const ContractGroupModule = require('./modules/contract-groups/contract-group.mo
 const ContractMovementModule = require('./modules/contract-movements/contract-movement.module');
 const ContractAdjustmentHistoryModule = require('./modules/contract-adjustment-history/contract-adjustment-history.module');
 const ContractAdjustmentContractRoutes = require('./modules/contract-adjustment/contract-adjustment-contract.module');
+const ContractExtraServiceModule = require('./modules/contract-extra-services/contract-extra-service.module');
 
 const movementDependencies = {
     movementRepository: new MovementRepository(),
@@ -341,6 +342,9 @@ ContractAdjustmentHistoryRoutes(app);
 
 // Adicionar rotas de ajuste de contrato
 ContractAdjustmentContractRoutes(app);
+
+// Adicionar rotas de serviços extras de contrato
+ContractExtraServiceModule.register(app);
 
 // Rota 404 para capturar requisições não encontradas
 app.use((req, res, next) => {
