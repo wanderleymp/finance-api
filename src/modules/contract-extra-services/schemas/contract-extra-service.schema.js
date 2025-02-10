@@ -7,7 +7,9 @@ const contractExtraServiceSchema = {
         itemDescription: Joi.string().required(),
         itemValue: Joi.number().precision(2).required(),
         serviceDate: Joi.date().required(),
-        movementId: Joi.number().integer().optional().allow(null)
+        movementId: Joi.number().integer().optional().allow(null),
+        quantity: Joi.number().integer().optional(),
+        amount: Joi.number().integer().optional() // Adicionado para compatibilidade
     }),
 
     update: Joi.object({
@@ -16,7 +18,9 @@ const contractExtraServiceSchema = {
         itemDescription: Joi.string().optional(),
         itemValue: Joi.number().precision(2).optional(),
         serviceDate: Joi.date().optional(),
-        movementId: Joi.number().integer().optional().allow(null)
+        movementId: Joi.number().integer().optional().allow(null),
+        quantity: Joi.number().integer().optional(),
+        amount: Joi.number().integer().optional() // Adicionado para compatibilidade
     }),
 
     get: Joi.object({

@@ -2,7 +2,14 @@ const ContractExtraServiceValidator = require('../validators/contract-extra-serv
 
 class ContractExtraServiceCreateDTO {
     static validate(data) {
-        const { error, value } = ContractExtraServiceValidator.create.validate(data, { 
+        // Mapear amount para quantity se existir
+        const processedData = { ...data };
+        if (processedData.amount !== undefined) {
+            processedData.quantity = processedData.amount;
+            delete processedData.amount;
+        }
+
+        const { error, value } = ContractExtraServiceValidator.create.validate(processedData, { 
             abortEarly: false,
             stripUnknown: true 
         });

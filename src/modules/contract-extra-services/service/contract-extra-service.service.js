@@ -50,24 +50,12 @@ class ContractExtraServiceService {
                 throw new Error('Contrato não encontrado');
             }
 
-            // Criar movimento para o serviço extra
-            const movementData = {
-                contractId: validatedData.contractId,
-                description: `Serviço Extra: ${validatedData.itemDescription}`,
-                value: validatedData.itemValue,
-                movementDate: validatedData.serviceDate
-            };
-            const movementId = await this.movementService.create(movementData, client);
-
-            // Adicionar movimento ao serviço extra
-            validatedData.movementId = movementId;
-
-            // Criar serviço extra
+            // Criar serviço extra sem movimento
             const extraServiceId = await this.repository.create(validatedData);
 
             await client.query('COMMIT');
             
-            this.logger.info('Serviço extra criado com sucesso', { extraServiceId, movementId });
+            this.logger.info('Serviço extra criado com sucesso', { extraServiceId });
             
             return extraServiceId;
         } catch (error) {

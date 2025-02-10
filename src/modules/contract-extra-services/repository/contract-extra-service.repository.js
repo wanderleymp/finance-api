@@ -10,8 +10,8 @@ class ContractExtraServiceRepository extends BaseRepository {
     async create(contractExtraService) {
         const query = `
             INSERT INTO public.contract_extra_services 
-            (contract_id, service_id, item_description, item_value, service_date, movement_id)
-            VALUES ($1, $2, $3, $4, $5, $6)
+            (contract_id, service_id, item_description, item_value, service_date, movement_id, quantity)
+            VALUES ($1, $2, $3, $4, $5, $6, $7)
             RETURNING extra_service_id
         `;
         const values = [
@@ -20,7 +20,8 @@ class ContractExtraServiceRepository extends BaseRepository {
             contractExtraService.itemDescription,
             contractExtraService.itemValue,
             contractExtraService.serviceDate,
-            contractExtraService.movementId
+            contractExtraService.movementId,
+            contractExtraService.quantity || null
         ];
 
         try {
