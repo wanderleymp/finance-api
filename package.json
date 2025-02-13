@@ -19,11 +19,13 @@
     "db:migrate": "node src/db/migrate.js",
     "roadmap:populate": "node scripts/populate_roadmap_full.js",
     "migrate": "node src/scripts/migrate.js",
+    "migrate:swagger": "node scripts/migrate-swagger.js",
     "docker:build": "docker build --platform linux/amd64 -t wanderleymp/finance-api:1.0.3 .",
     "docker:build:latest": "docker build --platform linux/amd64 -t wanderleymp/finance-api:latest .",
     "docker:build:main": "docker build --platform linux/amd64 -t wanderleymp/finance-api:main .",
     "release": "node scripts/release.js",
-    "deploy": "bash scripts/deploy.sh"
+    "deploy": "bash scripts/deploy.sh",
+    "generate:module": "node scripts/generate-module.js"
   },
   "keywords": [
     "finance",
@@ -79,7 +81,9 @@
     "@babel/core": "^7.23.4",
     "@babel/preset-env": "^7.23.4",
     "@nestjs/testing": "^11.0.5",
+    "@types/express": "^5.0.0",
     "@types/jest": "^29.5.14",
+    "@types/node": "^22.13.2",
     "eslint": "^8.56.0",
     "husky": "^8.0.3",
     "jest": "^29.7.0",
@@ -88,6 +92,7 @@
     "nodemon": "^3.0.1",
     "supertest": "^6.3.3",
     "ts-jest": "^29.2.5",
+    "ts-node": "^10.9.2",
     "typescript": "^5.7.3"
   },
   "engines": {
