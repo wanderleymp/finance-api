@@ -1,5 +1,11 @@
 ## [Não Lançado]
 
+## [1.0.19] - 2025-02-14
+### Adicionado
+- Deploy da versão 1.0.19
+
+## [Não Lançado]
+
 ## [1.0.19] - 2025-02-13
 ### Adicionado
 - Deploy da versão 1.0.19
