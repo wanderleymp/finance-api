@@ -23,14 +23,8 @@ function updateVersion(version) {
 
 // Função para atualizar o CHANGELOG
 function updateChangelog(version) {
-    const changelogPath = path.join(process.cwd(), 'CHANGELOG.md');
-    const changelog = fs.readFileSync(changelogPath, 'utf8');
-    const date = new Date().toISOString().split('T')[0];
-    
-    const newEntry = `\n## [${version}] - ${date}\n### Added\n- Nova versão estável\n\n`;
-    const updatedChangelog = changelog.replace('## [Unreleased]', `## [Unreleased]\n${newEntry}`);
-    
-    fs.writeFileSync(changelogPath, updatedChangelog);
+    // Função desabilitada
+    return;
 }
 
 // Função para verificar se a tag existe
@@ -92,7 +86,7 @@ async function release() {
         updateChangelog(releaseVersion);
 
         // 5. Commit das alterações de versão
-        exec('git add package.json CHANGELOG.md');
+        exec('git add package.json');
         exec(`git commit -m "chore: release version ${releaseVersion}"`);
 
         // 6. Push para o remoto
@@ -111,7 +105,7 @@ async function release() {
         updateChangelog(nextVersion);
 
         // 9. Commit da próxima versão
-        exec('git add package.json CHANGELOG.md');
+        exec('git add package.json');
         exec(`git commit -m "chore: prepare for next development version ${nextVersion}"`);
         exec('git push origin develop');
 
