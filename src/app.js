@@ -346,6 +346,10 @@ ContractAdjustmentContractRoutes(app);
 // Adicionar rotas de serviços extras de contrato
 ContractExtraServiceModule.register(app);
 
+// Registra rota de chat_messages
+const chatController = require('./modules/messages/chat.controller');
+app.use('/chat_messages', chatController);
+
 // Rota 404 para capturar requisições não encontradas
 app.use((req, res, next) => {
     const error = new Error('Not Found');
