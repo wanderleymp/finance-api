@@ -8,6 +8,7 @@ import {
     Index 
 } from 'typeorm';
 import { Chat } from './chat.entity';
+import { Contact } from '../../contacts/entities/contact.entity';
 
 @Entity('chat_messages')
 @Index('chat_messages_chat_idx', ['chat'])
@@ -22,9 +23,20 @@ export class ChatMessage {
     })
     chatId: number;
 
+    @Column({ 
+        name: 'contact_id', 
+        type: 'int', 
+        nullable: false 
+    })
+    contactId: number;
+
     @ManyToOne(() => Chat, chat => chat.messages)
     @JoinColumn({ name: 'chat_id' })
     chat: Chat;
+
+    @ManyToOne(() => Contact)
+    @JoinColumn({ name: 'contact_id' })
+    contact: Contact;
 
     @Column({ 
         type: 'varchar', 
@@ -49,34 +61,51 @@ export class ChatMessage {
         length: 20, 
         nullable: false,
         default: 'TEXT',
-        enum: ['TEXT', 'AUDIO', 'FILE', 'IMAGE', 'VIDEO']
+        name: 'content_type'
     })
-    contentType: 'TEXT' | 'AUDIO' | 'FILE' | 'IMAGE' | 'VIDEO' = 'TEXT';
+    contentType: string;
 
     @Column({ 
-        type: 'text', 
-        nullable: true 
+        type: 'varchar', 
+        length: 50, 
+        nullable: true,
+        name: 'external_id'
     })
-    fileUrl: string | null = null;
+    externalId: string;
+
+    @Column({ 
+        type: 'varchar', 
+        length: 20, 
+        nullable: false,
+        default: 'PENDING',
+        enum: ['PENDING', 'SENT', 'DELIVERED', 'READ', 'FAILED']
+    })
+    status: 'PENDING' | 'SENT' | 'DELIVERED' | 'READ' | 'FAILED';
 
     @Column({ 
         type: 'jsonb', 
         nullable: true,
-        default: () => "'{}'"
-    })
-    fileMetadata: Record<string, any> | null = null;
-
-    @Column({ 
-        type: 'jsonb', 
-        nullable: true,
-        default: () => "'{}'"
+        name: 'metadata'
     })
     metadata: Record<string, any>;
 
+    @Column({ 
+        type: 'jsonb', 
+        nullable: true,
+        name: 'delivery_metadata'
+    })
+    deliveryMetadata: Record<string, any>;
+
     @CreateDateColumn({ 
         name: 'created_at', 
-        type: 'timestamp without time zone', 
-        default: () => 'CURRENT_TIMESTAMP' 
+        type: 'timestamp with time zone' 
     })
     createdAt: Date;
+
+    @Column({ 
+        name: 'updated_at', 
+        type: 'timestamp with time zone',
+        nullable: true
+    })
+    updatedAt: Date;
 }
