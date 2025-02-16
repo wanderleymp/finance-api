@@ -196,7 +196,7 @@ class ChatMessageService {
         }
     }
 
-    async findOrCreateChatByContactId(contactId, transaction) {
+    async findOrCreateChatByContactId(contactId, transaction, channelId = null) {
         // Validação de entrada
         if (!contactId) {
             throw new Error('Contact ID é obrigatório');
@@ -224,12 +224,20 @@ class ChatMessageService {
         // Busca person-contact usando o contact_id (opcional)
         const personContact = await this.personContactRepository.findByContactId(contactId);
 
-        // Cria novo chat
-        const newChat = await this.chatRepository.create({
+        // Prepara dados do chat
+        const chatData = {
             status: 'ACTIVE',
             created_at: new Date(),
             updated_at: new Date()
-        }, transaction);
+        };
+
+        // Adiciona channel_id se fornecido
+        if (channelId) {
+            chatData.channel_id = channelId;
+        }
+
+        // Cria novo chat
+        const newChat = await this.chatRepository.create(chatData, transaction);
 
         // Prepara dados do participante
         const participantData = {
@@ -251,7 +259,8 @@ class ChatMessageService {
         this.logger.info('Novo chat criado', {
             contactId,
             chatId: newChat.chat_id,
-            personContactId: personContact?.person_contact_id || 'Não definido'
+            personContactId: personContact?.person_contact_id || 'Não definido',
+            channelId: channelId || 'Não definido'
         });
 
         return newChat.chat_id;
@@ -264,32 +273,16 @@ class ChatMessageService {
                 // Extração de dados da mensagem
                 const extractedData = this.extractDynamicContent(payload.data);
 
-                // Log da extração
-                this.logger.info('Dados da mensagem extraídos', {
-                    contentType: extractedData.contentType,
-                    content: extractedData.content,
-                    fileUrl: extractedData.fileUrl || 'Não definido'
-                });
-
                 // Recupera o contato usando os últimos 7 dígitos
                 const contact = await this.contactRepository.findByLastDigits(payload.data.remoteJid);
 
-                // Log de recuperação de contato
-                this.logger.info('Contato recuperado', {
-                    contactId: contact?.id || 'Não encontrado',
-                    contactValue: contact?.contact_value || 'Sem valor'
-                });
+                // Localiza ou cria o canal
+                const channel = await this.findOrCreateChannelByInstance(payload.api.instance, client);
 
                 // Busca ou cria chat para o contato
                 let chatId = null;
                 if (contact && contact.id) {
-                    chatId = await this.findOrCreateChatByContactId(contact.id, client);
-
-                    // Log de recuperação do chat
-                    this.logger.info('Chat recuperado ou criado', {
-                        contactId: contact.id,
-                        chatId: chatId
-                    });
+                    chatId = await this.findOrCreateChatByContactId(contact.id, client, channel);
                 }
 
                 // Cria a mensagem de chat
@@ -310,11 +303,11 @@ class ChatMessageService {
         }
     }
 
-    async findOrCreateChannelByInstance(instanceName) {
+    async findOrCreateChannelByInstance(instanceName, transaction) {
         // Busca canal existente
-        const existingChannel = await this.channelRepository.findByName(instanceName);
+        const existingChannel = await this.channelRepository.findByName(instanceName, transaction);
         if (existingChannel) {
-            return existingChannel.channel_id;
+            return existingChannel.channel_id; // Retorna apenas o channel_id
         }
 
         // Cria novo canal
@@ -322,9 +315,9 @@ class ChatMessageService {
             channel_name: instanceName,
             is_active: true,
             contact_type: 'whatsapp'
-        });
+        }, transaction);
 
-        return newChannel.channel_id;
+        return newChannel.channel_id; // Retorna apenas o channel_id
     }
 
     async updateMessageStatus(messageId, status) {
