@@ -1,10 +1,12 @@
 const { Router } = require('express');
 const { logger } = require('../../middlewares/logger');
 const ChatService = require('./chat.service');
+const ChatMessageService = require('./chat-message.service');
 const { authMiddleware } = require('../../middlewares/auth');
 
 const router = Router();
 const chatService = new ChatService();
+const chatMessageService = new ChatMessageService();
 
 // Lista todos os chats
 router.get('/', authMiddleware, async (req, res) => {
@@ -66,58 +68,130 @@ router.get('/', authMiddleware, async (req, res) => {
     }
 });
 
-// Lista mensagens de um chat
+// Rota para buscar mensagens de um chat específico
 router.get('/:chatId/messages', authMiddleware, async (req, res) => {
     try {
         const { chatId } = req.params;
-        const { page = 1, limit = 20 } = req.query;
-        
-        logger.info('Listando mensagens do chat', { chatId, page, limit });
-        
-        const messages = await chatService.getMessages(chatId, page, limit);
-        
-        logger.info('Mensagens listadas com sucesso', { 
+        const { 
+            page = 1, 
+            limit = 20 
+        } = req.query;
+
+        logger.info('Buscando mensagens do chat', { 
+            chatId, 
+            page, 
+            limit 
+        });
+
+        const messages = await chatMessageService.findByChatId(
+            Number(chatId), 
+            Number(page), 
+            Number(limit)
+        );
+
+        logger.info('Mensagens encontradas', { 
+            chatId, 
             count: messages.items.length,
             total: messages.meta.totalItems
         });
-        
-        res.json(messages);
+
+        res.status(200).json(messages);
     } catch (error) {
-        logger.error('Erro ao listar mensagens', { 
+        logger.error('Erro ao buscar mensagens do chat', { 
             error: error.message,
-            stack: error.stack,
-            params: req.params,
+            chatId: req.params.chatId
+        });
+
+        res.status(500).json({ 
+            error: 'Erro interno ao buscar mensagens do chat',
+            details: error.message,
+            code: 'INTERNAL_ERROR'
+        });
+    }
+});
+
+// Rota para buscar todas as mensagens de chat
+router.get('/', authMiddleware, async (req, res) => {
+    try {
+        const { 
+            page = 1, 
+            limit = 20,
+            chatId,
+            direction,
+            status
+        } = req.query;
+
+        // Preparar filtros
+        const filters = {};
+        if (chatId) filters.chatId = chatId;
+        if (direction) filters.direction = direction;
+        if (status) filters.status = status;
+
+        logger.info('Buscando mensagens de chat', { 
+            page, 
+            limit, 
+            filters 
+        });
+
+        const messages = await chatMessageService.findAll(
+            Number(page), 
+            Number(limit), 
+            filters
+        );
+
+        logger.info('Mensagens de chat encontradas', { 
+            count: messages.items.length,
+            total: messages.meta.totalItems
+        });
+
+        res.status(200).json(messages);
+    } catch (error) {
+        logger.error('Erro ao buscar mensagens de chat', { 
+            error: error.message,
             query: req.query
         });
 
-        // Mensagens de erro mais específicas
-        if (error.message.includes('column') && error.message.includes('does not exist')) {
-            return res.status(500).json({ 
-                error: 'Erro de estrutura no banco de dados',
-                details: error.message,
-                code: 'DB_COLUMN_ERROR'
-            });
-        }
-
-        if (error.message.includes('relation') && error.message.includes('does not exist')) {
-            return res.status(500).json({ 
-                error: 'Tabela não encontrada no banco de dados',
-                details: error.message,
-                code: 'DB_TABLE_ERROR'
-            });
-        }
-
-        if (error.message.includes('permission denied')) {
-            return res.status(500).json({ 
-                error: 'Erro de permissão no banco de dados',
-                details: error.message,
-                code: 'DB_PERMISSION_ERROR'
-            });
-        }
-
         res.status(500).json({ 
-            error: 'Erro interno ao listar mensagens',
+            error: 'Erro interno ao buscar mensagens de chat',
             details: error.message,
+            code: 'INTERNAL_ERROR'
+        });
+    }
+});
+
+// Rota para criar uma nova mensagem de chat
+router.post('/', authMiddleware, async (req, res) => {
+    try {
+        const chatMessageService = new ChatMessageService();
+        
+        try {
+            // Tenta extrair o conteúdo diretamente do objeto data
+            const messageData = chatMessageService.extractDynamicContent(req.body.data);
+            
+            // Cria a mensagem
+            const message = await chatMessageService.createMessage(req.body);
+            
+            res.status(201).json(message);
+        } catch (extractionError) {
+            logger.warn('Falha na extração de conteúdo', {
+                error: extractionError.message,
+                payload: req.body
+            });
+
+            return res.status(400).json({ 
+                error: 'Conteúdo da mensagem é obrigatório',
+                code: 'MISSING_CONTENT',
+                details: extractionError.message
+            });
+        }
+    } catch (error) {
+        logger.error('Erro no controlador de mensagens', {
+            error: error.message,
+            body: req.body
+        });
+        
+        res.status(500).json({ 
+            error: 'Erro interno ao processar mensagem',
             code: 'INTERNAL_ERROR'
         });
     }
@@ -230,6 +304,71 @@ router.post('/billing/:personId', authMiddleware, async (req, res) => {
 
         res.status(500).json({ 
             error: 'Erro interno ao enviar mensagem de faturamento',
+            details: error.message,
+            code: 'INTERNAL_ERROR'
+        });
+    }
+});
+
+// Nova rota para receber mensagem e vincular/criar chat
+router.post('/receive', authMiddleware, async (req, res) => {
+    try {
+        const { 
+            personContactId, 
+            content, 
+            metadata = {},
+            direction = 'INBOUND'
+        } = req.body;
+        
+        logger.info('Recebendo nova mensagem', { personContactId, metadata });
+        
+        const message = await chatService.receiveMessage(
+            personContactId, 
+            content, 
+            metadata,
+            direction
+        );
+        
+        logger.info('Mensagem recebida e processada com sucesso', { 
+            messageId: message.message_id,
+            chatId: message.chat_id 
+        });
+        
+        res.status(201).json(message);
+    } catch (error) {
+        logger.error('Erro ao processar mensagem recebida', { 
+            error: error.message,
+            stack: error.stack,
+            body: req.body
+        });
+
+        // Tratamento de erros específicos
+        if (error.message.includes('column') && error.message.includes('does not exist')) {
+            return res.status(500).json({ 
+                error: 'Erro de estrutura no banco de dados',
+                details: error.message,
+                code: 'DB_COLUMN_ERROR'
+            });
+        }
+
+        if (error.message.includes('relation') && error.message.includes('does not exist')) {
+            return res.status(500).json({ 
+                error: 'Tabela não encontrada no banco de dados',
+                details: error.message,
+                code: 'DB_TABLE_ERROR'
+            });
+        }
+
+        if (error.message.includes('permission denied')) {
+            return res.status(500).json({ 
+                error: 'Erro de permissão no banco de dados',
+                details: error.message,
+                code: 'DB_PERMISSION_ERROR'
+            });
+        }
+
+        res.status(500).json({ 
+            error: 'Erro interno ao processar mensagem',
             details: error.message,
             code: 'INTERNAL_ERROR'
         });

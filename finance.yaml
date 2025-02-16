@@ -1,0 +1,69 @@
+
+services:
+  finance-api:
+    image: wanderleymp/finance-api:latest
+    restart: always
+    # command: sh -c "cd /app && npx prisma format && npx prisma generate && node server.js"
+    # command: sh -c "node src/server.js"
+    command: sh -c "npm start"
+    environment:  
+
+      NODE_ENV: development
+      SYSTEM_DATABASE_URL: postgresql://postgres:ffcaa89a3e19bd98e911475c7974309b@10.1.0.2:5432/AgileDB?ssl=false
+      DISABLE_MIGRATIONS: "true"
+      # PORT: 3000
+      JWT_SECRET: ffcaa89a3e19bd98e911475c7974309b
+      JWT_EXPIRATION: 1h
+      REFRESH_TOKEN_EXPIRATION: 7d
+      PASSWORD_SALT_ROUNDS: 12
+      MAX_LOGIN_ATTEMPTS: 5
+      LOGIN_BLOCK_DURATION: 15
+      ENABLE_2FA: "false"
+
+      # Configurações de Email
+      SMTP_HOST: seu_host_smtp
+      SMTP_PORT: 587
+      SMTP_USER: seu_usuario_smtp
+      SMTP_PASS: sua_senha_smtp
+      SMTP_FROM: seu_email_remetente
+      BASE_URL: http://localhost:3000
+
+      # Configurações de Senha
+      SALT_ROUNDS: 10
+      PASSWORD_RESET_EXPIRATION: 90 # dias para expiração da senha
+
+
+      LOG_LEVEL: info
+   
+      # N8N Webhook Configurations
+      N8N_URL: https://n8n.webhook.agilefinance.com.br
+      N8N_API_SECRET: your_n8n_api_secret
+      N8N_BOLETO_WEBHOOK_URL: https://n8n.webhook.agilefinance.com.br/webhook/inter/cobranca/cancelar
+      N8N_WEBHOOK_TOKEN: your_webhook_token
+
+
+      RABBITMQ_URL: amqp://admin:8f2979c1c3ab073f718bdac1eac5d4ba@195.201.151.240:5672      
+     # RABBITMQ_URL: amqp://admin:8f2979c1c3ab073f718bdac1eac5d4ba@195.201.151.240:5672/AgileFinance
+      
+      REDIS_HOST: redis # Nome do serviço Redis no Docker
+      REDIS_PORT: 6379  # Porta padrão exposta pelo Redis
+      REDIS_USERNAME: "" # Redis não requer username por padrão
+      REDIS_PASSWORD: "" # Senha, caso você tenha configurado no Redis (não configurado no exemplo acima)
+      REDIS_USE_SSL: "false" # SSL desativado por padrão
+      REDIS_DB: 0 # Banco padrão do Redis
+      CELERY_BROKER_URL: redis://redis:6379/1 # URL completa para uso com Celery
+
+    networks:
+      - AgileNet
+    deploy:
+      labels:
+        - "traefik.enable=true"
+        - "traefik.http.routers.finance-api.rule=Host(`api.agilefinance.com.br`)"
+        - "traefik.http.services.finance-api.loadbalancer.server.port=3000"
+        - "traefik.http.routers.finance-api.tls.certresolver=letsencryptresolver"
+        - "traefik.docker.network=AgileNet"
+        - "traefik.http.routers.finance-api.entrypoints=websecure"
+
+networks:
+  AgileNet:
+    external: true

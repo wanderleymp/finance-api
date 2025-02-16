@@ -1,6 +1,7 @@
 const { logger } = require('../../middlewares/logger');
 const ChatRepository = require('./chat.repository');
 const ChatParticipantRepository = require('./chat-participant.repository');
+const ChatMessageService = require('./chat-message.service');
 const TaskService = require('../tasks/task.service');
 const TaskRepository = require('../tasks/repositories/task.repository');
 const TaskLogsService = require('../tasklogs/tasklogs.service');
@@ -11,6 +12,7 @@ class ChatService {
     constructor() {
         this.chatRepository = new ChatRepository();
         this.chatParticipantRepository = new ChatParticipantRepository();
+        this.chatMessageService = new ChatMessageService();
         this.taskService = new TaskService({ 
             taskRepository: new TaskRepository(),
             taskLogsService: new TaskLogsService(),
@@ -69,11 +71,12 @@ class ChatService {
         try {
             logger.info('Enviando mensagem', { chatId, metadata });
             
-            // Cria a mensagem
-            const message = await this.chatRepository.createMessage(chatId, 'OUTBOUND', content, metadata);
-            
-            // Atualiza última mensagem do chat
-            await this.chatRepository.updateChatLastMessage(chatId, message.message_id);
+            // Cria a mensagem usando o novo serviço
+            const message = await this.chatMessageService.createMessage(chatId, {
+                content,
+                metadata,
+                direction: 'OUTBOUND'
+            });
             
             logger.info('Mensagem enviada com sucesso', { 
                 messageId: message.message_id,
@@ -135,6 +138,53 @@ class ChatService {
                 page,
                 limit,
                 filters
+            });
+            throw error;
+        }
+    }
+
+    async receiveMessage(personContactId, content, metadata = {}, direction = 'INBOUND') {
+        try {
+            logger.info('Processando mensagem recebida', { personContactId, direction });
+
+            // Encontra ou cria chat para a pessoa
+            const chat = await this.findOrCreateChat(personContactId);
+
+            // Adiciona metadados padrão se não existirem
+            const processedMetadata = {
+                ...metadata,
+                receivedAt: new Date().toISOString(),
+                source: metadata.source || 'EXTERNAL'
+            };
+
+            // Cria a mensagem no chat usando o novo serviço
+            const message = await this.chatMessageService.createMessage(
+                chat.chat_id, 
+                {
+                    content, 
+                    metadata: processedMetadata,
+                    direction
+                }
+            );
+
+            // Atualiza status do chat para pendente, se necessário
+            if (chat.status !== 'PENDING') {
+                await this.chatRepository.update(chat.chat_id, { 
+                    status: 'PENDING' 
+                });
+            }
+
+            logger.info('Mensagem recebida processada com sucesso', { 
+                messageId: message.message_id,
+                chatId: chat.chat_id
+            });
+
+            return message;
+        } catch (error) {
+            logger.error('Erro ao processar mensagem recebida', { 
+                error: error.message,
+                personContactId,
+                direction
             });
             throw error;
         }

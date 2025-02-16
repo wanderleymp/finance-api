@@ -176,6 +176,85 @@ class ContactRepository extends BaseRepository {
             throw error;
         }
     }
+
+    async findByLastDigits(lastDigits, { client = null } = {}) {
+        try {
+            const queryClient = client || this.pool;
+            
+            // Log detalhado dos parâmetros de entrada
+            logger.info('BUSCA POR ÚLTIMOS DÍGITOS - INÍCIO', {
+                lastDigits,
+                lastDigitsType: typeof lastDigits,
+                lastDigitsLength: lastDigits.length
+            });
+
+            // Limpar caracteres não numéricos e pegar últimos 8 dígitos
+            const cleanDigits = String(lastDigits)
+                .replace(/\D/g, '')  // Remove caracteres não numéricos
+                .slice(-8);  // Pega últimos 8 dígitos
+
+            // Log de limpeza
+            logger.info('DÍGITOS LIMPOS', {
+                cleanDigits,
+                cleanDigitsLength: cleanDigits.length
+            });
+
+            // Log da query completa
+            const query = `
+                SELECT *
+                FROM ${this.tableName}
+                WHERE contact_value ILIKE '%${cleanDigits}'
+                LIMIT 1
+            `;
+
+            logger.info('QUERY DE BUSCA', {
+                query,
+                searchDigits: cleanDigits
+            });
+
+            const result = await queryClient.query(query);
+
+            // Log do resultado
+            logger.info('RESULTADO DA BUSCA', {
+                rowsFound: result.rows.length,
+                firstRow: result.rows[0] ? {
+                    contact_id: result.rows[0].contact_id,
+                    contact_value: result.rows[0].contact_value
+                } : null
+            });
+
+            return result.rows[0] ? ContactResponseDTO.fromDatabase(result.rows[0]) : null;
+        } catch (error) {
+            logger.error('Erro ao buscar contato por últimos dígitos', {
+                error: error.message,
+                stack: error.stack,
+                lastDigits
+            });
+            throw error;
+        }
+    }
+
+    async findFirstPersonContact(personId, { client = null } = {}) {
+        try {
+            const queryClient = client || this.getClient();
+            const query = `
+                SELECT *
+                FROM ${this.tableName}
+                WHERE person_id = $1
+                ORDER BY contact_id
+                LIMIT 1
+            `;
+            const result = await queryClient.query(query, [personId]);
+            return result.rows[0] ? ContactResponseDTO.fromDatabase(result.rows[0]) : null;
+        } catch (error) {
+            logger.error('Erro ao buscar primeiro contato da pessoa', {
+                personId,
+                error: error.message,
+                stack: error.stack
+            });
+            throw error;
+        }
+    }
 }
 
 module.exports = ContactRepository;

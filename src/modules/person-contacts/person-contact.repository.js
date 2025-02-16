@@ -203,6 +203,33 @@ class PersonContactRepository extends IPersonContactRepository {
     }
 
     /**
+     * Busca um person-contact pelo contact_id
+     */
+    async findByContactId(contactId) {
+        try {
+            const query = `
+                SELECT 
+                    person_contact_id, 
+                    person_id, 
+                    contact_id 
+                FROM ${this.tableName} 
+                WHERE contact_id = $1
+                LIMIT 1
+            `;
+
+            const result = await this.pool.query(query, [contactId]);
+
+            return result.rows[0] || null;
+        } catch (error) {
+            logger.error('Erro ao buscar person-contact por contact_id', {
+                error: error.message,
+                contactId
+            });
+            throw error;
+        }
+    }
+
+    /**
      * Cria uma nova associação entre pessoa e contato
      */
     async create(data, { client } = {}) {
