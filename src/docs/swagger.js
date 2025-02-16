@@ -2681,7 +2681,12 @@ const options = {
             }
         }
     },
-    apis: ['./src/routes/*.js', './src/modules/*/*.routes.js']
+    apis: [
+        './src/routes/*.js', 
+        './src/modules/*/*.routes.js',
+        './src/modules/*/*.controller.ts',  
+        './src/newArch/**/*.controller.ts'  
+    ]
 };
 
 const swaggerSpec = swaggerJsdoc(options);

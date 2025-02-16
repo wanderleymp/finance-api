@@ -866,7 +866,8 @@ class MovementRepository extends BaseRepository {
                                     'contact_type', c.contact_type
                                 )
                             )
-                        ) AS license,
+                        )
+                    ) AS license,
                     jsonb_build_object(
                         'person_id', mp.person_id,
                         'full_name', mp.full_name,

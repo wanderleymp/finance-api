@@ -19,30 +19,6 @@ erro() {
 # Obter branch atual
 BRANCH_ATUAL=$(git rev-parse --abbrev-ref HEAD)
 
-# Atualizar CHANGELOG
-atualizar_changelog() {
-    log "Atualizando CHANGELOG.md..."
-    
-    # Obter a versão atual
-    VERSAO_ATUAL=$(node -p "require('./package.json').version")
-    DATA_ATUAL=$(date +%Y-%m-%d)
-    
-    # Criar um novo CHANGELOG temporário
-    cp CHANGELOG.md CHANGELOG.md.bak
-    
-    # Adicionar nova entrada no CHANGELOG
-    echo "## [Não Lançado]
-
-## [${VERSAO_ATUAL}] - ${DATA_ATUAL}
-### Adicionado
-- Deploy da versão ${VERSAO_ATUAL}
-
-$(cat CHANGELOG.md.bak)" > CHANGELOG.md
-    
-    # Remover backup
-    rm CHANGELOG.md.bak
-}
-
 # Commitar alterações pendentes
 commitar_alteracoes() {
     log "Commitando alterações pendentes..."
@@ -106,7 +82,6 @@ criar_nova_versao() {
 
 # Função principal de deploy
 main() {
-    atualizar_changelog
     commitar_alteracoes
     atualizar_repositorio
     atualizar_branches

@@ -103,6 +103,33 @@ class ChatRepository extends BaseRepository {
         }
     }
 
+    async findChatByContact(contactId) {
+        const client = await this.pool.connect();
+        try {
+            const query = `
+                SELECT c.*
+                FROM chats c
+                JOIN chat_participants cp ON c.chat_id = cp.chat_id
+                WHERE cp.contact_id = $1
+                AND c.status = 'ACTIVE'
+                ORDER BY c.created_at DESC
+                LIMIT 1
+            `;
+            const values = [contactId];
+
+            const result = await client.query(query, values);
+            return result.rows[0] || null;
+        } catch (error) {
+            logger.error('Erro ao buscar chat por contact_id', {
+                error: error.message,
+                contactId
+            });
+            throw error;
+        } finally {
+            client.release();
+        }
+    }
+
     async createMessage(chatId, direction, content, metadata = {}) {
         return await this.create({
             chat_id: chatId,
@@ -165,6 +192,100 @@ class ChatRepository extends BaseRepository {
                 status
             }
         }, 'chat_messages', 'message_id');
+    }
+
+    async addChatParticipant(data) {
+        const ChatParticipantRepository = require('./chat-participant.repository');
+        const chatParticipantRepository = new ChatParticipantRepository();
+
+        try {
+            logger.info('Verificando participante no chat', { data });
+            
+            // Verifica se person_contact_id não foi fornecido
+            if (!data.person_contact_id) {
+                const personContactQuery = `
+                    SELECT person_contact_id 
+                    FROM person_contacts 
+                    WHERE contact_id = $1 
+                    LIMIT 1
+                `;
+                const personContactResult = await this.pool.query(personContactQuery, [data.contact_id]);
+                
+                // Se encontrar um person_contact, usa o ID
+                if (personContactResult.rows.length > 0) {
+                    data.person_contact_id = personContactResult.rows[0].person_contact_id;
+                }
+            }
+            
+            // Verifica se o participante já existe no chat
+            const existingParticipantQuery = `
+                SELECT participant_id 
+                FROM chat_participants 
+                WHERE chat_id = $1 
+                AND (
+                    (person_contact_id IS NOT NULL AND person_contact_id = $2) 
+                    OR 
+                    (contact_id = $3)
+                )
+            `;
+            
+            const existingParticipantResult = await this.pool.query(existingParticipantQuery, [
+                data.chat_id, 
+                data.person_contact_id, 
+                data.contact_id
+            ]);
+            
+            // Se já existir, não adiciona novamente
+            if (existingParticipantResult.rows.length > 0) {
+                logger.info('Participante já existe no chat', { 
+                    chat_id: data.chat_id, 
+                    person_contact_id: data.person_contact_id,
+                    contact_id: data.contact_id
+                });
+                return existingParticipantResult.rows[0];
+            }
+            
+            // Adiciona novo participante usando o repositório específico
+            const participant = await chatParticipantRepository.create({
+                chat_id: data.chat_id,
+                person_contact_id: data.person_contact_id,
+                contact_id: data.contact_id,
+                role: data.role || 'PARTICIPANT',
+                status: 'ACTIVE'
+            });
+            
+            logger.info('Participante adicionado com sucesso', { participant_id: participant.participant_id });
+            return participant;
+        } catch (error) {
+            logger.error('Erro ao adicionar participante ao chat', { error: error.message, data });
+            throw error;
+        }
+    }
+
+    async findByRemoteJid(remoteJid) {
+        const client = await this.pool.connect();
+        try {
+            const query = `
+                SELECT *
+                FROM chats
+                WHERE remote_jid = $1
+                AND status = 'ACTIVE'
+                ORDER BY created_at DESC
+                LIMIT 1
+            `;
+            const values = [remoteJid];
+
+            const result = await client.query(query, values);
+            return result.rows[0] || null;
+        } catch (error) {
+            logger.error('Erro ao buscar chat por remote_jid', {
+                error: error.message,
+                remoteJid
+            });
+            throw error;
+        } finally {
+            client.release();
+        }
     }
 }
 

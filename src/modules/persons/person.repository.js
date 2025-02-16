@@ -717,6 +717,39 @@ class PersonRepository extends IPersonRepository {
             throw error;
         }
     }
+
+    async findOrCreate(data) {
+        try {
+            // Busca pessoa pelo nome
+            const findQuery = `
+                SELECT *
+                FROM ${this.tableName}
+                WHERE full_name = $1
+                AND person_type = $2
+                LIMIT 1
+            `;
+            
+            const findResult = await this.pool.query(findQuery, [data.name, data.type]);
+            
+            if (findResult.rows.length > 0) {
+                return findResult.rows[0];
+            }
+            
+            // Se não encontrou, cria nova pessoa
+            const createQuery = `
+                INSERT INTO ${this.tableName} (full_name, person_type)
+                VALUES ($1, $2)
+                RETURNING *
+            `;
+            
+            const createResult = await this.pool.query(createQuery, [data.name, data.type]);
+            
+            return createResult.rows[0];
+        } catch (error) {
+            logger.error('Erro ao buscar ou criar pessoa', { error: error.message, data });
+            throw error;
+        }
+    }
 }
 
 module.exports = PersonRepository;

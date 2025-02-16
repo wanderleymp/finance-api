@@ -3,39 +3,32 @@ const BaseRepository = require('../../repositories/base/BaseRepository');
 
 class ChatParticipantRepository extends BaseRepository {
     constructor() {
-        super('chat_participants', 'participant_id');
+        super('chat_participants', ['chat_id', 'person_contact_id']);
     }
 
     async create(data) {
-        const client = await this.pool.connect();
         try {
-            const query = `
-                INSERT INTO chat_participants (
-                    chat_id,
-                    person_contact_id,
-                    role,
-                    status
-                )
-                VALUES ($1, $2, $3, $4)
-                RETURNING *
-            `;
-            const values = [
-                data.chat_id,
-                data.person_contact_id,
-                data.role,
-                data.status || 'ACTIVE'
-            ];
+            // Garantir que todos os campos necessários estejam presentes
+            const participantData = {
+                chat_id: data.chat_id,
+                person_contact_id: data.person_contact_id || null,
+                contact_id: data.contact_id || null,
+                role: data.role || 'PARTICIPANT',
+                status: data.status || 'ACTIVE'
+            };
 
-            const result = await client.query(query, values);
-            return result.rows[0];
+            logger.info('Criando participante de chat', { participantData });
+
+            // Usar método create do BaseRepository
+            const participant = await super.create(participantData, ['chat_id', 'person_contact_id']);
+            
+            return participant;
         } catch (error) {
             logger.error('Erro ao criar participante do chat', {
                 error: error.message,
                 data
             });
             throw error;
-        } finally {
-            client.release();
         }
     }
 

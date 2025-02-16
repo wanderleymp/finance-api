@@ -1,4 +1,5 @@
 const axios = require('axios');
+const moment = require('moment-timezone');
 const { logger } = require('../../middlewares/logger');
 const NfseRepository = require('./nfse.repository');
 const CreateNfseDto = require('./dto/create-nfse.dto');
@@ -253,8 +254,19 @@ class NfseService {
             throw new Error('Dados de endereço do tomador incompletos');
         }
 
-        const primeiroEndereco = data.personData.addresses[0];
+        // Formata data de emissão no fuso horário de Porto Velho
+        const dataEmissao = moment().tz('America/Porto_Velho').format('YYYY-MM-DD[T]HH:mm:ss');
+        
+        // Usa a data do movimento como data de competência
+        const dataCompetencia = moment(data.movimento.movement_date).format('YYYY-MM-DD');
 
+        logger.info('Datas para NFSe', {
+            dataEmissao,
+            dataCompetencia,
+            movementDate: data.movimento.movement_date
+        });
+
+        const primeiroEndereco = data.personData.addresses[0];
         const tomadorDocumento = this.extrairDocumento(data.personData.documents);
         
         const payload = {
@@ -263,8 +275,8 @@ class NfseService {
             referencia: data.movimento.referencia,
             infDPS: {
                 tpAmb: 1,
-                dhEmi: data.movimento.data,
-                dCompet: data.movimento.data.split('T')[0],
+                dhEmi: dataEmissao,        // Data atual no fuso de Porto Velho
+                dCompet: dataCompetencia,   // Data do movimento
                 prest: {
                     CNPJ: data.prestador.cnpj
                 },
@@ -1222,19 +1234,35 @@ class NfseService {
         }
     }
 
-    // Método centralizado para atualizar invoice
+    // Método centralizado para atualizar invoice e registrar evento
     async atualizarInvoiceNfse(invoiceId, dadosAtualizacao) {
         logger.info('Tentativa de atualização de invoice', {
             invoiceId,
-            dadosAtualizacao,
-            stackTrace: new Error().stack
+            dadosAtualizacao
         });
 
         try {
+            // 1. Atualiza apenas o status na invoice
             const invoiceAtualizada = await this.invoiceRepository.update(
                 invoiceId, 
-                dadosAtualizacao
+                { status: dadosAtualizacao.status }
             );
+
+            // 2. Se tem mensagens de erro, cria evento
+            if (dadosAtualizacao.error_messages) {
+                await this.invoiceEventRepository.create({
+                    invoice_id: invoiceId,
+                    event_type: 'ATUALIZACAO_STATUS_NFSE',
+                    event_data: JSON.stringify(dadosAtualizacao.error_messages),
+                    status: dadosAtualizacao.status
+                });
+
+                logger.info('Evento de erro registrado', {
+                    invoiceId,
+                    status: dadosAtualizacao.status,
+                    mensagens: dadosAtualizacao.error_messages
+                });
+            }
 
             logger.info('Invoice atualizada com sucesso', {
                 invoiceId,
