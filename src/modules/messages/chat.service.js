@@ -128,17 +128,17 @@ class ChatService {
     async findAll(page = 1, limit = 20, filters = {}) {
         try {
             logger.info('Buscando chats', { page, limit, filters });
-            const result = await this.chatRepository.findAll(filters, page, limit);
-            logger.info('Chats encontrados', { count: result.items.length });
-            return result;
-        } catch (error) {
-            logger.error('Erro ao listar chats', {
-                error: error.message,
-                stack: error.stack,
-                page,
-                limit,
-                filters
+            
+            const chats = await this.chatRepository.findAll(filters, page, limit);
+            
+            logger.info('Chats encontrados', { 
+                count: chats.items.length,
+                total: chats.meta.totalItems
             });
+            
+            return chats;
+        } catch (error) {
+            logger.error('Erro ao buscar chats', { error: error.message, filters });
             throw error;
         }
     }

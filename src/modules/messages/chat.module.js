@@ -1,5 +1,5 @@
 const testRoutes = require('./test.routes');
-const chatController = require('./chat.controller');
+const chatMessagesRoutes = require('./chat-messages.routes');
 const registerProcessors = require('./register-processors');
 const { logger } = require('../../middlewares/logger');
 
@@ -22,7 +22,7 @@ module.exports = (app, { taskService, taskWorker } = {}) => {
     registerProcessors(appTaskService, appTaskWorker);
     
     // Registra rotas de chat
-    app.use('/messages/chat', chatController);
+    app.use('/messages/chat', chatMessagesRoutes());
     
     // Registra rotas de teste
     app.use('/messages/test', testRoutes(appTaskService));
