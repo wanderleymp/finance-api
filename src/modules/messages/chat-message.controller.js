@@ -43,28 +43,47 @@ router.get('/:chatId/messages', authMiddleware, async (req, res) => {
 });
 
 // Criar nova mensagem
-router.post('/:chatId/messages', authMiddleware, async (req, res) => {
+router.post('/', authMiddleware, async (req, res) => {
     try {
-        const { chatId } = req.params;
+        // Log detalhado do payload recebido
+        logger.info('Requisição de criação de mensagem recebida', { 
+            body: JSON.stringify(req.body),
+            bodyType: typeof req.body,
+            headers: req.headers
+        });
+
         const messageData = req.body;
         
-        logger.info('Criando nova mensagem', { chatId, messageData });
+        logger.info('Preparando para criar mensagem', { 
+            messageData: JSON.stringify(messageData),
+            messageDataType: typeof messageData
+        });
         
-        const message = await chatMessageService.createMessage(chatId, messageData);
+        const message = await chatMessageService.createMessage(messageData);
         
         logger.info('Mensagem criada com sucesso', { 
             messageId: message.message_id,
-            chatId: message.chat_id 
+            messageDetails: JSON.stringify(message)
         });
         
         res.status(201).json(message);
     } catch (error) {
-        logger.error('Erro ao criar mensagem', { 
+        logger.error('Erro detalhado ao criar mensagem', { 
             error: error.message,
+            errorName: error.name,
+            errorDetails: JSON.stringify(error.details || {}),
             stack: error.stack,
-            params: req.params,
-            body: req.body
+            body: JSON.stringify(req.body)
         });
+
+        // Tratamento específico para erro de conteúdo
+        if (error.name === 'BusinessError' && error.message === 'Conteúdo da mensagem é obrigatório') {
+            return res.status(400).json({ 
+                error: error.message,
+                code: 'MISSING_CONTENT',
+                details: error.details
+            });
+        }
 
         res.status(500).json({ 
             error: 'Erro interno ao criar mensagem',

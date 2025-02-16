@@ -45,6 +45,28 @@ export class ChatMessage {
     content: string;
 
     @Column({ 
+        type: 'varchar', 
+        length: 20, 
+        nullable: false,
+        default: 'TEXT',
+        enum: ['TEXT', 'AUDIO', 'FILE', 'IMAGE', 'VIDEO']
+    })
+    contentType: 'TEXT' | 'AUDIO' | 'FILE' | 'IMAGE' | 'VIDEO' = 'TEXT';
+
+    @Column({ 
+        type: 'text', 
+        nullable: true 
+    })
+    fileUrl: string | null = null;
+
+    @Column({ 
+        type: 'jsonb', 
+        nullable: true,
+        default: () => "'{}'"
+    })
+    fileMetadata: Record<string, any> | null = null;
+
+    @Column({ 
         type: 'jsonb', 
         nullable: true,
         default: () => "'{}'"

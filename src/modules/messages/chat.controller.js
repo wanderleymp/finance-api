@@ -1,10 +1,12 @@
 const { Router } = require('express');
 const { logger } = require('../../middlewares/logger');
 const ChatService = require('./chat.service');
+const ChatMessageService = require('./chat-message.service');
 const { authMiddleware } = require('../../middlewares/auth');
 
 const router = Router();
 const chatService = new ChatService();
+const chatMessageService = new ChatMessageService();
 
 // Lista todos os chats
 router.get('/', authMiddleware, async (req, res) => {
@@ -81,7 +83,6 @@ router.get('/:chatId/messages', authMiddleware, async (req, res) => {
             limit 
         });
 
-        const chatMessageService = require('./chat-message.service');
         const messages = await chatMessageService.findByChatId(
             Number(chatId), 
             Number(page), 
@@ -132,7 +133,6 @@ router.get('/', authMiddleware, async (req, res) => {
             filters 
         });
 
-        const chatMessageService = require('./chat-message.service');
         const messages = await chatMessageService.findAll(
             Number(page), 
             Number(limit), 
@@ -162,61 +162,36 @@ router.get('/', authMiddleware, async (req, res) => {
 // Rota para criar uma nova mensagem de chat
 router.post('/', authMiddleware, async (req, res) => {
     try {
-        const { 
-            chatId, 
-            content, 
-            direction = 'OUTBOUND', 
-            status = 'SENT', 
-            metadata = {} 
-        } = req.body;
-
-        // Validações básicas
-        if (!chatId) {
-            return res.status(400).json({ 
-                error: 'ID do chat é obrigatório',
-                code: 'MISSING_CHAT_ID'
+        const chatMessageService = new ChatMessageService();
+        
+        try {
+            // Tenta extrair o conteúdo diretamente do objeto data
+            const messageData = chatMessageService.extractDynamicContent(req.body.data);
+            
+            // Cria a mensagem
+            const message = await chatMessageService.createMessage(req.body);
+            
+            res.status(201).json(message);
+        } catch (extractionError) {
+            logger.warn('Falha na extração de conteúdo', {
+                error: extractionError.message,
+                payload: req.body
             });
-        }
 
-        if (!content) {
             return res.status(400).json({ 
                 error: 'Conteúdo da mensagem é obrigatório',
-                code: 'MISSING_CONTENT'
+                code: 'MISSING_CONTENT',
+                details: extractionError.message
             });
         }
-
-        logger.info('Criando nova mensagem de chat', { 
-            chatId, 
-            direction, 
-            status 
-        });
-
-        const chatMessageService = require('./chat-message.service');
-        const message = await chatMessageService.createMessage(
-            chatId, 
-            { 
-                content, 
-                direction, 
-                status, 
-                metadata 
-            }
-        );
-
-        logger.info('Mensagem de chat criada com sucesso', { 
-            messageId: message.messageId,
-            chatId: message.chatId
-        });
-
-        res.status(201).json(message);
     } catch (error) {
-        logger.error('Erro ao criar mensagem de chat', { 
+        logger.error('Erro no controlador de mensagens', {
             error: error.message,
             body: req.body
         });
-
+        
         res.status(500).json({ 
-            error: 'Erro interno ao criar mensagem de chat',
-            details: error.message,
+            error: 'Erro interno ao processar mensagem',
             code: 'INTERNAL_ERROR'
         });
     }

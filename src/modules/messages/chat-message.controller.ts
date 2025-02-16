@@ -14,6 +14,7 @@ import { ChatMessageService } from './chat-message.service';
 import { AuthGuard } from '../../middlewares/auth.guard'; // Assumindo que existe um guard de autenticação
 import { CreateChatMessageDto } from './dtos/create-chat-message.dto';
 import { UpdateChatMessageStatusDto } from './dtos/update-chat-message-status.dto';
+import { HttpException, HttpStatus } from '@nestjs/common';
 
 @Controller('chat-messages')
 @UseGuards(AuthGuard)
@@ -56,32 +57,38 @@ export class ChatMessageController {
     }
 
     // Criar nova mensagem
-    @Post('/:chatId/messages')
+    @Post()
     async createMessage(
-        @Param('chatId') chatId: number,
         @Body() messageData: CreateChatMessageDto
     ) {
         try {
-            logger.info('Criando nova mensagem', { chatId, messageData });
+            logger.info('Criando mensagem de chat', { messageData });
             
-            const message = await this.chatMessageService.createMessage(
-                chatId, 
-                messageData
-            );
-            
-            logger.info('Mensagem criada com sucesso', { 
-                messageId: message.messageId,
-                chatId: message.chatId 
+            // Remove toda validação de chat_id
+            const message = await this.chatMessageService.createMessage({
+                ...messageData,
+                content: messageData.text || messageData.content,
+                remoteJid: messageData.remoteJid
             });
             
-            return message;
+            return {
+                message,
+                success: true
+            };
         } catch (error) {
-            logger.error('Erro ao criar mensagem', { 
+            logger.error('Erro ao criar mensagem de chat', { 
                 error: error.message,
-                chatId,
-                messageData
+                messageData 
             });
-            throw error;
+            
+            throw new HttpException(
+                {
+                    error: 'Erro ao criar mensagem',
+                    details: error.message,
+                    code: 'MESSAGE_CREATION_ERROR'
+                },
+                HttpStatus.INTERNAL_SERVER_ERROR
+            );
         }
     }
 

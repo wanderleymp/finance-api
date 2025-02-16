@@ -2,12 +2,22 @@ import {
     IsString, 
     IsOptional, 
     IsEnum, 
-    IsObject 
+    IsObject,
+    ValidateIf 
 } from 'class-validator';
 
 export class CreateChatMessageDto {
+    @IsOptional()
     @IsString()
-    content: string;
+    chat_id?: number;
+
+    @IsOptional()
+    @IsString()
+    remoteJid?: string;
+
+    @IsOptional()
+    @IsString()
+    content?: string;
 
     @IsOptional()
     @IsEnum(['INBOUND', 'OUTBOUND'])
@@ -20,4 +30,14 @@ export class CreateChatMessageDto {
     @IsOptional()
     @IsObject()
     metadata?: Record<string, any> = {};
+
+    @IsOptional()
+    @IsString()
+    text?: string;
+
+    @IsOptional()
+    fromMe?: boolean;
+
+    @IsOptional()
+    source?: string;
 }
