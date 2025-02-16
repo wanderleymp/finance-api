@@ -40,6 +40,7 @@ const ContractMovementModule = require('./modules/contract-movements/contract-mo
 const ContractAdjustmentHistoryModule = require('./modules/contract-adjustment-history/contract-adjustment-history.module');
 const ContractAdjustmentContractRoutes = require('./modules/contract-adjustment/contract-adjustment-contract.module');
 const ContractExtraServiceModule = require('./modules/contract-extra-services/contract-extra-service.module');
+const chatRoutes = require('./modules/chat/chat.routes');
 
 const movementDependencies = {
     movementRepository: new MovementRepository(),
@@ -345,6 +346,10 @@ ContractAdjustmentContractRoutes(app);
 
 // Adicionar rotas de serviços extras de contrato
 ContractExtraServiceModule.register(app);
+
+// Registra rota de chats
+const registerChatRoutes = require('./modules/chat/chat.routes');
+registerChatRoutes(app);
 
 // Registra rota de chat-messages
 const chatMessagesRoutes = require('./modules/messages/chat-messages.routes');

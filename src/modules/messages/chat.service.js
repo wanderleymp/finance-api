@@ -189,6 +189,220 @@ class ChatService {
             throw error;
         }
     }
+
+    async findChatHistory(chatId, page = 1, limit = 20) {
+        try {
+            const query = `
+                SELECT 
+                    m.message_id,
+                    m.content,
+                    m.created_at,
+                    m.direction,
+                    m.status,
+                    
+                    s.person_id as sender_id,
+                    s.name as sender_name,
+                    s.avatar_url as sender_avatar,
+                    
+                    c.contact_id,
+                    c.contact_value as sender_contact,
+                    
+                    ch.chat_id,
+                    ch.channel_id,
+                    ch.created_at as chat_created_at
+                FROM chat_messages m
+                LEFT JOIN persons s ON m.sender_id = s.person_id
+                LEFT JOIN contacts c ON s.person_id = c.person_id
+                LEFT JOIN chats ch ON m.chat_id = ch.chat_id
+                WHERE m.chat_id = $1
+                ORDER BY m.created_at ASC
+                LIMIT $2 OFFSET $3
+            `;
+
+            const queryParams = [
+                chatId,
+                limit,
+                (page - 1) * limit
+            ];
+
+            const result = await this.chatRepository.query(query, queryParams);
+
+            // Transformar resultado para formato mais amigável
+            const messagesWithDetails = result.rows.map(message => ({
+                messageId: message.message_id,
+                content: message.content,
+                createdAt: message.created_at,
+                direction: message.direction,
+                status: message.status,
+                sender: {
+                    id: message.sender_id,
+                    name: message.sender_name,
+                    avatarUrl: message.sender_avatar,
+                    contact: message.sender_contact
+                },
+                chat: {
+                    id: message.chat_id,
+                    channelId: message.channel_id,
+                    createdAt: message.chat_created_at
+                }
+            }));
+
+            // Contar total de mensagens para paginação
+            const countQuery = `
+                SELECT COUNT(*) as total
+                FROM chat_messages
+                WHERE chat_id = $1
+            `;
+
+            const countResult = await this.chatRepository.query(countQuery, [chatId]);
+
+            const totalItems = parseInt(countResult.rows[0].total);
+
+            return {
+                items: messagesWithDetails,
+                meta: {
+                    totalItems,
+                    itemCount: messagesWithDetails.length,
+                    itemsPerPage: limit,
+                    totalPages: Math.ceil(totalItems / limit),
+                    currentPage: page
+                }
+            };
+        } catch (error) {
+            logger.error('Erro ao buscar histórico do chat', { 
+                error: error.message,
+                chatId,
+                page,
+                limit
+            });
+            throw error;
+        }
+    }
+
+    async findChatsWithDetails(page = 1, limit = 20, filters = {}) {
+        try {
+            const query = `
+                WITH chat_details AS (
+                    SELECT 
+                        c.chat_id,
+                        c.channel_id,
+                        c.created_at as chat_created_at,
+                        c.last_message_id,
+                        
+                        ch.name as channel_name,
+                        
+                        m.message_id as last_message_id,
+                        m.content as last_message_content,
+                        m.created_at as last_message_date,
+                        m.direction as last_message_direction,
+                        m.status as last_message_status,
+                        
+                        cont.contact_id,
+                        cont.contact_value as contact_phone,
+                        cont.contact_name,
+                        
+                        p.person_id,
+                        p.name as person_name,
+                        p.avatar_url,
+                        
+                        (SELECT COUNT(*) 
+                         FROM chat_messages unread 
+                         WHERE unread.chat_id = c.chat_id 
+                         AND unread.status = 'UNREAD') as unread_messages_count,
+                        
+                        ROW_NUMBER() OVER (PARTITION BY c.chat_id ORDER BY m.created_at DESC) as row_num
+                    FROM chats c
+                    LEFT JOIN channels ch ON c.channel_id = ch.channel_id
+                    LEFT JOIN chat_messages m ON c.last_message_id = m.message_id
+                    LEFT JOIN chat_participants cp ON c.chat_id = cp.chat_id
+                    LEFT JOIN person_contacts pc ON cp.person_contact_id = pc.person_contact_id
+                    LEFT JOIN contacts cont ON pc.contact_id = cont.contact_id
+                    LEFT JOIN persons p ON pc.person_id = p.person_id
+                    WHERE 1=1
+                    ${filters.personId ? 'AND cp.person_id = $1' : ''}
+                    ${filters.channelId ? `AND c.channel_id = $${filters.personId ? 2 : 1}` : ''}
+                )
+                SELECT * 
+                FROM chat_details 
+                WHERE row_num = 1
+                ORDER BY last_message_date DESC
+                LIMIT $${filters.personId && filters.channelId ? 3 : filters.personId || filters.channelId ? 2 : 1} 
+                OFFSET $${filters.personId && filters.channelId ? 4 : filters.personId || filters.channelId ? 3 : 2}
+            `;
+
+            const queryParams = [
+                ...(filters.personId ? [filters.personId] : []),
+                ...(filters.channelId ? [filters.channelId] : []),
+                limit,
+                (page - 1) * limit
+            ];
+
+            const result = await this.chatRepository.query(query, queryParams);
+
+            // Transformar resultado para formato mais amigável
+            const chatsWithDetails = result.rows.map(chat => ({
+                chatId: chat.chat_id,
+                channel: {
+                    id: chat.channel_id,
+                    name: chat.channel_name
+                },
+                createdAt: chat.chat_created_at,
+                lastMessage: chat.last_message_id ? {
+                    id: chat.last_message_id,
+                    content: chat.last_message_content,
+                    date: chat.last_message_date,
+                    direction: chat.last_message_direction,
+                    status: chat.last_message_status
+                } : null,
+                contact: {
+                    id: chat.contact_id,
+                    name: chat.contact_name,
+                    phone: chat.contact_phone
+                },
+                person: {
+                    id: chat.person_id,
+                    name: chat.person_name,
+                    avatarUrl: chat.avatar_url
+                },
+                unreadMessagesCount: chat.unread_messages_count
+            }));
+
+            // Contar total de chats para paginação
+            const countQuery = `
+                SELECT COUNT(DISTINCT c.chat_id) as total
+                FROM chats c
+                LEFT JOIN chat_participants cp ON c.chat_id = cp.chat_id
+                WHERE 1=1
+                ${filters.personId ? 'AND cp.person_id = $1' : ''}
+                ${filters.channelId ? `AND c.channel_id = $${filters.personId ? 2 : 1}` : ''}
+            `;
+
+            const countResult = await this.chatRepository.query(countQuery, 
+                queryParams.slice(0, filters.personId && filters.channelId ? 2 : filters.personId || filters.channelId ? 1 : 0)
+            );
+
+            const totalItems = parseInt(countResult.rows[0].total);
+
+            return {
+                items: chatsWithDetails,
+                meta: {
+                    totalItems,
+                    itemCount: chatsWithDetails.length,
+                    itemsPerPage: limit,
+                    totalPages: Math.ceil(totalItems / limit),
+                    currentPage: page
+                }
+            };
+        } catch (error) {
+            logger.error('Erro ao buscar chats com detalhes', { 
+                error: error.message,
+                page,
+                limit,
+                filters
+            });
+            throw error;
+        }
+    }
 }
 
 module.exports = ChatService;
