@@ -1,13 +1,11 @@
 const { Router } = require('express');
 const { logger } = require('../../middlewares/logger');
-const ChatService = require('./chat.service');
 const ChatMessageService = require('./chat-message.service');
 const { authMiddleware } = require('../../middlewares/auth');
 
 class ChatMessagesRoutes {
     constructor(dependencies = {}) {
         this.router = Router();
-        this.chatService = dependencies.chatService || new ChatService();
         this.chatMessageService = dependencies.chatMessageService || new ChatMessageService();
         this.setupRoutes();
     }
@@ -26,31 +24,6 @@ class ChatMessagesRoutes {
                 query: req.query
             });
             next();
-        });
-
-        // Lista todos os chats
-        this.router.get('/', async (req, res) => {
-            try {
-                const { page = 1, limit = 20, personContactId } = req.query;
-                const filters = { personContactId };
-                
-                logger.info('Listando chats', { page, limit, filters });
-                
-                const chats = await this.chatService.findAll(
-                    parseInt(page), 
-                    parseInt(limit), 
-                    filters
-                );
-                
-                logger.info('Chats listados com sucesso', { 
-                    count: chats.items.length,
-                    total: chats.meta.totalItems
-                });
-                
-                res.json(chats);
-            } catch (error) {
-                this.handleError(res, error, 'Erro ao listar chats');
-            }
         });
 
         // Busca mensagens de um chat específico
@@ -78,24 +51,49 @@ class ChatMessagesRoutes {
             }
         });
 
-        // Criar novo chat
-        this.router.post('/', async (req, res) => {
+        // Lista todas as mensagens
+        this.router.get('/', async (req, res) => {
             try {
-                const chatData = req.body;
-                const userId = req.user.id; // Assumindo que o middleware de auth adiciona o usuário
+                const { page = 1, limit = 20, personContactId } = req.query;
+                const filters = personContactId ? { personContactId } : {};
                 
-                logger.info('Criando novo chat', { chatData, userId });
+                logger.info('Listando mensagens', { page, limit, filters });
                 
-                const newChat = await this.chatService.create({
-                    ...chatData,
-                    createdBy: userId
+                const messages = await this.chatMessageService.findAll(
+                    parseInt(page), 
+                    parseInt(limit), 
+                    filters
+                );
+                
+                logger.info('Mensagens listadas com sucesso', { 
+                    count: messages.items.length,
+                    total: messages.meta.totalItems
                 });
                 
-                logger.info('Chat criado com sucesso', { chatId: newChat.id });
-                
-                res.status(201).json(newChat);
+                res.json(messages);
             } catch (error) {
-                this.handleError(res, error, 'Erro ao criar chat');
+                this.handleError(res, error, 'Erro ao listar mensagens');
+            }
+        });
+
+        // Criar mensagem
+        this.router.post('/', async (req, res) => {
+            try {
+                const messageData = req.body;
+                const userId = req.user.id;
+                
+                logger.info('Criando nova mensagem', { messageData, userId });
+                
+                const newMessage = await this.chatMessageService.createMessage({
+                    ...messageData,
+                    senderId: userId
+                });
+                
+                logger.info('Mensagem criada com sucesso', { messageId: newMessage.id });
+                
+                res.status(201).json(newMessage);
+            } catch (error) {
+                this.handleError(res, error, 'Erro ao criar mensagem');
             }
         });
 
@@ -133,7 +131,7 @@ class ChatMessagesRoutes {
                 
                 logger.info('Criando chat de cobrança', { personId, billingData, userId });
                 
-                const billingChat = await this.chatService.createBillingChat(
+                const billingChat = await this.chatMessageService.createBillingChat(
                     parseInt(personId),
                     {
                         ...billingData,

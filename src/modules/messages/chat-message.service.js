@@ -350,64 +350,34 @@ class ChatMessageService {
         }
     }
 
-    async findAll(page = 1, limit = 20, filters = {}) {
+    async findAll(page = 1, limit = 20, filters = {}, options = {}) {
         try {
-            logger.info('Buscando mensagens de chat', { page, limit, filters });
+            logger.info('Buscando mensagens', { 
+                page, 
+                limit, 
+                filters, 
+                options,
+                pageType: typeof page,
+                limitType: typeof limit,
+                filtersType: typeof filters
+            });
             
-            const query = `
-                SELECT m.*, c.contact_value as contact_phone
-                FROM chat_messages m
-                LEFT JOIN chats ch ON m.chat_id = ch.chat_id
-                LEFT JOIN person_contacts pc ON ch.chat_id = pc.chat_id
-                LEFT JOIN contacts c ON pc.contact_id = c.contact_id
-                WHERE 1=1
-                ${filters.chatId ? 'AND m.chat_id = $1' : ''}
-                ${filters.direction ? 'AND m.direction = $2' : ''}
-                ${filters.status ? 'AND m.status = $3' : ''}
-                ORDER BY m.created_at DESC
-                LIMIT $4 OFFSET $5
-            `;
-
-            const queryParams = [
-                ...(filters.chatId ? [filters.chatId] : []),
-                ...(filters.direction ? [filters.direction] : []),
-                ...(filters.status ? [filters.status] : []),
-                limit,
-                (page - 1) * limit
-            ];
-
-            const countQuery = `
-                SELECT COUNT(*) as total
-                FROM chat_messages m
-                WHERE 1=1
-                ${filters.chatId ? 'AND m.chat_id = $1' : ''}
-                ${filters.direction ? 'AND m.direction = $2' : ''}
-                ${filters.status ? 'AND m.status = $3' : ''}
-            `;
-
-            const [messages, countResult] = await Promise.all([
-                this.pool.query(query, queryParams),
-                this.pool.query(countQuery, queryParams.slice(0, -2))
-            ]);
-
-            const totalItems = parseInt(countResult.rows[0].total);
-
-            return {
-                items: messages.rows,
-                meta: {
-                    totalItems,
-                    itemCount: messages.rows.length,
-                    itemsPerPage: limit,
-                    totalPages: Math.ceil(totalItems / limit),
-                    currentPage: page
-                }
-            };
+            const result = await this.chatMessageRepository.findAll(
+                page, 
+                limit, 
+                filters,
+                options
+            );
+            
+            logger.info('Mensagens encontradas', { count: result.items.length });
+            return result;
         } catch (error) {
-            logger.error('Erro ao buscar mensagens', { 
+            logger.error('Erro ao listar mensagens', {
                 error: error.message,
                 page,
                 limit,
-                filters
+                filters,
+                options
             });
             throw error;
         }

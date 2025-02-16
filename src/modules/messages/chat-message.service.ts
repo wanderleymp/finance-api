@@ -122,15 +122,25 @@ export class ChatMessageService {
     async findAll(
         page = 1, 
         limit = 20, 
-        filters = {}
+        filters = {}, 
+        options = {}
     ): Promise<{ items: ChatMessage[], meta: any }> {
         try {
-            logger.info('Buscando mensagens', { page, limit, filters });
+            logger.info('Buscando mensagens', { 
+                page, 
+                limit, 
+                filters, 
+                options,
+                pageType: typeof page,
+                limitType: typeof limit,
+                filtersType: typeof filters
+            });
             
             const result = await this.chatMessageRepository.findAll(
                 page, 
                 limit, 
-                filters
+                filters,
+                options
             );
             
             logger.info('Mensagens encontradas', { count: result.items.length });
@@ -140,7 +150,8 @@ export class ChatMessageService {
                 error: error.message,
                 page,
                 limit,
-                filters
+                filters,
+                options
             });
             throw error;
         }
