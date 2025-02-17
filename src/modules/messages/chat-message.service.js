@@ -51,6 +51,149 @@ class ChatMessageService {
         }
     }
 
+    async createMessage(payload) {
+        try {
+            // Log detalhado do payload
+            this.logger.info('PAYLOAD RECEBIDO NO CREATEMESSAGE', {
+                payloadKeys: Object.keys(payload),
+                dataKeys: payload.data ? Object.keys(payload.data) : 'SEM DATA',
+                remoteJid: payload.data?.data?.key?.remoteJid
+            });
+
+            return await this.chatMessageRepository.transaction(async (client) => {
+                // Verificação explícita antes da chamada
+                const remoteJid = payload.data?.data?.key?.remoteJid;
+                if (!remoteJid) {
+                    this.logger.error('PAYLOAD INVÁLIDO - REMOTEJID AUSENTE', { 
+                        payload: JSON.stringify(payload) 
+                    });
+                    throw new Error('RemoteJid é obrigatório');
+                }
+
+                const contact = await this.contactRepository.findByLastDigits(remoteJid);
+
+                // Localiza ou cria o canal
+                const channel = await this.findOrCreateChannelByInstance(payload.data.instance, client);
+
+                // Busca ou cria chat para o contato
+                let chatId = null;
+                if (contact && contact.id) {
+                    chatId = await this.findOrCreateChatByContactId(contact.id, client, channel);
+                }
+
+                // Cria a mensagem de chat
+                let message = null;
+                if (chatId && contact) {
+                    message = await this.createChatMessage(chatId, contact.id, payload.data.data, client);
+                }
+
+                return message;
+            });
+        } catch (error) {
+            this.logger.error('Falha ao criar mensagem', { 
+                error: error.message,
+                payload: JSON.stringify(payload)
+            });
+            throw error;
+        }
+    }
+
+    async findOrCreateChannelByInstance(instanceName, client) {
+        try {
+            // Mapeia o nome da instância para o ID do canal
+            const channelId = this.getChannelId(instanceName);
+
+            // Busca o canal existente
+            let channel = await this.channelRepository.findById(channelId, { client });
+
+            // Se não existir, cria um novo canal
+            if (!channel) {
+                channel = await this.channelRepository.create({
+                    channel_id: channelId,
+                    channel_name: instanceName || 'WhatsApp',
+                    channel_type: 'WHATSAPP'
+                }, { client });
+            }
+
+            return channel;
+        } catch (error) {
+            this.logger.error('Erro ao encontrar/criar canal', {
+                error: error.message,
+                instanceName
+            });
+            throw error;
+        }
+    }
+
+    async findOrCreateChatByContactId(contactId, client, channel) {
+        try {
+            // Busca chats existentes para o contato
+            const existingChats = await this.chatRepository.findByContactId(contactId, { client });
+
+            // Se já existir um chat, retorna o primeiro
+            if (existingChats && existingChats.length > 0) {
+                return existingChats[0].chat_id;
+            }
+
+            // Cria um novo chat
+            const newChat = await this.chatRepository.create({
+                contact_id: contactId,
+                channel_id: channel.channel_id,
+                status: 'ACTIVE'
+            }, { client });
+
+            return newChat.chat_id;
+        } catch (error) {
+            this.logger.error('Erro ao encontrar/criar chat', {
+                error: error.message,
+                contactId
+            });
+            throw error;
+        }
+    }
+
+    async createChatMessage(chatId, contactId, messageData, client) {
+        // Validação de entrada
+        if (!chatId) {
+            throw new Error('Chat ID é obrigatório');
+        }
+
+        if (!contactId) {
+            throw new Error('Contact ID é obrigatório');
+        }
+
+        // Extração de dados da mensagem
+        const extractedData = this.extractDynamicContent(messageData);
+
+        // Prepara dados para criação da mensagem
+        const messagePayload = {
+            chat_id: chatId,
+            contact_id: contactId,
+            content: extractedData.content,
+            content_type: extractedData.contentType || 'TEXT',
+            direction: messageData.fromMe ? 'OUTBOUND' : 'INBOUND',
+            external_id: messageData.id,
+            file_url: extractedData.fileUrl,
+            metadata: {
+                pushname: messageData.pushname,
+                source: messageData.source
+            }
+        };
+
+        // Cria a mensagem usando o repositório
+        const message = await this.chatMessageRepository.create(messagePayload, client);
+
+        // Registra log de criação da mensagem
+        this.logger.info('Mensagem de chat criada', {
+            chatId,
+            contactId,
+            messageId: message.message_id,
+            contentType: messagePayload.content_type
+        });
+
+        return message;
+    }
+
     extractDynamicContent(data) {
         // Log para debug
         this.logger.info('Extração Dinâmica de Conteúdo', { 
@@ -111,213 +254,17 @@ class ChatMessageService {
             }
         ];
 
-        // Executa estratégias de extração
-        for (let strategy of extractionStrategies) {
-            const extractedContent = strategy.extract(data);
-            
-            if (extractedContent) {
-                this.logger.info(`Conteúdo extraído por estratégia: ${strategy.name}`, {
-                    conteudo: extractedContent
-                });
-                return extractedContent;
-            }
+        // Tenta extrair conteúdo usando as estratégias
+        for (const strategy of extractionStrategies) {
+            const result = strategy.extract(data);
+            if (result) return result;
         }
 
-        // Fallback para conteúdo de texto
-        if (data.text) {
-            return { 
-                contentType: 'TEXT', 
-                content: data.text 
-            };
-        }
-
-        // Se não encontrar conteúdo
-        throw new Error('Conteúdo da mensagem é obrigatório');
-    }
-
-    async findOrCreateChat(payload) {
-        try {
-            const remoteJid = payload.data.remoteJid;
-            const channelId = this.getChannelId(payload.api.instance);
-            const pushname = payload.data.pushname || 'Contato Desconhecido';
-
-            // Remove @s.whatsapp.net e busca pelos últimos 7 dígitos
-            const lastDigits = remoteJid.split('@')[0].replace(/\D/g, '').slice(-7);
-
-            // 1. Localizar contacts
-            let contact = await this.contactRepository.findByLastDigits(lastDigits);
-            if (!contact) {
-                contact = await this.contactRepository.create({
-                    contact_value: remoteJid,
-                    contact_type: 'whatsapp',
-                    contact_name: pushname
-                });
-            }
-
-            // 2. Localizar person_contact
-            let personContact = await this.personContactRepository.findByContactId(contact.contact_id);
-
-            // 3. Buscar chat existente
-            let chat = await this.chatRepository.findChatByContact(contact.contact_id);
-
-            if (!chat) {
-                // Criar novo chat se não existir
-                chat = await this.chatRepository.create({
-                    channel_id: channelId,
-                    status: 'ACTIVE',
-                    allow_reply: true
-                });
-            }
-
-            // 4. Adicionar participante se não existir
-            if (personContact) {
-                await this.chatRepository.addChatParticipant({
-                    chat_id: chat.chat_id,
-                    person_contact_id: personContact.person_contact_id,
-                    contact_id: contact.contact_id,
-                    role: 'PARTICIPANT'
-                });
-            } else {
-                // Se não tiver person_contact, adiciona só o contact
-                await this.chatRepository.addChatParticipant({
-                    chat_id: chat.chat_id,
-                    contact_id: contact.contact_id,
-                    role: 'PARTICIPANT'
-                });
-            }
-
-            return chat.chat_id;
-        } catch (error) {
-            this.logger.error('Falha ao encontrar/criar chat', { 
-                error: error.message,
-                payload: JSON.stringify(payload)
-            });
-            throw error;
-        }
-    }
-
-    async findOrCreateChatByContactId(contactId, transaction, channelId = null) {
-        // Validação de entrada
-        if (!contactId) {
-            throw new Error('Contact ID é obrigatório');
-        }
-
-        // Primeiro, tenta buscar chats existentes
-        const existingChats = await this.chatMessageRepository.findChatsByContactId(contactId);
-
-        // Se existem chats, retorna o primeiro
-        if (existingChats.length > 0) {
-            this.logger.info('Chats existentes encontrados', {
-                contactId,
-                chatIds: existingChats
-            });
-
-            return existingChats[0];
-        }
-
-        // Verifica se o contato existe
-        const contactExists = await this.contactRepository.findById(contactId);
-        if (!contactExists) {
-            throw new Error('Contato não encontrado');
-        }
-
-        // Busca person-contact usando o contact_id (opcional)
-        const personContact = await this.personContactRepository.findByContactId(contactId);
-
-        // Prepara dados do chat
-        const chatData = {
-            status: 'ACTIVE',
-            created_at: new Date(),
-            updated_at: new Date()
+        // Se nenhuma estratégia funcionar, retorna null
+        return { 
+            contentType: 'TEXT', 
+            content: 'Conteúdo não reconhecido' 
         };
-
-        // Adiciona channel_id se fornecido
-        if (channelId) {
-            chatData.channel_id = channelId;
-        }
-
-        // Cria novo chat
-        const newChat = await this.chatRepository.create(chatData, transaction);
-
-        // Prepara dados do participante
-        const participantData = {
-            chat_id: newChat.chat_id,
-            contact_id: contactId,
-            role: 'PARTICIPANT',
-            status: 'ACTIVE'
-        };
-
-        // Adiciona person_contact_id apenas se existir
-        if (personContact) {
-            participantData.person_contact_id = personContact.person_contact_id;
-        }
-
-        // Adiciona participante ao chat
-        await this.chatParticipantRepository.create(participantData, transaction);
-
-        // Registra log de criação
-        this.logger.info('Novo chat criado', {
-            contactId,
-            chatId: newChat.chat_id,
-            personContactId: personContact?.person_contact_id || 'Não definido',
-            channelId: channelId || 'Não definido'
-        });
-
-        return newChat.chat_id;
-    }
-
-    async createMessage(payload) {
-        try {
-            // Usa transação do repositório com callback
-            return await this.chatMessageRepository.transaction(async (client) => {
-                // Extração de dados da mensagem
-                const extractedData = this.extractDynamicContent(payload.data);
-
-                // Recupera o contato usando os últimos 7 dígitos
-                const contact = await this.contactRepository.findByLastDigits(payload.data.remoteJid);
-
-                // Localiza ou cria o canal
-                const channel = await this.findOrCreateChannelByInstance(payload.api.instance, client);
-
-                // Busca ou cria chat para o contato
-                let chatId = null;
-                if (contact && contact.id) {
-                    chatId = await this.findOrCreateChatByContactId(contact.id, client, channel);
-                }
-
-                // Cria a mensagem de chat
-                let message = null;
-                if (chatId && contact) {
-                    message = await this.createChatMessage(chatId, contact.id, payload.data, client);
-                }
-
-                return message;
-            });
-        } catch (error) {
-            this.logger.error('Falha ao criar mensagem', { 
-                error: error.message,
-                payload: JSON.stringify(payload)
-            });
-            
-            throw error;
-        }
-    }
-
-    async findOrCreateChannelByInstance(instanceName, transaction) {
-        // Busca canal existente
-        const existingChannel = await this.channelRepository.findByName(instanceName, transaction);
-        if (existingChannel) {
-            return existingChannel.channel_id; // Retorna apenas o channel_id
-        }
-
-        // Cria novo canal
-        const newChannel = await this.channelRepository.create({
-            channel_name: instanceName,
-            is_active: true,
-            contact_type: 'whatsapp'
-        }, transaction);
-
-        return newChannel.channel_id; // Retorna apenas o channel_id
     }
 
     async updateMessageStatus(messageId, status) {
@@ -640,48 +587,40 @@ class ChatMessageService {
         }
     }
 
-    async createChatMessage(chatId, contactId, messageData, transaction) {
-        // Validação de entrada
-        if (!chatId) {
-            throw new Error('Chat ID é obrigatório');
-        }
+    async findOrCreateContactFromPayload(messageData, client) {
+        try {
+            const remoteJid = messageData.sender || messageData.key?.remoteJid;
+            const pushName = messageData.pushName || 'Contato WhatsApp';
 
-        if (!contactId) {
-            throw new Error('Contact ID é obrigatório');
-        }
-
-        // Extração de dados da mensagem
-        const extractedData = this.extractDynamicContent(messageData);
-
-        // Prepara dados para criação da mensagem
-        const messagePayload = {
-            chat_id: chatId,
-            contact_id: contactId,
-            content: extractedData.content,
-            content_type: extractedData.contentType || 'TEXT',
-            direction: messageData.fromMe ? 'OUTBOUND' : 'INBOUND',
-            external_id: messageData.id,
-            file_url: extractedData.fileUrl,
-            metadata: {
-                pushname: messageData.pushname,
-                source: messageData.source
+            if (!remoteJid) {
+                throw new Error('Identificador de remetente não encontrado');
             }
-        };
 
-        // Cria a mensagem usando o repositório
-        const message = await this.chatMessageRepository.create(messagePayload, transaction);
+            // Remove @s.whatsapp.net e busca pelos últimos 7 dígitos
+            const lastDigits = remoteJid.split('@')[0].replace(/\D/g, '').slice(-7);
 
-        // Registra log de criação da mensagem
-        this.logger.info('Mensagem de chat criada', {
-            chatId,
-            contactId,
-            messageId: message.message_id,
-            contentType: messagePayload.content_type
-        });
+            // Busca por contato existente
+            let contact = await this.contactRepository.findByLastDigits(lastDigits, { client });
 
-        return message;
+            // Se não encontrar, cria novo contato
+            if (!contact) {
+                contact = await this.contactRepository.create({
+                    contact_value: remoteJid,
+                    contact_type: 'whatsapp',
+                    contact_name: pushName
+                }, { client });
+            }
+
+            return contact.contact_id;
+        } catch (error) {
+            this.logger.error('Erro ao encontrar/criar contato', {
+                error: error.message,
+                messageData: JSON.stringify(messageData),
+                stack: error.stack
+            });
+            throw error;
+        }
     }
-
 }
 
 module.exports = ChatMessageService;

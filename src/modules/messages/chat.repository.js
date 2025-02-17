@@ -287,6 +287,39 @@ class ChatRepository extends BaseRepository {
             client.release();
         }
     }
+
+    async findByContactId(contactId, { client = null } = {}) {
+        const queryClient = client || this.pool;
+        try {
+            const query = `
+                SELECT c.*
+                FROM chats c
+                JOIN chat_participants cp ON c.chat_id = cp.chat_id
+                JOIN person_contacts pc ON cp.person_contact_id = pc.person_contact_id
+                WHERE pc.contact_id = $1
+                AND c.status = 'ACTIVE'
+                ORDER BY c.created_at DESC
+                LIMIT 1
+            `;
+            
+            const result = await queryClient.query(query, [contactId]);
+            
+            // Log para diagnóstico
+            logger.info('Resultado findByContactId', {
+                contactId,
+                rowsFound: result.rows.length,
+                firstRow: result.rows[0]
+            });
+            
+            return result.rows;
+        } catch (error) {
+            logger.error('Erro ao buscar chat por contact_id', {
+                error: error.message,
+                contactId
+            });
+            throw error;
+        }
+    }
 }
 
 module.exports = ChatRepository;
