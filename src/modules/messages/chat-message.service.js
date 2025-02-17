@@ -6,6 +6,16 @@ const ChatRepository = require('./chat.repository');
 const ChatParticipantRepository = require('./chat-participant.repository');
 const PersonRepository = require('../persons/person.repository');
 const ChannelRepository = require('../channels/channel.repository');
+const ChatMessageStatusRepository = require('../chat-message-status/chat-message-status.repository');
+
+const MESSAGE_STATUS = {
+    PENDING: 'PENDING',
+    SENT: 'SENT',
+    DELIVERED: 'DELIVERED',
+    READ: 'READ',
+    FAILED: 'FAILED',
+    DELIVERY_ACK: 'DELIVERY_ACK'
+};
 
 class ChatMessageService {
     constructor() {
@@ -16,6 +26,7 @@ class ChatMessageService {
         this.chatParticipantRepository = new ChatParticipantRepository();
         this.personRepository = new PersonRepository();
         this.channelRepository = new ChannelRepository();
+        this.chatMessageStatusRepository = new ChatMessageStatusRepository();
         this.logger = logger;
 
         // Mapeamento de canais para IDs
@@ -162,36 +173,69 @@ class ChatMessageService {
             throw new Error('Contact ID é obrigatório');
         }
 
-        // Extração de dados da mensagem
-        const extractedData = this.extractDynamicContent(messageData);
+        try {
+            // Extrai o conteúdo da conversa
+            const content = messageData.message?.conversation || 'Conteúdo não reconhecido';
 
-        // Prepara dados para criação da mensagem
-        const messagePayload = {
-            chat_id: chatId,
-            contact_id: contactId,
-            content: extractedData.content,
-            content_type: extractedData.contentType || 'TEXT',
-            direction: messageData.fromMe ? 'OUTBOUND' : 'INBOUND',
-            external_id: messageData.id,
-            file_url: extractedData.fileUrl,
-            metadata: {
-                pushname: messageData.pushname,
-                source: messageData.source
-            }
-        };
+            // Prepara metadados com payload completo
+            const metadata = {
+                ...messageData,
+                source: messageData.source || 'unknown'
+            };
 
-        // Cria a mensagem usando o repositório
-        const message = await this.chatMessageRepository.create(messagePayload, client);
+            // Determina o status da mensagem
+            const status = messageData.status || MESSAGE_STATUS.PENDING;
+            const messageStatus = MESSAGE_STATUS[status] || MESSAGE_STATUS.PENDING;
 
-        // Registra log de criação da mensagem
-        this.logger.info('Mensagem de chat criada', {
-            chatId,
-            contactId,
-            messageId: message.message_id,
-            contentType: messagePayload.content_type
-        });
+            // Converte timestamp para formato de data
+            const messageTimestamp = messageData.messageTimestamp 
+                ? new Date(messageData.messageTimestamp * 1000).toISOString() 
+                : new Date().toISOString();
 
-        return message;
+            // Extrai o external_id da mensagem
+            const externalId = messageData.key?.id || null;
+
+            // Cria a mensagem de chat
+            const chatMessage = await this.chatMessageRepository.create({
+                chat_id: chatId,
+                contact_id: contactId,
+                content: content,
+                content_type: 'TEXT',
+                direction: 'INBOUND',
+                metadata: metadata,
+                status: messageStatus,
+                message_status: messageStatus,
+                external_id: externalId,
+                created_at: messageTimestamp
+            }, { client });
+
+            // Cria o status da mensagem
+            await this.chatMessageStatusRepository.create({
+                message_id: chatMessage.message_id,
+                status: messageStatus,
+                metadata: {
+                    source: 'message_creation',
+                    originalPayload: metadata
+                }
+            });
+
+            this.logger.info('Mensagem de chat criada', {
+                chatId,
+                contactId,
+                content,
+                status: messageStatus,
+                externalId
+            });
+
+            return chatMessage;
+        } catch (error) {
+            this.logger.error('Erro ao criar mensagem de chat', {
+                error: error.message,
+                chatId,
+                contactId
+            });
+            throw error;
+        }
     }
 
     extractDynamicContent(data) {
@@ -267,17 +311,45 @@ class ChatMessageService {
         };
     }
 
-    async updateMessageStatus(messageId, status) {
+    async updateMessageStatus(messageId, status, metadata = {}) {
         try {
-            logger.info('Atualizando status da mensagem', { messageId, status });
-            const updatedMessage = await this.chatMessageRepository.updateMessageStatus(messageId, status);
-            logger.info('Status da mensagem atualizado', { messageId });
-            return updatedMessage;
+            // Valida o status
+            const validStatus = MESSAGE_STATUS[status] || MESSAGE_STATUS.PENDING;
+
+            // Log de início da atualização
+            this.logger.info('Iniciando atualização de status da mensagem', {
+                messageId,
+                status: validStatus
+            });
+
+            // Cria registro de status da mensagem
+            const messageStatus = await this.chatMessageStatusRepository.create({
+                message_id: messageId,
+                status: validStatus,
+                metadata: {
+                    ...metadata,
+                    updatedAt: new Date().toISOString()
+                }
+            });
+
+            // Atualiza o status na mensagem original
+            await this.chatMessageRepository.update(messageId, {
+                message_status: validStatus
+            });
+
+            // Log de sucesso
+            this.logger.info('Status da mensagem atualizado com sucesso', {
+                messageId,
+                status: validStatus
+            });
+
+            return messageStatus;
         } catch (error) {
-            logger.error('Erro ao atualizar status da mensagem', { 
-                error: error.message, 
-                messageId, 
-                status 
+            // Log de erro
+            this.logger.error('Erro ao atualizar status da mensagem', {
+                error: error.message,
+                messageId,
+                status
             });
             throw error;
         }
