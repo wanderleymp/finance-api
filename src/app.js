@@ -357,7 +357,7 @@ app.use('/chat-messages', chatMessagesRoutes());
 
 // Registra rota de chat-message-status
 const chatMessageStatusRoutes = require('./modules/chat-message-status/chat-message-status.routes');
-app.use('/chat-message-status', chatMessageStatusRoutes());
+app.use('/chat-message-status', chatMessageStatusRoutes);
 
 // Rota 404 para capturar requisições não encontradas
 app.use((req, res, next) => {

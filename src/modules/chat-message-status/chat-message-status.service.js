@@ -1,9 +1,11 @@
 const { logger } = require('../../middlewares/logger');
 const ChatMessageStatusRepository = require('./chat-message-status.repository');
+const ChatMessageRepository = require('../messages/chat-message.repository');
 
 class ChatMessageStatusService {
     constructor(dependencies = {}) {
         this.repository = dependencies.repository || new ChatMessageStatusRepository();
+        this.chatMessageRepository = dependencies.chatMessageRepository || new ChatMessageRepository();
     }
 
     async create(data) {
@@ -89,6 +91,61 @@ class ChatMessageStatusService {
             logger.error('Erro ao deletar status de mensagem', { 
                 error: error.message, 
                 id 
+            });
+            throw error;
+        }
+    }
+
+    // Mapeamento de status do WhatsApp para nossos status padrão
+    _mapWhatsAppStatus(whatsappStatus) {
+        const statusMap = {
+            'DELIVERY_ACK': 'DELIVERED',
+            'READ': 'READ',
+            'SENT': 'SENT'
+        };
+        return statusMap[whatsappStatus] || 'SENT';
+    }
+
+    async processMessageStatus(statusData) {
+        try {
+            const { 
+                messageId, 
+                status: whatsappStatus, 
+                fromMe, 
+                participant, 
+                remoteJid 
+            } = statusData;
+
+            // Buscar a mensagem correspondente
+            const message = await this.chatMessageRepository.findByExternalId(messageId);
+
+            if (!message) {
+                logger.warn('Mensagem não encontrada para atualização de status', { 
+                    externalMessageId: messageId 
+                });
+                return null;
+            }
+
+            // Mapear status do WhatsApp para nosso status padrão
+            const status = this._mapWhatsAppStatus(whatsappStatus);
+
+            // Criar/atualizar status da mensagem
+            const messageStatus = await this.repository.createOrUpdateMessageStatus({
+                message_id: message.message_id,
+                status
+            });
+
+            logger.info('Status de mensagem processado com sucesso', { 
+                messageId: message.message_id, 
+                status,
+                externalMessageId: messageId
+            });
+
+            return messageStatus;
+        } catch (error) {
+            logger.error('Erro ao processar status de mensagem', { 
+                error: error.message, 
+                statusData 
             });
             throw error;
         }

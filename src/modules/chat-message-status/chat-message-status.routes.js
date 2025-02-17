@@ -1,12 +1,13 @@
-const { Router } = require('express');
+const express = require('express');
 const { logger } = require('../../middlewares/logger');
-const ChatMessageStatusService = require('./chat-message-status.service');
 const { authMiddleware } = require('../../middlewares/auth');
+const ChatMessageStatusService = require('./chat-message-status.service');
+const { chatMessageStatusSchema } = require('./chat-message-status.schema');
 
 class ChatMessageStatusRoutes {
-    constructor(dependencies = {}) {
-        this.router = Router();
-        this.chatMessageStatusService = dependencies.chatMessageStatusService || new ChatMessageStatusService();
+    constructor() {
+        this.router = express.Router();
+        this.chatMessageStatusService = new ChatMessageStatusService();
         this.setupRoutes();
     }
 
@@ -27,7 +28,7 @@ class ChatMessageStatusRoutes {
         });
 
         // Rota para criar status de mensagem
-        this.router.post('/', async (req, res) => {
+        this.router.post('/create', async (req, res) => {
             try {
                 const statusData = req.body;
                 
@@ -101,25 +102,60 @@ class ChatMessageStatusRoutes {
                 this.handleError(res, error, 'Erro ao deletar status de mensagem');
             }
         });
+
+        // Rota para processar status de mensagens
+        this.router.post('/', async (req, res) => {
+            try {
+                const { data } = req.body;
+
+                // Validação básica do payload
+                if (!data || !data.messageId || !data.status) {
+                    return res.status(400).json({ 
+                        error: 'Payload inválido. Campos obrigatórios: messageId, status' 
+                    });
+                }
+
+                const result = await this.chatMessageStatusService.processMessageStatus({
+                    messageId: data.messageId,
+                    status: data.status,
+                    fromMe: data.fromMe || false,
+                    participant: data.participant,
+                    remoteJid: data.remoteJid
+                });
+
+                if (!result) {
+                    return res.status(404).json({ 
+                        error: 'Mensagem não encontrada' 
+                    });
+                }
+
+                res.status(200).json(result);
+            } catch (error) {
+                logger.error('Erro ao processar status de mensagem', { 
+                    error: error.message, 
+                    payload: req.body 
+                });
+
+                res.status(500).json({ 
+                    error: 'Erro interno ao processar status de mensagem' 
+                });
+            }
+        });
     }
 
     // Método para tratamento de erros
     handleError(res, error, message) {
         logger.error(message, { error: error.message });
-        res.status(error.status || 500).json({ 
+        res.status(500).json({ 
             error: message, 
             details: error.message 
         });
     }
 
-    // Retorna o roteador
+    // Método para retornar o roteador
     getRouter() {
         return this.router;
     }
 }
 
-// Exporta uma função que permite injeção de dependências
-module.exports = (dependencies = {}) => {
-    const routes = new ChatMessageStatusRoutes(dependencies);
-    return routes.getRouter();
-};
+module.exports = new ChatMessageStatusRoutes().getRouter();
