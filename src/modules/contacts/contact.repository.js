@@ -177,58 +177,76 @@ class ContactRepository extends BaseRepository {
         }
     }
 
-    async findByLastDigits(lastDigits, { client = null } = {}) {
+    async findByLastDigits(remoteJid, { client = null } = {}) {
         try {
             const queryClient = client || this.pool;
             
+            // Verifica se é um grupo
+            const isGroup = remoteJid.endsWith('@g.us');
+
             // Log detalhado dos parâmetros de entrada
-            logger.info('BUSCA POR ÚLTIMOS DÍGITOS - INÍCIO', {
-                lastDigits,
-                lastDigitsType: typeof lastDigits,
-                lastDigitsLength: lastDigits.length
+            logger.info('BUSCA DE CONTATO', {
+                remoteJid,
+                isGroup
             });
 
-            // Limpar caracteres não numéricos e pegar últimos 8 dígitos
-            const cleanDigits = String(lastDigits)
-                .replace(/\D/g, '')  // Remove caracteres não numéricos
-                .slice(-8);  // Pega últimos 8 dígitos
+            let contact = null;
 
-            // Log de limpeza
-            logger.info('DÍGITOS LIMPOS', {
-                cleanDigits,
-                cleanDigitsLength: cleanDigits.length
-            });
+            if (!isGroup) {
+                // Para contatos individuais, limpa e busca pelos últimos 8 dígitos
+                const cleanDigits = String(remoteJid)
+                    .replace(/\D/g, '')  // Remove caracteres não numéricos
+                    .slice(-8);  // Pega últimos 8 dígitos
 
-            // Log da query completa
-            const query = `
-                SELECT *
-                FROM ${this.tableName}
-                WHERE contact_value ILIKE '%${cleanDigits}'
-                LIMIT 1
-            `;
+                logger.info('BUSCA POR ÚLTIMOS DÍGITOS', {
+                    cleanDigits,
+                    cleanDigitsLength: cleanDigits.length
+                });
 
-            logger.info('QUERY DE BUSCA', {
-                query,
-                searchDigits: cleanDigits
-            });
+                const query = `
+                    SELECT *
+                    FROM ${this.tableName}
+                    WHERE contact_value ILIKE '%${cleanDigits}'
+                    LIMIT 1
+                `;
 
-            const result = await queryClient.query(query);
+                const result = await queryClient.query(query);
+                contact = result.rows[0] ? ContactResponseDTO.fromDatabase(result.rows[0]) : null;
+            }
 
-            // Log do resultado
+            // Se não encontrou (ou for grupo), busca pelo valor completo
+            if (!contact) {
+                const fullQuery = `
+                    SELECT *
+                    FROM ${this.tableName}
+                    WHERE contact_value = $1
+                    LIMIT 1
+                `;
+
+                const fullResult = await queryClient.query(fullQuery, [remoteJid]);
+                contact = fullResult.rows[0] ? ContactResponseDTO.fromDatabase(fullResult.rows[0]) : null;
+            }
+
+            // Se ainda não encontrou, cria novo contato
+            if (!contact) {
+                contact = await this.create({
+                    contact_value: remoteJid,
+                    contact_type: 'whatsapp', // Usando 'whatsapp' para grupos
+                    contact_name: isGroup ? 'Grupo WhatsApp' : 'Contato WhatsApp'
+                }, { client });
+            }
+
             logger.info('RESULTADO DA BUSCA', {
-                rowsFound: result.rows.length,
-                firstRow: result.rows[0] ? {
-                    contact_id: result.rows[0].contact_id,
-                    contact_value: result.rows[0].contact_value
-                } : null
+                contactFound: !!contact,
+                contactValue: contact?.contact_value
             });
 
-            return result.rows[0] ? ContactResponseDTO.fromDatabase(result.rows[0]) : null;
+            return contact;
         } catch (error) {
-            logger.error('Erro ao buscar contato por últimos dígitos', {
+            logger.error('Erro ao buscar/criar contato', {
                 error: error.message,
                 stack: error.stack,
-                lastDigits
+                remoteJid
             });
             throw error;
         }

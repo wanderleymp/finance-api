@@ -5,7 +5,7 @@ const swaggerUi = require('swagger-ui-express');
 const swaggerSpec = require('./config/swagger');
 const { errorHandler } = require('./middlewares/errorHandler');
 const { authMiddleware } = require('./middlewares/auth');
-const { logger } = require('./middlewares/logger');
+const { logger, httpLogger } = require('./middlewares/logger');
 const path = require('path');
 
 // Importando rotas dos módulos
@@ -192,6 +192,8 @@ app.use(cors({
     optionsSuccessStatus: 200,
     preflightContinue: false
 }));
+
+app.use(httpLogger);
 
 app.use(
     helmet({

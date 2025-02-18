@@ -111,26 +111,29 @@ class ChatMessageService {
 
     async findOrCreateChannelByInstance(instanceName, client) {
         try {
-            // Mapeia o nome da instância para o ID do canal
-            const channelId = this.getChannelId(instanceName);
+            this.logger.info('INICIANDO BUSCA/CRIAÇÃO DE CANAL', {
+                instanceName,
+                clientProvided: !!client
+            });
 
             // Busca o canal existente
-            let channel = await this.channelRepository.findById(channelId, { client });
+            let channel = await this.channelRepository.findByInstanceName(instanceName, { client });
 
             // Se não existir, cria um novo canal
             if (!channel) {
                 channel = await this.channelRepository.create({
-                    channel_id: channelId,
-                    channel_name: instanceName || 'WhatsApp',
-                    channel_type: 'WHATSAPP'
+                    channel_name: instanceName,
+                    contact_type: 'whatsapp',
+                    is_active: true
                 }, { client });
             }
 
             return channel;
         } catch (error) {
-            this.logger.error('Erro ao encontrar/criar canal', {
+            this.logger.error('ERRO AO ENCONTRAR/CRIAR CANAL', {
                 error: error.message,
-                instanceName
+                instanceName,
+                errorStack: error.stack
             });
             throw error;
         }
@@ -403,117 +406,37 @@ class ChatMessageService {
     }
 
     async processMessageWithTransaction(messageData) {
-        // Log inicial com todos os detalhes da mensagem
-        logger.info('INÍCIO processMessageWithTransaction', {
-            fullMessageData: JSON.stringify(messageData),
-            remoteJid: messageData.remoteJid
-        });
-
         const client = await this.chatMessageRepository.pool.connect();
-        
         try {
-            // Iniciar transação
-            await client.query('BEGIN');
-
-            // Extração de número
-          //  const originalPhoneNumber = messageData.remoteJid.split('@')[0];
-          //  const cleanPhoneNumber = originalPhoneNumber.replace(/\D/g, '');
-
-            logger.info('PREPARAÇÃO BUSCA CONTATO', {
-                originalPhoneNumber: messageData.remoteJid.split('@')[0],
-                cleanPhoneNumber: messageData.remoteJid.split('@')[0].replace(/\D/g, ''),
-                cleanPhoneNumberLength: messageData.remoteJid.split('@')[0].replace(/\D/g, '').length
-            });
-
-            // Verificação de método de busca
-            logger.info('MÉTODOS DISPONÍVEIS NO REPOSITÓRIO', {
-                repositoryMethods: Object.keys(this.contactRepository)
-            });
-
-            // Log antes da chamada
-            logger.info('PRÉ-BUSCA CONTATO', {
-                method: 'findByLastDigits',
-                phoneNumberToSearch: messageData.remoteJid.split('@')[0].replace(/\D/g, '').slice(-7)
-            });
-
-            // Chamada do método com try/catch específico
-            let existingContact = null;
-            try {
-                existingContact = await this.contactRepository.findByLastDigits(
-                    messageData.remoteJid.split('@')[0].replace(/\D/g, '').slice(-7), 
-                    { client }
-                );
-            } catch (findError) {
-                logger.error('ERRO NA BUSCA DE CONTATO', {
-                    errorMessage: findError.message,
-                    errorStack: findError.stack,
-                    method: 'findByLastDigits',
-                    phoneNumber: messageData.remoteJid.split('@')[0].replace(/\D/g, '').slice(-7)
-                });
-                throw findError;
-            }
-
-            // Log após a chamada
-            logger.info('PÓS-BUSCA CONTATO', {
-                contactFound: existingContact ? 'SIM' : 'NÃO',
-                contactDetails: existingContact ? {
-                    contact_id: existingContact.contact_id,
-                    contact_value: existingContact.contact_value
-                } : null
-            });
-
             // Etapa 1: Localizar/Adicionar Contato
             let contactId = null;
             try {
-                // Busca por últimos dígitos
-                const existingContact = await this.contactRepository.findByLastDigits(
-                    messageData.remoteJid.split('@')[0].replace(/\D/g, '').slice(-7), 
+                // Busca por valor completo
+                let contact = await this.contactRepository.findByValueAndType(
+                    messageData.remoteJid, 
+                    'whatsapp', 
                     { client }
                 );
 
-                if (existingContact) {
-                    contactId = existingContact.contact_id;
-                    logger.info('Contato encontrado pelos últimos dígitos', { 
-                        contactId, 
-                        contactValue: existingContact.contact_value 
-                    });
-                } else {
-                    // Tenta busca por valor completo
-                    const fullContact = await this.contactRepository.findByValueAndType(
-                        messageData.remoteJid, 
-                        'whatsapp', 
-                        { client }
-                    );
-
-                    if (fullContact) {
-                        contactId = fullContact.contact_id;
-                        logger.info('Contato encontrado por valor completo', { 
-                            contactId, 
-                            contactValue: fullContact.contact_value 
-                        });
-                    } else {
-                        // Criar novo contato
-                        const newContact = await this.contactRepository.create({
-                            contact_value: messageData.remoteJid,
-                            contact_type: 'whatsapp',
-                            contact_name: messageData.pushname || 'Contato WhatsApp'
-                        }, { client });
-                        
-                        contactId = newContact.contact_id;
-                        logger.info('Novo contato criado', { 
-                            contactId, 
-                            contactValue: newContact.contact_value 
-                        });
-                    }
+                // Se não encontrar, cria novo contato
+                if (!contact) {
+                    contact = await this.contactRepository.create({
+                        contact_value: messageData.remoteJid,
+                        contact_type: 'whatsapp',
+                        contact_name: messageData.pushname || 'Contato WhatsApp'
+                    }, { client });
                 }
+
+                contactId = contact.contact_id;
             } catch (contactError) {
-                logger.error('Erro na busca/criação de contato', {
-                    error: contactError.message,
-                    stack: contactError.stack
+                this.logger.error('Erro ao processar contato', { 
+                    error: contactError.message, 
+                    remoteJid: messageData.remoteJid 
                 });
                 throw contactError;
             }
 
+            // Restante do método permanece igual
             // Etapa 2: Localizar Person Contact
             let personContactId = null;
             try {
@@ -661,34 +584,30 @@ class ChatMessageService {
 
     async findOrCreateContactFromPayload(messageData, client) {
         try {
-            const remoteJid = messageData.sender || messageData.key?.remoteJid;
+            const remoteJid = messageData.key.remoteJid;
             const pushName = messageData.pushName || 'Contato WhatsApp';
 
             if (!remoteJid) {
                 throw new Error('Identificador de remetente não encontrado');
             }
 
-            // Remove @s.whatsapp.net e busca pelos últimos 7 dígitos
-            const lastDigits = remoteJid.split('@')[0].replace(/\D/g, '').slice(-7);
+            // Delega completamente para o repositório
+            let contact = await this.contactRepository.findByValue(remoteJid);
 
-            // Busca por contato existente
-            let contact = await this.contactRepository.findByLastDigits(lastDigits, { client });
-
-            // Se não encontrar, cria novo contato
+            // Se não encontrar, deixa o repositório decidir
             if (!contact) {
                 contact = await this.contactRepository.create({
                     contact_value: remoteJid,
-                    contact_type: 'whatsapp',
-                    contact_name: pushName
+                    contact_name: pushName,
+                    contact_type: 'whatsapp'
                 }, { client });
             }
 
-            return contact.contact_id;
+            return contact;
         } catch (error) {
             this.logger.error('Erro ao encontrar/criar contato', {
                 error: error.message,
-                messageData: JSON.stringify(messageData),
-                stack: error.stack
+                remoteJid: messageData.key.remoteJid
             });
             throw error;
         }

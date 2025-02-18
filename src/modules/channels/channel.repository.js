@@ -102,30 +102,95 @@ class ChannelRepository extends BaseRepository {
         }
     }
 
+    async findByInstanceName(instanceName, { client = null } = {}) {
+        const queryClient = client || await this.pool.connect();
+        
+        try {
+            const query = `
+                SELECT * FROM channels 
+                WHERE channel_name = $1 
+                ORDER BY channel_id DESC
+                LIMIT 1
+            `;
+            const values = [instanceName];
+
+            logger.info('BUSCANDO CANAL POR NOME', {
+                instanceName,
+                query,
+                values
+            });
+
+            const result = await queryClient.query(query, values);
+            
+            if (result.rows.length > 0) {
+                logger.info('CANAL ENCONTRADO', {
+                    channelId: result.rows[0].channel_id,
+                    channelName: result.rows[0].channel_name
+                });
+                return new ChannelResponseDTO(result.rows[0]);
+            }
+
+            logger.info('NENHUM CANAL ENCONTRADO', { instanceName });
+            return null;
+        } catch (error) {
+            logger.error('ERRO AO BUSCAR CANAL POR NOME', { 
+                error: error.message, 
+                instanceName,
+                errorStack: error.stack
+            });
+            throw error;
+        } finally {
+            if (!client) {
+                queryClient.release();
+            }
+        }
+    }
+
     async create(data) {
         const client = await this.pool.connect();
         try {
+            logger.info('CRIANDO NOVO CANAL', {
+                channelData: JSON.stringify(data)
+            });
+
+            // Verifica se já existe um canal com o mesmo nome
+            const existingChannel = await this.findByInstanceName(data.channel_name);
+            if (existingChannel) {
+                logger.info('CANAL JÁ EXISTE', {
+                    channelId: existingChannel.channel_id,
+                    channelName: existingChannel.channel_name
+                });
+                return existingChannel;
+            }
+
             const query = `
-                INSERT INTO channels (
+                INSERT INTO ${this.tableName} (
                     channel_name, 
-                    is_active, 
-                    contact_type
-                ) VALUES (
-                    $1, $2, $3
-                ) RETURNING *
+                    contact_type,
+                    is_active
+                ) VALUES ($1, $2, $3)
+                RETURNING *
             `;
+
             const values = [
-                data.channel_name,
-                data.is_active !== undefined ? data.is_active : true,
-                data.contact_type || 'outros'
+                data.channel_name || 'Canal Padrão',
+                data.contact_type || 'outros',
+                data.is_active !== undefined ? data.is_active : true
             ];
 
             const result = await client.query(query, values);
+            
+            logger.info('CANAL CRIADO COM SUCESSO', {
+                channelId: result.rows[0].channel_id,
+                channelName: result.rows[0].channel_name
+            });
+
             return new ChannelResponseDTO(result.rows[0]);
         } catch (error) {
-            logger.error('Erro ao criar canal', { 
+            logger.error('ERRO AO CRIAR CANAL', { 
                 error: error.message, 
-                data 
+                data: JSON.stringify(data),
+                errorStack: error.stack
             });
             throw error;
         } finally {
