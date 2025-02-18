@@ -10,135 +10,152 @@ class ChatRepository extends BaseRepository {
         const client = await this.pool.connect();
         try {
             const offset = (page - 1) * limit;
-            let query = `
-                WITH chat_details AS (
-                    SELECT 
-                        c.chat_id,
-                        c.status,
-                        c.created_at,
-                        c.updated_at,
-                        c.channel_id,
-                        c.allow_reply,
-                        c.last_message_id,
-                        lm.content AS last_message_content,
-                        lm.content_type AS last_message_type,
-                        lm.created_at AS last_message_created_at,
-                        lm.contact_id AS last_message_contact_id,
-                        lc.contact_name AS last_message_contact_name,
-                        (
-                            SELECT COUNT(*) 
-                            FROM chat_messages cm 
-                            LEFT JOIN chat_message_status cms ON cm.message_id = cms.message_id
-                            WHERE cm.chat_id = c.chat_id 
-                            AND cms.status = 'SENT'
-                        ) AS unread_count,
-                        (
-                            SELECT json_agg(
-                                json_build_object(
-                                    'contact_id', cp.contact_id,
-                                    'contact_name', ct.contact_name,
-                                    'role', cp.role,
-                                    'status', cp.status
-                                )
+
+            // Consulta base para buscar chats com detalhes completos em JSON
+            const baseQuery = `
+                SELECT 
+                    json_build_object(
+                        'chat', json_build_object(
+                            'id', c.chat_id,
+                            'status', c.status,
+                            'createdAt', c.created_at,
+                            'updatedAt', c.updated_at,
+                            'channelId', c.channel_id,
+                            'allowReply', c.allow_reply,
+                            'unreadCount', (
+                                SELECT COUNT(*) 
+                                FROM chat_messages cm 
+                                JOIN chat_message_status cms ON cm.message_id = cms.message_id
+                                WHERE cm.chat_id = c.chat_id AND cms.status = 'UNREAD'
                             )
-                            FROM chat_participants cp
-                            JOIN contacts ct ON cp.contact_id = ct.contact_id
-                            WHERE cp.chat_id = c.chat_id
-                            LIMIT 5
-                        ) AS participants,
-                        COUNT(*) OVER() as total_count
-                    FROM chats c
-                    LEFT JOIN chat_messages lm ON c.last_message_id = lm.message_id
-                    LEFT JOIN contacts lc ON lm.contact_id = lc.contact_id
-                    WHERE 1=1
+                        ),
+                        'channel', json_build_object(
+                            'id', cl.channel_id,
+                            'name', cl.channel_name
+                        ),
+                        'lastMessage', CASE 
+                            WHEN cm.message_id IS NOT NULL THEN json_build_object(
+                                'id', cm.message_id,
+                                'content', cm.content,
+                                'contentType', cm.content_type,
+                                'direction', cm.direction,
+                                'createdAt', cm.created_at,
+                                'formattedTime', to_char(cm.created_at, 'HH24:MI')
+                            )
+                            ELSE NULL
+                        END,
+                        'participants', COALESCE(json_agg(
+                            json_build_object(
+                                'contactId', ct.contact_id,
+                                'contactName', ct.contact_name,
+                                'contactValue', ct.contact_value,
+                                'profilePicUrl', ct."profilePicUrl"
+                            )
+                        ) FILTER (WHERE ct.contact_id IS NOT NULL), '[]'::json),
+                        'messageStatus', CASE 
+                            WHEN cms.message_id IS NOT NULL THEN json_build_object(
+                                'messageId', cms.message_id,
+                                'status', cms.status
+                            )
+                            ELSE NULL
+                        END
+                    ) as chat_details
+                FROM 
+                    chats c
+                JOIN 
+                    channels cl ON c.channel_id = cl.channel_id
+                LEFT JOIN 
+                    chat_messages cm ON c.chat_id = cm.chat_id AND cm.created_at = (
+                        SELECT MAX(created_at) 
+                        FROM chat_messages 
+                        WHERE chat_id = c.chat_id
+                    )
+                LEFT JOIN 
+                    chat_participants cp ON c.chat_id = cp.chat_id
+                LEFT JOIN 
+                    contacts ct ON cp.contact_id = ct.contact_id
+                LEFT JOIN 
+                    chat_message_status cms ON cm.message_id = cms.message_id
+                WHERE 
+                    c.status = 'ACTIVE'
             `;
-            const values = [];
+
+            // Adicionar filtros
+            const conditions = [];
+            const params = [];
             let paramCount = 1;
 
-            // Filtro por canal
             if (filters.channelId) {
-                query += ` AND c.channel_id = $${paramCount++}`;
-                values.push(filters.channelId);
+                conditions.push(`c.channel_id = $${paramCount}`);
+                params.push(filters.channelId);
+                paramCount++;
             }
 
-            // Filtro por status
-            if (filters.status) {
-                query += ` AND c.status = $${paramCount++}`;
-                values.push(filters.status);
-            }
+            // Adicionar condições de filtro à consulta
+            const whereClause = conditions.length > 0 
+                ? 'AND ' + conditions.join(' AND ')
+                : '';
 
-            // Filtro por contato
-            if (filters.contactId) {
-                query += ` AND EXISTS (
-                    SELECT 1 
-                    FROM chat_participants cp 
-                    WHERE cp.chat_id = c.chat_id 
-                    AND cp.contact_id = $${paramCount++}
-                )`;
-                values.push(filters.contactId);
-            }
-
-            // Filtro por data inicial
-            if (filters.startDate) {
-                query += ` AND c.created_at >= $${paramCount++}`;
-                values.push(filters.startDate);
-            }
-
-            // Filtro por data final
-            if (filters.endDate) {
-                query += ` AND c.created_at <= $${paramCount++}`;
-                values.push(filters.endDate);
-            }
-
-            // Finalizar consulta
-            query += `
-                ORDER BY COALESCE(lm.created_at, c.created_at) DESC
-                LIMIT $${paramCount++} OFFSET $${paramCount++}
-                ) 
-                SELECT 
-                    chat_id AS id,
-                    status,
-                    created_at AS "createdAt",
-                    updated_at AS "updatedAt",
-                    channel_id AS "channelId",
-                    allow_reply AS "allowReply",
-                    last_message_id AS "lastMessageId",
-                    last_message_content AS "lastMessageContent",
-                    last_message_type AS "lastMessageType",
-                    last_message_created_at AS "lastMessageDate",
-                    last_message_contact_id AS "lastMessageContactId",
-                    last_message_contact_name AS "lastMessageContactName",
-                    unread_count AS "unreadCount",
-                    participants,
-                    total_count AS "totalCount"
-                FROM chat_details
+            // Query completa com paginação
+            const query = `
+                ${baseQuery} 
+                ${whereClause}
+                GROUP BY 
+                    c.chat_id, 
+                    cl.channel_id, 
+                    cm.message_id,
+                    cms.message_id,
+                    cms.status
+                ORDER BY 
+                    c.created_at DESC
+                LIMIT $${paramCount} OFFSET $${paramCount + 1}
             `;
-            values.push(limit, offset);
 
-            const result = await client.query(query, values);
-            const totalItems = parseInt(result.rows[0]?.totalCount || 0);
-            
+            // Query de contagem total
+            const countQuery = `
+                SELECT COUNT(*) as total 
+                FROM chats c 
+                WHERE c.status = 'ACTIVE'
+                ${whereClause}
+            `;
+
+            // Adicionar parâmetros de paginação
+            params.push(limit, offset);
+
+            // Executar consultas
+            const [resultQuery, resultCount] = await Promise.all([
+                client.query(query, params),
+                client.query(countQuery, params.slice(0, -2))
+            ]);
+
+            const totalItems = parseInt(resultCount.rows[0].total);
+
             return {
-                items: result.rows || [],
+                items: resultQuery.rows.map(row => row.chat_details),
                 meta: {
                     totalItems,
-                    itemCount: result.rows?.length || 0,
+                    itemCount: resultQuery.rows.length,
                     itemsPerPage: limit,
                     totalPages: Math.ceil(totalItems / limit),
                     currentPage: page
                 }
             };
         } catch (error) {
-            logger.error('Erro ao buscar chats', { 
+            logger.error('Erro ao listar chats', { 
                 error: error.message, 
-                filters, 
-                page, 
-                limit 
+                filters,
+                page,
+                limit
             });
             throw error;
         } finally {
             client.release();
         }
+    }
+
+    async findById(id) {
+        const chats = await this.findAll({ id }, 1, 1);
+        return chats.items[0] || null;
     }
 }
 

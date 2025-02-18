@@ -1,5 +1,5 @@
 const { logger } = require('../../middlewares/logger');
-const ChatRepository = require('./chat.repository');
+const ChatRepository = require('../chat/chat.repository');
 const ChatParticipantRepository = require('./chat-participant.repository');
 const ChatMessageService = require('./chat-message.service');
 const TaskService = require('../tasks/task.service');

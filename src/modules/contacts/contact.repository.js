@@ -177,7 +177,7 @@ class ContactRepository extends BaseRepository {
         }
     }
 
-    async findByLastDigits(remoteJid, { client = null } = {}) {
+    async findByLastDigits(remoteJid, { client = null, createIfNotFound = true } = {}) {
         try {
             const queryClient = client || this.pool;
             
@@ -187,7 +187,8 @@ class ContactRepository extends BaseRepository {
             // Log detalhado dos parâmetros de entrada
             logger.info('BUSCA DE CONTATO', {
                 remoteJid,
-                isGroup
+                isGroup,
+                createIfNotFound
             });
 
             let contact = null;
@@ -199,53 +200,51 @@ class ContactRepository extends BaseRepository {
                     .slice(-8);  // Pega últimos 8 dígitos
 
                 logger.info('BUSCA POR ÚLTIMOS DÍGITOS', {
-                    cleanDigits,
-                    cleanDigitsLength: cleanDigits.length
+                    cleanDigits
                 });
 
+                // Consulta para encontrar o contato
                 const query = `
-                    SELECT *
-                    FROM ${this.tableName}
-                    WHERE contact_value ILIKE '%${cleanDigits}'
+                    SELECT * 
+                    FROM contacts 
+                    WHERE 
+                        contact_type = 'whatsapp' AND 
+                        RIGHT(REPLACE(contact_value, '+', ''), 8) = $1
                     LIMIT 1
                 `;
 
-                const result = await queryClient.query(query);
-                contact = result.rows[0] ? ContactResponseDTO.fromDatabase(result.rows[0]) : null;
+                const result = await queryClient.query(query, [cleanDigits]);
+
+                // Converte para DTO se encontrado
+                contact = result.rows[0] 
+                    ? ContactResponseDTO.fromDatabase(result.rows[0]) 
+                    : null;
+
+                logger.info('RESULTADO DA BUSCA', {
+                    contactFound: !!contact,
+                    contactId: contact?.id
+                });
+
+                // Se não encontrou e está autorizado a criar
+                if (!contact && createIfNotFound) {
+                    logger.info('CRIANDO NOVO CONTATO', { remoteJid });
+                    contact = await this.create({
+                        contact_value: remoteJid,
+                        contact_type: 'whatsapp',
+                        contact_name: 'Contato WhatsApp'
+                    }, { client: queryClient });
+
+                    logger.info('NOVO CONTATO CRIADO', {
+                        contactId: contact?.id,
+                        contactValue: contact?.contact_value
+                    });
+                }
             }
-
-            // Se não encontrou (ou for grupo), busca pelo valor completo
-            if (!contact) {
-                const fullQuery = `
-                    SELECT *
-                    FROM ${this.tableName}
-                    WHERE contact_value = $1
-                    LIMIT 1
-                `;
-
-                const fullResult = await queryClient.query(fullQuery, [remoteJid]);
-                contact = fullResult.rows[0] ? ContactResponseDTO.fromDatabase(fullResult.rows[0]) : null;
-            }
-
-            // Se ainda não encontrou, cria novo contato
-            if (!contact) {
-                contact = await this.create({
-                    contact_value: remoteJid,
-                    contact_type: 'whatsapp', // Usando 'whatsapp' para grupos
-                    contact_name: isGroup ? 'Grupo WhatsApp' : 'Contato WhatsApp'
-                }, { client });
-            }
-
-            logger.info('RESULTADO DA BUSCA', {
-                contactFound: !!contact,
-                contactValue: contact?.contact_value
-            });
 
             return contact;
         } catch (error) {
-            logger.error('Erro ao buscar/criar contato', {
+            logger.error('Erro ao buscar contato por últimos dígitos', {
                 error: error.message,
-                stack: error.stack,
                 remoteJid
             });
             throw error;

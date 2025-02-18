@@ -1,8 +1,8 @@
 const { logger } = require('../../middlewares/logger');
+const ChatRepository = require('../chat/chat.repository');
 const ContactRepository = require('../contacts/contact.repository');
 const PersonContactRepository = require('../person-contacts/person-contact.repository');
 const ChatMessageRepository = require('./chat-message.repository');
-const ChatRepository = require('./chat.repository');
 const ChatParticipantRepository = require('./chat-participant.repository');
 const PersonRepository = require('../persons/person.repository');
 const ChannelRepository = require('../channels/channel.repository');
@@ -64,46 +64,84 @@ class ChatMessageService {
 
     async createMessage(payload) {
         try {
-            // Log detalhado do payload
-            this.logger.info('PAYLOAD RECEBIDO NO CREATEMESSAGE', {
-                payloadKeys: Object.keys(payload),
-                dataKeys: payload.data ? Object.keys(payload.data) : 'SEM DATA',
+            // Log EXTREMAMENTE detalhado do payload completo
+            this.logger.info('PAYLOAD COMPLETO RECEBIDO', {
+                payloadFull: JSON.stringify(payload, null, 2)
+            });
+
+            // Log dos campos principais
+            this.logger.info('CAMPOS PRINCIPAIS DO PAYLOAD', {
+                hasData: !!payload.data,
+                hasInstance: !!payload.data?.instance,
+                hasRemoteJid: !!payload.data?.data?.key?.remoteJid,
                 remoteJid: payload.data?.data?.key?.remoteJid
             });
 
             return await this.chatMessageRepository.transaction(async (client) => {
-                // Verificação explícita antes da chamada
+                // Verificação explícita e log de cada etapa
                 const remoteJid = payload.data?.data?.key?.remoteJid;
                 if (!remoteJid) {
                     this.logger.error('PAYLOAD INVÁLIDO - REMOTEJID AUSENTE', { 
-                        payload: JSON.stringify(payload) 
+                        payloadDetails: JSON.stringify(payload, null, 2)
                     });
                     throw new Error('RemoteJid é obrigatório');
                 }
 
-                const contact = await this.contactRepository.findByLastDigits(remoteJid);
+                this.logger.info('INICIANDO BUSCA DE CONTATO', { remoteJid });
+                const contact = await this.contactRepository.findByLastDigits(remoteJid, { client });
+                this.logger.info('RESULTADO BUSCA CONTATO', { 
+                    contactFound: !!contact,
+                    contactId: contact?.id,
+                    contactName: contact?.name 
+                });
+
+                // Log da instância
+                const instanceName = payload.data?.instance;
+                this.logger.info('PROCESSANDO INSTÂNCIA', { instanceName });
 
                 // Localiza ou cria o canal
-                const channel = await this.findOrCreateChannelByInstance(payload.data.instance, client);
+                this.logger.info('BUSCANDO/CRIANDO CANAL');
+                const channel = await this.findOrCreateChannelByInstance(instanceName, client);
+                this.logger.info('CANAL PROCESSADO', { 
+                    channelId: channel?.channel_id, 
+                    channelName: channel?.channel_name 
+                });
 
                 // Busca ou cria chat para o contato
                 let chatId = null;
                 if (contact && contact.id) {
+                    this.logger.info('BUSCANDO/CRIANDO CHAT PARA CONTATO');
                     chatId = await this.findOrCreateChatByContactId(contact.id, client, channel);
+                    this.logger.info('CHAT PROCESSADO', { chatId });
                 }
 
                 // Cria a mensagem de chat
                 let message = null;
                 if (chatId && contact) {
+                    this.logger.info('CRIANDO MENSAGEM DE CHAT');
                     message = await this.createChatMessage(chatId, contact.id, payload.data.data, client);
+                    this.logger.info('MENSAGEM CRIADA', { 
+                        messageId: message?.id,
+                        messageContent: message?.content 
+                    });
+
+                    // Atualizar last_message_id do chat
+                    if (message && message.id) {
+                        await this.chatRepository.updateChatLastMessage(chatId, message.id);
+                        this.logger.info('LAST MESSAGE ID ATUALIZADO', { 
+                            chatId, 
+                            lastMessageId: message.id 
+                        });
+                    }
                 }
 
                 return message;
             });
         } catch (error) {
-            this.logger.error('Falha ao criar mensagem', { 
+            this.logger.error('FALHA CRÍTICA AO CRIAR MENSAGEM', { 
                 error: error.message,
-                payload: JSON.stringify(payload)
+                stack: error.stack,
+                payloadSummary: JSON.stringify(payload, null, 2)
             });
             throw error;
         }
@@ -372,34 +410,30 @@ class ChatMessageService {
         }
     }
 
-    async findAll(page = 1, limit = 20, filters = {}, options = {}) {
+    async findAll(filters = {}, page = 1, limit = 20) {
         try {
-            logger.info('Buscando mensagens', { 
-                page, 
-                limit, 
+            this.logger.info('BUSCANDO MENSAGENS COM FILTROS DETALHADOS', { 
                 filters, 
-                options,
-                pageType: typeof page,
-                limitType: typeof limit,
-                filtersType: typeof filters
-            });
-            
-            const result = await this.chatMessageRepository.findAll(
                 page, 
-                limit, 
-                filters,
-                options
-            );
+                limit 
+            });
+
+            const messages = await this.chatMessageRepository.findAll(filters, page, limit);
             
-            logger.info('Mensagens encontradas', { count: result.items.length });
-            return result;
-        } catch (error) {
-            logger.error('Erro ao listar mensagens', {
-                error: error.message,
-                page,
-                limit,
+            this.logger.info('RESULTADO DA BUSCA DE MENSAGENS', { 
+                totalMessages: messages.items.length,
                 filters,
-                options
+                page,
+                limit
+            });
+
+            return messages;
+        } catch (error) {
+            this.logger.error('Erro ao buscar mensagens', { 
+                error: error.message, 
+                filters,
+                page,
+                limit 
             });
             throw error;
         }
