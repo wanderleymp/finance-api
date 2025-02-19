@@ -83,9 +83,21 @@ export class ChatController {
         description: 'Detalhes do chat', 
         type: ChatResponseDto 
     })
+    @ApiQuery({ 
+        name: 'page', 
+        required: false, 
+        type: Number 
+    })
+    @ApiQuery({ 
+        name: 'limit', 
+        required: false, 
+        type: Number 
+    })
     async findById(
-        @Param('id', ParseIntPipe) id: number
+        @Param('id', ParseIntPipe) id: number,
+        @Query('page', new ParseIntPipe({ optional: true })) page = 1,
+        @Query('limit', new ParseIntPipe({ optional: true })) limit = 20
     ): Promise<ChatResponseDto | null> {
-        return this.chatService.findById(id);
+        return this.chatService.findById(id, page, limit);
     }
 }

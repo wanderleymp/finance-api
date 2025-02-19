@@ -47,22 +47,29 @@ class ChatService {
         }
     }
 
-    async findById(id) {
+    async findById(id, page = 1, limit = 20) {
         try {
-            logger.info('Buscando chat por ID', { id });
+            logger.info('Buscando chat por ID', { id, page, limit });
             
-            const chat = await this.chatRepository.findById(id);
+            const chat = await this.chatRepository.findById(id, page, limit);
             
             if (!chat) {
                 logger.warn('Chat não encontrado', { id });
                 return null;
             }
             
+            logger.info('Chat encontrado com sucesso', { 
+                chatId: id,
+                messagesCount: chat.messages?.length || 0
+            });
+            
             return chat;
         } catch (error) {
             logger.error('Erro ao buscar chat por ID', { 
                 error: error.message, 
-                id 
+                id,
+                page,
+                limit
             });
             throw error;
         }

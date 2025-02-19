@@ -5,11 +5,11 @@ import { Type } from 'class-transformer';
 export class ChannelDto {
     @ApiProperty({ description: 'ID do canal' })
     @IsNumber()
-    id: number;
+    channel_id: number;
 
     @ApiProperty({ description: 'Nome do canal' })
     @IsString()
-    name: string;
+    channel_name: string;
 }
 
 export class ContactDto {
@@ -94,8 +94,7 @@ export class ChatDetailsDto {
     @ApiProperty({ description: 'Data de atualização' })
     @IsDate()
     @Type(() => Date)
-    @IsOptional()
-    updatedAt?: Date;
+    updatedAt: Date;
 
     @ApiProperty({ description: 'ID do canal' })
     @IsNumber()
@@ -108,6 +107,82 @@ export class ChatDetailsDto {
     @ApiProperty({ description: 'Contagem de mensagens não lidas' })
     @IsNumber()
     unreadCount: number;
+}
+
+export class MessageSenderDto {
+    @ApiProperty({ description: 'ID do contato do remetente' })
+    @IsNumber()
+    @IsOptional()
+    contactId?: number;
+
+    @ApiProperty({ description: 'Nome do contato do remetente' })
+    @IsString()
+    @IsOptional()
+    contactName?: string;
+
+    @ApiProperty({ description: 'URL da foto de perfil do remetente' })
+    @IsString()
+    @IsOptional()
+    profilePicUrl?: string;
+}
+
+export class MessageDto {
+    @ApiProperty({ description: 'ID da mensagem' })
+    @IsNumber()
+    id: number;
+
+    @ApiProperty({ description: 'Conteúdo da mensagem' })
+    @IsString()
+    @IsOptional()
+    content?: string;
+
+    @ApiProperty({ description: 'Tipo de conteúdo' })
+    @IsString()
+    @IsOptional()
+    contentType?: string;
+
+    @ApiProperty({ description: 'Direção da mensagem' })
+    @IsString()
+    @IsOptional()
+    direction?: string;
+
+    @ApiProperty({ description: 'Data de criação' })
+    @IsDate()
+    @Type(() => Date)
+    @IsOptional()
+    createdAt?: Date;
+
+    @ApiProperty({ description: 'Hora formatada' })
+    @IsString()
+    @IsOptional()
+    formattedTime?: string;
+
+    @ApiProperty({ description: 'Remetente da mensagem' })
+    @Type(() => MessageSenderDto)
+    @IsOptional()
+    sender?: MessageSenderDto;
+}
+
+export class MessageMetaDto {
+    @ApiProperty({ description: 'Total de itens' })
+    @IsNumber()
+    totalItems: number;
+
+    @ApiProperty({ description: 'Contagem de itens' })
+    @IsNumber()
+    itemCount: number;
+
+    @ApiProperty({ description: 'Itens por página' })
+    @IsNumber()
+    itemsPerPage: number;
+
+    @ApiProperty({ description: 'Total de páginas' })
+    @IsNumber()
+    totalPages: number;
+
+    @ApiProperty({ description: 'Página atual' })
+    @IsNumber()
+    currentPage: number;
 }
 
 export class ChatResponseDto {
@@ -133,6 +208,17 @@ export class ChatResponseDto {
     @Type(() => MessageStatusDto)
     @IsOptional()
     messageStatus?: MessageStatusDto;
+
+    @ApiProperty({ description: 'Lista de mensagens do chat' })
+    @Type(() => MessageDto)
+    @IsArray()
+    @IsOptional()
+    messages?: MessageDto[];
+
+    @ApiProperty({ description: 'Metadados das mensagens' })
+    @Type(() => MessageMetaDto)
+    @IsOptional()
+    messagesMeta?: MessageMetaDto;
 }
 
 export class ChatListResponseDto {
