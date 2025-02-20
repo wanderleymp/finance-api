@@ -200,7 +200,8 @@ class ContactRepository extends BaseRepository {
                     .slice(-8);  // Pega últimos 8 dígitos
 
                 logger.info('BUSCA POR ÚLTIMOS DÍGITOS', {
-                    cleanDigits
+                    cleanDigits,
+                    fullRemoteJid: remoteJid
                 });
 
                 // Consulta para encontrar o contato
@@ -227,25 +228,49 @@ class ContactRepository extends BaseRepository {
 
                 // Se não encontrou e está autorizado a criar
                 if (!contact && createIfNotFound) {
-                    logger.info('CRIANDO NOVO CONTATO', { remoteJid });
-                    contact = await this.create({
-                        contact_value: remoteJid,
-                        contact_type: 'whatsapp',
-                        contact_name: 'Contato WhatsApp'
-                    }, { client: queryClient });
-
-                    logger.info('NOVO CONTATO CRIADO', {
-                        contactId: contact?.id,
-                        contactValue: contact?.contact_value
+                    logger.info('CRIANDO NOVO CONTATO', { 
+                        remoteJid,
+                        createIfNotFound 
                     });
+
+                    // Tenta criar o contato com o número completo
+                    try {
+                        contact = await this.create({
+                            contact_value: remoteJid,
+                            contact_type: 'whatsapp',
+                            contact_name: 'Contato WhatsApp'
+                        }, { client: queryClient });
+
+                        logger.info('NOVO CONTATO CRIADO', {
+                            contactId: contact?.id,
+                            contactValue: contact?.contact_value
+                        });
+                    } catch (createError) {
+                        logger.error('ERRO AO CRIAR CONTATO', {
+                            error: createError.message,
+                            remoteJid,
+                            fullError: createError
+                        });
+                        throw createError;
+                    }
                 }
+            }
+
+            // Verificação final para garantir que um contato válido foi retornado
+            if (!contact) {
+                logger.warn('NENHUM CONTATO ENCONTRADO OU CRIADO', {
+                    remoteJid,
+                    isGroup,
+                    createIfNotFound
+                });
             }
 
             return contact;
         } catch (error) {
             logger.error('Erro ao buscar contato por últimos dígitos', {
                 error: error.message,
-                remoteJid
+                remoteJid,
+                fullError: error
             });
             throw error;
         }

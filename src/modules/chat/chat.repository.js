@@ -275,6 +275,92 @@ class ChatRepository extends BaseRepository {
             client.release();
         }
     }
+
+    async findByContactId(contactId, { client = null } = {}) {
+        const queryClient = client || this.pool;
+        try {
+            const query = `
+                SELECT 
+                    c.chat_id, 
+                    c.status, 
+                    c.channel_id,
+                    c.created_at,
+                    c.updated_at
+                FROM 
+                    chats c
+                JOIN 
+                    chat_participants cp ON c.chat_id = cp.chat_id
+                WHERE 
+                    cp.contact_id = $1 AND 
+                    c.status = 'ACTIVE'
+                ORDER BY 
+                    c.created_at DESC
+            `;
+
+            const result = await queryClient.query(query, [contactId]);
+            return result.rows;
+        } catch (error) {
+            logger.error('Erro ao buscar chats do contato', { 
+                error: error.message, 
+                contactId 
+            });
+            throw error;
+        }
+    }
+
+    async findOrCreateChatByContactId(contactId, channelId, { client = null } = {}) {
+        const queryClient = client || this.pool;
+        try {
+            // Primeiro, busca chats ativos do contato
+            const existingChats = await this.findByContactId(contactId, { client: queryClient });
+
+            if (existingChats.length > 0) {
+                return existingChats[0];
+            }
+
+            // Se não existir, cria um novo chat
+            const newChatQuery = `
+                INSERT INTO chats (
+                    status, 
+                    channel_id, 
+                    created_at, 
+                    updated_at
+                ) VALUES (
+                    'ACTIVE', 
+                    $1, 
+                    NOW(), 
+                    NOW()
+                ) RETURNING *
+            `;
+
+            const newChatResult = await queryClient.query(newChatQuery, [channelId]);
+            const newChat = newChatResult.rows[0];
+
+            // Adiciona participante ao chat
+            const participantQuery = `
+                INSERT INTO chat_participants (
+                    chat_id, 
+                    contact_id, 
+                    created_at
+                ) VALUES (
+                    $1, 
+                    $2, 
+                    NOW()
+                )
+            `;
+
+            await queryClient.query(participantQuery, [newChat.chat_id, contactId]);
+
+            return newChat;
+        } catch (error) {
+            logger.error('Erro ao encontrar/criar chat do contato', { 
+                error: error.message, 
+                contactId,
+                channelId
+            });
+            throw error;
+        }
+    }
 }
 
 module.exports = ChatRepository;

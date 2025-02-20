@@ -7,6 +7,9 @@ const ChatParticipantRepository = require('./chat-participant.repository');
 const PersonRepository = require('../persons/person.repository');
 const ChannelRepository = require('../channels/channel.repository');
 const ChatMessageStatusRepository = require('../chat-message-status/chat-message-status.repository');
+const { validate } = require('class-validator');
+const { plainToClass } = require('class-transformer');
+const { CreateChatMessageDto } = require('./dtos/create-chat-message.dto');
 
 const MESSAGE_STATUS = {
     PENDING: 'PENDING',
@@ -29,7 +32,6 @@ class ChatMessageService {
         this.chatMessageStatusRepository = new ChatMessageStatusRepository();
         this.logger = logger;
 
-        // Mapeamento de canais para IDs
         this.channelMap = {
             'zapEsc': 1,
             'whatsapp': 2,
@@ -38,12 +40,9 @@ class ChatMessageService {
         };
     }
 
-    // Método para mapear nome do canal para ID
     getChannelId(channelName) {
-        // Se for um número, retorna direto
         if (!isNaN(channelName)) return Number(channelName);
 
-        // Busca no mapeamento, com fallback para 1
         return this.channelMap[channelName] || 1;
     }
 
@@ -62,89 +61,259 @@ class ChatMessageService {
         }
     }
 
-    async createMessage(payload) {
+    async validateMessagePayload(payload) {
         try {
-            // Log EXTREMAMENTE detalhado do payload completo
-            this.logger.info('PAYLOAD COMPLETO RECEBIDO', {
-                payloadFull: JSON.stringify(payload, null, 2)
-            });
+            // Log detalhado do payload original
+            this.logger.info('Payload recebido para validação', { payload });
 
-            // Log dos campos principais
-            this.logger.info('CAMPOS PRINCIPAIS DO PAYLOAD', {
-                hasData: !!payload.data,
-                hasInstance: !!payload.data?.instance,
-                hasRemoteJid: !!payload.data?.data?.key?.remoteJid,
-                remoteJid: payload.data?.data?.key?.remoteJid
-            });
+            const messageDto = plainToClass(CreateChatMessageDto, payload);
 
-            return await this.chatMessageRepository.transaction(async (client) => {
-                // Verificação explícita e log de cada etapa
-                const remoteJid = payload.data?.data?.key?.remoteJid;
-                if (!remoteJid) {
-                    this.logger.error('PAYLOAD INVÁLIDO - REMOTEJID AUSENTE', { 
-                        payloadDetails: JSON.stringify(payload, null, 2)
-                    });
-                    throw new Error('RemoteJid é obrigatório');
+            const errors = await validate(messageDto, { 
+                validationError: { 
+                    target: false,
+                    value: false 
                 }
+            });
 
-                this.logger.info('INICIANDO BUSCA DE CONTATO', { remoteJid });
-                const contact = await this.contactRepository.findByLastDigits(remoteJid, { client });
-                this.logger.info('RESULTADO BUSCA CONTATO', { 
-                    contactFound: !!contact,
-                    contactId: contact?.id,
-                    contactName: contact?.name 
+            if (errors.length > 0) {
+                const validationErrors = errors.map(error => ({
+                    property: error.property,
+                    constraints: error.constraints,
+                    value: error.value
+                }));
+
+                this.logger.error('Erro de validação do payload', { 
+                    errors: validationErrors,
+                    payload 
                 });
 
-                // Log da instância
-                const instanceName = payload.data?.instance;
-                this.logger.info('PROCESSANDO INSTÂNCIA', { instanceName });
+                throw new Error(`PAYLOAD INVÁLIDO - ${validationErrors.map(e => `${e.property}: ${Object.values(e.constraints).join(', ')}`).join('; ')}`);
+            }
 
-                // Localiza ou cria o canal
-                this.logger.info('BUSCANDO/CRIANDO CANAL');
-                const channel = await this.findOrCreateChannelByInstance(instanceName, client);
-                this.logger.info('CANAL PROCESSADO', { 
-                    channelId: channel?.channel_id, 
-                    channelName: channel?.channel_name 
-                });
-
-                // Busca ou cria chat para o contato
-                let chatId = null;
-                if (contact && contact.id) {
-                    this.logger.info('BUSCANDO/CRIANDO CHAT PARA CONTATO');
-                    chatId = await this.findOrCreateChatByContactId(contact.id, client, channel);
-                    this.logger.info('CHAT PROCESSADO', { chatId });
-                }
-
-                // Cria a mensagem de chat
-                let message = null;
-                if (chatId && contact) {
-                    this.logger.info('CRIANDO MENSAGEM DE CHAT');
-                    message = await this.createChatMessage(chatId, contact.id, payload.data.data, client);
-                    this.logger.info('MENSAGEM CRIADA', { 
-                        messageId: message?.id,
-                        messageContent: message?.content 
-                    });
-
-                    // Atualizar last_message_id do chat
-                    if (message && message.id) {
-                        await this.chatRepository.updateChatLastMessage(chatId, message.id);
-                        this.logger.info('LAST MESSAGE ID ATUALIZADO', { 
-                            chatId, 
-                            lastMessageId: message.id 
-                        });
-                    }
-                }
-
-                return message;
-            });
+            return messageDto;
         } catch (error) {
-            this.logger.error('FALHA CRÍTICA AO CRIAR MENSAGEM', { 
+            this.logger.error('Falha na validação do payload', { 
                 error: error.message,
-                stack: error.stack,
-                payloadSummary: JSON.stringify(payload, null, 2)
+                payload 
             });
             throw error;
         }
+    }
+
+    async processAudioMessage(payload) {
+        try {
+            const validatedPayload = await this.validateMessagePayload(payload);
+
+            if (validatedPayload.messageType !== 'audio') {
+                throw new Error('Payload não é uma mensagem de áudio');
+            }
+
+            const audioBuffer = Buffer.from(validatedPayload.base64, 'base64');
+            if (audioBuffer.length > 50 * 1024 * 1024) {
+                throw new Error('Tamanho do arquivo de áudio excede o limite de 50MB');
+            }
+
+            const audioMetadata = {
+                duration: payload.metadata?.duration || null,
+                size: audioBuffer.length,
+                mimetype: payload.metadata?.mime_type || 'audio/ogg'
+            };
+
+            const savedMessage = await this.chatMessageRepository.create({
+                ...validatedPayload,
+                metadata: {
+                    ...validatedPayload.metadata,
+                    ...audioMetadata
+                },
+                status: MESSAGE_STATUS.PENDING
+            });
+
+            this.logger.info('Mensagem de áudio processada com sucesso', { 
+                messageId: savedMessage.id 
+            });
+
+            return savedMessage;
+        } catch (error) {
+            this.logger.error('Erro ao processar mensagem de áudio', { 
+                error: error.message,
+                payload 
+            });
+            throw error;
+        }
+    }
+
+    prepareMessageStatus(status) {
+        // Converte o status para um objeto JSON válido
+        if (typeof status === 'string') {
+            return {
+                type: status,
+                timestamp: new Date().toISOString()
+            };
+        }
+        
+        // Se já for um objeto, apenas garante que tem timestamp
+        if (typeof status === 'object' && status !== null) {
+            return {
+                ...status,
+                timestamp: status.timestamp || new Date().toISOString()
+            };
+        }
+        
+        // Caso contrário, retorna um objeto de status padrão
+        return {
+            type: 'UNKNOWN',
+            timestamp: new Date().toISOString()
+        };
+    }
+
+    async createMessage(payload) {
+        try {
+            this.logger.info(`Processando mensagem: ${payload.data?.id}`);
+
+            // Detalhes completos do payload inicial
+            this.logger.info('Payload completo recebido', { 
+                fullPayload: payload 
+            });
+
+            // Encontrar/criar canal
+            const channel = await this.findOrCreateChannelByInstance(
+                payload.data?.instance || 'unknown', 
+                payload.client
+            );
+
+            this.logger.info('Canal encontrado/criado', { 
+                channelId: channel?.channel_id, 
+                channelName: channel?.channel_name 
+            });
+
+            // Log adicional para rastrear payload
+            this.logger.info('Payload de mensagem', { 
+                remoteJid: payload.data?.remoteJid, 
+                sender: payload.data?.sender,
+                instance: payload.data?.instance
+            });
+
+            // Preparar dados do contato para log
+            const contactPayload = { 
+                ...payload.data, 
+                channel,
+                remoteJid: payload.data?.remoteJid || payload.data?.sender 
+            };
+
+            this.logger.info('Payload para busca de contato', { 
+                contactPayload 
+            });
+
+            // Encontrar/criar contato
+            const contact = await this.findOrCreateContactFromPayload(
+                contactPayload, 
+                payload.client
+            );
+
+            // Verificação explícita de contact_id
+            if (!contact.id) {
+                this.logger.error('FALHA CRÍTICA: contact ID INVÁLIDO', {
+                    contact,
+                    payload: contactPayload
+                });
+                throw new Error(`Contact ID inválido: ${JSON.stringify(contact)}`);
+            }
+
+            // Log para verificar o contato encontrado/criado
+            this.logger.info('Contato encontrado/criado', { 
+                contact_id: contact.id, 
+                contact_details: contact,
+                contactPayload 
+            });
+
+            // Verificação mais rigorosa para garantir criação do contato
+            if (!contact) {
+                this.logger.error('Falha crítica: Contato não encontrado ou criado', {
+                    contactPayload,
+                    channel: channel?.channel_id
+                });
+                throw new Error('Não foi possível encontrar ou criar um contato');
+            }
+
+            // Encontrar/criar chat
+            const chatId = await this.findOrCreateChatByContactId(
+                contact.id, 
+                payload.client, 
+                channel
+            );
+
+            // Log para verificar o chat criado
+            this.logger.info('Chat encontrado/criado', { 
+                chat_id: chatId,
+                contact_id: contact.id,
+                channel_id: channel?.channel_id
+            });
+
+            // Preparar o status corretamente
+            const preparedStatus = this.prepareMessageStatus(payload.data?.status);
+
+            // Preparar dados da mensagem
+            const messageData = {
+                chat_id: chatId,
+                contact_id: contact.id,  
+                direction: payload.data?.fromMe === 'true' ? 'OUTBOUND' : 'INBOUND',
+                content: payload.data?.text || '',
+                content_type: this.getContentType(payload.data?.messageType),
+                external_id: payload.data?.id,
+                status: preparedStatus,
+                metadata: {
+                    instance: payload.data?.instance,
+                    remoteJid: payload.data?.remoteJid,
+                    pushName: payload.data?.pushName
+                },
+                file_url: payload.data?.url,
+                sent_at: payload.data?.date_time ? new Date(payload.data.date_time) : new Date(),
+                delivered_at: payload.data?.status === 'DELIVERY_ACK' ? new Date() : null
+            };
+
+            this.logger.info('Dados da mensagem a ser criada', { 
+                messageData 
+            });
+
+            // LOG CRÍTICO PARA RASTREAR contact_id
+            this.logger.error('RASTREAMENTO CRÍTICO DE contact_id', {
+                contact_id_type: typeof contact.id,
+                contact_id_value: contact.id,
+                contact_full_object: contact,
+                contact_keys: Object.keys(contact),
+                contact_id_is_null: contact.id === null,
+                contact_id_is_undefined: contact.id === undefined
+            });
+
+            // Criar a mensagem
+            const createdMessage = await this.chatMessageRepository.create(messageData);
+
+            this.logger.info('Mensagem criada com sucesso', { 
+                createdMessage 
+            });
+
+            return createdMessage;
+        } catch (error) {
+            this.logger.error('Erro ao criar mensagem', {
+                error: error.message,
+                payload,
+                fullError: error,
+                stack: error.stack
+            });
+            throw error;
+        }
+    }
+
+    getContentType(messageType) {
+        const contentTypeMap = {
+            'documentMessage': 'FILE',
+            'imageMessage': 'IMAGE',
+            'audioMessage': 'AUDIO',
+            'videoMessage': 'VIDEO',
+            'textMessage': 'TEXT'
+        };
+        
+        return contentTypeMap[messageType] || 'TEXT';
     }
 
     async findOrCreateChannelByInstance(instanceName, client) {
@@ -154,10 +323,8 @@ class ChatMessageService {
                 clientProvided: !!client
             });
 
-            // Busca o canal existente
             let channel = await this.channelRepository.findByInstanceName(instanceName, { client });
 
-            // Se não existir, cria um novo canal
             if (!channel) {
                 channel = await this.channelRepository.create({
                     channel_name: instanceName,
@@ -179,26 +346,28 @@ class ChatMessageService {
 
     async findOrCreateChatByContactId(contactId, client, channel) {
         try {
-            // Busca chats existentes para o contato
-            const existingChats = await this.chatRepository.findByContactId(contactId, { client });
+            this.logger.info('Criando chat', {
+                contactId, 
+                channelId: channel?.channel_id
+            });
 
-            // Se já existir um chat, retorna o primeiro
-            if (existingChats && existingChats.length > 0) {
-                return existingChats[0].chat_id;
-            }
-
-            // Cria um novo chat
             const newChat = await this.chatRepository.create({
                 contact_id: contactId,
                 channel_id: channel.channel_id,
                 status: 'ACTIVE'
             }, { client });
 
+            this.logger.info('Chat criado', {
+                chatId: newChat?.chat_id,
+                newChat
+            });
+
             return newChat.chat_id;
         } catch (error) {
-            this.logger.error('Erro ao encontrar/criar chat', {
+            this.logger.error('Erro ao criar chat', {
                 error: error.message,
-                contactId
+                contactId,
+                fullError: error
             });
             throw error;
         }
@@ -215,8 +384,24 @@ class ChatMessageService {
         }
 
         try {
-            // Extrai o conteúdo da conversa
-            const content = messageData.message?.conversation || 'Conteúdo não reconhecido';
+            // Log detalhado dos dados da mensagem
+            this.logger.info('DADOS DA MENSAGEM RECEBIDOS', {
+                chatId,
+                contactId,
+                messageDataFull: JSON.stringify(messageData, null, 2)
+            });
+
+            // Determina o tipo de conteúdo e extrai informações específicas
+            const isAudioMessage = messageData.messageType === 'audioMessage';
+            const content = isAudioMessage 
+                ? messageData.transcricao || 'Mensagem de áudio' 
+                : messageData.text || messageData.caption || 'Sem conteúdo';
+
+            this.logger.info('TIPO DE MENSAGEM IDENTIFICADO', {
+                isAudioMessage,
+                contentType: isAudioMessage ? 'AUDIO' : 'TEXT',
+                contentLength: content.length
+            });
 
             // Prepara metadados com payload completo
             const metadata = {
@@ -228,71 +413,95 @@ class ChatMessageService {
             const status = messageData.status || MESSAGE_STATUS.PENDING;
             const messageStatus = MESSAGE_STATUS[status] || MESSAGE_STATUS.PENDING;
 
+            this.logger.info('STATUS DA MENSAGEM', {
+                status: messageStatus,
+                originalStatus: status
+            });
+
             // Converte timestamp para formato de data
             const messageTimestamp = messageData.messageTimestamp 
                 ? new Date(messageData.messageTimestamp * 1000).toISOString() 
                 : new Date().toISOString();
 
+            this.logger.info('TIMESTAMP DA MENSAGEM', {
+                timestamp: messageTimestamp,
+                originalTimestamp: messageData.messageTimestamp
+            });
+
             // Extrai o external_id da mensagem
-            const externalId = messageData.key?.id || null;
+            const externalId = messageData.id || null;
+
+            this.logger.info('EXTERNAL ID', {
+                externalId,
+                hasExternalId: !!externalId
+            });
+
+            // Prepara metadados de mídia para mensagens de áudio
+            const mediaMetadata = isAudioMessage ? {
+                type: 'audio',
+                mime_type: messageData.mimetype,
+                filename: messageData.filename,
+                size: messageData.base64 ? messageData.base64.length : null,
+                duration: null, // Adicionar lógica para extrair duração se disponível
+                transcription: messageData.transcricao
+            } : null;
+
+            this.logger.info('METADADOS DE MÍDIA', {
+                isAudioMessage,
+                mediaMetadata: JSON.stringify(mediaMetadata, null, 2)
+            });
+
+            // Prepara detalhes de entrega
+            const deliveryDetails = {
+                provider: messageData.server_url || 'WhatsApp',
+                external_id: externalId,
+                status: messageStatus,
+                instance: messageData.instance
+            };
+
+            this.logger.info('DETALHES DE ENTREGA', {
+                deliveryDetails: JSON.stringify(deliveryDetails, null, 2)
+            });
 
             // Cria a mensagem de chat
             const chatMessage = await this.chatMessageRepository.create({
                 chat_id: chatId,
                 contact_id: contactId,
-                content: content,
-                content_type: 'TEXT',
-                direction: 'INBOUND',
-                metadata: metadata,
+                content,
+                direction: messageData.fromMe ? 'OUTBOUND' : 'INBOUND',
                 status: messageStatus,
-                message_status: messageStatus,
-                external_id: externalId,
-                created_at: messageTimestamp
-            }, { client });
-
-            // Cria o status da mensagem
-            await this.chatMessageStatusRepository.create({
-                message_id: chatMessage.message_id,
-                status: messageStatus,
-                metadata: {
-                    source: 'message_creation',
-                    originalPayload: metadata
-                }
+                metadata,
+                media_metadata: mediaMetadata,
+                sent_at: messageTimestamp,
+                delivery_details: deliveryDetails
             });
 
-            this.logger.info('Mensagem de chat criada', {
-                chatId,
-                contactId,
-                content,
-                status: messageStatus,
-                externalId
+            this.logger.info('MENSAGEM DE CHAT CRIADA', {
+                chatMessageId: chatMessage.id,
+                content: content.substring(0, 100) // Limita para não logar conteúdo muito longo
             });
 
             return chatMessage;
         } catch (error) {
-            this.logger.error('Erro ao criar mensagem de chat', {
-                error: error.message,
-                chatId,
-                contactId
+            this.logger.error('ERRO AO CRIAR MENSAGEM DE CHAT', {
+                errorMessage: error.message,
+                stack: error.stack,
+                messageData: JSON.stringify(messageData, null, 2)
             });
             throw error;
         }
     }
 
-    extractDynamicContent(data) {
-        // Log para debug
+    async extractDynamicContent(data) {
         this.logger.info('Extração Dinâmica de Conteúdo', { 
             dadosOriginais: JSON.stringify(data) 
         });
 
-        // Estratégias de extração com suporte a diferentes tipos
         const extractionStrategies = [
-            // Texto normal
             { 
                 name: 'Texto Direto', 
                 contentType: 'TEXT',
                 extract: (data) => {
-                    // Prioriza campos de texto
                     const content = data.text || data.caption || null;
                     return content ? { 
                         contentType: 'TEXT', 
@@ -300,12 +509,10 @@ class ChatMessageService {
                     } : null;
                 }
             },
-            // Áudio
             { 
                 name: 'Áudio', 
                 contentType: 'AUDIO',
                 extract: (data) => {
-                    // Verifica URL de áudio ou transcrição
                     if (data.audioUrl) {
                         return {
                             contentType: 'AUDIO',
@@ -319,7 +526,6 @@ class ChatMessageService {
                     return null;
                 }
             },
-            // Arquivo
             { 
                 name: 'Arquivo', 
                 contentType: 'FILE',
@@ -339,13 +545,11 @@ class ChatMessageService {
             }
         ];
 
-        // Tenta extrair conteúdo usando as estratégias
         for (const strategy of extractionStrategies) {
             const result = strategy.extract(data);
             if (result) return result;
         }
 
-        // Se nenhuma estratégia funcionar, retorna null
         return { 
             contentType: 'TEXT', 
             content: 'Conteúdo não reconhecido' 
@@ -354,16 +558,13 @@ class ChatMessageService {
 
     async updateMessageStatus(messageId, status, metadata = {}) {
         try {
-            // Valida o status
             const validStatus = MESSAGE_STATUS[status] || MESSAGE_STATUS.PENDING;
 
-            // Log de início da atualização
             this.logger.info('Iniciando atualização de status da mensagem', {
                 messageId,
                 status: validStatus
             });
 
-            // Cria registro de status da mensagem
             const messageStatus = await this.chatMessageStatusRepository.create({
                 message_id: messageId,
                 status: validStatus,
@@ -373,12 +574,10 @@ class ChatMessageService {
                 }
             });
 
-            // Atualiza o status na mensagem original
             await this.chatMessageRepository.update(messageId, {
                 message_status: validStatus
             });
 
-            // Log de sucesso
             this.logger.info('Status da mensagem atualizado com sucesso', {
                 messageId,
                 status: validStatus
@@ -386,7 +585,6 @@ class ChatMessageService {
 
             return messageStatus;
         } catch (error) {
-            // Log de erro
             this.logger.error('Erro ao atualizar status da mensagem', {
                 error: error.message,
                 messageId,
@@ -442,17 +640,14 @@ class ChatMessageService {
     async processMessageWithTransaction(messageData) {
         const client = await this.chatMessageRepository.pool.connect();
         try {
-            // Etapa 1: Localizar/Adicionar Contato
             let contactId = null;
             try {
-                // Busca por valor completo
                 let contact = await this.contactRepository.findByValueAndType(
                     messageData.remoteJid, 
                     'whatsapp', 
                     { client }
                 );
 
-                // Se não encontrar, cria novo contato
                 if (!contact) {
                     contact = await this.contactRepository.create({
                         contact_value: messageData.remoteJid,
@@ -461,7 +656,7 @@ class ChatMessageService {
                     }, { client });
                 }
 
-                contactId = contact.contact_id;
+                contactId = contact.id;
             } catch (contactError) {
                 this.logger.error('Erro ao processar contato', { 
                     error: contactError.message, 
@@ -470,8 +665,6 @@ class ChatMessageService {
                 throw contactError;
             }
 
-            // Restante do método permanece igual
-            // Etapa 2: Localizar Person Contact
             let personContactId = null;
             try {
                 const personContacts = await this.personContactRepository.findByPersonAndContact(
@@ -486,7 +679,6 @@ class ChatMessageService {
                 });
 
                 if (personContacts && personContacts.length > 0) {
-                    // Pega o primeiro person contact
                     personContactId = personContacts[0].person_contact_id;
                     logger.info('Person Contact encontrado', { 
                         personContactId, 
@@ -504,12 +696,10 @@ class ChatMessageService {
                 throw personContactError;
             }
 
-            // Etapa 3: Verificar/Criar Chat
             let chatId = null;
             const channelId = this.getChannelId(messageData.instance);
             
             try {
-                // Buscar chats existentes para este contato
                 const existingChats = await this.chatRepository.findAll(
                     { 
                         contact_id: contactId,
@@ -530,7 +720,6 @@ class ChatMessageService {
                     chatId = existingChats.items[0].chat_id;
                     logger.info('Chat existente encontrado', { chatId });
                 } else {
-                    // Criar novo chat
                     const newChat = await this.chatRepository.create({
                         type: 'conversation',
                         direction: 'incoming',
@@ -553,7 +742,6 @@ class ChatMessageService {
                 throw chatError;
             }
 
-            // Adicionar participante ao chat
             if (personContactId || contactId) {
                 try {
                     await this.chatRepository.addChatParticipant({
@@ -580,7 +768,6 @@ class ChatMessageService {
                 }
             }
 
-            // Criar mensagem
             const newMessage = await this.chatMessageRepository.createMessage({
                 chat_id: chatId,
                 content: messageData.text,
@@ -596,13 +783,11 @@ class ChatMessageService {
                 chatId 
             });
 
-            // Commit da transação
             await client.query('COMMIT');
             logger.info('Processamento de mensagem concluído com sucesso');
 
             return newMessage;
         } catch (error) {
-            // Rollback em caso de erro
             await client.query('ROLLBACK');
             logger.error('Erro no processamento da mensagem', { 
                 error: error.message, 
@@ -611,37 +796,67 @@ class ChatMessageService {
             });
             throw error;
         } finally {
-            // Liberar cliente de conexão
             client.release();
         }
     }
 
     async findOrCreateContactFromPayload(messageData, client) {
         try {
-            const remoteJid = messageData.key.remoteJid;
-            const pushName = messageData.pushName || 'Contato WhatsApp';
+            const remoteJid = messageData.remoteJid || 
+                              messageData.key?.remoteJid || 
+                              messageData.sender || 
+                              messageData.data?.remoteJid;
+            
+            const pushName = messageData.pushName || 
+                             messageData.data?.pushName || 
+                             'Contato WhatsApp';
+
+            this.logger.info('Detalhes de criação de contato', {
+                remoteJid,
+                pushName,
+                fullMessageData: messageData
+            });
 
             if (!remoteJid) {
                 throw new Error('Identificador de remetente não encontrado');
             }
 
-            // Delega completamente para o repositório
-            let contact = await this.contactRepository.findByValue(remoteJid);
+            let contact = await this.contactRepository.findByLastDigits(remoteJid, { 
+                client, 
+                createIfNotFound: true 
+            });
 
-            // Se não encontrar, deixa o repositório decidir
+            this.logger.info('Resultado findByLastDigits', { 
+                contact, 
+                remoteJid 
+            });
+
+            // Se o contato não foi encontrado ou criado, criar manualmente
             if (!contact) {
-                contact = await this.contactRepository.create({
-                    contact_value: remoteJid,
-                    contact_name: pushName,
-                    contact_type: 'whatsapp'
-                }, { client });
+                const createContactDTO = new CreateContactDTO({
+                    person_id: null, // Pode precisar de lógica para determinar pessoa
+                    type: 'phone',
+                    contact: remoteJid,
+                    description: pushName
+                });
+
+                this.logger.info('Tentando criar contato', { 
+                    createContactDTO 
+                });
+
+                contact = await this.contactService.create(createContactDTO);
+
+                this.logger.info('Contato criado', { 
+                    contact 
+                });
             }
 
             return contact;
         } catch (error) {
             this.logger.error('Erro ao encontrar/criar contato', {
                 error: error.message,
-                remoteJid: messageData.key.remoteJid
+                remoteJid: messageData.remoteJid || messageData.key?.remoteJid,
+                fullError: error
             });
             throw error;
         }

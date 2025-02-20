@@ -197,10 +197,10 @@ class ChatMessageRepository extends BaseRepository {
         const client = await this.pool.connect();
         try {
             const query = `
-                SELECT c.chat_id
+                SELECT DISTINCT c.chat_id
                 FROM chats c
-                JOIN chat_participants cp ON c.chat_id = cp.chat_id
-                WHERE c.status = 'ACTIVE' AND cp.contact_id = $1
+                JOIN chat_messages cm ON c.chat_id = cm.chat_id
+                WHERE c.status = 'ACTIVE' AND cm.contact_id = $1
             `;
 
             const result = await client.query(query, [contactId]);
