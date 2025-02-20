@@ -346,25 +346,37 @@ class ChatMessageService {
 
     async findOrCreateChatByContactId(contactId, client, channel) {
         try {
-            this.logger.info('Criando chat', {
+            this.logger.info('Buscando ou criando chat', {
                 contactId, 
                 channelId: channel?.channel_id
             });
 
+            // Primeiro busca chats existentes
+            const existingChats = await this.chatMessageRepository.findChatsByContactId(contactId);
+            
+            if (existingChats && existingChats.length > 0) {
+                this.logger.info('Chat existente encontrado', {
+                    chatId: existingChats[0],
+                    totalChats: existingChats.length
+                });
+                return existingChats[0];
+            }
+
+            // Se não encontrou nenhum chat, cria um novo
             const newChat = await this.chatRepository.create({
                 contact_id: contactId,
                 channel_id: channel.channel_id,
                 status: 'ACTIVE'
             }, { client });
 
-            this.logger.info('Chat criado', {
+            this.logger.info('Novo chat criado', {
                 chatId: newChat?.chat_id,
                 newChat
             });
 
             return newChat.chat_id;
         } catch (error) {
-            this.logger.error('Erro ao criar chat', {
+            this.logger.error('Erro ao buscar/criar chat', {
                 error: error.message,
                 contactId,
                 fullError: error
