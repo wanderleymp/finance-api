@@ -84,14 +84,19 @@ class ChatMessagesRoutes {
                 
                 logger.info('Criando nova mensagem', { messageData, userId });
                 
-                const newMessage = await this.chatMessageService.createMessage({
+                const result = await this.chatMessageService.createMessage({
                     ...messageData,
                     senderId: userId
                 });
                 
-                logger.info('Mensagem criada com sucesso', { messageId: newMessage.id });
+                logger.info('Mensagem processada com sucesso', { 
+                    status: result.status,
+                    messageId: result.message.message_id 
+                });
                 
-                res.status(201).json(newMessage);
+                // Se a mensagem já existia, retorna 200, senão 201
+                const statusCode = result.status === 'existing' ? 200 : 201;
+                res.status(statusCode).json(result.message);
             } catch (error) {
                 this.handleError(res, error, 'Erro ao criar mensagem');
             }

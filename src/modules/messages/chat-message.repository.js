@@ -92,11 +92,8 @@ class ChatMessageRepository extends BaseRepository {
         const client = await this.pool.connect();
         try {
             const query = `
-                SELECT m.*, c.*, co.contact_value as contact_number
+                SELECT *
                 FROM chat_messages m
-                LEFT JOIN chats c ON m.chat_id = c.chat_id
-                LEFT JOIN chat_participants cp ON c.chat_id = cp.chat_id
-                LEFT JOIN contacts co ON cp.contact_id = co.contact_id
                 WHERE m.external_id = $1
                 LIMIT 1
             `;

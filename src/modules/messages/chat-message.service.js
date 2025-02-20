@@ -285,14 +285,31 @@ class ChatMessageService {
                 contact_id_is_undefined: contact.id === undefined
             });
 
-            // Criar a mensagem
+            // Verifica se a mensagem já existe
+            const existingMessage = await this.chatMessageRepository.findByExternalId(messageData.external_id);
+            
+            if (existingMessage) {
+                this.logger.info('Mensagem já existe, retornando existente', {
+                    messageId: existingMessage.message_id,
+                    externalId: messageData.external_id
+                });
+                return {
+                    message: existingMessage,
+                    status: 'existing'
+                };
+            }
+
+            // Se não existe, cria nova mensagem
             const createdMessage = await this.chatMessageRepository.create(messageData);
 
-            this.logger.info('Mensagem criada com sucesso', { 
-                createdMessage 
+            this.logger.info('Nova mensagem criada com sucesso', {
+                createdMessage
             });
 
-            return createdMessage;
+            return {
+                message: createdMessage,
+                status: 'created'
+            };
         } catch (error) {
             this.logger.error('Erro ao criar mensagem', {
                 error: error.message,
