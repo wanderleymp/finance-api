@@ -15,15 +15,36 @@ class ChatRepository extends BaseRepository {
             const baseQuery = `
                 SELECT 
                     c.chat_id as id,
-                    c.status,
-                    c.created_at as "createdAt",
-                    c.updated_at as "updatedAt",
-                    c.channel_id as "channelId",
-                    c.allow_reply as "allowReply"
+                    COALESCE(ct.contact_name, 'Grupo ' || c.chat_id) as name,
+                    json_build_object(
+                        'content', COALESCE(lm.content, ''),
+                        'type', COALESCE(lm.content_type, 'TEXT'),
+                        'fileUrl', lm.file_url,
+                        'status', COALESCE(lms.status, 'UNREAD'),
+                        'timestamp', to_char(COALESCE(lm.created_at, c.created_at), 'YYYY-MM-DD"T"HH24:MI:SS.MS"Z"')
+                    ) as "lastMessage",
+                    (SELECT COUNT(*) FROM chat_messages cm2
+                     JOIN chat_message_status cms2 ON cm2.message_id = cms2.message_id
+                     WHERE cm2.chat_id = c.chat_id AND cms2.status = 'UNREAD'
+                    ) as "unreadCount",
+                    COALESCE(ct."profilePicUrl", '') as avatar,
+                    c.is_group as "isGroup",
+                    c.is_muted as "isMuted",
+                    c.is_pinned as "isPinned",
+                    ch.channel_name as "channelType"
                 FROM 
                     chats c
-                WHERE 
-                    c.status = 'ACTIVE'
+                LEFT JOIN chat_messages lm ON c.chat_id = lm.chat_id
+                    AND lm.created_at = (
+                        SELECT MAX(created_at)
+                        FROM chat_messages
+                        WHERE chat_id = c.chat_id
+                    )
+                LEFT JOIN chat_message_status lms ON lm.message_id = lms.message_id
+                LEFT JOIN contacts ct ON lm.contact_id = ct.contact_id
+                LEFT JOIN channels ch ON c.channel_id = ch.channel_id
+                WHERE c.status = 'ACTIVE'
+
             `;
 
             // Adicionar filtros
@@ -110,7 +131,6 @@ class ChatRepository extends BaseRepository {
                             'id', c.chat_id,
                             'status', c.status,
                             'createdAt', c.created_at,
-                            'updatedAt', c.updated_at,
                             'channelId', c.channel_id,
                             'allowReply', c.allow_reply,
                             'unreadCount', (

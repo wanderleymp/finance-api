@@ -1,9 +1,13 @@
 import { Module } from '@nestjs/common';
-import { Chat-message-statusController } from './chat-message-status.controller';
-import { Chat-message-statusService } from './chat-message-status.service';
+import { TypeOrmModule } from '@nestjs/typeorm';
+import { ChatMessageStatusController } from './chat-message-status.controller';
+import { ChatMessageStatusService } from './chat-message-status.service';
+import { ChatMessageStatus } from './entities/chat-message-status.entity';
 
 @Module({
-    controllers: [Chat-message-statusController],
-    providers: [Chat-message-statusService]
+    imports: [TypeOrmModule.forFeature([ChatMessageStatus])],
+    controllers: [ChatMessageStatusController],
+    providers: [ChatMessageStatusService],
+    exports: [ChatMessageStatusService]
 })
-export class Chat-message-statusModule {}
+export class ChatMessageStatusModule {}

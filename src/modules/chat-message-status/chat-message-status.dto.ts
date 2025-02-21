@@ -1,17 +1,51 @@
 import { ApiProperty } from '@nestjs/swagger';
-import { IsNotEmpty, IsString } from 'class-validator';
+import { IsNotEmpty, IsNumber, IsString, IsDate, IsOptional } from 'class-validator';
+import { Type } from 'class-transformer';
 
-export class CreateChat-message-statusDto {
-    @ApiProperty({ description: 'Nome do chat-message-status' })
+export class CreateChatMessageStatusDto {
+    @ApiProperty({ description: 'ID da mensagem' })
+    @IsNotEmpty()
+    @IsNumber()
+    messageId: number;
+
+    @ApiProperty({ description: 'ID do contato' })
+    @IsNotEmpty()
+    @IsNumber()
+    contactId: number;
+
+    @ApiProperty({ description: 'Status da mensagem', enum: ['UNREAD', 'READ'] })
     @IsNotEmpty()
     @IsString()
-    name: string;
+    status: string;
 }
 
-export class Chat-message-statusResponseDto {
-    @ApiProperty({ description: 'ID do chat-message-status' })
-    id: number;
+export class UpdateChatMessageStatusDto {
+    @ApiProperty({ description: 'Status da mensagem', enum: ['UNREAD', 'READ'] })
+    @IsNotEmpty()
+    @IsString()
+    status: string;
+}
 
-    @ApiProperty({ description: 'Nome do chat-message-status' })
-    name: string;
+export class ChatMessageStatusResponseDto {
+    @ApiProperty({ description: 'ID da mensagem' })
+    messageId: number;
+
+    @ApiProperty({ description: 'ID do contato' })
+    contactId: number;
+
+    @ApiProperty({ description: 'Status da mensagem', enum: ['UNREAD', 'READ'] })
+    status: string;
+
+    @ApiProperty({ description: 'Data de leitura' })
+    @Type(() => Date)
+    @IsOptional()
+    readAt?: Date;
+
+    @ApiProperty({ description: 'Data de criação' })
+    @Type(() => Date)
+    createdAt: Date;
+
+    @ApiProperty({ description: 'Data de atualização' })
+    @Type(() => Date)
+    updatedAt: Date;
 }

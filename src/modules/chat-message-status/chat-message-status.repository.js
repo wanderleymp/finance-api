@@ -1,85 +1,42 @@
-const BaseRepository = require('../../repositories/base/BaseRepository');
 const { logger } = require('../../middlewares/logger');
-const { chatMessageStatusSchema } = require('./chat-message-status.schema');
+const BaseRepository = require('../../repositories/base/BaseRepository');
 
 class ChatMessageStatusRepository extends BaseRepository {
     constructor() {
-        super('chat_message_status', 'status_id');
+        super('chat_message_status', 'message_id');
     }
 
-    async findAll(filters = {}, page = 1, limit = 20) {
+    async create(data) {
         const client = await this.pool.connect();
         try {
-            const offset = (page - 1) * limit;
-            let query = `
-                WITH status_details AS (
-                    SELECT 
-                        cms.*,
-                        m.content AS message_content,
-                        c.contact_name AS contact_name,
-                        COUNT(*) OVER() as total_count
-                    FROM chat_message_status cms
-                    LEFT JOIN chat_messages m ON cms.message_id = m.message_id
-                    LEFT JOIN contacts c ON m.contact_id = c.contact_id
-                    WHERE 1=1
+            const query = `
+                INSERT INTO ${this.tableName} 
+                (message_id, contact_id, status, read_at, created_at, updated_at)
+                VALUES ($1, $2, $3, $4, NOW(), NOW())
+                ON CONFLICT (message_id, contact_id) 
+                DO UPDATE SET 
+                    status = EXCLUDED.status,
+                    read_at = CASE 
+                        WHEN EXCLUDED.status = 'READ' THEN NOW() 
+                        ELSE ${this.tableName}.read_at 
+                    END,
+                    updated_at = NOW()
+                RETURNING *
             `;
-            const values = [];
-            let paramCount = 1;
 
-            // Filtro por status
-            if (filters.status) {
-                query += ` AND cms.status = $${paramCount++}`;
-                values.push(filters.status);
-            }
-
-            // Filtro por message_id
-            if (filters.messageId) {
-                query += ` AND cms.message_id = $${paramCount++}`;
-                values.push(filters.messageId);
-            }
-
-            // Finalizar consulta
-            query += `
-                ORDER BY cms.status_id DESC
-                LIMIT $${paramCount++} OFFSET $${paramCount++}
-                )
-                SELECT 
-                    status_id AS id,
-                    message_id AS "messageId",
-                    status,
-                    occurred_at AS "occurredAt",
-                    message_content AS "messageContent",
-                    contact_name AS "contactName",
-                    total_count AS "totalCount"
-                FROM status_details
-            `;
-            values.push(limit, offset);
+            const values = [
+                data.messageId, 
+                data.contactId, 
+                data.status, 
+                data.status === 'READ' ? new Date() : null
+            ];
 
             const result = await client.query(query, values);
-            const totalItems = parseInt(result.rows[0]?.totalCount || 0);
-            
-            return {
-                items: result.rows.map(row => {
-                    const { error } = chatMessageStatusSchema.validate(row);
-                    if (error) {
-                        logger.warn('Dados inválidos no status de mensagem', { error });
-                    }
-                    return row;
-                }),
-                meta: {
-                    totalItems,
-                    itemCount: result.rows?.length || 0,
-                    itemsPerPage: limit,
-                    totalPages: Math.ceil(totalItems / limit),
-                    currentPage: page
-                }
-            };
+            return result.rows[0];
         } catch (error) {
-            logger.error('Erro ao buscar status de mensagens', { 
+            logger.error('Erro ao criar status de mensagem', { 
                 error: error.message, 
-                filters, 
-                page, 
-                limit 
+                data 
             });
             throw error;
         } finally {
@@ -87,45 +44,65 @@ class ChatMessageStatusRepository extends BaseRepository {
         }
     }
 
-    async createOrUpdateMessageStatus(messageData) {
+    async findByMessageId(messageId) {
+        return this.findBy({ message_id: messageId });
+    }
+
+    async findUnreadByChat(chatId, contactId) {
         const client = await this.pool.connect();
         try {
-            const { message_id, status } = messageData;
-
-            const { error } = chatMessageStatusSchema.validate({ 
-                message_id, 
-                status 
-            });
-
-            if (error) {
-                throw new Error(`Dados inválidos: ${error.details[0].message}`);
-            }
-
             const query = `
-                INSERT INTO chat_message_status 
-                    (message_id, status)
-                VALUES 
-                    ($1, $2)
-                ON CONFLICT (message_id) 
-                DO UPDATE SET 
-                    status = EXCLUDED.status
+                SELECT cms.* FROM ${this.tableName} cms
+                JOIN chat_messages cm ON cms.message_id = cm.message_id
+                WHERE cm.chat_id = $1 
+                AND cms.contact_id != $2
+                AND cms.status != 'READ'
+            `;
+
+            const result = await client.query(query, [chatId, contactId]);
+            return result.rows;
+        } catch (error) {
+            logger.error('Erro ao buscar mensagens não lidas', { 
+                error: error.message, 
+                chatId, 
+                contactId 
+            });
+            throw error;
+        } finally {
+            client.release();
+        }
+    }
+
+    async update(messageId, contactId, data) {
+        const client = await this.pool.connect();
+        try {
+            const query = `
+                UPDATE ${this.tableName}
+                SET 
+                    status = $3,
+                    read_at = CASE 
+                        WHEN $3 = 'READ' THEN NOW() 
+                        ELSE read_at 
+                    END,
+                    updated_at = NOW()
+                WHERE message_id = $1 AND contact_id = $2
                 RETURNING *
             `;
 
-            const values = [message_id, status];
+            const values = [
+                messageId, 
+                contactId, 
+                data.status
+            ];
 
             const result = await client.query(query, values);
-            
-            logger.info('Status de mensagem criado/atualizado', { 
-                messageId: message_id, 
-                status 
-            });
-
             return result.rows[0];
         } catch (error) {
-            logger.error('Erro ao criar/atualizar status de mensagem', { 
+            logger.error('Erro ao atualizar status da mensagem', { 
                 error: error.message, 
-                messageData 
+                messageId, 
+                contactId, 
+                data 
             });
             throw error;
         } finally {

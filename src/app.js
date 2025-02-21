@@ -88,6 +88,7 @@ const paymentMethodModule = require('./modules/payment-methods/payment-method.mo
 const addressRoutes = require('./modules/addresses/address.module');
 const ContactModule = require('./modules/contacts/contact.module');
 const PersonContactModule = require('./modules/person-contacts/person-contact.module');
+const ChatSettingsModule = require('./modules/chat-settings/chat-settings.module');
 const PersonDocumentModule = require('./modules/person-documents/person-document.module');
 const PersonModule = require('./modules/persons/person.module');
 const ItemModule = require('./modules/items/item.module');
@@ -293,6 +294,9 @@ PersonDocumentModule.register(app);
 PersonModule.register(app);
 ItemModule.register(app);
 
+// Registra o módulo de configurações de chat
+ChatSettingsModule.register(app);
+
 // Registra o módulo de itens de movimentação
 const movementItemModule = new MovementItemModule();
 app.use('/movement-items', movementItemModule.getRouter());
@@ -360,6 +364,10 @@ app.use('/chat-messages', chatMessagesRoutes());
 // Registra rota de chat-message-status
 const chatMessageStatusRoutes = require('./modules/chat-message-status/chat-message-status.routes');
 app.use('/chat-message-status', chatMessageStatusRoutes);
+
+// Registra rota de chat-contact-status
+const chatContactStatusRoutes = require('./modules/chat-contact-status/chat-contact-status.routes');
+app.use('/chat-contact-status', chatContactStatusRoutes);
 
 // Rota 404 para capturar requisições não encontradas
 app.use((req, res, next) => {
