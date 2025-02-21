@@ -13,7 +13,10 @@ class MessagesModule {
     }
 
     registerRoutes() {
-        // Registrar rotas do webhook
+        // Registrar rotas do webhook da Evolution
+        this.app.use('/webhooks', webhookRoutes);
+        
+        // Registrar rotas do webhook do Graph
         this.app.use('/messages/webhooks', webhookRoutes);
 
         // Registrar módulo de chat (que inclui as rotas de teste)
@@ -26,6 +29,7 @@ class MessagesModule {
             routes: [
                 '/messages/webhooks/graph/subscribe',
                 '/messages/webhooks/graph/messages',
+                '/webhooks/evolution/status',
                 '/messages/test/*'
             ]
         });

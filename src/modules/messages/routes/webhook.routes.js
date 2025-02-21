@@ -16,7 +16,7 @@ const webhookController = new GraphWebhookController(webhookService);
 const corsOptions = {
     origin: '*',
     methods: ['GET', 'POST', 'OPTIONS'],
-    allowedHeaders: ['Content-Type', 'Authorization'],
+    allowedHeaders: ['Content-Type', 'Authorization', 'apikey'],
     credentials: true,
     optionsSuccessStatus: 200
 };
@@ -35,5 +35,12 @@ router.delete('/graph/subscription/:subscriptionId', authMiddleware, cors(corsOp
 
 // Endpoint para obter token do Graph (com autenticação)
 router.get('/graph/token', authMiddleware, cors(corsOptions), webhookController.getGraphToken.bind(webhookController));
+
+// Inicializar controller do Evolution Webhook
+const EvolutionWebhookController = require('../controllers/evolution-webhook.controller');
+const evolutionWebhookController = new EvolutionWebhookController();
+
+// Endpoint para receber atualizações de status da Evolution API
+router.post('/evolution/status', cors(corsOptions), evolutionWebhookController.handleStatusUpdate.bind(evolutionWebhookController));
 
 module.exports = router;
