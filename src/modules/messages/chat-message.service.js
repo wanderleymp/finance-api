@@ -46,6 +46,77 @@ class ChatMessageService {
         return this.channelMap[channelName] || 1;
     }
 
+    async getChatMessagesDetails(chatId) {
+        try {
+            // Buscar detalhes do chat
+            const chat = await this.chatRepository.findById(chatId);
+            if (!chat) {
+                throw new Error('Chat não encontrado');
+            }
+
+            // Buscar detalhes do contato
+            const contact = await this.contactRepository.findById(chat.contact_id);
+            if (!contact) {
+                throw new Error('Contato não encontrado');
+            }
+
+            // Buscar detalhes do canal
+            const channel = await this.channelRepository.findById(chat.channel_id);
+            if (!channel) {
+                throw new Error('Canal não encontrado');
+            }
+
+            // Buscar mensagens do chat
+            const messages = await this.chatMessageRepository.findByChatId(chatId);
+
+            // Formatar as mensagens
+            const formattedMessages = messages.map(message => ({
+                id: message.message_id,
+                content: message.content,
+                contentType: message.content_type,
+                senderId: message.sender_id,
+                senderName: message.sender_name,
+                createdAt: message.created_at,
+                status: message.status?.type || 'PENDING',
+                direction: message.direction,
+                formattedTime: new Date(message.created_at).toLocaleTimeString()
+            }));
+
+            // Montar o payload final
+            return {
+                chat: {
+                    id: chat.chat_id,
+                    name: chat.chat_name,
+                    status: chat.status,
+                    unreadCount: chat.unread_count?.toString() || '0',
+                    avatar: null, // Implementar lógica de avatar se necessário
+                    isGroup: chat.is_group || false,
+                    isMuted: chat.is_muted || false,
+                    isPinned: chat.is_pinned || false,
+                    channelType: channel.channel_name
+                },
+                contact: {
+                    id: contact.contact_id,
+                    name: contact.contact_value || contact.contact_name,  // valor do contato (ex: número do whatsapp)
+                    contact_name: contact.contact_name,  // nome de exibição
+                    contact_id: contact.contact_id,
+                    contact_type: contact.contact_type,  // tipo do contato (whatsapp, telegram, etc)
+                    contact_value: contact.contact_value,  // valor do contato
+                    profile_pic_url: contact.profilePicUrl || null,  // foto do perfil
+                    created_at: contact.created_at  // data de criação
+                },
+                channel: {
+                    id: channel.channel_id,
+                    name: channel.channel_name
+                },
+                messages: formattedMessages
+            };
+        } catch (error) {
+            logger.error('Erro ao buscar detalhes do chat e mensagens', { error });
+            throw error;
+        }
+    }
+
     async findByChatId(chatId, page = 1, limit = 20) {
         try {
             logger.info('Buscando mensagens do chat', { chatId, page, limit });

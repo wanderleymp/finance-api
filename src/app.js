@@ -359,7 +359,7 @@ registerChatRoutes(app);
 
 // Registra rota de chat-messages
 const chatMessagesRoutes = require('./modules/messages/chat-messages.routes');
-app.use('/chat-messages', chatMessagesRoutes());
+app.use('/chat', chatMessagesRoutes());
 
 // Registra rota de chat-message-status
 const chatMessageStatusRoutes = require('./modules/chat-message-status/chat-message-status.routes');

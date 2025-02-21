@@ -26,7 +26,22 @@ class ChatMessagesRoutes {
             next();
         });
 
-        // Busca mensagens de um chat específico
+        // Busca mensagens de um chat específico (formato antigo)
+        this.router.get('/chat/:id/messages', async (req, res) => {
+            try {
+                const chatId = parseInt(req.params.id);
+                
+                logger.info('Buscando detalhes do chat e mensagens', { chatId });
+                
+                const result = await this.chatMessageService.getChatMessagesDetails(chatId);
+                
+                res.json(result);
+            } catch (error) {
+                this.handleError(res, error, 'Erro ao buscar detalhes do chat e mensagens');
+            }
+        });
+
+        // Busca mensagens de um chat específico (formato paginado)
         this.router.get('/:chatId/messages', async (req, res) => {
             try {
                 const { chatId } = req.params;
