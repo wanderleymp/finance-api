@@ -119,8 +119,74 @@ class ChatRepository extends BaseRepository {
     }
 
     async findById(id) {
-        const chats = await this.findAll({ id }, 1, 1);
-        return chats.items[0] || null;
+        const client = await this.pool.connect();
+        try {
+            const query = `
+                SELECT 
+                    c.chat_id,
+                    c.channel_id,
+                    c.status,
+                    c.created_at,
+                    c.allow_reply,
+                    c.is_group,
+                    c.is_muted,
+                    c.is_pinned,
+                    ch.channel_name,
+                    ch.channel_id as channel_channel_id,
+                    ct.contact_value,
+                    ct.contact_id,
+                    (
+                        SELECT COUNT(*) 
+                        FROM chat_messages cm2
+                        WHERE cm2.chat_id = c.chat_id 
+                        AND cm2.read_at IS NULL
+                    ) as unread_count
+                FROM 
+                    chats c
+                LEFT JOIN 
+                    channels ch ON c.channel_id = ch.channel_id
+                LEFT JOIN
+                    contacts ct ON c.contact_id = ct.contact_id
+                WHERE 
+                    c.chat_id = $1
+            `;
+
+            const result = await client.query(query, [id]);
+
+            if (result.rows.length === 0) {
+                logger.warn('Chat não encontrado', { chatId: id });
+                return null;
+            }
+
+            const chatData = result.rows[0];
+
+            logger.info('Chat encontrado', { 
+                chatId: chatData.chat_id, 
+                channelId: chatData.channel_id 
+            });
+
+            return {
+                chat_id: chatData.chat_id,
+                channel_id: chatData.channel_id,
+                channel_name: chatData.channel_name,
+                status: chatData.status,
+                created_at: chatData.created_at,
+                allow_reply: chatData.allow_reply,
+                is_group: chatData.is_group,
+                is_muted: chatData.is_muted,
+                is_pinned: chatData.is_pinned,
+                unread_count: chatData.unread_count
+            };
+        } catch (error) {
+            logger.error('Erro ao buscar chat por ID', { 
+                error: error.message, 
+                chatId: id,
+                stack: error.stack
+            });
+            throw error;
+        } finally {
+            client.release();
+        }
     }
 
     async findById(id, page = 1, limit = 20) {
@@ -129,143 +195,54 @@ class ChatRepository extends BaseRepository {
             // Consulta para buscar detalhes do chat
             const chatQuery = `
                 SELECT 
-                    json_build_object(
-                        'chat', json_build_object(
-                            'id', c.chat_id,
-                            'status', c.status,
-                            'createdAt', c.created_at,
-                            'channelId', c.channel_id,
-                            'allowReply', c.allow_reply,
-                            'isGroup', c.is_group,
-                            'isMuted', c.is_muted,
-                            'isPinned', c.is_pinned,
-                            'unreadCount', (
-                                SELECT COUNT(*) 
-                                FROM chat_messages cm2
-                                WHERE cm2.chat_id = c.chat_id 
-                                AND cm2.read_at IS NULL
-                            )
-                        ),
-                        'channel', json_build_object(
-                            'id', ch.channel_id,
-                            'name', ch.channel_name
-                        ),
-                        'lastMessage', CASE 
-                            WHEN lm.message_id IS NOT NULL THEN json_build_object(
-                                'id', lm.message_id,
-                                'content', lm.content,
-                                'contentType', lm.content_type,
-                                'fileUrl', lm.file_url,
-                                'status', CASE 
-                                    WHEN lm.read_at IS NOT NULL THEN 'READ'
-                                    WHEN lm.delivered_at IS NOT NULL THEN 'DELIVERED'
-                                    ELSE 'SENT'
-                                END,
-                                'createdAt', lm.created_at,
-                                'timestamp', to_char(lm.created_at, 'YYYY-MM-DD"T"HH24:MI:SS.MS"Z"')
-                            )
-                            ELSE NULL
-                        END,
-                        'contact', json_build_object(
-                            'id', ct.contact_id,
-                            'name', ct.contact_name,
-                            'avatar', ct."profilePicUrl"
-                        )
-                    ) as chat_details
+                    c.chat_id,
+                    c.channel_id,
+                    c.status,
+                    c.created_at,
+                    c.allow_reply,
+                    c.is_group,
+                    c.is_muted,
+                    c.is_pinned,
+                    ch.channel_name,
+                    (
+                        SELECT COUNT(*) 
+                        FROM chat_messages cm2
+                        WHERE cm2.chat_id = c.chat_id 
+                        AND cm2.read_at IS NULL
+                    ) as unread_count
                 FROM 
                     chats c
                 LEFT JOIN 
                     channels ch ON c.channel_id = ch.channel_id
-                LEFT JOIN 
-                    chat_messages lm ON c.chat_id = lm.chat_id
-                    AND lm.created_at = (
-                        SELECT MAX(created_at) 
-                        FROM chat_messages 
-                        WHERE chat_id = c.chat_id
-                    )
-                LEFT JOIN 
-                    contacts ct ON lm.contact_id = ct.contact_id
                 WHERE 
                     c.chat_id = $1
             `;
 
-            // Consulta de paginação de mensagens
-            const messagesQuery = `
-                SELECT 
-                    msg.message_id as id,
-                    msg.content,
-                    msg.content_type as "contentType",
-                    msg.file_url as "fileUrl",
-                    CASE 
-                        WHEN msg.read_at IS NOT NULL THEN 'READ'
-                        WHEN msg.delivered_at IS NOT NULL THEN 'DELIVERED'
-                        ELSE 'SENT'
-                    END as status,
-                    msg.created_at as "createdAt",
-                    to_char(msg.created_at, 'YYYY-MM-DD"T"HH24:MI:SS.MS"Z"') as timestamp,
-                    json_build_object(
-                        'id', ct.contact_id,
-                        'name', ct.contact_name,
-                        'avatar', ct."profilePicUrl"
-                    ) as contact,
-                    COUNT(*) OVER() as total_messages
-                FROM 
-                    chat_messages msg
-                LEFT JOIN 
-                    contacts ct ON msg.contact_id = ct.contact_id
-                WHERE 
-                    msg.chat_id = $1
-                ORDER BY 
-                    msg.created_at DESC
-                LIMIT $2 OFFSET $3
-            `;
+            const result = await client.query(chatQuery, [id]);
 
-            const offset = (page - 1) * limit;
-            const params = [id, limit, offset];
-
-            // Executar consultas
-            const [chatResult, messagesResult] = await Promise.all([
-                client.query(chatQuery, [id]),
-                client.query(messagesQuery, params)
-            ]);
-
-            // Verificar se o chat existe
-            if (chatResult.rows.length === 0) {
+            if (result.rows.length === 0) {
                 return null;
             }
 
-            // Preparar resultado
-            const chatDetails = chatResult.rows[0].chat_details;
-            const totalMessages = parseInt(messagesResult.rows[0]?.total_messages || 0);
+            const chatData = result.rows[0];
 
-            // Adicionar mensagens ao resultado
-            chatDetails.messages = messagesResult.rows.map(msg => ({
-                id: msg.id,
-                content: msg.content,
-                contentType: msg.contentType,
-                fileUrl: msg.fileUrl,
-                status: msg.status,
-                createdAt: msg.createdAt,
-                timestamp: msg.timestamp,
-                contact: msg.contact
-            }));
-
-            // Adicionar metadados de paginação
-            chatDetails.messagesMeta = {
-                totalItems: totalMessages,
-                itemCount: messagesResult.rows.length,
-                itemsPerPage: limit,
-                totalPages: Math.ceil(totalMessages / limit),
-                currentPage: page
+            return {
+                channel_id: chatData.channel_id,
+                channel_name: chatData.channel_name,
+                chat_id: chatData.chat_id,
+                status: chatData.status,
+                created_at: chatData.created_at,
+                allow_reply: chatData.allow_reply,
+                is_group: chatData.is_group,
+                is_muted: chatData.is_muted,
+                is_pinned: chatData.is_pinned,
+                unread_count: chatData.unread_count
             };
-
-            return chatDetails;
         } catch (error) {
-            logger.error('Erro ao buscar detalhes do chat', { 
+            logger.error('Erro ao buscar chat por ID', { 
                 error: error.message, 
-                id,
-                page,
-                limit
+                chatId: id,
+                stack: error.stack
             });
             throw error;
         } finally {

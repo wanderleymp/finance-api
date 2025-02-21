@@ -134,10 +134,11 @@ class BaseRepository {
      */
     async findById(id) {
         try {
-            logger.debug('BaseRepository findById - input:', {
-                id,
+            logger.info('BaseRepository findById - Iniciando busca', {
                 tableName: this.tableName,
-                primaryKey: this.primaryKey
+                primaryKey: this.primaryKey,
+                id: id,
+                idType: typeof id
             });
 
             const query = `
@@ -146,22 +147,24 @@ class BaseRepository {
                 WHERE ${this.primaryKey} = $1
             `;
 
-            logger.debug('BaseRepository findById - query:', {
+            logger.info('BaseRepository findById - Query preparada', {
                 query,
-                id
+                params: [id]
             });
 
             const result = await this.pool.query(query, [id]);
 
-            logger.debug('BaseRepository findById - result:', {
-                result: result.rows[0]
+            logger.info('BaseRepository findById - Resultado da query', {
+                rowCount: result.rowCount,
+                rows: result.rows.length > 0 ? JSON.stringify(result.rows[0]) : null
             });
 
-            return result.rows[0];
+            return result.rows[0] || null;
         } catch (error) {
-            logger.error('BaseRepository - Erro ao buscar registro por ID', {
+            logger.error('BaseRepository findById - Erro ao buscar registro', {
                 error: error.message,
                 tableName: this.tableName,
+                primaryKey: this.primaryKey,
                 id,
                 stack: error.stack
             });

@@ -135,11 +135,10 @@ class ChatMessageRepository extends BaseRepository {
                     status, 
                     external_id, 
                     metadata,
-                    channel_id,
                     contact_id,
                     created_at
                 ) VALUES (
-                    $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12
+                    $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11
                 ) RETURNING *
             `;
             const values = [
@@ -152,7 +151,6 @@ class ChatMessageRepository extends BaseRepository {
                 data.status || 'PENDING',
                 data.external_id || null,
                 JSON.stringify(data.metadata || {}),
-                data.channel_id || null,
                 data.contact_id || null,
                 data.created_at || new Date()
             ];

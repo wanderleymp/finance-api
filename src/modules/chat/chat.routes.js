@@ -24,6 +24,39 @@ class ChatRoutes {
             next();
         });
 
+        // Rota para enviar mensagem em um chat específico
+        this.router.post('/:id/messages', async (req, res) => {
+            try {
+                const { id } = req.params;
+                const messageData = req.body;
+                const userId = req.user.id;
+
+                logger.info('Enviando mensagem no chat', {
+                    chatId: id,
+                    userId,
+                    messageData
+                });
+
+                const result = await this.chatService.create({
+                    chatId: parseInt(id),
+                    userId,
+                    content: messageData.content,
+                    contentType: messageData.contentType,
+                    metadata: messageData.metadata,
+                    contact_id: messageData.contact_id
+                });
+
+                logger.info('Mensagem enviada com sucesso', {
+                    chatId: id,
+                    result
+                });
+
+                res.status(201).json(result);
+            } catch (error) {
+                this.handleError(res, error, 'Erro ao enviar mensagem no chat');
+            }
+        });
+
         // Rota para criar um novo chat
         this.router.post('/', async (req, res) => {
             try {

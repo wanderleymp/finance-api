@@ -25,8 +25,20 @@ class ChannelService {
     async findById(channelId) {
         try {
             logger.info('Buscando canal por ID', { channelId });
+            
+            // Log adicional para verificar o tipo do ID
+            logger.info('Tipo do channelId', { 
+                type: typeof channelId, 
+                value: channelId,
+                convertedToNumber: Number(channelId)
+            });
+
             const channel = await this.channelRepository.findById(channelId);
             
+            logger.info('Resultado da busca de canal', { 
+                channel: channel ? JSON.stringify(channel) : null 
+            });
+
             if (!channel) {
                 const error = new Error('Canal não encontrado');
                 error.statusCode = 404;
@@ -37,6 +49,7 @@ class ChannelService {
         } catch (error) {
             logger.error('Erro ao buscar canal por ID', { 
                 error: error.message, 
+                errorStack: error.stack,
                 channelId 
             });
             throw error;

@@ -13,6 +13,7 @@ const Type = require('class-transformer').Type;
 class CreateChatMessageDto {
     constructor() {
         this.chat_id = null;
+        this.contact_id = null;
         this.remoteJid = '';
         this.messageType = '';
         this.content = '';
@@ -30,6 +31,11 @@ class CreateChatMessageDto {
 // Decoradores para validação
 CreateChatMessageDto.prototype.chat_id = [
     IsNotEmpty({ message: 'ID do chat é obrigatório' }),
+    IsNumber()
+];
+
+CreateChatMessageDto.prototype.contact_id = [
+    IsNotEmpty({ message: 'ID do contato é obrigatório' }),
     IsNumber()
 ];
 
