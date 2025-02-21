@@ -116,17 +116,55 @@ class ChatService {
                     logger.info('Resposta da Evolution API', { response });
 
                     // 10. Atualizar status da mensagem para enviada
-                    await this.chatMessageRepository.update(
-                        createdMessage.chat_message_id,
-                        {
-                            external_id: response?.messageId || response?.providerResponse?.key?.id,
-                            status: {
+                    const externalId = response?.messageId || response?.providerResponse?.key?.id;
+                    
+                    // Debug do createdMessage
+                    logger.info('Debug createdMessage', {
+                        createdMessage: JSON.stringify(createdMessage),
+                        messageId: createdMessage?.message_id,
+                        messageIdType: typeof createdMessage?.message_id,
+                        hasMessageId: createdMessage?.hasOwnProperty('message_id')
+                    });
+                    
+                    const client = await this.chatMessageRepository.pool.connect();
+                    try {
+                        const updateQuery = `
+                            UPDATE chat_messages
+                            SET 
+                                external_id = $1,
+                                status = $2,
+                                sent_at = $3
+                            WHERE message_id = $4
+                            RETURNING *
+                        `;
+                        const updateValues = [
+                            externalId,
+                            JSON.stringify({
                                 type: response?.status || 'SENT',
                                 timestamp: new Date().toISOString()
-                            },
-                            sent_at: new Date()
-                        }
-                    );
+                            }),
+                            new Date(),
+                            createdMessage.message_id
+                        ];
+
+                        const result = await client.query(updateQuery, updateValues);
+                        const updatedMessage = result.rows[0];
+
+                        logger.info('Mensagem atualizada com sucesso', { 
+                            messageId: updatedMessage.message_id,
+                            externalId: updatedMessage.external_id,
+                            status: updatedMessage.status
+                        });
+                    } catch (error) {
+                        logger.error('Erro ao atualizar mensagem', {
+                            error: error.message,
+                            messageId: createdMessage.chat_message_id,
+                            externalId
+                        });
+                        throw error;
+                    } finally {
+                        client.release();
+                    }
 
                     logger.info('Mensagem criada com sucesso', { 
                         messageId: createdMessage.chat_message_id,
