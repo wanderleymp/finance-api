@@ -136,106 +136,83 @@ class ChatRepository extends BaseRepository {
                             'createdAt', c.created_at,
                             'channelId', c.channel_id,
                             'allowReply', c.allow_reply,
+                            'isGroup', c.is_group,
+                            'isMuted', c.is_muted,
+                            'isPinned', c.is_pinned,
                             'unreadCount', (
                                 SELECT COUNT(*) 
-                                FROM chat_messages cm 
-                                JOIN chat_message_status cms ON cm.message_id = cms.message_id
-                                WHERE cm.chat_id = c.chat_id AND cms.status = 'UNREAD'
+                                FROM chat_messages cm2
+                                WHERE cm2.chat_id = c.chat_id 
+                                AND cm2.read_at IS NULL
                             )
                         ),
                         'channel', json_build_object(
-                            'id', cl.channel_id,
-                            'name', cl.channel_name
+                            'id', ch.channel_id,
+                            'name', ch.channel_name
                         ),
                         'lastMessage', CASE 
-                            WHEN cm.message_id IS NOT NULL THEN json_build_object(
-                                'id', cm.message_id,
-                                'content', cm.content,
-                                'contentType', cm.content_type,
-                                'direction', cm.direction,
-                                'createdAt', cm.created_at,
-                                'formattedTime', to_char(cm.created_at, 'HH24:MI')
+                            WHEN lm.message_id IS NOT NULL THEN json_build_object(
+                                'id', lm.message_id,
+                                'content', lm.content,
+                                'contentType', lm.content_type,
+                                'fileUrl', lm.file_url,
+                                'status', CASE 
+                                    WHEN lm.read_at IS NOT NULL THEN 'READ'
+                                    WHEN lm.delivered_at IS NOT NULL THEN 'DELIVERED'
+                                    ELSE 'SENT'
+                                END,
+                                'createdAt', lm.created_at,
+                                'timestamp', to_char(lm.created_at, 'YYYY-MM-DD"T"HH24:MI:SS.MS"Z"')
                             )
                             ELSE NULL
                         END,
-                        'participants', COALESCE(json_agg(
-                            json_build_object(
-                                'contactId', ct.contact_id,
-                                'contactName', ct.contact_name,
-                                'contactValue', ct.contact_value,
-                                'profilePicUrl', ct."profilePicUrl"
-                            )
-                        ) FILTER (WHERE ct.contact_id IS NOT NULL), '[]'::json),
-                        'messageStatus', CASE 
-                            WHEN cms.message_id IS NOT NULL THEN json_build_object(
-                                'messageId', cms.message_id,
-                                'status', cms.status
-                            )
-                            ELSE NULL
-                        END,
-                        'messages', COALESCE(json_agg(
-                            json_build_object(
-                                'id', msg.message_id,
-                                'content', msg.content,
-                                'contentType', msg.content_type,
-                                'direction', msg.direction,
-                                'createdAt', msg.created_at,
-                                'formattedTime', to_char(msg.created_at, 'HH24:MI'),
-                                'sender', json_build_object(
-                                    'contactId', msg_sender.contact_id,
-                                    'contactName', msg_sender.contact_name,
-                                    'profilePicUrl', msg_sender."profilePicUrl"
-                                )
-                            )
-                        ) FILTER (WHERE msg.message_id IS NOT NULL), '[]'::json)
+                        'contact', json_build_object(
+                            'id', ct.contact_id,
+                            'name', ct.contact_name,
+                            'avatar', ct."profilePicUrl"
+                        )
                     ) as chat_details
                 FROM 
                     chats c
-                JOIN 
-                    channels cl ON c.channel_id = cl.channel_id
                 LEFT JOIN 
-                    chat_messages msg ON c.chat_id = msg.chat_id
+                    channels ch ON c.channel_id = ch.channel_id
                 LEFT JOIN 
-                    contacts msg_sender ON msg.contact_id = msg_sender.contact_id
-                LEFT JOIN 
-                    chat_messages cm ON c.chat_id = cm.chat_id AND cm.created_at = (
+                    chat_messages lm ON c.chat_id = lm.chat_id
+                    AND lm.created_at = (
                         SELECT MAX(created_at) 
                         FROM chat_messages 
                         WHERE chat_id = c.chat_id
                     )
                 LEFT JOIN 
-                    chat_participants cp ON c.chat_id = cp.chat_id
-                LEFT JOIN 
-                    contacts ct ON cp.contact_id = ct.contact_id
-                LEFT JOIN 
-                    chat_message_status cms ON cm.message_id = cms.message_id
+                    contacts ct ON lm.contact_id = ct.contact_id
                 WHERE 
                     c.chat_id = $1
-                GROUP BY 
-                    c.chat_id, 
-                    cl.channel_id, 
-                    cm.message_id,
-                    cms.message_id,
-                    cms.status
             `;
 
             // Consulta de paginação de mensagens
             const messagesQuery = `
                 SELECT 
-                    msg.message_id,
+                    msg.message_id as id,
                     msg.content,
-                    msg.content_type,
-                    msg.direction,
-                    msg.created_at,
-                    to_char(msg.created_at, 'HH24:MI') as formatted_time,
-                    msg_sender.contact_id as sender_contact_id,
-                    msg_sender.contact_name as sender_contact_name,
-                    msg_sender."profilePicUrl" as sender_profile_pic,
+                    msg.content_type as "contentType",
+                    msg.file_url as "fileUrl",
+                    CASE 
+                        WHEN msg.read_at IS NOT NULL THEN 'READ'
+                        WHEN msg.delivered_at IS NOT NULL THEN 'DELIVERED'
+                        ELSE 'SENT'
+                    END as status,
+                    msg.created_at as "createdAt",
+                    to_char(msg.created_at, 'YYYY-MM-DD"T"HH24:MI:SS.MS"Z"') as timestamp,
+                    json_build_object(
+                        'id', ct.contact_id,
+                        'name', ct.contact_name,
+                        'avatar', ct."profilePicUrl"
+                    ) as contact,
                     COUNT(*) OVER() as total_messages
                 FROM 
                     chat_messages msg
                 LEFT JOIN 
-                    contacts msg_sender ON msg.contact_id = msg_sender.contact_id
+                    contacts ct ON msg.contact_id = ct.contact_id
                 WHERE 
                     msg.chat_id = $1
                 ORDER BY 
@@ -263,17 +240,14 @@ class ChatRepository extends BaseRepository {
 
             // Adicionar mensagens ao resultado
             chatDetails.messages = messagesResult.rows.map(msg => ({
-                id: msg.message_id,
+                id: msg.id,
                 content: msg.content,
-                contentType: msg.content_type,
-                direction: msg.direction,
-                createdAt: msg.created_at,
-                formattedTime: msg.formatted_time,
-                sender: {
-                    contactId: msg.sender_contact_id,
-                    contactName: msg.sender_contact_name,
-                    profilePicUrl: msg.sender_profile_pic
-                }
+                contentType: msg.contentType,
+                fileUrl: msg.fileUrl,
+                status: msg.status,
+                createdAt: msg.createdAt,
+                timestamp: msg.timestamp,
+                contact: msg.contact
             }));
 
             // Adicionar metadados de paginação
