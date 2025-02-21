@@ -20,12 +20,16 @@ class ChatRepository extends BaseRepository {
                         'content', COALESCE(lm.content, ''),
                         'type', COALESCE(lm.content_type, 'TEXT'),
                         'fileUrl', lm.file_url,
-                        'status', COALESCE(lms.status, 'UNREAD'),
+                        'status', CASE 
+                            WHEN lm.read_at IS NOT NULL THEN 'READ'
+                            WHEN lm.delivered_at IS NOT NULL THEN 'DELIVERED'
+                            ELSE 'SENT'
+                        END,
                         'timestamp', to_char(COALESCE(lm.created_at, c.created_at), 'YYYY-MM-DD"T"HH24:MI:SS.MS"Z"')
                     ) as "lastMessage",
                     (SELECT COUNT(*) FROM chat_messages cm2
-                     JOIN chat_message_status cms2 ON cm2.message_id = cms2.message_id
-                     WHERE cm2.chat_id = c.chat_id AND cms2.status = 'UNREAD'
+                     WHERE cm2.chat_id = c.chat_id 
+                     AND cm2.read_at IS NULL
                     ) as "unreadCount",
                     COALESCE(ct."profilePicUrl", '') as avatar,
                     c.is_group as "isGroup",
@@ -40,7 +44,6 @@ class ChatRepository extends BaseRepository {
                         FROM chat_messages
                         WHERE chat_id = c.chat_id
                     )
-                LEFT JOIN chat_message_status lms ON lm.message_id = lms.message_id
                 LEFT JOIN contacts ct ON lm.contact_id = ct.contact_id
                 LEFT JOIN channels ch ON c.channel_id = ch.channel_id
                 WHERE c.status = 'ACTIVE'
