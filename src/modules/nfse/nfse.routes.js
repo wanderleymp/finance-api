@@ -1,6 +1,6 @@
 const { Router } = require('express');
 const NfseController = require('./nfse.controller');
-const { validateRequest } = require('../../middlewares/validator');
+const { validate } = require('../../middlewares/validator');
 const { logger } = require('../../middlewares/logger');
 const { authMiddleware } = require('../../middlewares/auth');
 const { 
@@ -41,19 +41,19 @@ class NfseRoutes {
 
         // Buscar todos os NFSes
         this.router.get('/', 
-            (req, res, next) => validateRequest(listNFSeSchema, 'query')(req, res, next),
+            validate('query', listNFSeSchema),
             (req, res, next) => this.nfseController.findAll(req, res, next)
         );
 
         // Emitir NFSe
         this.router.post('/emitir', 
-            (req, res, next) => validateRequest(createNFSeSchema, 'body')(req, res, next),
+            (req, res, next) => validate('body', createNFSeSchema)(req, res, next),
             (req, res, next) => this.nfseController.emitirNfse(req, res, next)
         );
 
         // Criar NFSe com retorno
         this.router.post('/criar-nfse', 
-            (req, res, next) => validateRequest(createNFSeSchema, 'body')(req, res, next),
+            (req, res, next) => validate('body', createNFSeSchema)(req, res, next),
             (req, res, next) => this.nfseController.criarNfseComRetorno(req, res, next)
         );
 
@@ -79,19 +79,24 @@ class NfseRoutes {
 
         // Atualizar status do NFSe
         this.router.patch('/:id/status', 
-            (req, res, next) => validateRequest(updateStatusSchema, 'body')(req, res, next),
+            (req, res, next) => validate('body', updateStatusSchema)(req, res, next),
             (req, res, next) => this.nfseController.update(req, res, next)
         );
 
         // Cancelar NFSe
         this.router.post('/:id/cancel', 
-            (req, res, next) => validateRequest(cancelNFSeSchema, 'body')(req, res, next),
+            (req, res, next) => validate('body', cancelNFSeSchema)(req, res, next),
             (req, res, next) => this.nfseController.update(req, res, next)
         );
 
         // Processar PDF de NFSe
         this.router.post('/:id/pdf', 
             (req, res, next) => this.nfseController.processarPdf(req, res, next)
+        );
+
+        // Remover NFSe
+        this.router.delete('/:id', 
+            (req, res, next) => this.nfseController.remove(req, res, next)
         );
     }
 

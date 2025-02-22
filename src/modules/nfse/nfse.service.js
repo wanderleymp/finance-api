@@ -652,7 +652,8 @@ class NfseService {
      */
     async list({ page = 1, limit = 10, ...filters } = {}) {
         try {
-            const result = await NfseRepository.findAll(page, limit, filters);
+            logger.info('Listando NFSes', { page, limit, filters });
+            const result = await this.nfseRepository.findAll(page, limit, filters);
             return result;
         } catch (error) {
             logger.error('Erro ao listar NFSes', { error, page, limit, filters });
@@ -665,14 +666,14 @@ class NfseService {
      * @param {number} id - ID da NFSE
      * @returns {Promise<boolean>} Sucesso da remoção
      */
-    async delete(id) {
+    async remove(id) {
         try {
-            const existingNfse = await NfseRepository.findById(id);
+            const existingNfse = await this.nfseRepository.findById(id);
             if (!existingNfse) {
                 throw new NotFoundError('NFSE não encontrada');
             }
 
-            await NfseRepository.delete(id);
+            await this.nfseRepository.remove(id);
             logger.info('NFSE removida com sucesso', { nfseId: id });
             return true;
         } catch (error) {

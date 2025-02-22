@@ -142,13 +142,13 @@ class NfseController {
     /**
      * Remove um NFSe
      */
-    async delete(req, res) {
+    async remove(req, res) {
         try {
             const { id } = req.params;
-            await this.nfseService.delete(Number(id));
+            await this.nfseService.remove(Number(id));
             return successResponse(res, 204);
         } catch (error) {
-            logger.error('NfseController.delete - Erro', {
+            logger.error('NfseController.remove - Erro', {
                 error: error.message,
                 id: req.params.id
             });

@@ -6,6 +6,10 @@ const { logger } = require('./logger');
 async function validateRequest(req, property, schema) {
     try {
         const requestData = req[property];
+        if (!requestData) {
+            throw new Error(`Dados para ${property} não fornecidos na requisição.`);
+        }
+        console.log('Dados recebidos para validação:', requestData); // Log para verificar os dados
         logger.info('Validando requisição', { property, requestData });
 
         const { error, value } = schema.validate(requestData);

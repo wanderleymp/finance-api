@@ -368,9 +368,9 @@ class BaseRepository {
     /**
      * Remove um registro
      */
-    async delete(id) {
+    async remove(id) {
         try {
-            logger.debug('BaseRepository delete - input:', {
+            logger.debug('BaseRepository remove - input:', {
                 id,
                 tableName: this.tableName
             });
@@ -381,14 +381,14 @@ class BaseRepository {
                 RETURNING *
             `;
 
-            logger.debug('BaseRepository delete - query:', {
+            logger.debug('BaseRepository remove - query:', {
                 query,
                 id
             });
 
             const result = await this.pool.query(query, [id]);
 
-            logger.debug('BaseRepository delete - result:', {
+            logger.debug('BaseRepository remove - result:', {
                 result: result.rows[0]
             });
 

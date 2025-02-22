@@ -180,6 +180,80 @@ class NfseRepository extends BaseRepository {
             throw new DatabaseError('Erro ao atualizar status da NFSe', error);
         }
     }
+
+    /**
+     * Busca todas as NFSes com paginação e filtros
+     * @param {number} page - Número da página
+     * @param {number} limit - Limite de itens por página
+     * @param {Object} filters - Filtros de busca
+     * @returns {Promise<{items: Array, total: number, page: number, limit: number}>} Lista de NFSes e metadados
+     */
+    async findAll(page = 1, limit = 10, filters = {}) {
+        try {
+            const offset = (page - 1) * limit;
+            const values = [limit, offset];
+            let whereClause = '';
+            let paramCount = 3;
+
+            // Construindo a cláusula WHERE com base nos filtros
+            if (filters) {
+                const conditions = [];
+                if (filters.status) {
+                    conditions.push(`status = $${paramCount}`);
+                    values.push(filters.status);
+                    paramCount++;
+                }
+                if (filters.reference_id) {
+                    conditions.push(`reference_id = $${paramCount}`);
+                    values.push(filters.reference_id);
+                    paramCount++;
+                }
+                if (filters.prestador_cnpj) {
+                    conditions.push(`prestador_cnpj = $${paramCount}`);
+                    values.push(filters.prestador_cnpj);
+                    paramCount++;
+                }
+                if (filters.tomador_cnpj) {
+                    conditions.push(`tomador_cnpj = $${paramCount}`);
+                    values.push(filters.tomador_cnpj);
+                    paramCount++;
+                }
+                if (conditions.length > 0) {
+                    whereClause = 'WHERE ' + conditions.join(' AND ');
+                }
+            }
+
+            // Query para buscar os itens com paginação
+            const query = `
+                SELECT * FROM nfse
+                ${whereClause}
+                ORDER BY nfse_id DESC
+                LIMIT $1 OFFSET $2
+            `;
+
+            // Query para contar o total de registros
+            const countQuery = `
+                SELECT COUNT(*) as total FROM nfse ${whereClause}
+            `;
+
+            const [result, countResult] = await Promise.all([
+                this.pool.query(query, values),
+                this.pool.query(countQuery, values.slice(2))
+            ]);
+
+            const total = parseInt(countResult.rows[0].total);
+
+            return {
+                items: result.rows,
+                total,
+                page,
+                limit
+            };
+        } catch (error) {
+            logger.error('Erro ao buscar NFSes no repositório', { error, page, limit, filters });
+            throw new DatabaseError('Erro ao buscar NFSes');
+        }
+    }
 }
 
 module.exports = NfseRepository;
