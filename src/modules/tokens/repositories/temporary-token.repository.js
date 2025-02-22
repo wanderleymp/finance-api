@@ -14,6 +14,35 @@ class TemporaryTokenRepository extends BaseRepository {
    */
   async create(tokenData) {
     try {
+      // Tenta encontrar um token existente para a credencial
+      const query = `
+        SELECT *
+        FROM ${this.tableName}
+        WHERE credential_id = $1
+        LIMIT 1
+      `;
+      const queryResult = await this.pool.query(query, [tokenData.credentialId]);
+      const existingToken = queryResult.rows[0];
+
+      if (existingToken) {
+        // Se encontrou, atualiza o token
+        const result = await super.update(
+          existingToken.id,
+          {
+            token: tokenData.token,
+            expires_in_seconds: tokenData.expiresInSeconds
+          }
+        );
+
+        logger.info('Token temporário atualizado', { 
+          tokenId: result.id,
+          credentialId: result.credential_id
+        });
+
+        return result;
+      }
+
+      // Se não encontrou, cria um novo
       const result = await super.create({
         token: tokenData.token,
         credential_id: tokenData.credentialId,

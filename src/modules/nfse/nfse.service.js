@@ -908,13 +908,13 @@ class NfseService {
 
             // Criar invoice diretamente
             const invoice = await this.invoiceRepository.create({
-                reference_id: nuvemFiscalResponse.referencia,
-                type: 'NFSe',
-                status: nuvemFiscalResponse.status,
-                environment: nuvemFiscalResponse.ambiente || 'producao',
-                total_amount: nuvemFiscalResponse.valores?.servico || 0,
-                movement_id: nuvemFiscalResponse.referencia, // Assumindo que referencia é o movement_id,
-                integration_id: 10, // Valor padrão
+                reference_id: nuvemFiscalResponse.invoice.reference_id,
+                type: nuvemFiscalResponse.invoice.type,
+                status: nuvemFiscalResponse.invoice.status,
+                environment: nuvemFiscalResponse.invoice.environment,
+                total_amount: parseFloat(nuvemFiscalResponse.invoice.total_amount),
+                movement_id: nuvemFiscalResponse.invoice.movement_id,
+                integration_id: nuvemFiscalResponse.invoice.integration_id
             });
 
             logger.info('Nova invoice criada para NFSe', {

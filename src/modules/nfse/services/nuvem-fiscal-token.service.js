@@ -69,16 +69,18 @@ class NuvemFiscalTokenService {
       }
 
       // Faz requisição para obter token
+      const params = new URLSearchParams();
+      params.append('grant_type', 'client_credentials');
+      params.append('client_id', client_id);
+      params.append('client_secret', client_secret);
+      params.append('scope', 'nfse'); // Adicionando o scope necessário
+
       const response = await axios.post(
         'https://auth.nuvemfiscal.com.br/oauth/token',
-        {
-          grant_type: 'client_credentials',
-          client_id: client_id,
-          client_secret: client_secret
-        },
+        params,
         {
           headers: {
-            'Content-Type': 'application/json'
+            'Content-Type': 'application/x-www-form-urlencoded'
           }
         }
       );
