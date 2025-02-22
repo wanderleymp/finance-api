@@ -194,12 +194,20 @@ class NfseRepository extends BaseRepository {
             const values = [limit, offset];
             let whereClause = '';
             let paramCount = 3;
+            
+            const baseQuery = `
+                SELECT p.full_name, n.*, i.*
+                FROM nfse n
+                join invoices i on n.invoice_id = i.invoice_id
+                join movements m on i.movement_id = m.movement_id
+                join persons p on m.person_id = p.person_id
+            `;
 
             // Construindo a cláusula WHERE com base nos filtros
             if (filters) {
                 const conditions = [];
                 if (filters.status) {
-                    conditions.push(`status = $${paramCount}`);
+                    conditions.push(`n.status = $${paramCount}`);
                     values.push(filters.status);
                     paramCount++;
                 }
@@ -225,15 +233,24 @@ class NfseRepository extends BaseRepository {
 
             // Query para buscar os itens com paginação
             const query = `
-                SELECT * FROM nfse
+                SELECT p.full_name, n.*, i.*
+                FROM nfse n
+                join invoices i on n.invoice_id = i.invoice_id
+                join movements m on i.movement_id = m.movement_id
+                join persons p on m.person_id = p.person_id
                 ${whereClause}
-                ORDER BY nfse_id DESC
+                ORDER BY n.nfse_id DESC
                 LIMIT $1 OFFSET $2
             `;
 
             // Query para contar o total de registros
             const countQuery = `
-                SELECT COUNT(*) as total FROM nfse ${whereClause}
+                SELECT COUNT(*) as total 
+                FROM nfse n
+                join invoices i on n.invoice_id = i.invoice_id
+                join movements m on i.movement_id = m.movement_id
+                join persons p on m.person_id = p.person_id
+                ${whereClause}
             `;
 
             const [result, countResult] = await Promise.all([

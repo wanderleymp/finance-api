@@ -654,7 +654,17 @@ class NfseService {
         try {
             logger.info('Listando NFSes', { page, limit, filters });
             const result = await this.nfseRepository.findAll(page, limit, filters);
-            return result;
+            
+            // Mapear os resultados para incluir o full_name
+            const items = result.items.map(item => ({
+                ...item,
+                full_name: item.full_name || null
+            }));
+
+            return {
+                ...result,
+                items
+            };
         } catch (error) {
             logger.error('Erro ao listar NFSes', { error, page, limit, filters });
             throw error;

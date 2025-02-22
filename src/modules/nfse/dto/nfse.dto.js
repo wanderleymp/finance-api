@@ -19,6 +19,7 @@ class NFSeDTO {
       tomador_cnpj: Joi.string().length(14).optional(),
       tomador_cpf: Joi.string().length(11).optional(),
       tomador_razao_social: Joi.string().required(),
+      full_name: Joi.string().optional(),
       
       valor_total: Joi.number().precision(2).required(),
       valor_servicos: Joi.number().precision(2).required(),
