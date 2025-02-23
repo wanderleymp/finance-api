@@ -1,12 +1,21 @@
-const { FileStorageDomainService } = require('../newArch/fileStorage/domain/services/file-storage.domain.service');
-const { FileStorageAdapter } = require('../newArch/fileStorage/infra/adapters/file-storage.adapter');
-const { MinioStorageProvider } = require('../newArch/fileStorage/infra/providers/minio-storage.provider');
-const { FileStorageLoggerService } = require('../newArch/fileStorage/infra/services/file-storage-logger.service');
-const { FileStorageMetricsService } = require('../newArch/fileStorage/infra/services/file-storage-metrics.service');
+const { FileStorageDomainService } = require('./services/file-storage.domain.service');
+const { FileStorageAdapter } = require('./adapters/adapters/file-storage.adapter');
+const { MinioStorageProvider } = require('./providers/minio-storage.provider');
+const { FileStorageLoggerService } = require('./services/file-storage-logger.service');
+const { FileStorageMetricsService } = require('./services/file-storage-metrics.service');
 
 const logger = require('../middlewares/logger').logger;
 
+/**
+ * Serviço responsável pelo gerenciamento de arquivos usando MinIO como provider
+ * Este serviço é um singleton que deve ser usado por todos os módulos da aplicação
+ * para operações de armazenamento de arquivos.
+ */
 class FileStorageService {
+    /**
+     * Inicializa o serviço de armazenamento com todas as dependências necessárias
+     * Configura o MinIO client e os serviços de log e métricas
+     */
     constructor() {
         const loggerService = new FileStorageLoggerService();
         const metricsService = new FileStorageMetricsService();
@@ -20,11 +29,30 @@ class FileStorageService {
         );
     }
 
+    /**
+     * Faz upload de um arquivo para o storage
+     * @param {Buffer} file - Buffer contendo os dados do arquivo
+     * @param {Object} metadata - Metadados do arquivo
+     * @param {string} metadata.fileName - Nome do arquivo
+     * @param {string} [metadata.contentType] - Tipo de conteúdo do arquivo
+     * @param {string} [metadata.bucketName] - Nome do bucket (default: 'finance')
+     * @returns {Promise<string>} ID único do arquivo no storage
+     * @throws {Error} Se houver falha no upload
+     */
     async uploadFile(file, metadata) {
         try {
             logger.info('Iniciando upload de arquivo via serviço legado', { 
                 fileName: metadata.fileName, 
-                fileSize: file.length 
+                fileSize: file.length,
+                contentType: metadata.contentType,
+                bucketName: metadata.bucketName || 'finance'
+            });
+
+            // Log da configuração do MinIO
+            logger.debug('Configuração do MinIO', {
+                endpoint: process.env.MINIO_ENDPOINT,
+                useSSL: process.env.MINIO_USE_SSL,
+                bucketName: process.env.MINIO_BUCKET_NAME
             });
 
             const fileId = await this.domainService.uploadFile(file, {
@@ -34,10 +62,20 @@ class FileStorageService {
                 bucketName: metadata.bucketName || 'finance'
             });
 
-            logger.info('Upload de arquivo concluído', { fileId });
+            logger.info('Upload de arquivo concluído com sucesso', { 
+                fileId,
+                fileName: metadata.fileName,
+                bucketName: metadata.bucketName || 'finance'
+            });
             return fileId;
         } catch (error) {
-            logger.error('Erro no upload de arquivo', { error });
+            logger.error('Erro no upload de arquivo', { 
+                error,
+                errorCode: error.code,
+                errorMessage: error.message,
+                stack: error.stack,
+                metadata
+            });
             throw error;
         }
     }

@@ -13,7 +13,7 @@ const NuvemFiscalService = require('../nuvemFiscal/nuvemFiscal.service');
 const invoiceRepository = require('../invoices/invoice.repository');
 const invoiceEventRepository = require('../invoices/invoice-event.repository');
 const n8nService = require('../../services/n8n.service');
-const { FileStorageDomainService } = require('../../newArch/fileStorage/domain/services/file-storage.domain.service'); // Nova dependência
+const fileStorageService = require('../../services/fileStorageService'); // Serviço singleton de storage
 
 class NfseService {
     constructor() {
@@ -26,7 +26,7 @@ class NfseService {
         this.n8nService = n8nService;
 
         // Novas dependências
-        this.fileStorageService = new FileStorageDomainService();
+        this.fileStorageService = fileStorageService;
     }
 
     async emitirNfse(detailedMovement, ambiente = 'homologacao') {
@@ -1419,7 +1419,7 @@ class NfseService {
                 const metadata = {
                     contentType: 'application/pdf',
                     size: pdfBuffer.length,
-                    originalName: `nfse/pdf/nfse_${nfse.integration_nfse_id}.pdf`,
+                    fileName: `nfse/pdf/${nfse.integration_nfse_id}.pdf`,
                     bucketName: process.env.MINIO_BUCKET_NAME || 'finance',
                     tags: {
                         nfseId,
