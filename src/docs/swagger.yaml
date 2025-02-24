@@ -1,0 +1,1491 @@
+openapi: 3.0.0
+info:
+  title: Finance API
+  version: 1.0.0
+  description: API para gestão financeira
+servers:
+  - url: https://dev.agilefinance.com.br
+    description: Servidor de Desenvolvimento
+tags:
+  - name: Chats
+    description: Endpoints relacionados ao sistema de chat
+  - name: TaskDependencies
+    description: Operações relacionadas a TaskDependencies
+  - name: TaskLogs
+    description: Operações relacionadas a TaskLogs
+  - name: TaskTypes
+    description: Operações relacionadas a TaskTypes
+  - name: User
+    description: Operações relacionadas a User
+paths:
+  /api/chats:
+    get:
+      tags:
+        - Chats
+      summary: Lista todos os chats
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: query
+          name: page
+          schema:
+            type: integer
+            default: 1
+        - in: query
+          name: limit
+          schema:
+            type: integer
+            default: 10
+      responses:
+        '200':
+          description: Lista de chats retornada com sucesso
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  items:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/Chat'
+                  meta:
+                    type: object
+                    properties:
+                      totalItems:
+                        type: integer
+                      itemCount:
+                        type: integer
+                      itemsPerPage:
+                        type: integer
+                      totalPages:
+                        type: integer
+                      currentPage:
+                        type: integer
+  /api/chats/{chatId}/messages:
+    get:
+      tags:
+        - Chats
+      summary: Lista mensagens de um chat
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: path
+          name: chatId
+          required: true
+          schema:
+            type: integer
+        - in: query
+          name: page
+          schema:
+            type: integer
+            default: 1
+        - in: query
+          name: limit
+          schema:
+            type: integer
+            default: 50
+      responses:
+        '200':
+          description: Lista de mensagens retornada com sucesso
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  items:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/ChatMessage'
+                  meta:
+                    type: object
+                    properties:
+                      totalItems:
+                        type: integer
+                      currentPage:
+                        type: integer
+  /api/chats/{chatId}/status:
+    put:
+      tags:
+        - Chats
+      summary: Atualiza o status de um chat
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: path
+          name: chatId
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                status:
+                  $ref: '#/components/schemas/ChatStatus'
+      responses:
+        '200':
+          description: Status atualizado com sucesso
+  /taskdependenciess:
+    get:
+      tags:
+        - TaskDependencies
+      summary: Lista todos os taskdependenciess
+      description: Retorna uma lista paginada de taskdependenciess
+      parameters:
+        - in: query
+          name: page
+          schema:
+            type: integer
+            default: 1
+          description: Número da página
+        - in: query
+          name: limit
+          schema:
+            type: integer
+            default: 10
+          description: Itens por página
+      responses:
+        '200':
+          description: Lista de taskdependenciess
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/TaskDependencies'
+                  pagination:
+                    type: object
+                    properties:
+                      total:
+                        type: integer
+                      page:
+                        type: integer
+                      limit:
+                        type: integer
+        '401':
+          description: Não autorizado
+        '500':
+          description: Erro interno do servidor
+    post:
+      tags:
+        - TaskDependencies
+      summary: Cria um novo taskdependencies
+      description: Cria um novo taskdependencies com os dados fornecidos
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateTaskDependencies'
+      responses:
+        '201':
+          description: TaskDependencies criado com sucesso
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TaskDependencies'
+        '400':
+          description: Dados inválidos
+        '401':
+          description: Não autorizado
+        '500':
+          description: Erro interno do servidor
+  /taskdependenciess/{id}:
+    get:
+      tags:
+        - TaskDependencies
+      summary: Busca um taskdependencies por ID
+      description: Retorna um único taskdependencies pelo ID
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: integer
+          description: ID do taskdependencies
+      responses:
+        '200':
+          description: TaskDependencies encontrado
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TaskDependencies'
+        '401':
+          description: Não autorizado
+        '404':
+          description: TaskDependencies não encontrado
+        '500':
+          description: Erro interno do servidor
+    put:
+      tags:
+        - TaskDependencies
+      summary: Atualiza um taskdependencies
+      description: Atualiza um taskdependencies existente pelo ID
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: integer
+          description: ID do taskdependencies
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdateTaskDependencies'
+      responses:
+        '200':
+          description: TaskDependencies atualizado com sucesso
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TaskDependencies'
+        '400':
+          description: Dados inválidos
+        '401':
+          description: Não autorizado
+        '404':
+          description: TaskDependencies não encontrado
+        '500':
+          description: Erro interno do servidor
+    delete:
+      tags:
+        - TaskDependencies
+      summary: Remove um taskdependencies
+      description: Remove um taskdependencies existente pelo ID
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: integer
+          description: ID do taskdependencies
+      responses:
+        '204':
+          description: TaskDependencies removido com sucesso
+        '401':
+          description: Não autorizado
+        '404':
+          description: TaskDependencies não encontrado
+        '500':
+          description: Erro interno do servidor
+  /taskdependenciess/refresh:
+    post:
+      tags:
+        - TaskDependencies
+      summary: Atualiza o token de acesso
+      description: Gera um novo token de acesso usando o refresh token
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                refreshToken:
+                  type: string
+                  description: Refresh token válido
+              required:
+                - refreshToken
+      responses:
+        '200':
+          description: Novo token gerado com sucesso
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  accessToken:
+                    type: string
+                    description: Novo token de acesso
+                  refreshToken:
+                    type: string
+                    description: Novo refresh token
+                  expiresIn:
+                    type: integer
+                    description: Tempo de expiração em segundos
+        '401':
+          description: Refresh token inválido ou expirado
+        '500':
+          description: Erro interno do servidor
+  /tasklogss:
+    get:
+      tags:
+        - TaskLogs
+      summary: Lista todos os tasklogss
+      description: Retorna uma lista paginada de tasklogss
+      parameters:
+        - in: query
+          name: page
+          schema:
+            type: integer
+            default: 1
+          description: Número da página
+        - in: query
+          name: limit
+          schema:
+            type: integer
+            default: 10
+          description: Itens por página
+      responses:
+        '200':
+          description: Lista de tasklogss
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/TaskLogs'
+                  pagination:
+                    type: object
+                    properties:
+                      total:
+                        type: integer
+                      page:
+                        type: integer
+                      limit:
+                        type: integer
+        '401':
+          description: Não autorizado
+        '500':
+          description: Erro interno do servidor
+    post:
+      tags:
+        - TaskLogs
+      summary: Cria um novo tasklogs
+      description: Cria um novo tasklogs com os dados fornecidos
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateTaskLogs'
+      responses:
+        '201':
+          description: TaskLogs criado com sucesso
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TaskLogs'
+        '400':
+          description: Dados inválidos
+        '401':
+          description: Não autorizado
+        '500':
+          description: Erro interno do servidor
+  /tasklogss/{id}:
+    get:
+      tags:
+        - TaskLogs
+      summary: Busca um tasklogs por ID
+      description: Retorna um único tasklogs pelo ID
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: integer
+          description: ID do tasklogs
+      responses:
+        '200':
+          description: TaskLogs encontrado
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TaskLogs'
+        '401':
+          description: Não autorizado
+        '404':
+          description: TaskLogs não encontrado
+        '500':
+          description: Erro interno do servidor
+    put:
+      tags:
+        - TaskLogs
+      summary: Atualiza um tasklogs
+      description: Atualiza um tasklogs existente pelo ID
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: integer
+          description: ID do tasklogs
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdateTaskLogs'
+      responses:
+        '200':
+          description: TaskLogs atualizado com sucesso
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TaskLogs'
+        '400':
+          description: Dados inválidos
+        '401':
+          description: Não autorizado
+        '404':
+          description: TaskLogs não encontrado
+        '500':
+          description: Erro interno do servidor
+    delete:
+      tags:
+        - TaskLogs
+      summary: Remove um tasklogs
+      description: Remove um tasklogs existente pelo ID
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: integer
+          description: ID do tasklogs
+      responses:
+        '204':
+          description: TaskLogs removido com sucesso
+        '401':
+          description: Não autorizado
+        '404':
+          description: TaskLogs não encontrado
+        '500':
+          description: Erro interno do servidor
+  /tasklogss/refresh:
+    post:
+      tags:
+        - TaskLogs
+      summary: Atualiza o token de acesso
+      description: Gera um novo token de acesso usando o refresh token
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                refreshToken:
+                  type: string
+                  description: Refresh token válido
+              required:
+                - refreshToken
+      responses:
+        '200':
+          description: Novo token gerado com sucesso
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  accessToken:
+                    type: string
+                    description: Novo token de acesso
+                  refreshToken:
+                    type: string
+                    description: Novo refresh token
+                  expiresIn:
+                    type: integer
+                    description: Tempo de expiração em segundos
+        '401':
+          description: Refresh token inválido ou expirado
+        '500':
+          description: Erro interno do servidor
+  /tasktypess:
+    get:
+      tags:
+        - TaskTypes
+      summary: Lista todos os tasktypess
+      description: Retorna uma lista paginada de tasktypess
+      parameters:
+        - in: query
+          name: page
+          schema:
+            type: integer
+            default: 1
+          description: Número da página
+        - in: query
+          name: limit
+          schema:
+            type: integer
+            default: 10
+          description: Itens por página
+      responses:
+        '200':
+          description: Lista de tasktypess
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/TaskTypes'
+                  pagination:
+                    type: object
+                    properties:
+                      total:
+                        type: integer
+                      page:
+                        type: integer
+                      limit:
+                        type: integer
+        '401':
+          description: Não autorizado
+        '500':
+          description: Erro interno do servidor
+    post:
+      tags:
+        - TaskTypes
+      summary: Cria um novo tasktypes
+      description: Cria um novo tasktypes com os dados fornecidos
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateTaskTypes'
+      responses:
+        '201':
+          description: TaskTypes criado com sucesso
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TaskTypes'
+        '400':
+          description: Dados inválidos
+        '401':
+          description: Não autorizado
+        '500':
+          description: Erro interno do servidor
+  /tasktypess/{id}:
+    get:
+      tags:
+        - TaskTypes
+      summary: Busca um tasktypes por ID
+      description: Retorna um único tasktypes pelo ID
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: integer
+          description: ID do tasktypes
+      responses:
+        '200':
+          description: TaskTypes encontrado
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TaskTypes'
+        '401':
+          description: Não autorizado
+        '404':
+          description: TaskTypes não encontrado
+        '500':
+          description: Erro interno do servidor
+    put:
+      tags:
+        - TaskTypes
+      summary: Atualiza um tasktypes
+      description: Atualiza um tasktypes existente pelo ID
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: integer
+          description: ID do tasktypes
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdateTaskTypes'
+      responses:
+        '200':
+          description: TaskTypes atualizado com sucesso
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TaskTypes'
+        '400':
+          description: Dados inválidos
+        '401':
+          description: Não autorizado
+        '404':
+          description: TaskTypes não encontrado
+        '500':
+          description: Erro interno do servidor
+    delete:
+      tags:
+        - TaskTypes
+      summary: Remove um tasktypes
+      description: Remove um tasktypes existente pelo ID
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: integer
+          description: ID do tasktypes
+      responses:
+        '204':
+          description: TaskTypes removido com sucesso
+        '401':
+          description: Não autorizado
+        '404':
+          description: TaskTypes não encontrado
+        '500':
+          description: Erro interno do servidor
+  /tasktypess/refresh:
+    post:
+      tags:
+        - TaskTypes
+      summary: Atualiza o token de acesso
+      description: Gera um novo token de acesso usando o refresh token
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                refreshToken:
+                  type: string
+                  description: Refresh token válido
+              required:
+                - refreshToken
+      responses:
+        '200':
+          description: Novo token gerado com sucesso
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  accessToken:
+                    type: string
+                    description: Novo token de acesso
+                  refreshToken:
+                    type: string
+                    description: Novo refresh token
+                  expiresIn:
+                    type: integer
+                    description: Tempo de expiração em segundos
+        '401':
+          description: Refresh token inválido ou expirado
+        '500':
+          description: Erro interno do servidor
+  /users:
+    get:
+      tags:
+        - User
+      summary: Lista todos os users
+      description: Retorna uma lista paginada de users
+      parameters:
+        - in: query
+          name: page
+          schema:
+            type: integer
+            default: 1
+          description: Número da página
+        - in: query
+          name: limit
+          schema:
+            type: integer
+            default: 10
+          description: Itens por página
+      responses:
+        '200':
+          description: Lista de users
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/User'
+                  pagination:
+                    type: object
+                    properties:
+                      total:
+                        type: integer
+                      page:
+                        type: integer
+                      limit:
+                        type: integer
+        '401':
+          description: Não autorizado
+        '500':
+          description: Erro interno do servidor
+    post:
+      tags:
+        - User
+      summary: Cria um novo user
+      description: Cria um novo user com os dados fornecidos
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateUser'
+      responses:
+        '201':
+          description: User criado com sucesso
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/User'
+        '400':
+          description: Dados inválidos
+        '401':
+          description: Não autorizado
+        '500':
+          description: Erro interno do servidor
+  /users/{id}:
+    get:
+      tags:
+        - User
+      summary: Busca um user por ID
+      description: Retorna um único user pelo ID
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: integer
+          description: ID do user
+      responses:
+        '200':
+          description: User encontrado
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/User'
+        '401':
+          description: Não autorizado
+        '404':
+          description: User não encontrado
+        '500':
+          description: Erro interno do servidor
+    put:
+      tags:
+        - User
+      summary: Atualiza um user
+      description: Atualiza um user existente pelo ID
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: integer
+          description: ID do user
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdateUser'
+      responses:
+        '200':
+          description: User atualizado com sucesso
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/User'
+        '400':
+          description: Dados inválidos
+        '401':
+          description: Não autorizado
+        '404':
+          description: User não encontrado
+        '500':
+          description: Erro interno do servidor
+    delete:
+      tags:
+        - User
+      summary: Remove um user
+      description: Remove um user existente pelo ID
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: integer
+          description: ID do user
+      responses:
+        '204':
+          description: User removido com sucesso
+        '401':
+          description: Não autorizado
+        '404':
+          description: User não encontrado
+        '500':
+          description: Erro interno do servidor
+  /users/refresh:
+    post:
+      tags:
+        - User
+      summary: Atualiza o token de acesso
+      description: Gera um novo token de acesso usando o refresh token
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                refreshToken:
+                  type: string
+                  description: Refresh token válido
+              required:
+                - refreshToken
+      responses:
+        '200':
+          description: Novo token gerado com sucesso
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  accessToken:
+                    type: string
+                    description: Novo token de acesso
+                  refreshToken:
+                    type: string
+                    description: Novo refresh token
+                  expiresIn:
+                    type: integer
+                    description: Tempo de expiração em segundos
+        '401':
+          description: Refresh token inválido ou expirado
+        '500':
+          description: Erro interno do servidor
+components:
+  schemas:
+    Address:
+      type: object
+      properties:
+        id:
+          type: integer
+          description: ID do endereço
+        street:
+          type: string
+          description: Logradouro
+        number:
+          type: string
+          description: Número
+        complement:
+          type: string
+          description: Complemento
+        neighborhood:
+          type: string
+          description: Bairro
+        city:
+          type: string
+          description: Cidade
+        state:
+          type: string
+          description: Estado
+        postal_code:
+          type: string
+          description: CEP
+        country:
+          type: string
+          description: País
+        reference:
+          type: string
+          description: Referência
+        ibge:
+          type: integer
+          description: Código IBGE
+        is_main:
+          type: boolean
+          description: Se é o endereço principal
+    Boleto:
+      type: object
+      properties:
+        boleto_id:
+          type: integer
+          description: ID único do boleto
+        installment_id:
+          type: integer
+          description: ID da parcela associada
+        due_date:
+          type: string
+          format: date
+          description: Data de vencimento
+        amount:
+          type: number
+          format: float
+          description: Valor do boleto
+        status:
+          type: string
+          enum:
+            - A Emitir
+            - Emitido
+            - Cancelado
+            - Pago
+          description: Status atual do boleto
+        url:
+          type: string
+          description: URL para visualização/download do boleto
+        barcode:
+          type: string
+          description: Código de barras do boleto
+        our_number:
+          type: string
+          description: Nosso número
+        description:
+          type: string
+          description: Descrição do boleto
+        created_at:
+          type: string
+          format: date-time
+          description: Data de criação
+        updated_at:
+          type: string
+          format: date-time
+          description: Data da última atualização
+      required:
+        - installment_id
+        - due_date
+        - amount
+    BoletoCancel:
+      type: object
+      properties:
+        reason:
+          type: string
+          description: Motivo do cancelamento
+      required:
+        - reason
+    BoletoCreate:
+      type: object
+      properties:
+        installment_id:
+          type: integer
+          description: ID da parcela
+        due_date:
+          type: string
+          format: date
+          description: Data de vencimento
+        amount:
+          type: number
+          format: float
+          description: Valor do boleto
+        description:
+          type: string
+          description: Descrição do boleto
+      required:
+        - installment_id
+        - due_date
+        - amount
+    BoletoUpdate:
+      type: object
+      properties:
+        due_date:
+          type: string
+          format: date
+          description: Nova data de vencimento
+        amount:
+          type: number
+          format: float
+          description: Novo valor do boleto
+        status:
+          type: string
+          enum:
+            - A Emitir
+            - Cancelado
+          description: Novo status do boleto
+    ChatMessage:
+      type: object
+      properties:
+        id:
+          type: integer
+          format: int64
+          example: 1
+        content:
+          type: string
+          example: Olá, como vai?
+        type:
+          type: string
+          enum:
+            - text
+            - image
+            - file
+          example: text
+        sender:
+          type: object
+          properties:
+            id:
+              type: integer
+              example: 1
+            name:
+              type: string
+              example: João Silva
+        createdAt:
+          type: string
+          format: date-time
+    ChatStatus:
+      type: string
+      enum:
+        - active
+        - archived
+        - deleted
+      example: active
+    ChatType:
+      type: string
+      enum:
+        - individual
+        - group
+      example: individual
+    Contact:
+      type: object
+      properties:
+        contact_id:
+          type: integer
+          description: ID do contato
+        contact_type:
+          type: string
+          enum:
+            - EMAIL
+            - PHONE
+            - WHATSAPP
+          description: Tipo do contato
+        contact_value:
+          type: string
+          description: Valor do contato
+        contact_name:
+          type: string
+          description: Nome do contato
+    CreateAddress:
+      type: object
+      required:
+        - street
+        - number
+        - neighborhood
+        - city
+        - state
+        - postal_code
+      properties:
+        street:
+          type: string
+          description: Logradouro
+        number:
+          type: string
+          description: Número
+        complement:
+          type: string
+          description: Complemento
+        neighborhood:
+          type: string
+          description: Bairro
+        city:
+          type: string
+          description: Cidade
+        state:
+          type: string
+          description: Estado
+        postal_code:
+          type: string
+          description: CEP
+        country:
+          type: string
+          default: Brasil
+          description: País
+        reference:
+          type: string
+          description: Referência
+        ibge:
+          type: integer
+          description: Código IBGE
+        is_main:
+          type: boolean
+          default: false
+          description: Se é o endereço principal
+    CreateContact:
+      type: object
+      required:
+        - contact_type
+        - contact_value
+      properties:
+        contact_type:
+          type: string
+          enum:
+            - EMAIL
+            - PHONE
+            - WHATSAPP
+          description: Tipo do contato
+        contact_value:
+          type: string
+          description: Valor do contato
+        contact_name:
+          type: string
+          description: Nome do contato
+    CreateDocument:
+      type: object
+      required:
+        - document_type
+        - document_value
+      properties:
+        document_type:
+          type: string
+          enum:
+            - CPF
+            - CNPJ
+            - RG
+          description: Tipo do documento
+        document_value:
+          type: string
+          description: Valor do documento
+    CreateMovementItem:
+      type: object
+      required:
+        - item_id
+        - quantity
+        - unit_price
+      properties:
+        item_id:
+          type: integer
+          description: ID do item
+        description:
+          type: string
+          description: Descrição adicional do item
+        quantity:
+          type: number
+          format: float
+          description: Quantidade
+        unit_price:
+          type: number
+          format: float
+          description: Preço unitário
+    CreatePerson:
+      type: object
+      required:
+        - full_name
+        - type
+      properties:
+        full_name:
+          type: string
+          description: Nome completo
+        fantasy_name:
+          type: string
+          description: Nome fantasia (para PJ)
+        birth_date:
+          type: string
+          format: date
+          description: Data de nascimento/fundação
+        type:
+          type: string
+          enum:
+            - PF
+            - PJ
+          description: Tipo de pessoa
+    CreateTaskDependencies:
+      type: object
+      properties: null
+      required: null
+    CreateTaskLogs:
+      type: object
+      properties: null
+      required: null
+    CreateTaskTypes:
+      type: object
+      properties: null
+      required: null
+    CreateUser:
+      type: object
+      properties: null
+      required: null
+    Document:
+      type: object
+      properties:
+        person_document_id:
+          type: integer
+          description: ID do documento
+        person_id:
+          type: integer
+          description: ID da pessoa
+        document_type:
+          type: string
+          enum:
+            - CPF
+            - CNPJ
+            - RG
+          description: Tipo do documento
+        document_value:
+          type: string
+          description: Valor do documento
+    Error:
+      type: object
+      properties:
+        message:
+          type: string
+          description: Mensagem de erro
+        code:
+          type: string
+          description: Código do erro
+    MovementItem:
+      type: object
+      properties:
+        movement_item_id:
+          type: integer
+          description: ID do item do movimento
+        movement_id:
+          type: integer
+          description: ID do movimento
+        item_id:
+          type: integer
+          description: ID do item
+        item_name:
+          type: string
+          description: Nome do item
+        description:
+          type: string
+          description: Descrição adicional do item
+        quantity:
+          type: number
+          format: float
+          description: Quantidade
+        unit_price:
+          type: number
+          format: float
+          description: Preço unitário
+        total_price:
+          type: number
+          format: float
+          description: Preço total (quantidade * preço unitário)
+        created_at:
+          type: string
+          format: date-time
+          description: Data de criação
+        updated_at:
+          type: string
+          format: date-time
+          description: Data de atualização
+    Pagination:
+      type: object
+      properties:
+        total:
+          type: integer
+          description: Total de registros
+        page:
+          type: integer
+          description: Página atual
+        limit:
+          type: integer
+          description: Itens por página
+        totalPages:
+          type: integer
+          description: Total de páginas
+    PaginationMeta:
+      type: object
+      properties:
+        totalItems:
+          type: integer
+          description: Total de itens
+        itemCount:
+          type: integer
+          description: Quantidade de itens na página atual
+        itemsPerPage:
+          type: integer
+          description: Itens por página
+        totalPages:
+          type: integer
+          description: Total de páginas
+        currentPage:
+          type: integer
+          description: Página atual
+    Person:
+      type: object
+      properties:
+        person_id:
+          type: integer
+          description: ID da pessoa
+        full_name:
+          type: string
+          description: Nome completo
+        fantasy_name:
+          type: string
+          description: Nome fantasia (para PJ)
+        birth_date:
+          type: string
+          format: date
+          description: Data de nascimento/fundação
+        type:
+          type: string
+          enum:
+            - PF
+            - PJ
+          description: Tipo de pessoa
+        created_at:
+          type: string
+          format: date-time
+          description: Data de criação
+        updated_at:
+          type: string
+          format: date-time
+          description: Data de atualização
+    PersonDetails:
+      allOf:
+        - $ref: '#/components/schemas/Person'
+        - type: object
+          properties:
+            documents:
+              type: array
+              items:
+                $ref: '#/components/schemas/Document'
+            contacts:
+              type: array
+              items:
+                $ref: '#/components/schemas/Contact'
+            addresses:
+              type: array
+              items:
+                $ref: '#/components/schemas/Address'
+    TaskDependencies:
+      type: object
+      properties:
+        id:
+          type: integer
+          description: ID único do taskdependencies
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+    TaskLogs:
+      type: object
+      properties:
+        id:
+          type: integer
+          description: ID único do tasklogs
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+    TaskTypes:
+      type: object
+      properties:
+        id:
+          type: integer
+          description: ID único do tasktypes
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+    UpdateAddress:
+      type: object
+      properties:
+        street:
+          type: string
+        number:
+          type: string
+        complement:
+          type: string
+        neighborhood:
+          type: string
+        city:
+          type: string
+        state:
+          type: string
+        postal_code:
+          type: string
+        country:
+          type: string
+        reference:
+          type: string
+        ibge:
+          type: string
+        is_main:
+          type: boolean
+    UpdateContact:
+      type: object
+      properties:
+        contact_type:
+          type: string
+          enum:
+            - EMAIL
+            - PHONE
+            - WHATSAPP
+          description: Tipo do contato
+        contact_value:
+          type: string
+          description: Valor do contato
+        contact_name:
+          type: string
+          description: Nome do contato
+    UpdatePerson:
+      type: object
+      properties:
+        full_name:
+          type: string
+          description: Nome completo
+        fantasy_name:
+          type: string
+          description: Nome fantasia (para PJ)
+        birth_date:
+          type: string
+          format: date
+          description: Data de nascimento/fundação
+    UpdateTaskDependencies:
+      type: object
+      properties: null
+    UpdateTaskLogs:
+      type: object
+      properties: null
+    UpdateTaskTypes:
+      type: object
+      properties: null
+    UpdateUser:
+      type: object
+      properties: null
+    User:
+      type: object
+      properties:
+        id:
+          type: integer
+          description: ID único do user
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+    WebSocketEvent:
+      type: object
+      properties:
+        event:
+          type: string
+          example: message
+        data:
+          type: object
+          example:
+            chatId: 1
+            content: Olá!
+            type: text
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT

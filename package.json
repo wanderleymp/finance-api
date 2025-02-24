@@ -5,8 +5,8 @@
   "main": "src/app.js",
   "scripts": {
     "build:ts": "tsc",
-    "start": "npm run build:ts && node --expose-gc --gc-global src/server.js",
-    "dev": "clear && kill -9 $(lsof -t -i:3000) || true && nodemon --expose-gc --gc-global src/server.js",
+    "start": "npm run build:ts && npm run docs:generate && node --expose-gc --gc-global src/server.js",
+    "dev": "clear && kill -9 $(lsof -t -i:3000) || true && npm run docs:watch & nodemon --expose-gc --gc-global src/server.js",
     "test": "jest",
     "test:watch": "jest --watch",
     "test:coverage": "jest --coverage",
@@ -26,7 +26,9 @@
     "docker:build:main": "docker build --platform linux/amd64 -t wanderleymp/finance-api:main .",
     "release": "node scripts/release.js",
     "deploy": "bash scripts/deploy.sh",
-    "generate:module": "node scripts/generate-module.js"
+    "generate:module": "node scripts/generate-module.js",
+    "docs:generate": "node scripts/generate-swagger.js",
+    "docs:watch": "node scripts/watch-swagger.js"
   },
   "keywords": [
     "finance",
@@ -48,6 +50,7 @@
     "bcrypt": "^5.1.1",
     "bcryptjs": "^2.4.3",
     "body-parser": "^1.20.2",
+    "chokidar": "^4.0.3",
     "class-transformer": "^0.5.1",
     "class-validator": "^0.14.1",
     "compression": "^1.7.5",

@@ -1,36 +1,21 @@
-const swaggerJsdoc = require('swagger-jsdoc');
 const path = require('path');
 
-// Configuração base do Swagger
-const options = {
-    definition: {
+// Carrega a especificação Swagger gerada
+let swaggerSpec;
+try {
+    swaggerSpec = require('../docs/swagger.json');
+} catch (error) {
+    console.error('Erro ao carregar documentação Swagger. Execute: node scripts/generate-swagger.js');
+    // Fornece uma especificação mínima para evitar erros
+    swaggerSpec = {
         openapi: '3.0.0',
         info: {
             title: 'Finance API',
             version: '1.0.0',
-            description: 'API para gestão financeira'
+            description: 'API para gestão financeira (Documentação não gerada)'
         },
-        servers: [
-            {
-                url: 'http://localhost:3000',
-                description: 'Servidor de desenvolvimento local'
-            }
-        ],
-        components: {
-            securitySchemes: {
-                bearerAuth: {
-                    type: 'http',
-                    scheme: 'bearer',
-                    bearerFormat: 'JWT'
-                }
-            }
-        }
-    },
-    apis: [
-        path.join(__dirname, '../modules/**/routes.js'),
-        path.join(__dirname, '../modules/**/docs/*.yaml'),
-        path.join(__dirname, '../modules/**/docs/*.js')
-    ]
-};
+        paths: {}
+    };
+}
 
-module.exports = swaggerJsdoc(options);
+module.exports = swaggerSpec;
