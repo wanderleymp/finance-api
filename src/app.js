@@ -1,3 +1,17 @@
+const CacheHelper = require('./helpers/cache.helper');
+
+const redisConfig = {
+    host: process.env.REDIS_AGILE_HOST || '10.1.0.4',
+    port: parseInt(process.env.REDIS_AGILE_PORT || '6380'),
+    password: process.env.REDIS_AGILE_PASSWORD,
+    db: parseInt(process.env.REDIS_AGILE_DB || '0')
+};
+
+// Inicializa o cache com a configuração desejada
+CacheHelper.initialize({ enabled: true, provider: 'redis', redis: redisConfig });
+// Ou para usar o cache em memória
+// CacheHelper.initialize({ enabled: true, provider: 'memory' });
+
 const express = require('express');
 const cors = require('cors');
 const helmet = require('helmet');

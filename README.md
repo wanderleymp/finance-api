@@ -566,3 +566,68 @@ Por favor, leia [CONTRIBUTING.md](CONTRIBUTING.md) para detalhes sobre nosso có
 
 ## Licença
 Este projeto está licenciado sob a Licença MIT - veja o arquivo [LICENSE.md](LICENSE.md) para detalhes.
+
+## Sistema de Cache
+
+Este documento fornece orientações sobre como utilizar o sistema de cache implementado na aplicação.
+
+### Estrutura do Cache
+
+O sistema de cache é composto por três partes principais:
+
+1. **Providers de Cache**: Implementações que definem como os dados são armazenados e recuperados.
+   - `MemoryCacheProvider`: Armazena dados na memória.
+   - `RedisCacheProvider`: Armazena dados no Redis.
+
+2. **Cache Factory**: Uma fábrica que cria instâncias do provider de cache apropriado com base na configuração.
+
+3. **Cache Helper**: Um helper que facilita a interação com o cache, permitindo operações como [getOrSet](cci:1://file:///root/finance-api/src/helpers/cache.helper.js:19:4-44:5).
+
+### Inicialização do Cache
+
+Para usar o cache, você deve inicializá-lo no início da sua aplicação. Aqui está um exemplo de como fazer isso:
+
+```javascript
+const CacheHelper = require('./src/helpers/cache.helper');
+
+const redisConfig = {
+    host: process.env.REDIS_AGILE_HOST || '10.1.0.4',
+    port: parseInt(process.env.REDIS_AGILE_PORT || '6380'),
+    password: process.env.REDIS_AGILE_PASSWORD,
+    db: parseInt(process.env.REDIS_AGILE_DB || '0')
+};
+
+// Inicializa o cache com a configuração desejada
+CacheHelper.initialize({ enabled: true, provider: 'redis', redis: redisConfig });
+// Ou para usar o cache em memória
+// CacheHelper.initialize({ enabled: true, provider: 'memory' });
+```
+
+### Usando o Cache
+
+#### Armazenar e Recuperar Dados
+
+Você pode usar o [CacheHelper](cci:2://file:///root/finance-api/src/helpers/cache.helper.js:2:0-45:1) para armazenar e recuperar dados facilmente:
+
+```javascript
+const resultado = await CacheHelper.getOrSet('chave:exemplo', async () => {
+    // Esta função será chamada se a chave não estiver no cache
+    return { mensagem: 'Olá, mundo!' };
+});
+console.log(resultado); // { mensagem: 'Olá, mundo!' }
+```
+
+#### Limpar o Cache
+
+Você também pode limpar o cache a qualquer momento:
+
+```javascript
+const cache = CacheHelper.getInstance();
+await cache.clear();
+```
+
+### Conclusão
+
+Este sistema de cache é flexível e pode ser facilmente integrado em diferentes partes da aplicação. Sinta-se à vontade para ajustar a configuração conforme necessário.
+
+Para mais informações, consulte a documentação dos providers de cache.
