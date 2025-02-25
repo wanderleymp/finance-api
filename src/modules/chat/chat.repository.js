@@ -11,43 +11,56 @@ class ChatRepository extends BaseRepository {
         try {
             const offset = (page - 1) * limit;
 
-            // Consulta base simplificada
+            // Consulta base otimizada
             const baseQuery = `
                 SELECT 
                     c.chat_id as id,
-                    COALESCE(ct.contact_name, 'Grupo ' || c.chat_id) as name,
+                    COALESCE(ct.contact_name, ct.contact_value, 'Grupo ' || c.chat_id) as name,
+                    c.channel_id,
+                    cl.channel_name as "channelType",
+                    ct.contact_value as "contactValue",
+                    ct.contact_id as "lastContactId",
+                    COALESCE(ct."profilePicUrl", '') as avatar,
                     json_build_object(
-                        'content', COALESCE(lm.content, ''),
-                        'type', COALESCE(lm.content_type, 'TEXT'),
-                        'fileUrl', lm.file_url,
+                        'content', COALESCE(cm.content, ''),
+                        'type', COALESCE(cm.content_type, 'TEXT'),
+                        'fileUrl', cm.file_url,
                         'status', CASE 
-                            WHEN lm.read_at IS NOT NULL THEN 'READ'
-                            WHEN lm.delivered_at IS NOT NULL THEN 'DELIVERED'
+                            WHEN cms.status = 'READ' THEN 'READ'
+                            WHEN cm.delivered_at IS NOT NULL THEN 'DELIVERED'
                             ELSE 'SENT'
                         END,
-                        'timestamp', to_char(COALESCE(lm.created_at, c.created_at), 'YYYY-MM-DD"T"HH24:MI:SS.MS"Z"')
+                        'timestamp', to_char(cm.created_at, 'YYYY-MM-DD"T"HH24:MI:SS.MS"Z"')
                     ) as "lastMessage",
-                    (SELECT COUNT(*) FROM chat_messages cm2
-                     WHERE cm2.chat_id = c.chat_id 
-                     AND cm2.read_at IS NULL
+                    (
+                        SELECT COUNT(*) 
+                        FROM chat_messages cm2
+                        LEFT JOIN chat_message_status cms2 ON cm2.message_id = cms2.message_id
+                        WHERE cm2.chat_id = c.chat_id 
+                        AND (cms2.status IS NULL OR cms2.status = 'UNREAD')
                     ) as "unreadCount",
-                    COALESCE(ct."profilePicUrl", '') as avatar,
                     c.is_group as "isGroup",
-                    c.is_muted as "isMuted",
-                    c.is_pinned as "isPinned",
-                    ch.channel_name as "channelType"
-                FROM 
-                    chats c
-                LEFT JOIN chat_messages lm ON c.chat_id = lm.chat_id
-                    AND lm.created_at = (
-                        SELECT MAX(created_at)
-                        FROM chat_messages
-                        WHERE chat_id = c.chat_id
-                    )
-                LEFT JOIN contacts ct ON lm.contact_id = ct.contact_id
-                LEFT JOIN channels ch ON c.channel_id = ch.channel_id
+                    COALESCE(c.is_muted, false) as "isMuted",
+                    COALESCE(c.is_pinned, false) as "isPinned",
+                    'OFFLINE' as "contactStatus"
+                FROM chats c
+                JOIN (
+                    SELECT DISTINCT ON (chat_id) 
+                        chat_id,
+                        message_id,
+                        contact_id,
+                        content,
+                        content_type,
+                        file_url,
+                        delivered_at,
+                        created_at
+                    FROM chat_messages 
+                    ORDER BY chat_id, created_at DESC
+                ) cm ON c.chat_id = cm.chat_id
+                JOIN contacts ct ON cm.contact_id = ct.contact_id
+                JOIN channels cl ON c.channel_id = cl.channel_id
+                LEFT JOIN chat_message_status cms ON cm.message_id = cms.message_id
                 WHERE c.status = 'ACTIVE'
-
             `;
 
             // Adicionar filtros
@@ -72,7 +85,7 @@ class ChatRepository extends BaseRepository {
                 ${baseQuery} 
                 ${whereClause}
                 ORDER BY 
-                    c.created_at DESC
+                    cm.created_at DESC
                 LIMIT $${paramCount} OFFSET $${paramCount + 1}
             `;
 
