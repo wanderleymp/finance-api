@@ -58,6 +58,14 @@ services:
       - "traefik.http.routers.api.tls=true"
       - "traefik.http.routers.api.tls.certresolver=letsencrypt"
       - "traefik.http.services.api.loadbalancer.server.port=3000"
+      - "traefik.http.middlewares.websocket.headers.customrequestheaders.Connection=Upgrade"
+      - "traefik.http.middlewares.websocket.headers.customrequestheaders.Upgrade=websocket"
+      - "traefik.http.routers.websocket.rule=Host(`dev.agilefinance.com.br`) && PathPrefix(`/socket.io`)"
+      - "traefik.http.routers.websocket.entrypoints=websecure"
+      - "traefik.http.routers.websocket.tls=true"
+      - "traefik.http.routers.websocket.tls.certresolver=letsencrypt"
+      - "traefik.http.routers.websocket.service=api"
+      - "traefik.http.routers.websocket.middlewares=websocket"
 
 networks:
   AgileNet:

@@ -4,8 +4,8 @@ info:
   version: 1.0.0
   description: API para gestão financeira
 servers:
-  - url: https://dev.agilefinance.com.br
-    description: Servidor de Desenvolvimento
+  - url: http://localhost:3000
+    description: Servidor Local
 tags:
   - name: Chats
     description: Endpoints relacionados ao sistema de chat

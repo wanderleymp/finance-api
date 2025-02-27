@@ -157,21 +157,55 @@ class ContactRepository extends BaseRepository {
 
     async findByValueAndType(value, type, { client = null } = {}) {
         try {
-            const queryClient = client || this.pool;
             const query = `
                 SELECT *
-                FROM ${this.tableName}
+                FROM contacts
                 WHERE contact_value = $1
                 AND contact_type = $2
                 LIMIT 1
             `;
-            const result = await queryClient.query(query, [value, type]);
+            const values = [value, type];
+
+            const result = client 
+                ? await client.query(query, values)
+                : await this.pool.query(query, values);
+            
             return result.rows[0] ? ContactResponseDTO.fromDatabase(result.rows[0]) : null;
         } catch (error) {
             logger.error('Erro ao buscar contato por valor e tipo', {
                 error: error.message,
                 value,
                 type
+            });
+            throw error;
+        }
+    }
+
+    /**
+     * Busca um contato pelo valor (telefone, email, etc)
+     * @param {string} value - Valor do contato
+     * @param {Object} options - Opções adicionais
+     * @returns {Promise<Object>} - Contato encontrado ou null
+     */
+    async findByValue(value, { client = null } = {}) {
+        const query = `
+            SELECT *
+            FROM contacts
+            WHERE contact_value = $1
+            LIMIT 1
+        `;
+        const values = [value];
+
+        try {
+            const result = client 
+                ? await client.query(query, values)
+                : await this.pool.query(query, values);
+            
+            return result.rows[0] ? ContactResponseDTO.fromDatabase(result.rows[0]) : null;
+        } catch (error) {
+            logger.error('Erro ao buscar contato por valor', {
+                error: error.message,
+                value
             });
             throw error;
         }

@@ -45,6 +45,101 @@ class ChatMessageService {
 
         return this.channelMap[channelName] || 1;
     }
+    
+    /**
+     * Encontra ou cria um chat e contato com base no número de telefone
+     * @param {string} phoneNumber - Número de telefone
+     * @param {string} instance - Nome da instância
+     * @param {string} serverUrl - URL do servidor
+     * @param {string} apikey - Chave da API
+     * @returns {Promise<{chat: Object, contact: Object}>} - Objeto contendo chat e contato
+     */
+    async findOrCreateChatByPhone(phoneNumber, instance, serverUrl, apikey) {
+        try {
+            this.logger.info('Buscando ou criando chat por telefone', { 
+                phoneNumber, 
+                instance 
+            });
+            
+            // 1. Buscar ou criar contato
+            let contact = await this.contactRepository.findByValue(phoneNumber);
+            
+            if (!contact) {
+                this.logger.info('Contato não encontrado, criando novo', { phoneNumber });
+                
+                contact = await this.contactRepository.create({
+                    type: 'PHONE',
+                    value: phoneNumber,
+                    name: `Contato ${phoneNumber}`,
+                    is_active: true
+                });
+                
+                this.logger.info('Novo contato criado', { 
+                    contactId: contact.contact_id,
+                    phoneNumber
+                });
+            }
+            
+            // 2. Buscar canal pelo nome da instância
+            let channel = await this.channelRepository.findByName(instance);
+            
+            if (!channel) {
+                this.logger.info('Canal não encontrado, criando novo', { instance });
+                
+                channel = await this.channelRepository.create({
+                    channel_name: instance,
+                    channel_type: 'WHATSAPP',
+                    is_active: true,
+                    config: {
+                        instance,
+                        server_url: serverUrl,
+                        apikey
+                    }
+                });
+                
+                this.logger.info('Novo canal criado', { 
+                    channelId: channel.channel_id,
+                    instance
+                });
+            }
+            
+            // 3. Buscar chat existente para esse contato e canal
+            let chat = await this.chatRepository.findByContactAndChannel(
+                contact.contact_id,
+                channel.channel_id
+            );
+            
+            if (!chat) {
+                this.logger.info('Chat não encontrado, criando novo', { 
+                    contactId: contact.contact_id,
+                    channelId: channel.channel_id
+                });
+                
+                chat = await this.chatRepository.create({
+                    contact_id: contact.contact_id,
+                    channel_id: channel.channel_id,
+                    status: 'ACTIVE',
+                    created_at: new Date().toISOString()
+                });
+                
+                this.logger.info('Novo chat criado', { 
+                    chatId: chat.chat_id,
+                    contactId: contact.contact_id,
+                    channelId: channel.channel_id
+                });
+            }
+            
+            return { chat, contact };
+        } catch (error) {
+            this.logger.error('Erro ao buscar ou criar chat por telefone', { 
+                error: error.message,
+                stack: error.stack,
+                phoneNumber,
+                instance
+            });
+            throw error;
+        }
+    }
 
     async getChatMessagesDetails(chatId) {
         try {

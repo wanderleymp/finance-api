@@ -6,6 +6,7 @@ const fs = require('fs');
 const path = require('path');
 const { logger } = require('./middlewares/logger');
 const { systemDatabase } = require('./config/database');
+const socketService = require('./websocket/socket');
 
 async function startServer() {
     try {
@@ -19,6 +20,10 @@ async function startServer() {
         
         // Criar servidor HTTP para o Traefik
         const httpServer = http.createServer(app);
+        
+        // Inicializar WebSocket
+        socketService.initialize(httpServer);
+        
         httpServer.listen(port, () => {
             logger.info(`Servidor HTTP rodando na porta ${port} (${process.env.NODE_ENV})`);
         });
@@ -33,6 +38,10 @@ async function startServer() {
             };
 
             const httpsServer = https.createServer(httpsOptions, app);
+            
+            // Inicializar WebSocket também para HTTPS
+            socketService.initialize(httpsServer);
+            
             httpsServer.listen(httpsPort, () => {
                 logger.info(`Servidor HTTPS rodando na porta ${httpsPort} (${process.env.NODE_ENV})`, {
                     version: process.env.npm_package_version || 'unknown'
@@ -49,5 +58,4 @@ async function startServer() {
     }
 }
 
-// Teste de deploy simples - sem impacto no sistema
 startServer();

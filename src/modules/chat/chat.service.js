@@ -7,6 +7,7 @@ const { plainToClass } = require('class-transformer');
 const { CreateChatMessageDto } = require('../messages/dtos/create-chat-message.dto');
 const ChannelService = require('../channels/channel.service');
 const IntegrationService = require('../integrations/integration.service');
+const chatSocketService = require('../../websocket/chat-socket.service');
 
 class ChatService {
     constructor() {
@@ -170,6 +171,9 @@ class ChatService {
                         messageId: createdMessage.chat_message_id,
                         externalId: response?.messageId || response?.providerResponse?.key?.id
                     });
+                    
+                    // Notificar via WebSocket sobre a nova mensagem
+                    chatSocketService.notifyNewMessage(data.chatId, createdMessage);
                 } catch (error) {
                     // Se falhar o envio, atualizar status da mensagem para erro
                     await this.chatMessageRepository.update(
@@ -183,6 +187,10 @@ class ChatService {
                             sent_at: null
                         }
                     );
+                    
+                    // Notificar via WebSocket sobre falha no envio
+                    chatSocketService.notifyMessageStatusUpdate(data.chatId, createdMessage.chat_message_id, 'FAILED');
+                    
                     throw error;
                 }
 
@@ -247,6 +255,98 @@ class ChatService {
                 id,
                 page,
                 limit
+            });
+            throw error;
+        }
+    }
+
+    async updateMessageStatus(chatId, messageId, status) {
+        try {
+            logger.info('Atualizando status de mensagem', { chatId, messageId, status });
+            
+            const message = await this.chatMessageRepository.findById(messageId);
+            
+            if (!message) {
+                logger.warn('Mensagem não encontrada', { messageId });
+                throw new Error('Mensagem não encontrada');
+            }
+            
+            const updatedMessage = await this.chatMessageRepository.update(messageId, {
+                status: {
+                    type: status,
+                    timestamp: new Date().toISOString()
+                }
+            });
+            
+            // Notificar via WebSocket sobre atualização de status
+            chatSocketService.notifyMessageStatusUpdate(chatId, messageId, status);
+            
+            logger.info('Status de mensagem atualizado com sucesso', { 
+                messageId, 
+                status,
+                chatId
+            });
+            
+            return updatedMessage;
+        } catch (error) {
+            logger.error('Erro ao atualizar status de mensagem', { 
+                error: error.message, 
+                messageId,
+                status,
+                chatId
+            });
+            throw error;
+        }
+    }
+    
+    async updateChatStatus(chatId, status) {
+        try {
+            logger.info('Atualizando status de chat', { chatId, status });
+            
+            const chat = await this.chatRepository.findById(chatId);
+            
+            if (!chat) {
+                logger.warn('Chat não encontrado', { chatId });
+                throw new Error('Chat não encontrado');
+            }
+            
+            const updatedChat = await this.chatRepository.update(chatId, {
+                status: status
+            });
+            
+            // Notificar via WebSocket sobre atualização de status do chat
+            chatSocketService.notifyChatStatusUpdate(chatId, status);
+            
+            logger.info('Status de chat atualizado com sucesso', { 
+                chatId, 
+                status
+            });
+            
+            return updatedChat;
+        } catch (error) {
+            logger.error('Erro ao atualizar status de chat', { 
+                error: error.message, 
+                chatId,
+                status
+            });
+            throw error;
+        }
+    }
+    
+    async registerTypingEvent(chatId, userId, isTyping) {
+        try {
+            logger.info('Registrando evento de digitação', { chatId, userId, isTyping });
+            
+            // Notificar via WebSocket sobre evento de digitação
+            chatSocketService.notifyTypingEvent(chatId, userId, isTyping);
+            
+            return { success: true };
+        } catch (error) {
+            logger.error('Erro ao registrar evento de digitação', { 
+                error: error.message, 
+                chatId,
+                userId,
+                isTyping
             });
             throw error;
         }
