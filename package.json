@@ -28,7 +28,8 @@
     "deploy": "bash scripts/deploy.sh",
     "generate:module": "node scripts/generate-module.js",
     "docs:generate": "node scripts/generate-swagger.js",
-    "docs:watch": "node scripts/watch-swagger.js"
+    "docs:watch": "node scripts/watch-swagger.js",
+    "builder": "node scripts/builder.js"
   },
   "keywords": [
     "finance",
