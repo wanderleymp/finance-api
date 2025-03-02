@@ -1,6 +1,6 @@
 {
   "name": "finance-api",
-  "version": "1.0.23",
+  "version": "1.0.24",
   "description": "RESTful API para gerenciamento financeiro",
   "main": "src/app.js",
   "scripts": {
