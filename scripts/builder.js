@@ -1,4 +1,5 @@
 const { execSync } = require('child_process');
+const fs = require('fs');
 const path = require('path');
 
 function exec(command) {
@@ -11,39 +12,47 @@ function exec(command) {
     }
 }
 
+function incrementVersion(currentVersion) {
+    const [major, minor, patch] = currentVersion.split('.').map(Number);
+    return `${major}.${minor}.${patch + 1}`;
+}
+
 function builder() {
     try {
-        // Obter a versão atual do package.json
+        // 1. Obter versão atual do package.json
         const packagePath = path.join(process.cwd(), 'package.json');
-        const packageJson = require(packagePath);
+        const packageJson = JSON.parse(fs.readFileSync(packagePath, 'utf8'));
         const currentVersion = packageJson.version;
-        const [major, minor, patch] = currentVersion.split('.').map(Number);
-        const newVersion = `${major}.${minor}.${patch + 1}`;
+        const newVersion = incrementVersion(currentVersion);
 
-        // Checkout na branch de release atual
+        // 2. Checkout na branch de release atual
         exec(`git checkout release/v${currentVersion}`);
 
-        // Atualizar develop
+        // 3. Atualizar develop
         exec('git checkout develop');
         exec(`git merge release/v${currentVersion}`);
         exec('git push origin develop');
 
-        // Atualizar main
+        // 4. Atualizar main
         exec('git checkout main');
         exec(`git merge release/v${currentVersion}`);
         exec('git push origin main');
 
-        // Construir imagem docker para main
+        // 5. Construir imagem docker para main
         exec('npm run docker:build:main');
 
-        // Criar nova branch de release
+        // 6. Criar nova branch de release
         exec(`git checkout -b release/v${newVersion}`);
 
-        // Commitar mudanças
-        exec('git add .');
-        exec(`git commit -m "chore: preparando release ${newVersion}"`);
+        // 7. Atualizar versão no package.json
+        packageJson.version = newVersion;
+        fs.writeFileSync(packagePath, JSON.stringify(packageJson, null, 2));
 
-        // Fazer push da nova branch
+        // 8. Commitar mudanças da versão
+        exec('git add package.json');
+        exec(`git commit -m "chore: bump version to ${newVersion}"`);
+
+        // 9. Fazer push da nova branch
         exec(`git push -u origin release/v${newVersion}`);
 
         console.log(`Builder concluído: nova versão ${newVersion}`);
