@@ -46,4 +46,11 @@ router.post(
     controller.processSingleContractBilling.bind(controller)
 );
 
+// Nova rota para encerramento de contrato
+router.post(
+    '/:id/terminate',
+    validate('body', contractRecurringValidator.termination),
+    controller.terminateContract.bind(controller)
+);
+
 module.exports = router;

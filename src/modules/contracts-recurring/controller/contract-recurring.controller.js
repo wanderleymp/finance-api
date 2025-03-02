@@ -275,23 +275,72 @@ class ContractRecurringController {
 
     async updateContractRecurringItem(req, res, next) {
         try {
-            const { id: contractId, movementItemId } = req.params;
-            const updateData = req.body;
-
-            const result = await this.service.updateContractRecurringItem(
-                Number(contractId), 
-                Number(movementItemId), 
-                updateData
-            );
+            const { id, movementItemId } = req.params;
+            const result = await this.service.updateContractRecurringItem(Number(id), Number(movementItemId), req.body);
             
-            this.logger.info('Item de contrato recorrente atualizado', { 
-                contractId, 
+            this.logger.info('Item de contrato recorrente atualizado', {
+                contractId: id,
                 movementItemId,
-                updateData 
+                result
             });
-
+            
             res.json(result);
         } catch (error) {
+            this.logger.error('Erro ao atualizar item de contrato recorrente', {
+                error: error.message,
+                stack: error.stack
+            });
+            next(error);
+        }
+    }
+
+    /**
+     * Encerra um contrato recorrente, atualizando seu status para 'inactive',
+     * definindo a data de encerramento e registrando o motivo no histórico.
+     */
+    async terminateContract(req, res, next) {
+        try {
+            const { id } = req.params;
+            const { endDate, reason } = req.body;
+            
+            // Extrair ID do usuário do token JWT
+            const changedBy = req.user.userId;
+
+            this.logger.info('Requisição de encerramento de contrato recebida', { 
+                contractId: id, 
+                endDate, 
+                reason,
+                changedBy 
+            });
+
+            const result = await this.service.terminateContract(id, { 
+                endDate, 
+                reason, 
+                changedBy 
+            });
+
+            // Se o contrato já estava inativo, retorna 200 com mensagem informativa
+            if (result.wasAlreadyInactive) {
+                return res.status(200).json({
+                    message: 'Contrato já estava inativo. Histórico de ajuste registrado.',
+                    contract: result.contract,
+                    adjustmentHistory: result.adjustmentHistory
+                });
+            }
+
+            // Para novos encerramentos, retorna 200 com detalhes
+            return res.status(200).json({
+                message: 'Contrato encerrado com sucesso',
+                contract: result.contract,
+                adjustmentHistory: result.adjustmentHistory
+            });
+        } catch (error) {
+            this.logger.error('Erro ao processar encerramento de contrato', {
+                errorMessage: error.message,
+                errorStack: error.stack
+            });
+
+            // Tratamento de erro padrão
             next(error);
         }
     }

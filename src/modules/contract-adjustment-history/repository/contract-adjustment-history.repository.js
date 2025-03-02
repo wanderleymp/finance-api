@@ -51,29 +51,12 @@ class ContractAdjustmentHistoryRepository extends BaseRepository {
 
   async create(data, client = null) {
     try {
-      logger.info('Criando histórico de ajuste de contrato', { 
-        data,
-        contractId: data.contract_id,
-        changedBy: data.changed_by,
-        changedByType: typeof data.changed_by
-      });
-
-      logger.info('Dados para criação de histórico de ajuste', {
-        contractId: data.contract_id,
-        previousValue: data.previous_value,
-        newValue: data.new_value,
-        changeType: data.change_type,
-        changedBy: data.changed_by,
-        changeDate: data.change_date,
-        description: data.description
-      });
-
       const query = `
         INSERT INTO public.contract_adjustment_history (
           contract_id, 
           previous_value, 
           new_value, 
-          change_type, 
+          change_type,
           changed_by,
           change_date,
           description
@@ -82,24 +65,54 @@ class ContractAdjustmentHistoryRepository extends BaseRepository {
         ) RETURNING *
       `;
 
+      // Extrair valores numéricos dos JSONs
+      let previousValue = 0;
+      let newValue = 0;
+
+      try {
+        const previousValueObj = JSON.parse(data.previous_value);
+        const newValueObj = JSON.parse(data.new_value);
+
+        // Tenta extrair valor numérico do campo 'contract_value' ou 'value'
+        previousValue = parseFloat(previousValueObj.contract_value || previousValueObj.value || previousValueObj.new_value || 0);
+        newValue = parseFloat(newValueObj.contract_value || newValueObj.value || newValueObj.new_value || 0);
+      } catch (parseError) {
+        // Se falhar na conversão, usa 0 como valor padrão
+        logger.warn('Falha ao converter valores JSON', { 
+          previousValue: data.previous_value, 
+          newValue: data.new_value,
+          error: parseError 
+        });
+      }
+
       const values = [
         data.contract_id,
-        data.previous_value,
-        data.new_value,
+        previousValue,
+        newValue,
         data.change_type,
         data.changed_by,
         data.change_date || new Date(),
         data.description
       ];
 
-      logger.info('Query de criação de histórico de ajuste', { query, values });
+      logger.info('Query de criação de histórico de ajuste', { 
+        query, 
+        values: values.map((v, i) => i > 0 && i < 3 ? '[MASKED]' : v) // Mascara valores sensíveis
+      });
 
       const pool = client || this.pool;
       const result = await pool.query(query, values);
 
       return result.rows[0];
     } catch (error) {
-      logger.error('Erro ao criar histórico de ajuste de contrato', { error, data });
+      logger.error('Erro ao criar histórico de ajuste de contrato', { 
+        error, 
+        data: {
+          ...data,
+          previous_value: '[MASKED]',
+          new_value: '[MASKED]'
+        } 
+      });
       throw error;
     }
   }

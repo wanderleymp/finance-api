@@ -136,32 +136,53 @@ class ChatRepository extends BaseRepository {
         try {
             const query = `
                 SELECT 
-                    c.chat_id,
+                    c.chat_id as id,
+                    COALESCE(ct.contact_name, ct.contact_value, 'Grupo ' || c.chat_id) as name,
                     c.channel_id,
-                    c.status,
-                    c.created_at,
-                    c.allow_reply,
-                    c.is_group,
-                    c.is_muted,
-                    c.is_pinned,
-                    ch.channel_name,
-                    ch.channel_id as channel_channel_id,
-                    ct.contact_value,
-                    ct.contact_id,
+                    cl.channel_name as "channelType",
+                    ct.contact_value as "contactValue",
+                    ct.contact_id as "lastContactId",
+                    COALESCE(ct."profilePicUrl", '') as avatar,
+                    json_build_object(
+                        'content', COALESCE(cm.content, ''),
+                        'type', COALESCE(cm.content_type, 'TEXT'),
+                        'fileUrl', cm.file_url,
+                        'status', CASE 
+                            WHEN cms.status = 'READ' THEN 'READ'
+                            WHEN cm.delivered_at IS NOT NULL THEN 'DELIVERED'
+                            ELSE 'SENT'
+                        END,
+                        'timestamp', to_char(cm.created_at, 'YYYY-MM-DD"T"HH24:MI:SS.MS"Z"')
+                    ) as "lastMessage",
                     (
                         SELECT COUNT(*) 
                         FROM chat_messages cm2
+                        LEFT JOIN chat_message_status cms2 ON cm2.message_id = cms2.message_id
                         WHERE cm2.chat_id = c.chat_id 
-                        AND cm2.read_at IS NULL
-                    ) as unread_count
-                FROM 
-                    chats c
-                LEFT JOIN 
-                    channels ch ON c.channel_id = ch.channel_id
-                LEFT JOIN
-                    contacts ct ON c.contact_id = ct.contact_id
-                WHERE 
-                    c.chat_id = $1
+                        AND (cms2.status IS NULL OR cms2.status = 'UNREAD')
+                    ) as "unreadCount",
+                    c.is_group as "isGroup",
+                    COALESCE(c.is_muted, false) as "isMuted",
+                    COALESCE(c.is_pinned, false) as "isPinned",
+                    'OFFLINE' as "contactStatus"
+                FROM chats c
+                JOIN (
+                    SELECT DISTINCT ON (chat_id) 
+                        chat_id,
+                        message_id,
+                        contact_id,
+                        content,
+                        content_type,
+                        file_url,
+                        delivered_at,
+                        created_at
+                    FROM chat_messages 
+                    ORDER BY chat_id, created_at DESC
+                ) cm ON c.chat_id = cm.chat_id
+                JOIN contacts ct ON cm.contact_id = ct.contact_id
+                JOIN channels cl ON c.channel_id = cl.channel_id
+                LEFT JOIN chat_message_status cms ON cm.message_id = cms.message_id
+                WHERE c.chat_id = $1 AND c.status = 'ACTIVE'
             `;
 
             const result = await client.query(query, [id]);
@@ -174,22 +195,11 @@ class ChatRepository extends BaseRepository {
             const chatData = result.rows[0];
 
             logger.info('Chat encontrado', { 
-                chatId: chatData.chat_id, 
+                chatId: chatData.id, 
                 channelId: chatData.channel_id 
             });
 
-            return {
-                chat_id: chatData.chat_id,
-                channel_id: chatData.channel_id,
-                channel_name: chatData.channel_name,
-                status: chatData.status,
-                created_at: chatData.created_at,
-                allow_reply: chatData.allow_reply,
-                is_group: chatData.is_group,
-                is_muted: chatData.is_muted,
-                is_pinned: chatData.is_pinned,
-                unread_count: chatData.unread_count
-            };
+            return chatData;
         } catch (error) {
             logger.error('Erro ao buscar chat por ID', { 
                 error: error.message, 
@@ -199,68 +209,6 @@ class ChatRepository extends BaseRepository {
             throw error;
         } finally {
             client.release();
-        }
-    }
-
-    async findById(id, page = 1, limit = 20) {
-        try {
-            const query = `
-                SELECT c.*, 
-                       ch.channel_name, 
-                       co.contact_value,
-                       co.contact_name
-                FROM chats c
-                LEFT JOIN channels ch ON c.channel_id = ch.channel_id
-                LEFT JOIN contacts co ON c.contact_id = co.contact_id
-                WHERE c.chat_id = $1
-            `;
-            
-            const result = await this.pool.query(query, [id]);
-            
-            if (result.rows.length === 0) {
-                return null;
-            }
-            
-            const chat = result.rows[0];
-            
-            // Buscar mensagens do chat com paginação
-            const messagesQuery = `
-                SELECT *
-                FROM chat_messages
-                WHERE chat_id = $1
-                ORDER BY created_at DESC
-                LIMIT $2 OFFSET $3
-            `;
-            
-            const offset = (page - 1) * limit;
-            const messagesResult = await this.pool.query(messagesQuery, [id, limit, offset]);
-            
-            // Contar total de mensagens
-            const countQuery = `
-                SELECT COUNT(*) as total
-                FROM chat_messages
-                WHERE chat_id = $1
-            `;
-            
-            const countResult = await this.pool.query(countQuery, [id]);
-            const totalMessages = parseInt(countResult.rows[0].total);
-            
-            return {
-                ...chat,
-                messages: messagesResult.rows,
-                pagination: {
-                    page,
-                    limit,
-                    totalItems: totalMessages,
-                    totalPages: Math.ceil(totalMessages / limit)
-                }
-            };
-        } catch (error) {
-            logger.error('Erro ao buscar chat por ID', { 
-                error: error.message, 
-                id 
-            });
-            throw error;
         }
     }
     

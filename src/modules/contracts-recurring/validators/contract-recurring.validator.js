@@ -45,6 +45,12 @@ const contractRecurringValidator = {
         adjustmentType: Joi.string().valid('percentage', 'fixed').required(),
         adjustmentValue: Joi.number().positive().required(),
         description: Joi.string().optional()
+    }),
+
+    // Nova validação para encerramento de contrato
+    termination: Joi.object({
+        endDate: Joi.date().iso().required(),
+        reason: Joi.string().required()
     })
 };
 

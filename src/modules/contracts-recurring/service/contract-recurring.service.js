@@ -1488,6 +1488,121 @@ class ContractRecurringService {
             throw error;
         }
     }
+
+    /**
+     * Encerra um contrato recorrente, atualizando seu status para 'inactive', 
+     * definindo a data de encerramento e registrando o motivo no histórico.
+     * 
+     * @param {number} contractId - ID do contrato a ser encerrado
+     * @param {Object} data - Dados para encerramento do contrato
+     * @param {Date|string} data.endDate - Data de encerramento do contrato
+     * @param {string} data.reason - Motivo do encerramento
+     * @param {number} [data.changedBy] - ID do usuário que realizou a alteração
+     * @returns {Promise<Object>} Contrato atualizado e histórico
+     */
+    async terminateContract(contractId, { endDate, reason, changedBy }) {
+        this.logger.info('Iniciando encerramento de contrato recorrente', { 
+            contractId, 
+            endDate, 
+            reason,
+            changedBy 
+        });
+
+        // Obter cliente para transação
+        const client = await this.dataSource.pool.connect();
+
+        try {
+            // Iniciar transação
+            await client.query('BEGIN');
+
+            // Buscar contrato atual para verificar status e obter valores atuais
+            const currentContract = await this.findById(contractId);
+            
+            if (!currentContract) {
+                throw new Error(`Contrato recorrente com ID ${contractId} não encontrado`);
+            }
+
+            // Preparar dados para atualização
+            const updateData = {
+                status: 'inactive',
+                end_date: endDate instanceof Date ? endDate.toISOString().split('T')[0] : endDate
+            };
+
+            // Se o contrato já estiver inativo, apenas registra um novo histórico
+            const isAlreadyInactive = currentContract.status === 'inactive';
+            
+            let updatedContract = currentContract;
+            if (!isAlreadyInactive) {
+                // Atualizar contrato apenas se não estiver inativo
+                this.logger.info('Atualizando status e data de encerramento do contrato', { 
+                    contractId, 
+                    updateData 
+                });
+                
+                updatedContract = await this.repository.update(contractId, updateData, client);
+            }
+
+            // Registrar no histórico
+            const adjustmentHistoryData = {
+                contract_id: contractId,
+                previous_value: JSON.stringify({
+                    status: currentContract.status || 'active',
+                    end_date: currentContract.end_date || null
+                }),
+                new_value: JSON.stringify({
+                    status: 'inactive',
+                    end_date: updateData.end_date
+                }),
+                change_type: 'termination',
+                changed_by: changedBy || null,
+                change_date: new Date(),
+                description: reason || (isAlreadyInactive ? 'Reconfirmação de encerramento de contrato' : 'Contrato encerrado')
+            };
+
+            this.logger.info('Registrando encerramento no histórico', { 
+                contractId, 
+                adjustmentHistoryData,
+                isAlreadyInactive 
+            });
+            
+            const adjustmentHistory = await this.contractAdjustmentHistoryRepository.create(
+                adjustmentHistoryData, 
+                client
+            );
+
+            // Commit da transação
+            await client.query('COMMIT');
+
+            this.logger.info('Contrato processado com sucesso', { 
+                contractId, 
+                endDate, 
+                adjustmentHistory,
+                status: updatedContract.status
+            });
+
+            return {
+                contract: updatedContract,
+                adjustmentHistory,
+                wasAlreadyInactive: isAlreadyInactive
+            };
+        } catch (error) {
+            // Rollback em caso de erro
+            await client.query('ROLLBACK');
+            
+            this.logger.error('Erro ao processar encerramento de contrato recorrente', {
+                contractId,
+                endDate,
+                reason,
+                errorMessage: error.message,
+                errorStack: error.stack
+            });
+            
+            throw error;
+        } finally {
+            // Liberar cliente
+            client.release();
+        }
+    }
 }
 
 module.exports = ContractRecurringService;
