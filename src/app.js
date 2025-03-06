@@ -21,6 +21,7 @@ const { errorHandler } = require('./middlewares/errorHandler');
 const { authMiddleware } = require('./middlewares/auth');
 const { logger, httpLogger } = require('./middlewares/logger');
 const path = require('path');
+const swaggerMiddleware = require('./middlewares/swagger.middleware');
 
 // Importando rotas dos módulos
 const healthRoutes = require('./modules/health/health.routes');
@@ -258,7 +259,22 @@ app.use((req, res, next) => {
 });
 
 // Setup do Swagger
-app.use('/docs', swaggerUi.serve, swaggerUi.setup(swaggerSpec));
+// Configurando duas rotas para a documentação Swagger para garantir compatibilidade
+const swaggerUiHandler = swaggerUi.setup(swaggerSpec, {
+    explorer: true,
+    customCss: '.swagger-ui .topbar { display: none }',
+    swaggerOptions: {
+        docExpansion: 'none',
+        filter: true,
+        showRequestDuration: true
+    }
+});
+
+// Rota principal para a documentação
+app.use('/docs', swaggerUi.serve, swaggerUiHandler);
+
+// Rota alternativa para compatibilidade
+app.use('/api-docs', swaggerUi.serve, swaggerUiHandler);
 
 // Rotas públicas (não precisam de autenticação)
 app.use('/health', healthRoutes);
