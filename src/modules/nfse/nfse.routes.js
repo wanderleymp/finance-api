@@ -72,6 +72,11 @@ class NfseRoutes {
             (req, res, next) => this.nfseController.atualizarStatusNfse(req, res, next)
         );
 
+        // Rota alternativa para atualizar status (aceita POST e nome em português)
+        this.router.post('/:id/atualizar-status', 
+            (req, res, next) => this.nfseController.atualizarStatusNfse(req, res, next)
+        );
+
         // Buscar NFSe por ID
         this.router.get('/:id', 
             (req, res, next) => this.nfseController.findById(req, res, next)

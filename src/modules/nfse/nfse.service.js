@@ -1163,6 +1163,30 @@ class NfseService {
                             invoiceId: nfseLocal.invoice_id,
                             invoiceAtualizada: JSON.stringify(invoiceAtualizada)
                         });
+                        
+                        // Processar PDF da NFSe assincronamente quando autorizada
+                        try {
+                            // Não usamos await aqui para não bloquear a resposta
+                            this.processarPdfNfse(nfseId).then(resultado => {
+                                logger.info('PDF da NFSe processado com sucesso após atualização de status', {
+                                    nfseId,
+                                    pdfUrl: resultado?.pdfUrl
+                                });
+                            }).catch(pdfError => {
+                                logger.error('Erro ao processar PDF da NFSe após atualização de status', {
+                                    nfseId,
+                                    error: pdfError.message,
+                                    stack: pdfError.stack
+                                });
+                            });
+                        } catch (pdfError) {
+                            // Apenas logamos o erro, não interrompemos o fluxo principal
+                            logger.error('Erro ao iniciar processamento de PDF da NFSe', {
+                                nfseId,
+                                error: pdfError.message,
+                                stack: pdfError.stack
+                            });
+                        }
                     }
 
                     // Log final antes da atualização no repositório
