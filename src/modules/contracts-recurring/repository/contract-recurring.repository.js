@@ -310,6 +310,24 @@ class ContractRecurringRepository extends BaseRepository {
                     p.full_name, 
                     cg.group_name, 
                     cr.*,
+                    (SELECT 
+                         json_agg(
+                             json_build_object(
+                                 'item_id', mi.item_id,
+                                 'movement_item_id', mi.movement_item_id,
+                                 'quantity', mi.quantity,
+                                 'unit_price', mi.unit_price,
+                                 'total_price', mi.total_price,
+                                 'item_name', i.name
+                             )
+                         )
+                     FROM 
+                         movement_items mi
+                     JOIN 
+                         items i ON mi.item_id = i.item_id
+                     WHERE 
+                         mi.movement_id = cr.model_movement_id
+                    ) AS items,
                     json_agg(
                         json_build_object(
                             'movement_id', cm.movement_id,
