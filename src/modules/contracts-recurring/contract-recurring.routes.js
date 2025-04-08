@@ -46,6 +46,13 @@ router.post(
     controller.processSingleContractBilling.bind(controller)
 );
 
+// Nova rota para ajuste manual da data de faturamento
+router.post(
+    '/:id/adjust-billing-date',
+    validate('body', contractRecurringValidator.adjustBillingDate),
+    controller.adjustBillingDate.bind(controller)
+);
+
 // Nova rota para encerramento de contrato
 router.post(
     '/:id/terminate',

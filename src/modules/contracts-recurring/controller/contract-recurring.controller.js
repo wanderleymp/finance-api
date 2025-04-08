@@ -294,6 +294,27 @@ class ContractRecurringController {
         }
     }
 
+    async adjustBillingDate(req, res) {
+        try {
+            const { id } = req.params;
+            const { next_billing_date, description } = req.body;
+            
+            // Recuperar ID do usuário do token JWT
+            const changedBy = req.user ? req.user.userId : null;
+
+            const result = await this.service.adjustBillingDate(
+                Number(id),
+                next_billing_date,
+                description,
+                changedBy
+            );
+
+            res.json(result);
+        } catch (error) {
+            next(error);
+        }
+    }
+
     /**
      * Encerra um contrato recorrente, atualizando seu status para 'inactive',
      * definindo a data de encerramento e registrando o motivo no histórico.

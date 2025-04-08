@@ -36,7 +36,14 @@ const contractRecurringValidator = {
         status: Joi.string().valid('active', 'inactive', 'paused').optional(),
         model_movement_id: Joi.number().integer().optional(),
         contract_group_id: Joi.number().integer().optional(),
-        billing_reference: Joi.string().valid('current', 'previous').optional()
+        billing_reference: Joi.string().valid('current', 'previous').optional(),
+        next_billing_date: Joi.date().iso().optional()
+    }),
+
+    // Nova validação para ajuste de data de faturamento
+    adjustBillingDate: Joi.object({
+        next_billing_date: Joi.date().iso().required(),
+        description: Joi.string().optional()
     }),
 
     // Nova validação para ajuste de contrato

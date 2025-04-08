@@ -997,9 +997,9 @@ class ContractRecurringService {
             await client.query('ROLLBACK');
             
             this.logger.error('Erro no processamento de ajuste de contrato', {
+                contractId,
                 error: error.message,
-                stack: error.stack,
-                contractId
+                stack: error.stack
             });
 
             throw error;
@@ -1264,6 +1264,45 @@ class ContractRecurringService {
             throw error;
         } finally {
             client.release();
+        }
+    }
+
+    async update(contractId, data, transaction = null) {
+        try {
+            const client = transaction || await this.dataSource.pool.connect();
+            
+            try {
+                // Buscar contrato existente
+                const contract = await this.repository.findById(contractId, client);
+                if (!contract) {
+                    throw new Error('Contrato não encontrado');
+                }
+
+                // Atualizar contrato
+                const updatedContract = await this.repository.update(contractId, data, client);
+
+                // Se não foi fornecida uma transação, commitar
+                if (!transaction) {
+                    await client.query('COMMIT');
+                }
+
+                return updatedContract;
+            } catch (error) {
+                if (!transaction) {
+                    await client.query('ROLLBACK');
+                }
+                throw error;
+            } finally {
+                if (!transaction) {
+                    client.release();
+                }
+            }
+        } catch (error) {
+            this.logger.error('Erro ao atualizar contrato recorrente', {
+                contractId,
+                error: error.message
+            });
+            throw error;
         }
     }
 
@@ -1601,6 +1640,59 @@ class ContractRecurringService {
         } finally {
             // Liberar cliente
             client.release();
+        }
+    }
+
+    async adjustBillingDate(contractId, nextBillingDate, description, changedBy) {
+        try {
+            const client = await this.dataSource.pool.connect();
+            
+            try {
+                await client.query('BEGIN');
+
+                // Buscar contrato
+                const contract = await this.findById(contractId);
+                if (!contract) {
+                    throw new Error('Contrato não encontrado');
+                }
+
+                // Atualizar data de faturamento
+                const updateResult = await this.repository.update(contractId, {
+                    next_billing_date: nextBillingDate,
+                    last_billing_date: contract.last_billing_date
+                }, client);
+
+                // Criar histórico de ajuste
+                await this.contractAdjustmentHistoryRepository.create({
+                    contract_id: contractId,
+                    adjustment_type: 'manual_billing_date',
+                    previous_value: contract.next_billing_date,
+                    new_value: nextBillingDate,
+                    description: description || 'Ajuste manual da data de faturamento',
+                    changed_by: changedBy
+                }, client);
+
+                await client.query('COMMIT');
+
+                return {
+                    success: true,
+                    contractId,
+                    oldDate: contract.next_billing_date,
+                    newDate: nextBillingDate,
+                    description
+                };
+            } catch (error) {
+                await client.query('ROLLBACK');
+                throw error;
+            } finally {
+                client.release();
+            }
+        } catch (error) {
+            this.logger.error('Erro ao ajustar data de faturamento', {
+                contractId,
+                error: error.message
+            });
+            throw error;
         }
     }
 }
