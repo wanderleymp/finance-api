@@ -302,7 +302,7 @@ class ContractRecurringService {
 
             const paymentData = {
                 movement_id: billingData.movement_id,
-                payment_method_id: billingData.payment_method_id,
+                payment_method_id: billingData.payment_method_id || 1,  // Usar método 1 como padrão
                 total_amount: billingData.total_amount,
                 due_date: dueDate,
                 generateBoleto: true
