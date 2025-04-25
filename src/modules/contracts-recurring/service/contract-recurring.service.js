@@ -510,15 +510,16 @@ class ContractRecurringService {
         }
     }
 
-    async findPendingBillings(page = 1, limit = 10, currentDate = new Date()) {
+    async findPendingBillings(page = 1, limit = 10, currentDate = new Date(), search = null) {
         try {
             this.logger.info('Buscando contratos pendentes de faturamento', {
                 page,
                 limit,
-                currentDate
+                currentDate,
+                search
             });
 
-            const result = await this.repository.findPendingBillings(page, limit, currentDate);
+            const result = await this.repository.findPendingBillings(page, limit, currentDate, search);
 
             this.logger.info('Contratos pendentes encontrados', {
                 totalItems: result.meta.totalItems,

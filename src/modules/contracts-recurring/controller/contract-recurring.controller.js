@@ -97,13 +97,14 @@ class ContractRecurringController {
 
     async findPendingBillings(req, res, next) {
         try {
-            const { page = 1, limit = 10 } = req.query;
+            const { page = 1, limit = 10, search } = req.query;
             const currentDate = new Date();
             
             const result = await this.service.findPendingBillings(
                 Number(page), 
                 Number(limit), 
-                currentDate
+                currentDate,
+                search
             );
             
             logger.info('Contratos pendentes listados', { 

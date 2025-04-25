@@ -372,7 +372,7 @@ class ContractRecurringRepository extends BaseRepository {
         }
     }
 
-    async findPendingBillings(page = 1, limit = 10, currentDate = new Date()) {
+    async findPendingBillings(page = 1, limit = 10, currentDate = new Date(), search = null) {
         try {
             const whereConditions = [
                 `cr.status = 'active'`,
@@ -380,6 +380,15 @@ class ContractRecurringRepository extends BaseRepository {
             ];
             const queryParams = [currentDate];
             let paramCount = 2;
+
+            if (search && search.trim()) {
+                whereConditions.push(`(
+                    cr.contract_name ILIKE $${paramCount} OR
+                    p.full_name ILIKE $${paramCount}
+                )`);
+                queryParams.push(`%${search}%`);
+                paramCount++;
+            }
 
             // Construir cláusula WHERE
             const whereClause = `WHERE ${whereConditions.join(' AND ')}`;
